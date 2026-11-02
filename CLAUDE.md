@@ -5,6 +5,8 @@ V1 goal: one Space Marine Intercessor Squad vs one Tyranid Termagant unit, playe
 following the real core rules.
 
 The milestone plan is in `PLAN.md`. Before starting work, check which milestone is current and stay inside its scope.
+V1 (M0–M13) is complete. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance
+criteria (see "Later (post-V1)"), agree it with the user, then work inside it.
 
 ## Repository layout
 
@@ -69,7 +71,7 @@ Each unit JSON records the BSData commit it came from in `source.commit`. Pin to
 - In section 05, the dice-face tables (hit, wound and save) were transcribed from page images. Everything else is raw extraction.
 - If a rule is ambiguous, or `docs/rules/` disagrees with what you expected, **stop and ask**. Don't guess. Record the decision in `docs/decisions.md` (create it if missing), with the rule number.
 - Cite rule numbers in code and tests: `// 05.04 Inflict Damage: lowest save roll first` and `TEST(R05_04_InflictDamage, ResolvesLowestRollFirst)`.
-- **Known gaps (app-only rules):** the PDF names some rules under "See also" without including their text, because they live in the Warhammer 40,000 app. The ones V1 touches are: Modifying Dice Rolls, Modifying Damage, Modified Characteristics, Characteristic Modifiers, Random Characteristics, Multiple Weapon Profiles (D-001), Target No Longer Eligible or Viable, Closest Model/Unit (M3, M10), Within/Wholly Within (M3, M8), Multiple Battle-shock Rolls (M7, M11), Re-rolls and Rules Sequencing. "Destroyed" is partly covered: the Rules Appendix (`05_reference/25_rules_appendix.md`) has a DESTROYED entry; use that text. Starting Strength/Half-strength, Different Move Characteristics and fight-phase passing are also in the appendix. Never invent the app-only rules. When a milestone needs one, ask the user for the wording and record it in `docs/decisions.md`.
+- **Known gaps (app-only rules):** the PDF names some rules under "See also" without including their text, because they live in the Warhammer 40,000 app. The ones V1 touches are: Modifying Dice Rolls, Modifying Damage, Modified Characteristics, Characteristic Modifiers, Random Characteristics, Multiple Weapon Profiles (D-001), Target No Longer Eligible or Viable, Closest Model/Unit (M3, M10), Within/Wholly Within (M3, M8), Multiple Battle-shock Rolls (M7, M11), Re-rolls and Rules Sequencing. "Destroyed" is partly covered: the Rules Appendix (`05_reference/25_rules_appendix.md`) has a DESTROYED entry; use that text. Starting Strength/Half-strength, Different Move Characteristics and fight-phase passing are also in the appendix. Never invent the app-only rules. When a milestone needs one, first check `docs/decisions.md`: wording the user supplied is already recorded for Within/Wholly Within (D-009), Closest Model/Unit (D-010), Modifying Dice Rolls and Re-rolls (D-011), Target No Longer Eligible or Viable (D-012) and Multiple Battle-shock Rolls (D-015). That wording is AI-sourced and not verified against the app, so treat it as a working assumption. For any other app-only rule, ask the user for the wording and record it in `docs/decisions.md`.
 - If `docs/rules/` is missing (fresh clone), ask the user to run `python tools/extract_rules.py`. Don't reconstruct rules from memory.
 
 ## Architecture (non-negotiable)
@@ -130,13 +132,16 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 
 - Every rule implemented gets tests named after its rule number. Use `ScriptedDice` for all combat. Include the failure cases (illegal moves, out-of-range targets) as well as the happy path.
 - Geometry tests use explicit coordinates in inches, converted with a helper, so the numbers read like the rulebook.
-- At the end of each milestone, add at least one replay file under `tests/replays/` covering that milestone's flow.
+- Tests that check a decision rather than a numbered rule are named after it (`TEST(D020_FightSequence, ...)`), Rules Appendix tests use `Appendix_...`, and client tests (`wh40k_client_tests`) use the milestone (`M12_...`, `M13_...`).
+- At the end of each milestone, add at least one replay file under `tests/replays/` covering that milestone's flow. Stop the replay before any phase a later milestone will change (as `m9_charge.json` and `m10_fight.json` do), so it stays valid.
+- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`.
 
 ## Working style for Claude in this repo
 
 - One milestone per session. Run `/clear` between milestones. Re-read `PLAN.md` and the relevant `docs/rules/` files at the start.
 - For milestones marked "plan mode" in `PLAN.md`, propose the design (types, files, decision flow) and wait for approval before writing code.
-- Commit at the end of each green milestone with a message naming the milestone and rule numbers covered. Only commit when the user asks.
+- Commit at the end of each green milestone with a message naming the milestone and rule numbers covered, then push. In cloud sessions the environment's stop hook requires uncommitted work to be committed and pushed. Open a pull request and merge it (rebase merge, to keep `main` linear) only when the user asks.
+- The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests (`wh40k_client_tests`) and screenshots under `xvfb-run`. The client's flags for this are `--screenshot <file.png>`, `--steps <n>` (click the first decision button n times), `--select <unit id>`, `--select-model <model id>`, `--seed <n>`, `--replay <file>`, `--frame <n>` and `--zoom <px per mm>`. A full game by mouse still needs a manual run on Windows.
 - Don't add dependencies beyond those listed without asking.
 - Don't edit `data/units/*.json` by hand. Re-run the fetch tool, or put overrides in the scenario file.
 - Never commit the PDF, `rules-summary.txt` or `docs/rules/`. They are gitignored on purpose (Games Workshop copyright).
