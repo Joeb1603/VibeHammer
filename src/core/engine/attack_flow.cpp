@@ -337,7 +337,11 @@ ValidationResult validate_details(const GameState& state, Side, const action::Or
 }
 
 void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource&, Events& events) {
-    resolve_casualties(state, a.priority, events);
+    if (state.flow.attack) {
+        resolve_casualties(state, a.priority, events);  // 05.04
+    } else {
+        resolve_move_mortal_wounds(state, a.priority, events);  // 06.02 (Desperate Escape hazards)
+    }
 }
 
 }  // namespace detail

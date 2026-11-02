@@ -63,7 +63,7 @@ void on_enter_stage(GameState& state, Events& events) {
             break;
         case Stage::StartOfMovementPhase:
             for (Unit& u : state.units) {
-                u.phase_flags.selected_to_move = false;  // 09.02: "not been selected to move this phase"
+                u.phase_flags = UnitPhaseFlags{};  // 09.02 "not been selected to move this phase"; D-005 rolls
             }
             break;
         case Stage::PileIn:
@@ -131,7 +131,8 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::MoveUn
     const Side side = state.pending ? state.pending->side : turn_side(state);
     for (const Unit& u : state.units) {
         if (u.side == side && !is_destroyed(u) && !u.phase_flags.selected_to_move) {
-            out.push_back(action::StartMove{u.id, MoveType::RemainStationary});  // 09.04: any unit
+            const auto moves = legal_moves_for_unit(state, u);
+            out.insert(out.end(), moves.begin(), moves.end());
         }
     }
     return out;
@@ -153,22 +154,18 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
         return ValidationResult::failure("09.02: " + unit_label(a.unit) +
                                          " has already been selected to move this phase");
     }
-    switch (a.move_type) {
-        case MoveType::RemainStationary:
-            return ValidationResult::success();  // 09.04: eligible if any unit
-    }
-    return ValidationResult::failure("09.02: unknown move type");
+    return validate_move_type(state, *u, a);
 }
 
-void apply_details(GameState& state, Side, const action::StartMove& a, DiceSource&, Events& events) {
+void apply_details(GameState& state, Side, const action::StartMove& a, DiceSource& dice, Events& events) {
     Unit* u = state.find_unit(a.unit);
-    u->phase_flags.selected_to_move = true;
-    switch (a.move_type) {
-        case MoveType::RemainStationary:
-            // 09.04: no models are moved; no rules triggered by starting or ending a move.
-            events.push_back(event::UnitRemainedStationary{a.unit});
-            return;
+    u->phase_flags.selected_to_move = true;  // 09.02: that unit is selected to move
+    if (a.move_type == MoveType::RemainStationary) {
+        // 09.04: no models are moved; no rules triggered by starting or ending a move.
+        events.push_back(event::UnitRemainedStationary{a.unit});
+        return;
     }
+    begin_move(state, a, dice, events);
 }
 
 // ---- 10.02 Shoot (M5 stub: the only option is to end the step) ----

@@ -39,8 +39,56 @@ std::vector<WeaponAbility> abilities_from_json(const Json& j) {
 }  // namespace
 
 // ---- unit phase flags ----
-void to_json(Json& j, const UnitPhaseFlags& v) { j = Json{{"selected_to_move", v.selected_to_move}}; }
-void from_json(const Json& j, UnitPhaseFlags& v) { j.at("selected_to_move").get_to(v.selected_to_move); }
+void to_json(Json& j, const UnitPhaseFlags& v) {
+    j = Json{{"selected_to_move", v.selected_to_move},
+             {"desperate_escape_hazards_made", v.desperate_escape_hazards_made}};
+    put_opt(j, "advance_roll", v.advance_roll);
+}
+void from_json(const Json& j, UnitPhaseFlags& v) {
+    j.at("selected_to_move").get_to(v.selected_to_move);
+    get_opt(j, "advance_roll", v.advance_roll);
+    j.at("desperate_escape_hazards_made").get_to(v.desperate_escape_hazards_made);
+}
+
+// ---- moves ----
+void to_json(Json& j, MoveType v) { j = std::string(move_type_name(v)); }
+void from_json(const Json& j, MoveType& v) {
+    const auto t = move_type_from_name(j.get<std::string>());
+    if (!t) bad_enum("MoveType", j);
+    v = *t;
+}
+void to_json(Json& j, FallBackMode v) { j = std::string(fall_back_mode_name(v)); }
+void from_json(const Json& j, FallBackMode& v) {
+    const auto m = fall_back_mode_from_name(j.get<std::string>());
+    if (!m) bad_enum("FallBackMode", j);
+    v = *m;
+}
+void to_json(Json& j, const ModelStart& v) { j = Json{{"model", v.model}, {"position", v.position}}; }
+void from_json(const Json& j, ModelStart& v) {
+    j.at("model").get_to(v.model);
+    j.at("position").get_to(v.position);
+}
+void to_json(Json& j, const ModelPath& v) { j = Json{{"model", v.model}, {"points", v.points}}; }
+void from_json(const Json& j, ModelPath& v) {
+    j.at("model").get_to(v.model);
+    j.at("points").get_to(v.points);
+}
+void to_json(Json& j, const MoveInProgress& v) {
+    j = Json{{"unit", v.unit},
+             {"type", v.type},
+             {"starts", v.starts},
+             {"paths", v.paths},
+             {"pending_mortal_wounds", v.pending_mortal_wounds}};
+    put_opt(j, "mode", v.mode);
+}
+void from_json(const Json& j, MoveInProgress& v) {
+    j.at("unit").get_to(v.unit);
+    j.at("type").get_to(v.type);
+    get_opt(j, "mode", v.mode);
+    j.at("starts").get_to(v.starts);
+    j.at("paths").get_to(v.paths);
+    j.at("pending_mortal_wounds").get_to(v.pending_mortal_wounds);
+}
 
 // ---- attack data ----
 void to_json(Json& j, AttackType v) { j = (v == AttackType::Shooting) ? "Shooting" : "Fighting"; }
@@ -200,6 +248,7 @@ void to_json(Json& j, const FlowState& v) {
     j = Json{{"stage", v.stage}, {"battle_round", v.battle_round}, {"turn_in_round", v.turn_in_round}};
     put_opt(j, "activation", v.activation);
     put_opt(j, "attack", v.attack);
+    put_opt(j, "move", v.move);
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -207,6 +256,7 @@ void from_json(const Json& j, FlowState& v) {
     j.at("turn_in_round").get_to(v.turn_in_round);
     get_opt(j, "activation", v.activation);
     get_opt(j, "attack", v.attack);
+    get_opt(j, "move", v.move);
 }
 
 void to_json(Json& j, const GameResult& v) {
@@ -224,7 +274,9 @@ void to_json(Json& j, const PendingDecision& v) {
     std::visit(
         [&j](const auto& k) {
             using T = std::decay_t<decltype(k)>;
-            if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
+            if constexpr (std::is_same_v<T, decision::MoveModels>) {
+                j["unit"] = k.unit;
+            } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 j["attacker"] = k.attacker;
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder> ||
                                  std::is_same_v<T, decision::OrderCasualties>) {
@@ -237,6 +289,7 @@ void from_json(const Json& j, PendingDecision& v) {
     j.at("side").get_to(v.side);
     const auto kind = j.at("kind").get<std::string>();
     if (kind == "MoveUnits") v.kind = decision::MoveUnits{};
+    else if (kind == "MoveModels") v.kind = decision::MoveModels{j.at("unit").get<UnitId>()};
     else if (kind == "Shoot") v.kind = decision::Shoot{};
     else if (kind == "Charge") v.kind = decision::Charge{};
     else if (kind == "SelectAttackBatch") v.kind = decision::SelectAttackBatch{j.at("attacker").get<UnitId>()};

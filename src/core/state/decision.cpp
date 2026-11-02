@@ -15,6 +15,7 @@ std::string_view decision_rule(const PendingDecision& d) {
         [](const auto& k) -> std::string_view {
             using T = std::decay_t<decltype(k)>;
             if constexpr (std::is_same_v<T, decision::MoveUnits>) return "09.02";
+            else if constexpr (std::is_same_v<T, decision::MoveModels>) return "03.01";
             else if constexpr (std::is_same_v<T, decision::Shoot>) return "10.02";
             else if constexpr (std::is_same_v<T, decision::Charge>) return "11.02";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "04.03";
@@ -30,6 +31,7 @@ std::string_view decision_name(const DecisionKind& kind) {
         [](const auto& k) -> std::string_view {
             using T = std::decay_t<decltype(k)>;
             if constexpr (std::is_same_v<T, decision::MoveUnits>) return "MoveUnits";
+            else if constexpr (std::is_same_v<T, decision::MoveModels>) return "MoveModels";
             else if constexpr (std::is_same_v<T, decision::Shoot>) return "Shoot";
             else if constexpr (std::is_same_v<T, decision::Charge>) return "Charge";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "SelectAttackBatch";
@@ -46,6 +48,8 @@ std::string describe(const PendingDecision& d) {
             using T = std::decay_t<decltype(k)>;
             if constexpr (std::is_same_v<T, decision::MoveUnits>) {
                 return "select a unit to move";
+            } else if constexpr (std::is_same_v<T, decision::MoveModels>) {
+                return "move the models of unit " + std::to_string(k.unit.v) + ", then commit or reset the move";
             } else if constexpr (std::is_same_v<T, decision::Shoot>) {
                 return "select a unit to shoot, or end the Shoot step";
             } else if constexpr (std::is_same_v<T, decision::Charge>) {

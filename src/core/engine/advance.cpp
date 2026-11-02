@@ -104,6 +104,14 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
             attack_progress(state, dice, events);
             continue;
         }
+        if (state.flow.move) {
+            if (auto d = move_decision(state)) {
+                state.pending = std::move(d);
+                return;
+            }
+            move_progress(state, dice, events);
+            continue;
+        }
         if (!state.flow.activation && end_game_if_side_wiped_out(state, events)) {
             return;
         }

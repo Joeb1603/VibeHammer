@@ -13,18 +13,42 @@ using json_detail::bad_enum;
 using json_detail::get_opt;
 using json_detail::put_opt;
 
+// ---- leadership, hazards, mortal wounds ----
+void to_json(Json& j, const TwoD6& v) { j = v.dice; }
+void from_json(const Json& j, TwoD6& v) { j.get_to(v.dice); }
+void to_json(Json& j, const LeadershipRoll& v) {
+    j = Json{{"roll", v.roll}, {"target", v.target}, {"success", v.success}};
+}
+void from_json(const Json& j, LeadershipRoll& v) {
+    j.at("roll").get_to(v.roll);
+    j.at("target").get_to(v.target);
+    j.at("success").get_to(v.success);
+}
+void to_json(Json& j, const BattleShockRoll& v) {
+    j = Json{{"leadership", v.leadership}, {"becomes_battle_shocked", v.becomes_battle_shocked}};
+}
+void from_json(const Json& j, BattleShockRoll& v) {
+    j.at("leadership").get_to(v.leadership);
+    j.at("becomes_battle_shocked").get_to(v.becomes_battle_shocked);
+}
+void to_json(Json& j, const HazardRolls& v) {
+    j = Json{{"rolls", v.rolls}, {"failures", v.failures}, {"mortal_wounds", v.mortal_wounds}};
+}
+void from_json(const Json& j, HazardRolls& v) {
+    j.at("rolls").get_to(v.rolls);
+    j.at("failures").get_to(v.failures);
+    j.at("mortal_wounds").get_to(v.mortal_wounds);
+}
+void to_json(Json& j, const MortalWoundsResult& v) {
+    j = Json{{"steps", v.steps}, {"models_destroyed", v.models_destroyed}, {"not_inflicted", v.not_inflicted}};
+}
+void from_json(const Json& j, MortalWoundsResult& v) {
+    j.at("steps").get_to(v.steps);
+    j.at("models_destroyed").get_to(v.models_destroyed);
+    j.at("not_inflicted").get_to(v.not_inflicted);
+}
+
 // ---- enums ----
-void to_json(Json& j, MoveType v) {
-    switch (v) {
-        case MoveType::RemainStationary: j = "RemainStationary"; return;
-    }
-    throw std::logic_error("to_json: invalid MoveType");
-}
-void from_json(const Json& j, MoveType& v) {
-    const auto s = j.get<std::string>();
-    if (s == "RemainStationary") v = MoveType::RemainStationary;
-    else bad_enum("MoveType", j);
-}
 
 void to_json(Json& j, HitOutcome v) {
     switch (v) {
@@ -153,6 +177,10 @@ void to_json(Json& j, const GameAction& v) {
             if constexpr (std::is_same_v<T, StartMove>) {
                 j["unit"] = a.unit;
                 j["move_type"] = a.move_type;
+                if (a.fall_back_mode) j["fall_back_mode"] = *a.fall_back_mode;
+            } else if constexpr (std::is_same_v<T, ProposeModelMove>) {
+                j["model"] = a.model;
+                j["path"] = a.path;
             } else if constexpr (std::is_same_v<T, SelectAttackBatch>) {
                 j["batch"] = a.batch;
             } else if constexpr (std::is_same_v<T, DeclareAllocationOrder>) {
@@ -169,7 +197,15 @@ void to_json(Json& j, const GameAction& v) {
 void from_json(const Json& j, GameAction& v) {
     const auto kind = j.at("kind").get<std::string>();
     if (kind == "StartMove") {
-        v = StartMove{j.at("unit").get<UnitId>(), j.at("move_type").get<MoveType>()};
+        StartMove a{j.at("unit").get<UnitId>(), j.at("move_type").get<MoveType>(), std::nullopt};
+        if (j.contains("fall_back_mode")) a.fall_back_mode = j.at("fall_back_mode").get<FallBackMode>();
+        v = a;
+    } else if (kind == "ProposeModelMove") {
+        v = ProposeModelMove{j.at("model").get<ModelId>(), j.at("path").get<std::vector<Position>>()};
+    } else if (kind == "CommitUnitMove") {
+        v = CommitUnitMove{};
+    } else if (kind == "ResetUnitMove") {
+        v = ResetUnitMove{};
     } else if (kind == "EndShootStep") {
         v = EndShootStep{};
     } else if (kind == "EndChargeStep") {
@@ -205,6 +241,34 @@ void to_json(Json& j, const GameEvent& v) {
                 j["side"] = e.side;
             } else if constexpr (std::is_same_v<T, UnitRemainedStationary> || std::is_same_v<T, UnitDestroyed>) {
                 j["unit"] = e.unit;
+            } else if constexpr (std::is_same_v<T, MoveStarted>) {
+                j["unit"] = e.unit;
+                j["move_type"] = e.move_type;
+                put_opt(j, "mode", e.mode);
+            } else if constexpr (std::is_same_v<T, AdvanceRolled>) {
+                j["unit"] = e.unit;
+                j["roll"] = e.roll;
+                j["reused"] = e.reused;
+            } else if constexpr (std::is_same_v<T, HazardRollsMade>) {
+                j["unit"] = e.unit;
+                j["rolls"] = e.rolls;
+            } else if constexpr (std::is_same_v<T, MortalWoundsInflicted>) {
+                j["unit"] = e.unit;
+                j["result"] = e.result;
+            } else if constexpr (std::is_same_v<T, ModelMoveProposed>) {
+                j["unit"] = e.unit;
+                j["model"] = e.model;
+                j["path"] = e.path;
+                j["distance_mm"] = e.distance_mm;
+            } else if constexpr (std::is_same_v<T, UnitMoveCommitted>) {
+                j["unit"] = e.unit;
+                j["move_type"] = e.move_type;
+            } else if constexpr (std::is_same_v<T, UnitMoveReverted>) {
+                j["unit"] = e.unit;
+                j["reasons"] = e.reasons;
+            } else if constexpr (std::is_same_v<T, BattleShockRolled>) {
+                j["unit"] = e.unit;
+                j["roll"] = e.roll;
             } else if constexpr (std::is_same_v<T, AttackBatchesGathered>) {
                 j["attacker"] = e.attacker;
                 j["batches"] = e.batches;
@@ -258,6 +322,25 @@ void from_json(const Json& j, GameEvent& v) {
         v = PhaseEnded{j.at("phase").get<Phase>(), j.at("side").get<Side>()};
     } else if (kind == "UnitRemainedStationary") {
         v = UnitRemainedStationary{j.at("unit").get<UnitId>()};
+    } else if (kind == "MoveStarted") {
+        MoveStarted m{j.at("unit").get<UnitId>(), j.at("move_type").get<MoveType>(), std::nullopt};
+        get_opt(j, "mode", m.mode);
+        v = m;
+    } else if (kind == "AdvanceRolled") {
+        v = AdvanceRolled{j.at("unit").get<UnitId>(), j.at("roll").get<int>(), j.at("reused").get<bool>()};
+    } else if (kind == "HazardRollsMade") {
+        v = HazardRollsMade{j.at("unit").get<UnitId>(), j.at("rolls").get<HazardRolls>()};
+    } else if (kind == "MortalWoundsInflicted") {
+        v = MortalWoundsInflicted{j.at("unit").get<UnitId>(), j.at("result").get<MortalWoundsResult>()};
+    } else if (kind == "ModelMoveProposed") {
+        v = ModelMoveProposed{j.at("unit").get<UnitId>(), j.at("model").get<ModelId>(),
+                              j.at("path").get<std::vector<Position>>(), j.at("distance_mm").get<float>()};
+    } else if (kind == "UnitMoveCommitted") {
+        v = UnitMoveCommitted{j.at("unit").get<UnitId>(), j.at("move_type").get<MoveType>()};
+    } else if (kind == "UnitMoveReverted") {
+        v = UnitMoveReverted{j.at("unit").get<UnitId>(), j.at("reasons").get<std::vector<std::string>>()};
+    } else if (kind == "BattleShockRolled") {
+        v = BattleShockRolled{j.at("unit").get<UnitId>(), j.at("roll").get<BattleShockRoll>()};
     } else if (kind == "AttackBatchesGathered") {
         v = AttackBatchesGathered{j.at("attacker").get<UnitId>(), j.at("batches").get<std::vector<AttackBatch>>()};
     } else if (kind == "AttackBatchSelected") {

@@ -63,8 +63,10 @@ PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions) {
                 if (corrupt) {
                     check_rejection(first);
                     ++stats.rejected_fills;
-                } else {
+                } else if (wh40k::test::clean_fill_always_valid(a)) {
                     EXPECT_TRUE(first.ok()) << (first.ok() ? "" : first.reasons[0]);
+                } else if (!first.ok()) {
+                    check_rejection(first);  // e.g. a random path through an enemy model: still rule-cited
                 }
             }
         }
@@ -80,15 +82,26 @@ PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions) {
 }  // namespace
 
 TEST(D004_LegalActions, RandomPlayFromTheScenarioStart) {
+    int moves_proposed = 0;
     for (std::uint64_t seed = 1; seed <= 50; ++seed) {
         GameState gs = wh40k::test::load_v1_scenario();
         gs.dice.seed = seed;
         start_game(gs);
         TestRng rng(seed);
         const PlayStats stats = play_and_check(gs, rng, 200);
-        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed;
-        EXPECT_EQ(stats.actions, 30);  // M5 stubs: every game is the same 30 decisions
+        EXPECT_TRUE(gs.flow.stage == Stage::GameOver || stats.actions == 200) << "seed " << seed;
+        moves_proposed += stats.template_fills;
     }
+    EXPECT_GT(moves_proposed, 0);  // path templates (D-004) were filled and checked
+}
+
+TEST(D004_LegalActions, RandomPlayFromTheScenarioStartMovesModels) {
+    // Separate assertion so a regression is easy to read: random play does use the path templates.
+    GameState gs = wh40k::test::load_v1_scenario();
+    start_game(gs);
+    TestRng rng(99);
+    const PlayStats stats = play_and_check(gs, rng, 200);
+    EXPECT_GT(stats.template_fills, 0);
 }
 
 TEST(D004_LegalActions, RandomPlayThroughAttackFlows) {

@@ -26,6 +26,9 @@ bool answers(const DecisionKind& d, const GameAction& a) {
         [&d](const auto& act) {
             using T = std::decay_t<decltype(act)>;
             if constexpr (std::is_same_v<T, action::StartMove>) return std::holds_alternative<decision::MoveUnits>(d);
+            else if constexpr (std::is_same_v<T, action::ProposeModelMove> || std::is_same_v<T, action::CommitUnitMove> ||
+                               std::is_same_v<T, action::ResetUnitMove>)
+                return std::holds_alternative<decision::MoveModels>(d);
             else if constexpr (std::is_same_v<T, action::EndShootStep>) return std::holds_alternative<decision::Shoot>(d);
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return std::holds_alternative<decision::Charge>(d);
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>)
@@ -90,6 +93,9 @@ std::optional<PendingDecision> compute_decision(const GameState& state) {
     }
     if (state.flow.attack) {
         return detail::attack_decision(state);
+    }
+    if (state.flow.move) {
+        return detail::move_decision(state);
     }
     return detail::stage_decision(state);
 }

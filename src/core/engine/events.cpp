@@ -20,6 +20,14 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::PhaseStarted>) return {"PhaseStarted", "07.02"};
     else if constexpr (std::is_same_v<T, event::PhaseEnded>) return {"PhaseEnded", "07.02"};
     else if constexpr (std::is_same_v<T, event::UnitRemainedStationary>) return {"UnitRemainedStationary", "09.04"};
+    else if constexpr (std::is_same_v<T, event::MoveStarted>) return {"MoveStarted", "09.02"};
+    else if constexpr (std::is_same_v<T, event::AdvanceRolled>) return {"AdvanceRolled", "09.06"};
+    else if constexpr (std::is_same_v<T, event::HazardRollsMade>) return {"HazardRollsMade", "06.03"};
+    else if constexpr (std::is_same_v<T, event::MortalWoundsInflicted>) return {"MortalWoundsInflicted", "06.02"};
+    else if constexpr (std::is_same_v<T, event::ModelMoveProposed>) return {"ModelMoveProposed", "03.01"};
+    else if constexpr (std::is_same_v<T, event::UnitMoveCommitted>) return {"UnitMoveCommitted", "03.01"};
+    else if constexpr (std::is_same_v<T, event::UnitMoveReverted>) return {"UnitMoveReverted", "03.01"};
+    else if constexpr (std::is_same_v<T, event::BattleShockRolled>) return {"BattleShockRolled", "01.07"};
     else if constexpr (std::is_same_v<T, event::AttackBatchesGathered>) return {"AttackBatchesGathered", "04.03"};
     else if constexpr (std::is_same_v<T, event::AttackBatchSelected>) return {"AttackBatchSelected", "04.03"};
     else if constexpr (std::is_same_v<T, event::HitRollsMade>) return {"HitRollsMade", "05.01"};

@@ -31,7 +31,9 @@ std::vector<GameEvent> play_all_pass(GameState& gs, int& actions) {
     while (gs.pending) {
         const Side side = decider(gs);
         const auto legal = legal_actions(gs, side);
-        EXPECT_EQ(legal.size(), 1u) << describe(*gs.pending);
+        EXPECT_FALSE(legal.empty()) << describe(*gs.pending);
+        if (legal.empty()) break;
+        // "Pass": the first legal action is Remain Stationary / End Shoot Step / End Charge Step.
         const auto events = apply_action(gs, side, legal.front());
         all.insert(all.end(), events.begin(), events.end());
         ++actions;
@@ -137,8 +139,11 @@ TEST(R09_02_MoveUnits, OnlyTheActivePlayersUnselectedUnitsAreOffered) {
     GameState gs = load_v1_scenario();
     start_game(gs);
     const auto legal = legal_actions(gs, Side::A);
-    ASSERT_EQ(legal.size(), 1u);
-    EXPECT_EQ(legal[0], GameAction{(action::StartMove{gs.units[0].id, MoveType::RemainStationary})});
+    const UnitId unit = gs.units[0].id;
+    // 09.04 any unit; 09.05 / 09.06 unengaged units. Not engaged, so no Fall-back move (09.07).
+    EXPECT_EQ(legal, (std::vector<GameAction>{action::StartMove{unit, MoveType::RemainStationary, std::nullopt},
+                                              action::StartMove{unit, MoveType::Normal, std::nullopt},
+                                              action::StartMove{unit, MoveType::Advance, std::nullopt}}));
     EXPECT_TRUE(legal_actions(gs, Side::B).empty());
 }
 
@@ -160,8 +165,10 @@ TEST(R09_02_MoveUnits, EveryUnitMustBeSelectedBeforeTheStepEnds) {
     apply_action(gs, Side::A, action::StartMove{gs.units[0].id});
     EXPECT_EQ(gs.flow.stage, Stage::MoveUnits);
     const auto legal = legal_actions(gs, Side::A);
-    ASSERT_EQ(legal.size(), 1u);
-    EXPECT_EQ(legal[0], GameAction{(action::StartMove{second, MoveType::RemainStationary})});
+    ASSERT_EQ(legal.size(), 3u);
+    for (const auto& a : legal) {
+        EXPECT_EQ(std::get<action::StartMove>(a).unit, second);  // only the unselected unit
+    }
 
     const auto again = validate_action(gs, Side::A, action::StartMove{gs.units[0].id});
     ASSERT_FALSE(again.ok());
@@ -197,7 +204,7 @@ TEST(R09_02_MoveUnits, EnemyAndDestroyedUnitsCannotBeSelected) {
     const auto missing = validate_action(gs, Side::A, action::StartMove{UnitId{77}});
     ASSERT_FALSE(missing.ok());
     EXPECT_EQ(missing.reasons[0], "09.02: unit 77 does not exist");
-    EXPECT_EQ(legal_actions(gs, Side::A).size(), 1u);  // the destroyed unit is not offered
+    EXPECT_EQ(legal_actions(gs, Side::A).size(), 3u);  // the destroyed unit is not offered
 }
 
 TEST(R07_02_PlayerTurns, TurnFlagsAreClearedAtTheEndOfTheTurn) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,9 @@ struct UnitTurnFlags {
 // Per-phase selection flags. Reset when the phase starts.
 struct UnitPhaseFlags {
     bool selected_to_move = false;  // 09.02
+    // D-005: dice rolled for a move stand for the rest of the phase, even if the move is reverted.
+    std::optional<int> advance_roll;           // 09.06
+    bool desperate_escape_hazards_made = false;  // 09.07
     friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
 };
 

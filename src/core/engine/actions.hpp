@@ -4,24 +4,42 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
 
+#include "core/geometry/primitives.hpp"
+#include "core/rules/move_types.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
 
-// 09.02 Select Move Type. M5 implements Remain Stationary (09.04); M7 adds Normal, Advance and
-// Fall-back moves.
-enum class MoveType : std::uint8_t { RemainStationary };
-
 namespace action {
-// 09.02: select a friendly unit that has not been selected to move this phase, and its move type.
+// 09.02: select a friendly unit that has not been selected to move this phase, and its move type
+// (with the fall-back mode for a Fall-back move, 09.07).
 struct StartMove {
     UnitId unit;
     MoveType move_type = MoveType::RemainStationary;
+    std::optional<FallBackMode> fall_back_mode;
     friend bool operator==(const StartMove&, const StartMove&) = default;
+};
+// 03.01: move one model of the moving unit. `path` is the end of each straight line, starting from the
+// model's position at the start of the move; proposing again replaces the model's earlier path.
+// An empty path is the template legal_actions returns (D-004).
+struct ProposeModelMove {
+    ModelId model;
+    std::vector<Position> path;
+    friend bool operator==(const ProposeModelMove&, const ProposeModelMove&) = default;
+};
+// 03.01 Ending a Move: finish the move. If an end condition fails, every model returns to its start
+// position and the unit has not been selected to make that move (03 sidebar; D-005 for dice).
+struct CommitUnitMove {
+    friend bool operator==(const CommitUnitMove&, const CommitUnitMove&) = default;
+};
+// Abandon the move: models return to their start positions; the unit can be selected again (D-005).
+struct ResetUnitMove {
+    friend bool operator==(const ResetUnitMove&, const ResetUnitMove&) = default;
 };
 // 10.02: no more units will be selected to shoot this phase.
 struct EndShootStep {
@@ -51,7 +69,8 @@ struct OrderCasualties {
 };
 }  // namespace action
 
-using GameAction = std::variant<action::StartMove, action::EndShootStep, action::EndChargeStep,
+using GameAction = std::variant<action::StartMove, action::ProposeModelMove, action::CommitUnitMove,
+                                action::ResetUnitMove, action::EndShootStep, action::EndChargeStep,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties>;
 

@@ -4,6 +4,8 @@
 #include <type_traits>
 #include <variant>
 
+#include "core/geometry/units.hpp"
+
 namespace wh40k::client {
 
 namespace {
@@ -70,6 +72,32 @@ std::string body(const core::GameEvent& e) {
                 return std::string(core::phase_name(x.phase)) + " phase ends";
             } else if constexpr (std::is_same_v<T, ev::UnitRemainedStationary>) {
                 return unit(x.unit) + " remains stationary";
+            } else if constexpr (std::is_same_v<T, ev::MoveStarted>) {
+                std::string text = unit(x.unit) + " starts a " + std::string(core::move_type_name(x.move_type)) +
+                                   " move";
+                if (x.mode) text += " (" + std::string(core::fall_back_mode_name(*x.mode)) + ")";
+                return text;
+            } else if constexpr (std::is_same_v<T, ev::AdvanceRolled>) {
+                return "Advance roll: " + std::to_string(x.roll) + (x.reused ? " (kept from earlier, D-005)" : "");
+            } else if constexpr (std::is_same_v<T, ev::HazardRollsMade>) {
+                return "Hazard rolls: " + ints(x.rolls.rolls) + " -> " + std::to_string(x.rolls.mortal_wounds) +
+                       " mortal wound(s)";
+            } else if constexpr (std::is_same_v<T, ev::MortalWoundsInflicted>) {
+                return std::to_string(x.result.steps.size()) + " mortal wound(s) on " + unit(x.unit) + ", " +
+                       std::to_string(x.result.models_destroyed) + " destroyed";
+            } else if constexpr (std::is_same_v<T, ev::ModelMoveProposed>) {
+                return model(x.model) + " moves " + std::to_string(core::mm_to_inches(x.distance_mm)).substr(0, 4) +
+                       "\"";
+            } else if constexpr (std::is_same_v<T, ev::UnitMoveCommitted>) {
+                return unit(x.unit) + " ends its " + std::string(core::move_type_name(x.move_type)) + " move";
+            } else if constexpr (std::is_same_v<T, ev::UnitMoveReverted>) {
+                return unit(x.unit) + "'s move is undone" +
+                       (x.reasons.empty() ? std::string(" (reset)") : ": " + x.reasons.front());
+            } else if constexpr (std::is_same_v<T, ev::BattleShockRolled>) {
+                return "Battle-shock roll for " + unit(x.unit) + ": " +
+                       std::to_string(x.roll.leadership.roll.total()) + " vs " +
+                       std::to_string(x.roll.leadership.target) + "+ -> " +
+                       (x.roll.becomes_battle_shocked ? "battle-shocked" : "passed");
             } else if constexpr (std::is_same_v<T, ev::AttackBatchesGathered>) {
                 int dice = 0;
                 for (const auto& b : x.batches) dice += b.attack_dice;

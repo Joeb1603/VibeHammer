@@ -10,7 +10,9 @@
 #include <string_view>
 #include <vector>
 
+#include "core/geometry/primitives.hpp"
 #include "core/rules/attack_types.hpp"
+#include "core/rules/move_types.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -88,12 +90,38 @@ struct AttackFlow {
     friend bool operator==(const AttackFlow&, const AttackFlow&) = default;
 };
 
+// A model's position at the start of the move (03.01: models return here if the move fails).
+struct ModelStart {
+    ModelId model;
+    Position position;
+    friend bool operator==(const ModelStart&, const ModelStart&) = default;
+};
+
+// A model's proposed path for the move in progress: start position first, then each straight line.
+struct ModelPath {
+    ModelId model;
+    std::vector<Position> points;
+    friend bool operator==(const ModelPath&, const ModelPath&) = default;
+};
+
+// 09.02 / 03.01: a unit selected to make a move (other than Remain Stationary), moving model by model.
+struct MoveInProgress {
+    UnitId unit;
+    MoveType type = MoveType::Normal;
+    std::optional<FallBackMode> mode;  // 09.07 fall-back moves only
+    std::vector<ModelStart> starts;    // every model's position when the move started
+    std::vector<ModelPath> paths;      // proposed paths, one per moved model
+    int pending_mortal_wounds = 0;     // 09.07 Desperate Escape hazard rolls (06.03) not yet allocated
+    friend bool operator==(const MoveInProgress&, const MoveInProgress&) = default;
+};
+
 struct FlowState {
     Stage stage = Stage::NotStarted;
     int battle_round = 0;   // 1-based once started
     int turn_in_round = 0;  // 0: the first turn of the battle round, 1: the second
     std::optional<Activation> activation;
     std::optional<AttackFlow> attack;
+    std::optional<MoveInProgress> move;
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

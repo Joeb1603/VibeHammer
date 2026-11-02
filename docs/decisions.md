@@ -217,7 +217,24 @@ models is therefore exactly as expressive as answering each Select Model step se
   about.
 - Replay regression test: every file must run with every step valid and match its `expect` block.
 
+## D-015: Multiple Battle-shock Rolls (01.07 / 08.03 "See also", app-only rule)
+**Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**)
+
+> If a rule requires a unit to make a battle-shock roll at a time when it is already under the effects
+> of a previous battle-shock roll (or when multiple rules require a battle-shock roll to be made
+> simultaneously for the same unit), the unit only makes one cumulative battle-shock roll for that
+> instance. However, if any rule or ability imposes a modifier to a battle-shock roll, apply all
+> applicable modifiers to that single roll. If the roll fails, the unit remains battle-shocked (or
+> becomes battle-shocked if it wasn't already), and any ongoing penalties do not stack beyond the
+> standard battle-shock effects.
+
+Applied as:
+- One battle-shock roll per instance, never several at once for the same unit; battle-shock effects
+  don't stack (the unit is simply battle-shocked).
+- V1 has no battle-shock modifiers. Desperate Escape (09.07) only requires a roll when the unit is
+  **not** battle-shocked, so in V1 this rule never changes an outcome; M11 (08.03) is the other user.
+
 ## Note on app-only rule wording (2026-11-02)
-D-009, D-010, D-011 and D-012 use wording the user obtained from an AI assistant, not copied from the
+D-009, D-010, D-011, D-012 and D-015 use wording the user obtained from an AI assistant, not copied from the
 Warhammer 40,000 app. Treat them as working assumptions: if the official app text differs, update the
 decision, the code that cites it, and its tests.

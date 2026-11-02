@@ -16,6 +16,11 @@ namespace decision {
 struct MoveUnits {
     friend bool operator==(const MoveUnits&, const MoveUnits&) = default;
 };
+// 03.01 / 09.05-09.07: move the selected unit's models one at a time, then commit or reset the move.
+struct MoveModels {
+    UnitId unit;
+    friend bool operator==(const MoveModels&, const MoveModels&) = default;
+};
 // 10.02 Shoot: select a unit to shoot, or end the Shoot step.
 struct Shoot {
     friend bool operator==(const Shoot&, const Shoot&) = default;
@@ -34,14 +39,15 @@ struct DeclareAllocationOrder {
     UnitId target;
     friend bool operator==(const DeclareAllocationOrder&, const DeclareAllocationOrder&) = default;
 };
-// 05.04 Select Model, answered once per batch with a casualty priority (D-013).
+// 05.04 Select Model (attacks) or 06.02 Select Model (mortal wounds), answered once with a casualty
+// priority (D-013). Owned by the controlling player of the unit losing models.
 struct OrderCasualties {
     UnitId target;
     friend bool operator==(const OrderCasualties&, const OrderCasualties&) = default;
 };
 }  // namespace decision
 
-using DecisionKind = std::variant<decision::MoveUnits, decision::Shoot, decision::Charge,
+using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, decision::Shoot, decision::Charge,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties>;
 

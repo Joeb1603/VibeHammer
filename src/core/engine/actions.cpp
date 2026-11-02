@@ -9,6 +9,9 @@ std::string_view action_name(const GameAction& a) {
         [](const auto& x) -> std::string_view {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, action::StartMove>) return "StartMove";
+            else if constexpr (std::is_same_v<T, action::ProposeModelMove>) return "ProposeModelMove";
+            else if constexpr (std::is_same_v<T, action::CommitUnitMove>) return "CommitUnitMove";
+            else if constexpr (std::is_same_v<T, action::ResetUnitMove>) return "ResetUnitMove";
             else if constexpr (std::is_same_v<T, action::EndShootStep>) return "EndShootStep";
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return "EndChargeStep";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "SelectAttackBatch";
@@ -24,6 +27,9 @@ std::string_view action_rule(const GameAction& a) {
         [](const auto& x) -> std::string_view {
             using T = std::decay_t<decltype(x)>;
             if constexpr (std::is_same_v<T, action::StartMove>) return "09.02";
+            else if constexpr (std::is_same_v<T, action::ProposeModelMove>) return "03.01";
+            else if constexpr (std::is_same_v<T, action::CommitUnitMove>) return "03.01";
+            else if constexpr (std::is_same_v<T, action::ResetUnitMove>) return "03.01";
             else if constexpr (std::is_same_v<T, action::EndShootStep>) return "10.02";
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return "11.02";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "04.03";
@@ -37,6 +43,9 @@ std::string_view action_rule(const GameAction& a) {
 bool is_template(const GameAction& a) {
     if (const auto* c = std::get_if<action::OrderCasualties>(&a)) {
         return c->priority.empty();  // D-013: the priority is the open parameter
+    }
+    if (const auto* m = std::get_if<action::ProposeModelMove>(&a)) {
+        return m->path.empty();  // D-004: the path is the open parameter
     }
     return false;
 }

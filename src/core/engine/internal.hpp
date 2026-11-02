@@ -46,6 +46,29 @@ void apply_details(GameState& state, Side side, const action::StartMove& a, Dice
 void apply_details(GameState& state, Side side, const action::EndShootStep& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::EndChargeStep& a, DiceSource& dice, Events& events);
 
+// ---- movement.cpp: 09.04-09.07 / 03.01 as a sub-machine ----
+
+// The StartMove actions `unit` may take now (Remain Stationary first).
+[[nodiscard]] std::vector<GameAction> legal_moves_for_unit(const GameState& state, const Unit& unit);
+// 09.04-09.07 eligibility and fall-back mode for a StartMove.
+[[nodiscard]] ValidationResult validate_move_type(const GameState& state, const Unit& unit, const action::StartMove& a);
+// Starts a Normal/Advance/Fall-back move (Before Moving rolls, start positions, activation).
+void begin_move(GameState& state, const action::StartMove& a, DiceSource& dice, Events& events);
+// The decision the move in progress needs (pure), or nullopt if it can progress automatically.
+[[nodiscard]] std::optional<PendingDecision> move_decision(const GameState& state);
+// One step of automatic move work. Precondition: a move is in progress and move_decision is nullopt.
+void move_progress(GameState& state, DiceSource& dice, Events& events);
+// 06.02 for the moving unit's pending Desperate Escape mortal wounds, with a casualty priority (D-013).
+void resolve_move_mortal_wounds(GameState& state, const std::vector<ModelId>& priority, Events& events);
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::MoveModels& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::ProposeModelMove& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::CommitUnitMove& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::ResetUnitMove& a);
+void apply_details(GameState& state, Side side, const action::ProposeModelMove& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::CommitUnitMove& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::ResetUnitMove& a, DiceSource& dice, Events& events);
+
 // ---- attack_flow.cpp: 04.03 / 05 as a sub-machine ----
 
 // The decision the attack in progress needs (pure), or nullopt if it can progress automatically.

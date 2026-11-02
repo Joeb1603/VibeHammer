@@ -9,6 +9,7 @@
 
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
+#include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
@@ -53,7 +54,6 @@ TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
         Match match(initial);
         TestRng rng(seed);
         random_play(match, rng, 200);
-        EXPECT_EQ(match.state().flow.stage, Stage::GameOver);
         expect_replays_identically(match);
     }
 }
@@ -141,4 +141,49 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     }
     replay.expect = replay_expectation(gs);
     save_replay(replay, kReplayDir / "m5_full_game_all_pass.json");
+
+    // M7: movement. A Normal move, an Advance (seeded roll), a move reverted for coherency (03.01), then
+    // every later decision passes.
+    Replay moves;
+    moves.description =
+        "M7: Side A Normal-moves its Intercessors 3\" north; Side B advances its Termagants 2\" south; "
+        "Side A then moves one Intercessor 3\" west, which breaks coherency so the move reverts (03.01, "
+        "03.03), and remains stationary instead. Every later decision passes; the game is a draw.";
+    moves.initial.scenario = "data/scenarios/v1_skirmish.json";
+    moves.initial.seed = 7;
+    GameState g = replay_initial_state(moves, repo_root());
+    start_game(g);
+    auto act = [&](const GameAction& a) {
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        moves.steps.push_back(ReplayStep{side, a});
+        apply_action(g, side, a);
+    };
+    auto shift_unit = [&](std::size_t unit, float dx_in, float dy_in) {
+        for (const Model& m : g.units[unit].models) {
+            const Position s = *move_start_position(g, m.id);
+            act(action::ProposeModelMove{m.id, {Position{s.x + wh40k::test::in(dx_in), s.y + wh40k::test::in(dy_in), 0}}});
+        }
+    };
+    act(action::StartMove{g.units[0].id, MoveType::Normal, std::nullopt});
+    shift_unit(0, 0, 3);
+    act(action::CommitUnitMove{});
+    act(action::EndShootStep{});
+    act(action::EndChargeStep{});
+    act(action::StartMove{g.units[1].id, MoveType::Advance, std::nullopt});
+    shift_unit(1, 0, -2);
+    act(action::CommitUnitMove{});
+    act(action::EndShootStep{});
+    act(action::EndChargeStep{});
+    act(action::StartMove{g.units[0].id, MoveType::Normal, std::nullopt});
+    const Model& first = g.units[0].models[0];
+    const Position s = *move_start_position(g, first.id);
+    act(action::ProposeModelMove{first.id, {Position{s.x - wh40k::test::in(3), s.y, 0}}});
+    act(action::CommitUnitMove{});  // reverts: model 1 is more than 2" from the others
+    while (g.pending) {
+        act(legal_actions(g, decider(g)).front());
+    }
+    moves.expect = replay_expectation(g);
+    save_replay(moves, kReplayDir / "m7_movement.json");
 }

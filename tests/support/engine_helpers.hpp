@@ -4,6 +4,7 @@
 // shortcuts to common positions in the game.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <regex>
@@ -15,6 +16,7 @@
 #include "core/dice/dice.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
+#include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/rules/attacks.hpp"
 #include "test_helpers.hpp"
@@ -71,16 +73,63 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
         }
         return filled;
     }
+    if (const auto* pm = std::get_if<core::action::ProposeModelMove>(&tmpl)) {
+        // A path of 1-3 straight lines from the model's start position, within its maximum distance.
+        // It can still be invalid (off the battlefield, through an enemy model): that's the point.
+        core::action::ProposeModelMove filled = *pm;
+        const core::Position start = core::move_start_position(gs, pm->model).value();
+        const float max = core::max_move_distance_mm(gs, pm->model).value();
+        if (corrupt) {
+            switch (rng.below(3)) {
+                case 0: filled.path = {core::Position{start.x + max + in(2), start.y, 0.0f}}; break;  // too far
+                case 1: filled.path = {core::Position{-in(1), start.y, 0.0f}}; break;  // off the battlefield
+                default: filled.path.clear(); break;
+            }
+            return filled;
+        }
+        const std::size_t legs = 1 + rng.below(3);
+        float budget = max * 0.95f;
+        core::Position at = start;
+        for (std::size_t i = 0; i < legs; ++i) {
+            const float angle = static_cast<float>(rng.below(3600)) * 0.1f * 3.14159265f / 180.0f;
+            const float length = budget * static_cast<float>(rng.below(1000)) / 1000.0f / static_cast<float>(legs);
+            at = core::Position{at.x + length * std::cos(angle), at.y + length * std::sin(angle), 0.0f};
+            filled.path.push_back(at);
+            budget -= length;
+        }
+        return filled;
+    }
     ADD_FAILURE() << "unknown template kind " << core::action_name(tmpl);
     return tmpl;
 }
 
-// One random legal (and, for templates, validly filled) action for whoever must decide.
+// Templates whose clean random fill is always valid (casualty orders). Path fills may be rejected.
+inline bool clean_fill_always_valid(const core::GameAction& tmpl) {
+    return std::holds_alternative<core::action::OrderCasualties>(tmpl);
+}
+
+// One random legal action for whoever must decide. Templates are filled until one validates (a few
+// tries); if none does, a fully specified legal action is chosen instead.
 inline core::GameAction random_action(const core::GameState& gs, TestRng& rng) {
-    const auto legal = core::legal_actions(gs, decider(gs));
+    const core::Side side = decider(gs);
+    const auto legal = core::legal_actions(gs, side);
     EXPECT_FALSE(legal.empty());
     const core::GameAction& pick = legal[rng.below(legal.size())];
-    return core::is_template(pick) ? fill_template(gs, pick, rng, false) : pick;
+    if (!core::is_template(pick)) {
+        return pick;
+    }
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        core::GameAction filled = fill_template(gs, pick, rng, false);
+        if (core::validate_action(gs, side, filled).ok()) {
+            return filled;
+        }
+    }
+    std::vector<core::GameAction> concrete;
+    for (const auto& a : legal) {
+        if (!core::is_template(a)) concrete.push_back(a);
+    }
+    EXPECT_FALSE(concrete.empty());
+    return concrete[rng.below(concrete.size())];
 }
 
 // Starts the V1 scenario (Termagants 1" closer, D-008 note) and plays to `side`'s Shoot step.

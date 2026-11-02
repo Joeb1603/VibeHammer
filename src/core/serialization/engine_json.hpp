@@ -12,8 +12,16 @@
 
 namespace wh40k::core {
 
-void to_json(Json& j, MoveType v);
-void from_json(const Json& j, MoveType& v);
+void to_json(Json& j, const TwoD6& v);
+void from_json(const Json& j, TwoD6& v);
+void to_json(Json& j, const LeadershipRoll& v);
+void from_json(const Json& j, LeadershipRoll& v);
+void to_json(Json& j, const BattleShockRoll& v);
+void from_json(const Json& j, BattleShockRoll& v);
+void to_json(Json& j, const HazardRolls& v);
+void from_json(const Json& j, HazardRolls& v);
+void to_json(Json& j, const MortalWoundsResult& v);
+void from_json(const Json& j, MortalWoundsResult& v);
 
 void to_json(Json& j, HitOutcome v);
 void from_json(const Json& j, HitOutcome& v);

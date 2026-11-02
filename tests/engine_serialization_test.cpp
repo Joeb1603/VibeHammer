@@ -59,6 +59,7 @@ TEST(Serialization, EveryStageRoundTrips) {
 TEST(Serialization, EveryDecisionKindRoundTrips) {
     const std::vector<PendingDecision> all{
         {Side::A, decision::MoveUnits{}},
+        {Side::A, decision::MoveModels{UnitId{1}}},
         {Side::B, decision::Shoot{}},
         {Side::A, decision::Charge{}},
         {Side::A, decision::SelectAttackBatch{UnitId{1}}},
@@ -84,6 +85,21 @@ TEST(Serialization, StateMidAttackRoundTrips) {
     EXPECT_EQ(round_trip(*gs.flow.attack), *gs.flow.attack);
 }
 
+TEST(Serialization, StateMidMoveRoundTrips) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    start_game(gs);
+    apply_action(gs, Side::A, action::StartMove{gs.units[0].id, MoveType::Advance, std::nullopt});
+    const ModelId m = gs.units[0].models[0].id;
+    const Position start = gs.units[0].models[0].position;
+    apply_action(gs, Side::A, action::ProposeModelMove{m, {Position{start.x, start.y + 20.0f, 0.0f}}});
+    ASSERT_TRUE(gs.flow.move.has_value());
+    ASSERT_TRUE(gs.units[0].phase_flags.advance_roll.has_value());
+    gs.flow.move->mode = FallBackMode::OrderedRetreat;  // exercise every field
+    gs.flow.move->pending_mortal_wounds = 2;
+    gs.units[0].phase_flags.desperate_escape_hazards_made = true;
+    EXPECT_EQ(round_trip(gs), gs);
+}
+
 TEST(Serialization, GameResultWithAndWithoutWinner) {
     const GameResult win{Side::A, "D-007: Side B has no models on the battlefield; Side A wins"};
     const GameResult draw{std::nullopt, "D-007: draw"};
@@ -96,7 +112,10 @@ TEST(Serialization, GameResultWithAndWithoutWinner) {
 
 TEST(Serialization, EveryActionKindRoundTrips) {
     const std::vector<GameAction> all{
-        action::StartMove{UnitId{1}, MoveType::RemainStationary},
+        action::StartMove{UnitId{1}, MoveType::FallBack, FallBackMode::DesperateEscape},
+        action::ProposeModelMove{ModelId{3}, {Position{10.5f, 20.25f, 0.0f}, Position{30.0f, 40.0f, 0.0f}}},
+        action::CommitUnitMove{},
+        action::ResetUnitMove{},
         action::EndShootStep{},
         action::EndChargeStep{},
         action::SelectAttackBatch{3},
@@ -107,6 +126,12 @@ TEST(Serialization, EveryActionKindRoundTrips) {
     for (const auto& a : all) {
         EXPECT_EQ(round_trip_action(a), a) << action_name(a);
     }
+    EXPECT_EQ(round_trip_action(action::StartMove{UnitId{1}, MoveType::Advance, std::nullopt}),
+              GameAction{(action::StartMove{UnitId{1}, MoveType::Advance, std::nullopt})});
+    // M5 replays wrote StartMove without a fall_back_mode field: still readable.
+    GameAction old_form;
+    action::from_json(Json::parse(R"({"kind":"StartMove","unit":1,"move_type":"RemainStationary"})"), old_form);
+    EXPECT_EQ(old_form, GameAction{(action::StartMove{UnitId{1}, MoveType::RemainStationary, std::nullopt})});
     EXPECT_EQ(round_trip_action(action::OrderCasualties{UnitId{2}, {}}),
               GameAction{(action::OrderCasualties{UnitId{2}, {}})});  // a template
 }
@@ -140,6 +165,15 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::PhaseStarted{Phase::Shooting, Side::A},
         event::PhaseEnded{Phase::Fight, Side::B},
         event::UnitRemainedStationary{UnitId{1}},
+        event::MoveStarted{UnitId{1}, MoveType::FallBack, FallBackMode::OrderedRetreat},
+        event::AdvanceRolled{UnitId{1}, 4, true},
+        event::HazardRollsMade{UnitId{1}, HazardRolls{{1, 5}, 1, 1}},
+        event::MortalWoundsInflicted{UnitId{1}, MortalWoundsResult{{DamageResult{ModelId{2}, 1, 1, false}}, 0, 0}},
+        event::ModelMoveProposed{UnitId{1}, ModelId{2}, {Position{1.0f, 2.0f, 0.0f}, Position{3.0f, 4.0f, 0.0f}},
+                                 2.5f},
+        event::UnitMoveCommitted{UnitId{1}, MoveType::Advance},
+        event::UnitMoveReverted{UnitId{1}, {"03.03: model 2 is more than 2\" from every other model in unit 1"}},
+        event::BattleShockRolled{UnitId{1}, BattleShockRoll{LeadershipRoll{TwoD6{{1, 2}}, 6, false}, true}},
         event::AttackBatchesGathered{UnitId{1}, {batch}},
         event::AttackBatchSelected{UnitId{1}, 0, UnitId{2}, 7},
         event::HitRollsMade{0, hits},

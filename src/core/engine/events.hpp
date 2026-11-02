@@ -11,8 +11,12 @@
 #include <variant>
 #include <vector>
 
+#include "core/geometry/primitives.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attack_types.hpp"
+#include "core/rules/leadership.hpp"
+#include "core/rules/mortal_wounds.hpp"
+#include "core/rules/move_types.hpp"
 #include "core/state/flow.hpp"
 #include "core/types/ids.hpp"
 
@@ -50,6 +54,50 @@ struct PhaseEnded {
 struct UnitRemainedStationary {  // 09.04
     UnitId unit;
     friend bool operator==(const UnitRemainedStationary&, const UnitRemainedStationary&) = default;
+};
+struct MoveStarted {  // 09.02: the unit is selected to make this move
+    UnitId unit;
+    MoveType move_type = MoveType::Normal;
+    std::optional<FallBackMode> mode;
+    friend bool operator==(const MoveStarted&, const MoveStarted&) = default;
+};
+struct AdvanceRolled {  // 09.06 Before Moving (D-005: reused if the unit advances again this phase)
+    UnitId unit;
+    int roll = 0;
+    bool reused = false;
+    friend bool operator==(const AdvanceRolled&, const AdvanceRolled&) = default;
+};
+struct HazardRollsMade {  // 09.07 Desperate Escape, 06.03
+    UnitId unit;
+    HazardRolls rolls;
+    friend bool operator==(const HazardRollsMade&, const HazardRollsMade&) = default;
+};
+struct MortalWoundsInflicted {  // 06.02
+    UnitId unit;
+    MortalWoundsResult result;
+    friend bool operator==(const MortalWoundsInflicted&, const MortalWoundsInflicted&) = default;
+};
+struct ModelMoveProposed {  // 03.01: a model's path (start position first)
+    UnitId unit;
+    ModelId model;
+    std::vector<Position> path;
+    float distance_mm = 0.0f;
+    friend bool operator==(const ModelMoveProposed&, const ModelMoveProposed&) = default;
+};
+struct UnitMoveCommitted {  // 03.01 Ending a Move: the move ended
+    UnitId unit;
+    MoveType move_type = MoveType::Normal;
+    friend bool operator==(const UnitMoveCommitted&, const UnitMoveCommitted&) = default;
+};
+struct UnitMoveReverted {  // 03.01: models returned to their start positions; not selected to make that move
+    UnitId unit;
+    std::vector<std::string> reasons;  // rule-cited; empty when the player reset the move
+    friend bool operator==(const UnitMoveReverted&, const UnitMoveReverted&) = default;
+};
+struct BattleShockRolled {  // 01.07 (e.g. after a Desperate Escape, 09.07)
+    UnitId unit;
+    BattleShockRoll roll;
+    friend bool operator==(const BattleShockRolled&, const BattleShockRolled&) = default;
 };
 struct AttackBatchesGathered {  // 04.03: the attacking unit's attacks, grouped (D-006)
     UnitId attacker;
@@ -112,8 +160,10 @@ struct GameOver {  // D-007
 
 using GameEvent =
     std::variant<event::BattleRoundStarted, event::BattleRoundEnded, event::TurnStarted, event::TurnEnded,
-                 event::PhaseStarted, event::PhaseEnded, event::UnitRemainedStationary,
-                 event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
+                 event::PhaseStarted, event::PhaseEnded, event::UnitRemainedStationary, event::MoveStarted,
+                 event::AdvanceRolled, event::HazardRollsMade, event::MortalWoundsInflicted,
+                 event::ModelMoveProposed, event::UnitMoveCommitted, event::UnitMoveReverted,
+                 event::BattleShockRolled, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver>;

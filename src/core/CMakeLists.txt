@@ -8,6 +8,7 @@ add_library(wh40k_core STATIC
     engine/attack_flow.cpp
     engine/engine.cpp
     engine/events.cpp
+    engine/movement.cpp
     engine/replay.cpp
     engine/turn_phases.cpp
     geometry/closest.cpp
@@ -22,6 +23,7 @@ add_library(wh40k_core STATIC
     rules/attacks.cpp
     rules/leadership.cpp
     rules/mortal_wounds.cpp
+    rules/move_types.cpp
     serialization/engine_json.cpp
     serialization/flow_json.cpp
     serialization/json.cpp
