@@ -22,7 +22,12 @@
 #include "move_plan.hpp"
 #include "session.hpp"
 #include "shot_plan.hpp"
+#include "core/data/load_error.hpp"
+#include "core/engine/replay.hpp"
+#include "core/serialization/engine_json.hpp"
+#include "core/serialization/json.hpp"
 #include "support/engine_helpers.hpp"
+#include "timeline.hpp"
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
@@ -357,4 +362,123 @@ TEST(M12_NoRulesInTheClient, OnlyTheSessionAndTimelineApplyActions) {
         }
     }
     EXPECT_GT(files, 10);
+}
+
+// ==== M13: save, load, replay export, undo and the seed ====
+
+namespace {
+
+std::filesystem::path temp_file(const std::string& name) {
+    return std::filesystem::temp_directory_path() / ("vibehammer_" + name);
+}
+
+// From the V1 scenario with `seed`: Side A moves 6" north, skips shooting and declares a charge. Returns
+// nullopt if that roll gives no charge target.
+std::optional<GameSession> mid_charge(std::uint64_t seed) {
+    GameState initial = wh40k::test::load_v1_scenario();
+    GameSession s = GameSession::new_game(initial, seed);
+    const UnitId marines = s.state().units[0].id;
+    if (!s.submit(action::StartMove{marines, MoveType::Normal, std::nullopt}).ok()) return std::nullopt;
+    for (const auto& a : translate_unit(s.state(), marines, 0.0f, in(6))) {
+        if (!s.submit(a).ok()) return std::nullopt;
+    }
+    if (!s.submit(action::CommitUnitMove{}).ok() || !s.submit(action::EndShootStep{}).ok()) return std::nullopt;
+    if (!s.submit(action::DeclareCharge{marines}).ok()) return std::nullopt;
+    if (!s.pending() || !std::holds_alternative<decision::SelectChargeTargets>(s.pending()->kind)) return std::nullopt;
+    return s;
+}
+
+}  // namespace
+
+TEST(M13_SaveLoad, SavedMidChargeTheLoadedGameResumesAtTheSamePendingDecision) {
+    std::optional<GameSession> s;
+    for (std::uint64_t seed = 1; !s; ++seed) {
+        ASSERT_LT(seed, 100u);
+        s = mid_charge(seed);
+    }
+    const auto path = temp_file("m13_mid_charge.json");
+    s->save(path);
+    GameSession loaded = GameSession::load(path);  // "quit, load": a fresh session from the file
+    std::filesystem::remove(path);
+
+    ASSERT_TRUE(loaded.pending().has_value());
+    EXPECT_EQ(*loaded.pending(), *s->pending());
+    EXPECT_TRUE(std::holds_alternative<decision::SelectChargeTargets>(loaded.pending()->kind));
+    EXPECT_EQ(loaded.state(), s->state());
+    EXPECT_EQ(loaded.history(), s->history());
+    EXPECT_EQ(loaded.log().size(), s->log().size());
+    EXPECT_EQ(loaded.legal(), s->legal());
+    // Both continue identically.
+    const GameAction next = loaded.legal().front();
+    ASSERT_TRUE(loaded.submit(next).ok());
+    ASSERT_TRUE(s->submit(next).ok());
+    EXPECT_EQ(loaded.state(), s->state());
+}
+
+TEST(M13_SaveLoad, ATamperedSaveIsRejected) {
+    GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 3);
+    ASSERT_TRUE(s.submit(s.legal().front()).ok());
+    nlohmann::json j = s.to_save_json();
+    j["state"]["units"][0]["models"][0]["wounds_remaining"] = 1;
+    EXPECT_THROW((void)GameSession::from_save_json(j), DataError);
+    j = s.to_save_json();
+    j["steps"][0]["action"] = Json(GameAction{action::EndShootStep{}});
+    EXPECT_THROW((void)GameSession::from_save_json(j), DataError);
+}
+
+TEST(M13_SaveLoad, ABareGameStateLoadsWithoutHistory) {
+    GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 3);
+    const GameSession loaded = GameSession::from_save_json(Json(s.state()));
+    EXPECT_EQ(loaded.state(), s.state());
+    EXPECT_FALSE(loaded.can_undo());
+}
+
+TEST(M13_ReplayExport, AnExportedReplayPlaysBackInTheViewerIdentically) {
+    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
+        int move_tries = 0;
+        for (int step = 0; step < 400 && s.pending(); ++step) {
+            if (std::holds_alternative<decision::MoveUnits>(s.pending()->kind)) move_tries = 0;
+            ASSERT_TRUE(s.submit(choose(s, move_tries)).ok());
+        }
+        const auto path = temp_file("m13_export.json");
+        save_replay(s.to_replay("M13 export test"), path);
+        const Replay replay = load_replay(path);
+        std::filesystem::remove(path);
+
+        const Timeline timeline = Timeline::from_replay(replay, wh40k::test::repo_root(), "export");
+        ASSERT_TRUE(timeline.error().empty()) << timeline.error();
+        ASSERT_EQ(timeline.size(), s.log().size());
+        for (std::size_t i = 0; i < timeline.size(); ++i) {
+            EXPECT_EQ(timeline.frame(i).events, s.log()[i].events) << "frame " << i;
+        }
+        EXPECT_EQ(timeline.frame(timeline.size() - 1).state, s.state());
+        EXPECT_EQ(replay_expectation(run_replay(replay, wh40k::test::repo_root()).final_state), replay.expect);
+    }
+}
+
+TEST(M13_Undo, UndoRebuildsTheGameWithoutTheLastAction) {
+    GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 5);
+    EXPECT_FALSE(s.can_undo());
+    std::vector<GameState> states{s.state()};
+    int move_tries = 0;
+    for (int i = 0; i < 30 && s.pending(); ++i) {
+        ASSERT_TRUE(s.submit(choose(s, move_tries)).ok());
+        states.push_back(s.state());
+    }
+    for (std::size_t i = states.size() - 1; i > 0; --i) {
+        ASSERT_TRUE(s.undo());
+        EXPECT_EQ(s.state(), states[i - 1]) << "after undoing to step " << i - 1;  // dice included
+        EXPECT_EQ(s.history().size(), i - 1);
+    }
+    EXPECT_FALSE(s.undo());
+}
+
+TEST(M13_Seed, TheSeedCanBeOverriddenAtGameStart) {
+    const GameState scenario = wh40k::test::load_v1_scenario();
+    const GameSession a = GameSession::new_game(scenario, 42);
+    const GameSession b = GameSession::new_game(scenario, 42);
+    EXPECT_EQ(a.seed(), 42u);
+    EXPECT_EQ(a.state(), b.state());
+    EXPECT_EQ(GameSession::new_game(scenario, std::nullopt).seed(), scenario.dice.seed);  // the scenario's own
 }

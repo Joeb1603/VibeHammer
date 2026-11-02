@@ -13,4 +13,5 @@ if(MSVC)
     target_compile_options(wh40k_client_tests PRIVATE /W4 /permissive- /utf-8 /bigobj)
 endif()
 
+include(GoogleTest)  # needed in this directory too: it sets the discovery script path
 gtest_discover_tests(wh40k_client_tests DISCOVERY_MODE PRE_TEST)

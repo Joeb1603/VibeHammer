@@ -4,9 +4,13 @@
 // validates the action (validate_action) before applying it (apply_action). The client never mutates a
 // GameState itself (CLAUDE.md, D-024).
 
+#include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "core/engine/actions.hpp"
 #include "core/engine/engine.hpp"
@@ -26,6 +30,30 @@ class GameSession {
 public:
     // Starts the game (start_game) if it has not started.
     explicit GameSession(core::GameState initial);
+
+    // A new game from a scenario's state, with the dice seed overridden if given (M13).
+    [[nodiscard]] static GameSession new_game(core::GameState scenario, std::optional<std::uint64_t> seed);
+    // Rebuilds a game by submitting `steps` from `initial`. Throws core::DataError if a step is invalid.
+    [[nodiscard]] static GameSession from_steps(core::GameState initial, const std::vector<core::ReplayStep>& steps);
+
+    // ---- save / load (D-025) ----
+    // {"format": 1, "kind": "vibehammer-save", "initial", "steps", "state"}: the initial state and the
+    // accepted steps (so undo and replay export keep working), plus the current state as a check.
+    [[nodiscard]] nlohmann::json to_save_json() const;
+    // Rebuilds the game from "initial" + "steps" and checks it matches "state" (core::DataError if not).
+    // A bare GameState JSON loads as a game with no history.
+    [[nodiscard]] static GameSession from_save_json(const nlohmann::json& j);
+    void save(const std::filesystem::path& path) const;
+    [[nodiscard]] static GameSession load(const std::filesystem::path& path);
+
+    // The game so far as a replay (initial state form, D-014), with the current state as its expectation.
+    [[nodiscard]] core::Replay to_replay(std::string description) const;
+
+    // Undo (hotseat): rebuild from the initial state with every step but the last. False if there is none.
+    [[nodiscard]] bool can_undo() const noexcept { return !history_.empty(); }
+    bool undo();
+
+    [[nodiscard]] std::uint64_t seed() const noexcept { return initial_.dice.seed; }
 
     [[nodiscard]] const core::GameState& state() const noexcept { return state_; }
     [[nodiscard]] const core::GameState& initial() const noexcept { return initial_; }
