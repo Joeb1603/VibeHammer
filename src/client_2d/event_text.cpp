@@ -101,6 +101,21 @@ std::string body(const core::GameEvent& e) {
             } else if constexpr (std::is_same_v<T, ev::ShootingStarted>) {
                 return unit(x.unit) + " shoots (" + std::string(core::shooting_type_name(x.type)) + " shooting, " +
                        std::to_string(x.selections.size()) + " weapon(s))";
+            } else if constexpr (std::is_same_v<T, ev::ChargeDeclared>) {
+                return unit(x.unit) + " declares a charge";
+            } else if constexpr (std::is_same_v<T, ev::ChargeRolled>) {
+                std::string targets;
+                for (const auto t : x.eligible_targets) targets += (targets.empty() ? "" : ", ") + unit(t);
+                return "Charge roll: " + ints({x.roll.dice[0], x.roll.dice[1]}) + " = " +
+                       std::to_string(x.roll.total()) + "\" -> " +
+                       (targets.empty() ? std::string("no unit can be a charge target") : "can charge " + targets);
+            } else if constexpr (std::is_same_v<T, ev::ChargeTargetsSelected>) {
+                std::string targets;
+                for (const auto t : x.targets) targets += (targets.empty() ? "" : ", ") + unit(t);
+                return unit(x.unit) + " charges " + targets;
+            } else if constexpr (std::is_same_v<T, ev::ChargeResolved>) {
+                return x.charge_move_made ? unit(x.unit) + " completes its charge (Fights First until end of turn)"
+                                          : "Charge fails: " + x.reason;
             } else if constexpr (std::is_same_v<T, ev::AttackBatchesGathered>) {
                 int dice = 0;
                 for (const auto& b : x.batches) dice += b.attack_dice;

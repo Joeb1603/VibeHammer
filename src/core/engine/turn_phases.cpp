@@ -1,6 +1,6 @@
 // Stage entry/exit work, stage decisions and the turn-structure actions (07-12).
-// Movement (M7) is in movement.cpp and shooting (M8) in shooting.cpp; the Charge and Fight phases are
-// still stubs (end charges; no fights). Later milestones fill them in.
+// Movement (M7) is in movement.cpp, shooting (M8) in shooting.cpp and charges (M9) in charge.cpp. The
+// Fight phase is still a stub with no fights (D-019) until M10.
 
 #include <stdexcept>
 #include <string>
@@ -13,23 +13,6 @@
 namespace wh40k::core::detail {
 
 namespace {
-
-bool any_unit_engaged(const GameState& state) {
-    for (const Unit& u : state.units) {
-        if (!is_destroyed(u) && is_engaged(state, u)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// Fight-phase steps are M10. Until then they must never have work to do.
-void require_no_fights(const GameState& state, const char* rule) {
-    if (any_unit_engaged(state)) {
-        throw std::logic_error(std::string(rule) + ": units are eligible, but the Fight phase is not implemented "
-                                                   "until M10");
-    }
-}
 
 bool is_phase_start(Stage s) {
     return s == Stage::StartOfCommandPhase || s == Stage::StartOfMovementPhase || s == Stage::StartOfShootingPhase ||
@@ -72,14 +55,16 @@ void on_enter_stage(GameState& state, Events& events) {
                 u.phase_flags.selected_to_shoot = false;  // 10.02 "not already been selected to shoot this phase"
             }
             break;
+        case Stage::StartOfChargePhase:
+            for (Unit& u : state.units) {
+                u.phase_flags.declared_charge = false;  // 11.02 "has not declared a charge this phase"
+                u.phase_flags.charge_roll.reset();
+            }
+            break;
         case Stage::PileIn:
-            require_no_fights(state, "12.02");
-            break;
         case Stage::Fight:
-            require_no_fights(state, "12.04");
-            break;
         case Stage::Consolidate:
-            require_no_fights(state, "12.07");
+            // TODO(M10): 12.02-12.08. Until the Fight phase exists, engaged units do not fight (D-019).
             break;
         case Stage::EndOfTurn:
             // TODO(M11): 03.03 Regaining Coherency.
@@ -172,20 +157,6 @@ void apply_details(GameState& state, Side, const action::StartMove& a, DiceSourc
         return;
     }
     begin_move(state, a, dice, events);
-}
-
-// ---- 11.02 Charge (M5 stub: the only option is to end the step) ----
-
-std::vector<GameAction> legal_for(const GameState&, const decision::Charge&) {
-    return {action::EndChargeStep{}};
-}
-
-ValidationResult validate_details(const GameState&, Side, const action::EndChargeStep&) {
-    return ValidationResult::success();
-}
-
-void apply_details(GameState& state, Side, const action::EndChargeStep&, DiceSource&, Events& events) {
-    next_stage(state, events);  // 11.03 End of Charge Phase
 }
 
 }  // namespace wh40k::core::detail

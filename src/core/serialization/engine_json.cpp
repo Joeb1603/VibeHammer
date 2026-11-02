@@ -185,6 +185,11 @@ void to_json(Json& j, const GameAction& v) {
                 j["unit"] = a.unit;
                 j["type"] = a.type;
                 j["shots"] = a.shots;
+            } else if constexpr (std::is_same_v<T, DeclareCharge> || std::is_same_v<T, SkipChargeMove>) {
+                j["unit"] = a.unit;
+            } else if constexpr (std::is_same_v<T, StartChargeMove>) {
+                j["unit"] = a.unit;
+                j["targets"] = a.targets;
             } else if constexpr (std::is_same_v<T, SelectAttackBatch>) {
                 j["batch"] = a.batch;
             } else if constexpr (std::is_same_v<T, DeclareAllocationOrder>) {
@@ -215,6 +220,12 @@ void from_json(const Json& j, GameAction& v) {
                   j.at("shots").get<std::vector<ShotDeclaration>>()};
     } else if (kind == "EndShootStep") {
         v = EndShootStep{};
+    } else if (kind == "DeclareCharge") {
+        v = DeclareCharge{j.at("unit").get<UnitId>()};
+    } else if (kind == "StartChargeMove") {
+        v = StartChargeMove{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "SkipChargeMove") {
+        v = SkipChargeMove{j.at("unit").get<UnitId>()};
     } else if (kind == "EndChargeStep") {
         v = EndChargeStep{};
     } else if (kind == "SelectAttackBatch") {
@@ -280,6 +291,19 @@ void to_json(Json& j, const GameEvent& v) {
                 j["unit"] = e.unit;
                 j["type"] = e.type;
                 j["selections"] = e.selections;
+            } else if constexpr (std::is_same_v<T, ChargeDeclared>) {
+                j["unit"] = e.unit;
+            } else if constexpr (std::is_same_v<T, ChargeRolled>) {
+                j["unit"] = e.unit;
+                j["roll"] = e.roll;
+                j["eligible_targets"] = e.eligible_targets;
+            } else if constexpr (std::is_same_v<T, ChargeTargetsSelected>) {
+                j["unit"] = e.unit;
+                j["targets"] = e.targets;
+            } else if constexpr (std::is_same_v<T, ChargeResolved>) {
+                j["unit"] = e.unit;
+                j["charge_move_made"] = e.charge_move_made;
+                j["reason"] = e.reason;
             } else if constexpr (std::is_same_v<T, AttackBatchesGathered>) {
                 j["attacker"] = e.attacker;
                 j["batches"] = e.batches;
@@ -355,6 +379,16 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "ShootingStarted") {
         v = ShootingStarted{j.at("unit").get<UnitId>(), j.at("type").get<ShootingType>(),
                             j.at("selections").get<std::vector<WeaponSelection>>()};
+    } else if (kind == "ChargeDeclared") {
+        v = ChargeDeclared{j.at("unit").get<UnitId>()};
+    } else if (kind == "ChargeRolled") {
+        v = ChargeRolled{j.at("unit").get<UnitId>(), j.at("roll").get<TwoD6>(),
+                         j.at("eligible_targets").get<std::vector<UnitId>>()};
+    } else if (kind == "ChargeTargetsSelected") {
+        v = ChargeTargetsSelected{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "ChargeResolved") {
+        v = ChargeResolved{j.at("unit").get<UnitId>(), j.at("charge_move_made").get<bool>(),
+                           j.at("reason").get<std::string>()};
     } else if (kind == "AttackBatchesGathered") {
         v = AttackBatchesGathered{j.at("attacker").get<UnitId>(), j.at("batches").get<std::vector<AttackBatch>>()};
     } else if (kind == "AttackBatchSelected") {

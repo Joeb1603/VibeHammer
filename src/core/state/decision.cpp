@@ -18,6 +18,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::MoveModels>) return "03.01";
             else if constexpr (std::is_same_v<T, decision::Shoot>) return "10.02";
             else if constexpr (std::is_same_v<T, decision::Charge>) return "11.02";
+            else if constexpr (std::is_same_v<T, decision::SelectChargeTargets>) return "11.04";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "05.04";
@@ -34,6 +35,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::MoveModels>) return "MoveModels";
             else if constexpr (std::is_same_v<T, decision::Shoot>) return "Shoot";
             else if constexpr (std::is_same_v<T, decision::Charge>) return "Charge";
+            else if constexpr (std::is_same_v<T, decision::SelectChargeTargets>) return "SelectChargeTargets";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "OrderCasualties";
@@ -54,6 +56,8 @@ std::string describe(const PendingDecision& d) {
                 return "select a unit to shoot, or end the Shoot step";
             } else if constexpr (std::is_same_v<T, decision::Charge>) {
                 return "declare a charge, or end the Charge step";
+            } else if constexpr (std::is_same_v<T, decision::SelectChargeTargets>) {
+                return "select charge targets for unit " + std::to_string(k.unit.v) + ", or make no charge move";
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 return "select the next attacks to resolve for unit " + std::to_string(k.attacker.v);
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) {

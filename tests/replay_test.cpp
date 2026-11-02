@@ -241,4 +241,52 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     while (s8.pending) play(first_legal());
     shots.expect = replay_expectation(s8);
     save_replay(shots, kReplayDir / "m8_shooting.json");
+
+    // M9: a charge. The replay stops when the charge is resolved, before the Fight phase (M10), so it
+    // stays valid when M10 adds fight decisions.
+    Replay charge;
+    charge.description =
+        "M9: Side A Normal-moves its Intercessors 6\" north (6\" from the Termagants), skips shooting and "
+        "declares a charge (seeded 2D6 of 6 or more). It selects the Termagants as the charge target and moves "
+        "every model 2\" north: not engaged, so the move reverts (03.01, 11.04 After Moving) and the unit goes "
+        "back to selecting targets with the same roll (D-018). It selects the Termagants again and moves every "
+        "model 5\" north, ending 1\" away: the charge succeeds and the Intercessors have Fights First (24.13).";
+    charge.initial.scenario = "data/scenarios/v1_skirmish.json";
+    GameState c9;
+    auto c_act = [&](const GameAction& a) {
+        const Side side = decider(c9);
+        const auto v = validate_action(c9, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        charge.steps.push_back(ReplayStep{side, a});
+        apply_action(c9, side, a);
+    };
+    auto c_move_north = [&](float dy_in) {
+        for (const Model& m : c9.units[0].models) {
+            const Position p = *move_start_position(c9, m.id);
+            c_act(action::ProposeModelMove{m.id, {Position{p.x, p.y + wh40k::test::in(dy_in), 0}}});
+        }
+    };
+    // The first seed whose charge roll is 6 or more.
+    for (std::uint64_t seed = 1;; ++seed) {
+        charge.initial.seed = seed;
+        charge.steps.clear();
+        c9 = replay_initial_state(charge, repo_root());
+        start_game(c9);
+        c_act(action::StartMove{c9.units[0].id, MoveType::Normal, std::nullopt});
+        c_move_north(6);
+        c_act(action::CommitUnitMove{});
+        c_act(action::EndShootStep{});
+        c_act(action::DeclareCharge{c9.units[0].id});
+        if (c9.flow.charge) break;  // a target was within the roll
+        ASSERT_LT(seed, 100u);
+    }
+    c_act(action::StartChargeMove{c9.units[0].id, {c9.units[1].id}});
+    c_move_north(2);
+    c_act(action::CommitUnitMove{});  // reverts: not engaged with the charge target
+    c_act(action::StartChargeMove{c9.units[0].id, {c9.units[1].id}});
+    c_move_north(5);
+    c_act(action::CommitUnitMove{});
+    ASSERT_TRUE(c9.units[0].turn_flags.fights_first);
+    charge.expect = replay_expectation(c9);
+    save_replay(charge, kReplayDir / "m9_charge.json");
 }

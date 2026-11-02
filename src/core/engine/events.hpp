@@ -106,6 +106,27 @@ struct ShootingStarted {  // 10.02: the unit is selected to shoot, with its weap
     std::vector<WeaponSelection> selections;
     friend bool operator==(const ShootingStarted&, const ShootingStarted&) = default;
 };
+struct ChargeDeclared {  // 11.02 Declare Charge
+    UnitId unit;
+    friend bool operator==(const ChargeDeclared&, const ChargeDeclared&) = default;
+};
+struct ChargeRolled {  // 11.02 Make Charge Roll; the enemy units that can be charge targets (11.04)
+    UnitId unit;
+    TwoD6 roll;
+    std::vector<UnitId> eligible_targets;
+    friend bool operator==(const ChargeRolled&, const ChargeRolled&) = default;
+};
+struct ChargeTargetsSelected {  // 11.04 Before Moving
+    UnitId unit;
+    std::vector<UnitId> targets;
+    friend bool operator==(const ChargeTargetsSelected&, const ChargeTargetsSelected&) = default;
+};
+struct ChargeResolved {  // 11.02 Attempt Charge: the charge is resolved
+    UnitId unit;
+    bool charge_move_made = false;  // true: the unit made its charge move (Fights First, 11.04)
+    std::string reason;             // rule-cited when no charge move was made; empty otherwise
+    friend bool operator==(const ChargeResolved&, const ChargeResolved&) = default;
+};
 struct AttackBatchesGathered {  // 04.03: the attacking unit's attacks, grouped (D-006)
     UnitId attacker;
     std::vector<AttackBatch> batches;
@@ -170,7 +191,8 @@ using GameEvent =
                  event::PhaseStarted, event::PhaseEnded, event::UnitRemainedStationary, event::MoveStarted,
                  event::AdvanceRolled, event::HazardRollsMade, event::MortalWoundsInflicted,
                  event::ModelMoveProposed, event::UnitMoveCommitted, event::UnitMoveReverted,
-                 event::BattleShockRolled, event::ShootingStarted, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
+                 event::BattleShockRolled, event::ShootingStarted, event::ChargeDeclared, event::ChargeRolled,
+                 event::ChargeTargetsSelected, event::ChargeResolved, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver>;

@@ -12,6 +12,7 @@ enum class MoveType : std::uint8_t {
     Normal,            // 09.05
     Advance,           // 09.06
     FallBack,          // 09.07
+    Charge,            // 11.04 (Charge phase only; not selectable in 09.02)
 };
 
 // 09.07 Before Moving: select fall-back mode.

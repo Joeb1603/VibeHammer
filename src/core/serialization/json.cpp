@@ -211,12 +211,18 @@ void from_json(const Json& j, AbilityText& v) {
 }
 
 void to_json(Json& j, const UnitTurnFlags& v) {
-    j = Json{{"advanced", v.advanced}, {"fell_back", v.fell_back}, {"moved_over_3in", v.moved_over_3in}};
+    j = Json{{"advanced", v.advanced},
+             {"fell_back", v.fell_back},
+             {"moved_over_3in", v.moved_over_3in},
+             {"made_charge_move", v.made_charge_move},
+             {"fights_first", v.fights_first}};
 }
 void from_json(const Json& j, UnitTurnFlags& v) {
     j.at("advanced").get_to(v.advanced);
     j.at("fell_back").get_to(v.fell_back);
     j.at("moved_over_3in").get_to(v.moved_over_3in);
+    j.at("made_charge_move").get_to(v.made_charge_move);
+    j.at("fights_first").get_to(v.fights_first);
 }
 
 void to_json(Json& j, const Unit& v) {

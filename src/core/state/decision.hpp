@@ -29,6 +29,12 @@ struct Shoot {
 struct Charge {
     friend bool operator==(const Charge&, const Charge&) = default;
 };
+// 11.04 Before Moving / 11.02 Attempt Charge: after the charge roll, select the charge targets and
+// start the charge move, or make no charge move.
+struct SelectChargeTargets {
+    UnitId unit;
+    friend bool operator==(const SelectChargeTargets&, const SelectChargeTargets&) = default;
+};
 // 04.03 Select Enemy Unit / Gather Attack Dice: the attacker picks the next batch to resolve.
 struct SelectAttackBatch {
     UnitId attacker;
@@ -48,6 +54,7 @@ struct OrderCasualties {
 }  // namespace decision
 
 using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, decision::Shoot, decision::Charge,
+                                  decision::SelectChargeTargets,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties>;
 

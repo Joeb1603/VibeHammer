@@ -35,13 +35,8 @@ void on_enter_stage(GameState& state, Events& events);
 void on_leave_stage(GameState& state, Events& events);
 
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::MoveUnits& d);
-[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Charge& d);
-
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::StartMove& a);
-[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndChargeStep& a);
-
 void apply_details(GameState& state, Side side, const action::StartMove& a, DiceSource& dice, Events& events);
-void apply_details(GameState& state, Side side, const action::EndChargeStep& a, DiceSource& dice, Events& events);
 
 // ---- shooting.cpp: 10.02 Shoot ----
 
@@ -50,6 +45,24 @@ void apply_details(GameState& state, Side side, const action::EndChargeStep& a, 
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndShootStep& a);
 void apply_details(GameState& state, Side side, const action::Shoot& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::EndShootStep& a, DiceSource& dice, Events& events);
+
+// ---- charge.cpp: 11.02 Charge and 11.04 Before Moving ----
+
+// The decision a declared charge needs while no charge move is in progress (select targets or skip).
+[[nodiscard]] std::optional<PendingDecision> charge_decision(const GameState& state);
+// 11.02 Attempt Charge: the charge in progress is resolved; clears it and the activation.
+void resolve_charge(GameState& state, bool charge_move_made, std::string reason, Events& events);
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Charge& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectChargeTargets& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::DeclareCharge& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::StartChargeMove& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::SkipChargeMove& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndChargeStep& a);
+void apply_details(GameState& state, Side side, const action::DeclareCharge& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::StartChargeMove& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::SkipChargeMove& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::EndChargeStep& a, DiceSource& dice, Events& events);
 
 // ---- movement.cpp: 09.04-09.07 / 03.01 as a sub-machine ----
 

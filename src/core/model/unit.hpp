@@ -36,6 +36,8 @@ struct UnitTurnFlags {
     bool advanced = false;
     bool fell_back = false;
     bool moved_over_3in = false;  // 24.16 [HEAVY]
+    bool made_charge_move = false;  // 11.04 (12.02 / 12.04 refer to it)
+    bool fights_first = false;      // 11.04 After Moving: every model has Fights First (24.13) until end of turn
     friend bool operator==(const UnitTurnFlags&, const UnitTurnFlags&) = default;
 };
 
@@ -46,6 +48,8 @@ struct UnitPhaseFlags {
     std::optional<int> advance_roll;           // 09.06
     bool desperate_escape_hazards_made = false;  // 09.07
     bool selected_to_shoot = false;  // 10.02; reset when the Shooting phase starts
+    bool declared_charge = false;    // 11.02; reset when the Charge phase starts
+    std::optional<int> charge_roll;  // 11.02 Make Charge Roll (2D6 total); stands for the phase (D-018)
     friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
 };
 

@@ -143,3 +143,24 @@ TEST(D004_LegalActions, RandomPlayShootsWithFilledTemplates) {
     }
     EXPECT_GT(shots, 0);
 }
+
+TEST(D004_LegalActions, RandomPlayDeclaresChargesAndStartsChargeMoves) {
+    // M9: random play reaches the charge decisions; charge paths come from the path template.
+    int declared = 0;
+    int moves = 0;
+    for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+        GameState gs = wh40k::test::load_v1_scenario();
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        for (int i = 0; i < 300 && gs.pending; ++i) {
+            const GameAction a = wh40k::test::random_action(gs, rng);
+            if (std::holds_alternative<action::DeclareCharge>(a)) ++declared;
+            if (std::holds_alternative<action::StartChargeMove>(a)) ++moves;
+            apply_action(gs, decider(gs), a);
+            EXPECT_EQ(gs.pending, compute_decision(gs));
+        }
+    }
+    EXPECT_GT(declared, 0);
+    EXPECT_GT(moves, 0);
+}

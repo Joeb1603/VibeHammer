@@ -31,7 +31,10 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::MoveModels>(d);
             else if constexpr (std::is_same_v<T, action::Shoot> || std::is_same_v<T, action::EndShootStep>)
                 return std::holds_alternative<decision::Shoot>(d);
-            else if constexpr (std::is_same_v<T, action::EndChargeStep>) return std::holds_alternative<decision::Charge>(d);
+            else if constexpr (std::is_same_v<T, action::DeclareCharge> || std::is_same_v<T, action::EndChargeStep>)
+                return std::holds_alternative<decision::Charge>(d);
+            else if constexpr (std::is_same_v<T, action::StartChargeMove> || std::is_same_v<T, action::SkipChargeMove>)
+                return std::holds_alternative<decision::SelectChargeTargets>(d);
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>)
                 return std::holds_alternative<decision::SelectAttackBatch>(d);
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>)
@@ -97,6 +100,9 @@ std::optional<PendingDecision> compute_decision(const GameState& state) {
     }
     if (state.flow.move) {
         return detail::move_decision(state);
+    }
+    if (state.flow.charge) {
+        return detail::charge_decision(state);
     }
     return detail::stage_decision(state);
 }

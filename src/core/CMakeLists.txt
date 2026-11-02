@@ -6,6 +6,7 @@ add_library(wh40k_core STATIC
     engine/actions.cpp
     engine/advance.cpp
     engine/attack_flow.cpp
+    engine/charge.cpp
     engine/engine.cpp
     engine/events.cpp
     engine/movement.cpp
@@ -23,6 +24,7 @@ add_library(wh40k_core STATIC
     model/weapon.cpp
     rules/attack_sequence.cpp
     rules/attacks.cpp
+    rules/charge.cpp
     rules/leadership.cpp
     rules/mortal_wounds.cpp
     rules/move_types.cpp
