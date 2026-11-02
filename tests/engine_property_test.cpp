@@ -164,3 +164,18 @@ TEST(D004_LegalActions, RandomPlayDeclaresChargesAndStartsChargeMoves) {
     EXPECT_GT(declared, 0);
     EXPECT_GT(moves, 0);
 }
+
+TEST(D004_LegalActions, RandomPlayThroughTheFightPhase) {
+    // M10: from a successful charge, random play runs the Fight phase (pile-in and consolidation path
+    // templates, Fight declaration templates, fight sequence, passes) and the rest of the game.
+    int fights = 0;
+    for (std::uint64_t seed = 1; seed <= 30; ++seed) {
+        GameState gs = wh40k::test::after_successful_charge();
+        gs.dice.seed = seed;
+        apply_action(gs, Side::A, action::EndChargeStep{});
+        TestRng rng(seed * 104729);
+        const PlayStats stats = play_and_check(gs, rng, 120);
+        fights += stats.template_fills;
+    }
+    EXPECT_GT(fights, 0);
+}

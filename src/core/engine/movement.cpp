@@ -15,6 +15,7 @@
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/charge.hpp"
+#include "core/rules/fight.hpp"
 #include "core/rules/leadership.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/state/queries.hpp"
@@ -59,12 +60,17 @@ std::vector<ModelId> ids_of(const Unit& u) {
     return out;
 }
 
-// Clears the move, and the activation unless a charge is still being resolved (11.02).
+// Clears the move, and the activation unless a charge (11.02) or a fight (12.06 overrun pile-in) is
+// still being resolved.
 void finish_move(GameState& state) {
     state.flow.move.reset();
-    if (!state.flow.charge) {
+    if (!state.flow.charge && !state.flow.fight) {
         state.flow.activation.reset();
     }
+}
+
+bool is_movement_phase_move(MoveType t) {
+    return t == MoveType::Normal || t == MoveType::Advance || t == MoveType::FallBack;
 }
 
 void revert_move(GameState& state, std::vector<std::string> reasons, Events& events) {
@@ -77,7 +83,8 @@ void revert_move(GameState& state, std::vector<std::string> reasons, Events& eve
     }
     // 03 sidebar: the unit has not been selected to make that move, so it can be selected again. A charge
     // move goes back to selecting charge targets with the same charge roll (D-018).
-    if (mv.type != MoveType::Charge) {
+    // Pile-in and consolidation moves go back to the same decision (D-022).
+    if (is_movement_phase_move(mv.type)) {
         u->phase_flags.selected_to_move = false;
     }
     events.push_back(event::UnitMoveReverted{mv.unit, std::move(reasons)});
@@ -133,6 +140,10 @@ ValidationResult validate_move_type(const GameState& state, const Unit& u, const
             return ValidationResult::success();
         case MoveType::Charge:
             return ValidationResult::failure("09.02: a Charge move is made in the Charge phase (11.02, 11.04)");
+        case MoveType::PileIn:
+        case MoveType::Consolidation:
+            return ValidationResult::failure("09.02: pile-in and consolidation moves are made in the Fight phase "
+                                             "(12.03, 12.08)");
         case MoveType::RemainStationary:
             break;
     }
@@ -272,10 +283,26 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
         r.reasons.push_back(v.reason);
     }
     if (mv.type == MoveType::Charge &&
-        !ends_closer_to_a_charge_target(state, *m, points.front(), points.back(), mv.charge_targets)) {
+        !ends_closer_to_a_charge_target(state, *m, points.front(), points.back(), mv.targets)) {
         // 11.04 While Moving (03.01: checked for each model that is moved).
         r.reasons.push_back("11.04: " + model_label(a.model) + " must end its move closer to one or more charge "
                             "targets");
+    }
+    const bool pile_in = mv.type == MoveType::PileIn;
+    const bool ongoing = mv.consolidation_mode == ConsolidationMode::Ongoing;
+    if (pile_in || mv.type == MoveType::Consolidation) {
+        const std::string rule = pile_in ? "12.03" : "12.08";
+        // 12.03 / 12.08 Ongoing While Moving: models in base contact with an enemy model cannot be moved.
+        if ((pile_in || ongoing) && in_base_contact_with_enemy(state, u, *m, points.front())) {
+            r.reasons.push_back(rule + ": " + model_label(a.model) +
+                                " is in base contact with an enemy model and cannot be moved");
+        }
+        // Each model that is moved must end its move closer to the closest target (D-022).
+        if (!ends_closer_to_closest_target(state, *m, points.front(), points.back(), mv.targets)) {
+            r.reasons.push_back(rule + ": " + model_label(a.model) + " must end its move closer to the closest " +
+                                (pile_in ? "pile-in target" : "selected enemy unit"));
+        }
+        // TODO(if-possible): 12.03 / 12.08 While Moving: "and engaged with it if possible".
     }
     // TODO(if-possible): 11.04 While Moving: each model that can end its move within 1" of (and engaged
     // with) a charge target must do so. V1 leaves this to the player (CLAUDE.md "If possible" rules).
@@ -318,6 +345,9 @@ void apply_details(GameState& state, Side, const action::CommitUnitMove&, DiceSo
     if (mv.type == MoveType::Advance) u.turn_flags.advanced = true;   // 09.06 After Moving
     if (mv.type == MoveType::FallBack) u.turn_flags.fell_back = true;  // 09.07 After Moving
     events.push_back(event::UnitMoveCommitted{u.id, mv.type});
+    if (mv.type == MoveType::PileIn || mv.type == MoveType::Consolidation) {
+        fight_move_committed(state, mv, events);  // 12.02 / 12.06 / 12.07 / 12.08 After Moving
+    }
     if (mv.type == MoveType::Charge) {
         // 11.04 After Moving: every model has Fights First (24.13) until the end of the turn.
         u.turn_flags.made_charge_move = true;
@@ -357,6 +387,8 @@ std::optional<float> max_move_distance_mm(const GameState& state, ModelId model)
         if (!u->phase_flags.charge_roll) return std::nullopt;
         return inches_to_mm(static_cast<float>(*u->phase_flags.charge_roll));  // 11.04: the charge roll
     }
+    if (mv.type == MoveType::PileIn) return inches_to_mm(kPileInDistanceInches);                // 12.03
+    if (mv.type == MoveType::Consolidation) return inches_to_mm(kConsolidationDistanceInches);  // 12.08
     float max = *m->characteristics.move_mm;  // 09.05 / 09.07: M
     if (mv.type == MoveType::Advance && u->phase_flags.advance_roll) {
         max += inches_to_mm(static_cast<float>(*u->phase_flags.advance_roll));  // 09.06: advance roll + M
@@ -402,8 +434,30 @@ std::vector<std::string> move_end_problems(const GameState& state) {
     }
     if (mv.type == MoveType::Charge) {
         // 11.04 After Moving: engaged with every charge target, and with no other enemy unit.
-        for (std::string& p : charge_after_moving_problems(state, u, mv.charge_targets)) {
+        for (std::string& p : charge_after_moving_problems(state, u, mv.targets)) {
             out.push_back(std::move(p));
+        }
+        return out;
+    }
+    if (mv.type == MoveType::PileIn) {
+        // 12.03 After Moving: the unit is engaged, and models that started engaged stay engaged with those units.
+        if (!is_engaged(state, u)) {
+            out.push_back("12.03: " + detail::unit_label(u.id) + " must be engaged after its pile-in move");
+        }
+        for (std::string& p : still_engaged_problems(state, u, mv.starts, "12.03")) out.push_back(std::move(p));
+        return out;
+    }
+    if (mv.type == MoveType::Consolidation) {
+        if (mv.consolidation_mode == ConsolidationMode::Ongoing) {
+            for (std::string& p : still_engaged_problems(state, u, mv.starts, "12.08")) out.push_back(std::move(p));
+        } else if (mv.consolidation_mode == ConsolidationMode::Engaging) {
+            const std::vector<UnitId> engaged = engaged_enemy_units(state, u);
+            for (const UnitId t : mv.targets) {
+                if (std::find(engaged.begin(), engaged.end(), t) == engaged.end()) {
+                    out.push_back("12.08: " + detail::unit_label(u.id) + " must end its Engaging Consolidation "
+                                  "engaged with " + detail::unit_label(t));
+                }
+            }
         }
         return out;
     }

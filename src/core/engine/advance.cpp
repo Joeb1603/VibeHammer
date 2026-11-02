@@ -27,6 +27,9 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.attack.reset();
     state.flow.move.reset();
     state.flow.charge.reset();
+    state.flow.fight_sequence.reset();
+    state.flow.fight.reset();
+    state.flow.forced_fights.clear();
     state.pending.reset();
     events.push_back(event::GameOver{winner, std::move(reason)});
 }
@@ -118,12 +121,27 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
             state.pending = charge_decision(state);  // 11.04 Before Moving: always the player's choice
             return;
         }
+        if (state.flow.fight) {
+            if (auto d = fight_decision(state)) {
+                state.pending = std::move(d);
+                return;
+            }
+            fight_progress(state, events);
+            continue;
+        }
+        if (!state.flow.forced_fights.empty()) {
+            state.pending = forced_fight_decision(state);  // 12.08: the opponent selects each unit
+            return;
+        }
         if (!state.flow.activation && end_game_if_side_wiped_out(state, events)) {
             return;
         }
         if (auto d = stage_decision(state)) {
             state.pending = std::move(d);
             return;
+        }
+        if (fight_stage_progress(state, events)) {
+            continue;
         }
         next_stage(state, events);
     }

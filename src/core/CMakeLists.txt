@@ -9,6 +9,7 @@ add_library(wh40k_core STATIC
     engine/charge.cpp
     engine/engine.cpp
     engine/events.cpp
+    engine/fight.cpp
     engine/movement.cpp
     engine/replay.cpp
     engine/shooting.cpp
@@ -25,6 +26,7 @@ add_library(wh40k_core STATIC
     rules/attack_sequence.cpp
     rules/attacks.cpp
     rules/charge.cpp
+    rules/fight.cpp
     rules/leadership.cpp
     rules/mortal_wounds.cpp
     rules/move_types.cpp

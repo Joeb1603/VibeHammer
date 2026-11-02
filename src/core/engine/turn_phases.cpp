@@ -1,6 +1,6 @@
 // Stage entry/exit work, stage decisions and the turn-structure actions (07-12).
-// Movement (M7) is in movement.cpp, shooting (M8) in shooting.cpp and charges (M9) in charge.cpp. The
-// Fight phase is still a stub with no fights (D-019) until M10.
+// Movement (M7) is in movement.cpp, shooting (M8) in shooting.cpp, charges (M9) in charge.cpp and the
+// Fight phase (M10) in fight.cpp.
 
 #include <stdexcept>
 #include <string>
@@ -61,10 +61,11 @@ void on_enter_stage(GameState& state, Events& events) {
                 u.phase_flags.charge_roll.reset();
             }
             break;
+        case Stage::StartOfFightPhase:
         case Stage::PileIn:
         case Stage::Fight:
         case Stage::Consolidate:
-            // TODO(M10): 12.02-12.08. Until the Fight phase exists, engaged units do not fight (D-019).
+            on_enter_fight_stage(state, events);  // fight.cpp
             break;
         case Stage::EndOfTurn:
             // TODO(M11): 03.03 Regaining Coherency.
@@ -110,6 +111,10 @@ std::optional<PendingDecision> stage_decision(const GameState& state) {
             return PendingDecision{side, decision::Shoot{}};  // 10.02: shooting is optional
         case Stage::Charge:
             return PendingDecision{side, decision::Charge{}};  // 11.02: charging is optional
+        case Stage::PileIn:
+        case Stage::Fight:
+        case Stage::Consolidate:
+            return fight_stage_decision(state);
         default:
             return std::nullopt;
     }

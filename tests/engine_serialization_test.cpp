@@ -64,6 +64,12 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::Shoot{}},
         {Side::A, decision::Charge{}},
         {Side::B, decision::SelectChargeTargets{UnitId{2}}},
+        {Side::A, decision::PileIn{}},
+        {Side::B, decision::OverrunPileIn{UnitId{2}}},
+        {Side::A, decision::SelectUnitToFight{}},
+        {Side::B, decision::DeclareMeleeAttacks{UnitId{2}}},
+        {Side::A, decision::Consolidate{}},
+        {Side::B, decision::ForcedFight{}},
         {Side::A, decision::SelectAttackBatch{UnitId{1}}},
         {Side::B, decision::DeclareAllocationOrder{UnitId{2}}},
         {Side::B, decision::OrderCasualties{UnitId{2}}},
@@ -113,9 +119,39 @@ TEST(Serialization, StateMidChargeRoundTrips) {
     EXPECT_EQ(round_trip(gs), gs);  // selecting charge targets
     apply_action(gs, Side::A, action::StartChargeMove{gs.units[0].id, {gs.units[1].id}});
     ASSERT_TRUE(gs.flow.move.has_value());
-    ASSERT_EQ(gs.flow.move->charge_targets.size(), 1u);
+    ASSERT_EQ(gs.flow.move->targets.size(), 1u);
     gs.units[1].turn_flags.made_charge_move = true;  // exercise every field
     gs.units[1].turn_flags.fights_first = true;
+    EXPECT_EQ(round_trip(gs), gs);
+}
+
+TEST(Serialization, StateMidFightRoundTrips) {
+    GameState gs = wh40k::test::after_successful_charge();
+    apply_action(gs, Side::A, action::EndChargeStep{});
+    apply_action(gs, Side::A, action::EndPileIns{});
+    ASSERT_TRUE(gs.flow.step_done[0]);
+    EXPECT_EQ(round_trip(gs), gs);  // Side B's pile-in decision
+    apply_action(gs, Side::B, action::StartPileIn{gs.units[1].id, {gs.units[0].id}});
+    ASSERT_TRUE(gs.flow.move.has_value());
+    EXPECT_EQ(round_trip(gs), gs);  // a pile-in move in progress
+    apply_action(gs, Side::B, action::ResetUnitMove{});
+    apply_action(gs, Side::B, action::EndPileIns{});
+    apply_action(gs, Side::A, action::SelectToFight{gs.units[0].id, FightType::Normal});
+    ASSERT_TRUE(gs.flow.fight.has_value());
+    ASSERT_TRUE(gs.flow.fight_sequence.has_value());
+    // Exercise every field.
+    gs.flow.fight->overrun_pile_in_pending = true;
+    gs.flow.fight->forced = true;
+    gs.flow.fight_sequence->last_pass = Side::B;
+    gs.flow.forced_fights = {gs.units[1].id};
+    UnitPhaseFlags& f = gs.units[1].phase_flags;
+    f.piled_in = f.selected_for_overrun = f.forced_to_fight = f.consolidated = true;
+    MoveInProgress mv;
+    mv.unit = gs.units[1].id;
+    mv.type = MoveType::Consolidation;
+    mv.consolidation_mode = ConsolidationMode::Engaging;
+    mv.targets = {gs.units[0].id};
+    gs.flow.move = mv;
     EXPECT_EQ(round_trip(gs), gs);
 }
 
@@ -157,6 +193,14 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::StartChargeMove{UnitId{1}, {UnitId{2}, UnitId{3}}},
         action::SkipChargeMove{UnitId{1}},
         action::EndChargeStep{},
+        action::StartPileIn{UnitId{1}, {UnitId{2}}},
+        action::SkipPileIn{UnitId{1}},
+        action::EndPileIns{},
+        action::SelectToFight{UnitId{2}, FightType::Overrun},
+        action::PassFight{},
+        action::Fight{UnitId{1}, {MeleeDeclaration{ModelId{3}, 2, 0, {MeleeTarget{UnitId{2}, 2}, MeleeTarget{UnitId{4}, 1}}}}},
+        action::StartConsolidation{UnitId{1}, {UnitId{2}, UnitId{4}}},
+        action::EndConsolidations{},
         action::SelectAttackBatch{3},
         action::DeclareAllocationOrder{UnitId{2}, {1, 0}},
         action::OrderCasualties{UnitId{2}, {ModelId{9}, ModelId{6}}},
@@ -228,6 +272,13 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::ChargeRolled{UnitId{1}, TwoD6{{4, 5}}, {UnitId{2}, UnitId{3}}},
         event::ChargeTargetsSelected{UnitId{1}, {UnitId{2}}},
         event::ChargeResolved{UnitId{1}, true, ""},
+        event::PileInStarted{UnitId{1}, {UnitId{2}}},
+        event::UnitSelectedToFight{UnitId{2}, FightType::Overrun, true},
+        event::FightPassed{Side::B},
+        event::MeleeAttacksDeclared{UnitId{1}, {selection}},
+        event::FightStepEnded{"Appendix: both players passed in succession"},
+        event::ConsolidationStarted{UnitId{1}, ConsolidationMode::Engaging, {UnitId{2}}},
+        event::UnitsForcedToFight{{UnitId{2}, UnitId{4}}},
         event::AttackBatchesGathered{UnitId{1}, {batch}},
         event::AttackBatchSelected{UnitId{1}, 0, UnitId{2}, 7},
         event::HitRollsMade{0, hits},

@@ -12,6 +12,7 @@
 #include "core/model/unit.hpp"
 #include "core/model/weapon.hpp"
 #include "core/rules/attack_types.hpp"
+#include "core/rules/fight_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/state/decision.hpp"
 #include "core/state/flow.hpp"
@@ -93,6 +94,20 @@ void to_json(Json& j, const ModelPath& v);
 void from_json(const Json& j, ModelPath& v);
 void to_json(Json& j, const MoveInProgress& v);
 void from_json(const Json& j, MoveInProgress& v);
+void to_json(Json& j, ConsolidationMode v);
+void from_json(const Json& j, ConsolidationMode& v);
+void to_json(Json& j, FightType v);
+void from_json(const Json& j, FightType& v);
+void to_json(Json& j, const MeleeTarget& v);
+void from_json(const Json& j, MeleeTarget& v);
+void to_json(Json& j, const MeleeDeclaration& v);
+void from_json(const Json& j, MeleeDeclaration& v);
+void to_json(Json& j, FightSubStep v);
+void from_json(const Json& j, FightSubStep& v);
+void to_json(Json& j, const FightSequence& v);
+void from_json(const Json& j, FightSequence& v);
+void to_json(Json& j, const FightInProgress& v);
+void from_json(const Json& j, FightInProgress& v);
 void to_json(Json& j, const ChargeInProgress& v);
 void from_json(const Json& j, ChargeInProgress& v);
 void to_json(Json& j, ShootingType v);

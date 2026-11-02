@@ -19,6 +19,12 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::Shoot>) return "10.02";
             else if constexpr (std::is_same_v<T, decision::Charge>) return "11.02";
             else if constexpr (std::is_same_v<T, decision::SelectChargeTargets>) return "11.04";
+            else if constexpr (std::is_same_v<T, decision::PileIn>) return "12.02";
+            else if constexpr (std::is_same_v<T, decision::OverrunPileIn>) return "12.06";
+            else if constexpr (std::is_same_v<T, decision::SelectUnitToFight>) return "12.04";
+            else if constexpr (std::is_same_v<T, decision::DeclareMeleeAttacks>) return "04.02";
+            else if constexpr (std::is_same_v<T, decision::Consolidate>) return "12.07";
+            else if constexpr (std::is_same_v<T, decision::ForcedFight>) return "12.08";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "05.04";
@@ -36,6 +42,12 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::Shoot>) return "Shoot";
             else if constexpr (std::is_same_v<T, decision::Charge>) return "Charge";
             else if constexpr (std::is_same_v<T, decision::SelectChargeTargets>) return "SelectChargeTargets";
+            else if constexpr (std::is_same_v<T, decision::PileIn>) return "PileIn";
+            else if constexpr (std::is_same_v<T, decision::OverrunPileIn>) return "OverrunPileIn";
+            else if constexpr (std::is_same_v<T, decision::SelectUnitToFight>) return "SelectUnitToFight";
+            else if constexpr (std::is_same_v<T, decision::DeclareMeleeAttacks>) return "DeclareMeleeAttacks";
+            else if constexpr (std::is_same_v<T, decision::Consolidate>) return "Consolidate";
+            else if constexpr (std::is_same_v<T, decision::ForcedFight>) return "ForcedFight";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "OrderCasualties";
@@ -58,6 +70,18 @@ std::string describe(const PendingDecision& d) {
                 return "declare a charge, or end the Charge step";
             } else if constexpr (std::is_same_v<T, decision::SelectChargeTargets>) {
                 return "select charge targets for unit " + std::to_string(k.unit.v) + ", or make no charge move";
+            } else if constexpr (std::is_same_v<T, decision::PileIn>) {
+                return "make a pile-in move, or end pile-in moves";
+            } else if constexpr (std::is_same_v<T, decision::OverrunPileIn>) {
+                return "make unit " + std::to_string(k.unit.v) + "'s overrun pile-in move, or skip it";
+            } else if constexpr (std::is_same_v<T, decision::SelectUnitToFight>) {
+                return "select a unit to fight";
+            } else if constexpr (std::is_same_v<T, decision::DeclareMeleeAttacks>) {
+                return "select melee weapons and targets for unit " + std::to_string(k.unit.v);
+            } else if constexpr (std::is_same_v<T, decision::Consolidate>) {
+                return "make a consolidation move, or end consolidation moves";
+            } else if constexpr (std::is_same_v<T, decision::ForcedFight>) {
+                return "select a unit engaged by an engaging consolidation to fight";
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 return "select the next attacks to resolve for unit " + std::to_string(k.attacker.v);
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) {

@@ -18,6 +18,14 @@ std::string_view action_name(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::StartChargeMove>) return "StartChargeMove";
             else if constexpr (std::is_same_v<T, action::SkipChargeMove>) return "SkipChargeMove";
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return "EndChargeStep";
+            else if constexpr (std::is_same_v<T, action::StartPileIn>) return "StartPileIn";
+            else if constexpr (std::is_same_v<T, action::SkipPileIn>) return "SkipPileIn";
+            else if constexpr (std::is_same_v<T, action::EndPileIns>) return "EndPileIns";
+            else if constexpr (std::is_same_v<T, action::SelectToFight>) return "SelectToFight";
+            else if constexpr (std::is_same_v<T, action::PassFight>) return "PassFight";
+            else if constexpr (std::is_same_v<T, action::Fight>) return "Fight";
+            else if constexpr (std::is_same_v<T, action::StartConsolidation>) return "StartConsolidation";
+            else if constexpr (std::is_same_v<T, action::EndConsolidations>) return "EndConsolidations";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "OrderCasualties";
@@ -40,6 +48,14 @@ std::string_view action_rule(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::StartChargeMove>) return "11.04";
             else if constexpr (std::is_same_v<T, action::SkipChargeMove>) return "11.02";
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return "11.02";
+            else if constexpr (std::is_same_v<T, action::StartPileIn>) return "12.03";
+            else if constexpr (std::is_same_v<T, action::SkipPileIn>) return "12.06";
+            else if constexpr (std::is_same_v<T, action::EndPileIns>) return "12.02";
+            else if constexpr (std::is_same_v<T, action::SelectToFight>) return "12.04";
+            else if constexpr (std::is_same_v<T, action::PassFight>) return "12.04";  // Appendix: Eligible to Fight, but Unable
+            else if constexpr (std::is_same_v<T, action::Fight>) return "04.02";
+            else if constexpr (std::is_same_v<T, action::StartConsolidation>) return "12.08";
+            else if constexpr (std::is_same_v<T, action::EndConsolidations>) return "12.07";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "05.04";
@@ -51,6 +67,9 @@ std::string_view action_rule(const GameAction& a) {
 bool is_template(const GameAction& a) {
     if (const auto* c = std::get_if<action::OrderCasualties>(&a)) {
         return c->priority.empty();  // D-013: the priority is the open parameter
+    }
+    if (const auto* f = std::get_if<action::Fight>(&a)) {
+        return f->declarations.empty();  // D-021: the declarations are the open parameter
     }
     if (const auto* s = std::get_if<action::Shoot>(&a)) {
         return s->shots.empty();  // D-016: the declarations are the open parameter

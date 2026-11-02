@@ -301,10 +301,70 @@ observed model's base. Models in either of those two units are ignored; every ot
   Moving, 24.13); both end with the turn.
 
 ## D-019: Fight phase placeholder until M10
-**Decided:** 2026-11-02 (M9)
+**Decided:** 2026-11-02 (M9). **Superseded by M10 (D-020 to D-022):** the Fight phase is implemented.
 Before M9 no unit could become engaged in play, and the Fight-phase steps threw if one was. A successful
 charge now leaves units engaged, so until M10 the Pile In, Fight and Consolidate steps (12.02-12.08) pass
 with no fights. Engaged units stay engaged into the next turn (they can then fall back, make
 close-quarters shooting, and so on). This is scaffolding, not a rule: M10 replaces it. Replays that
 reach a Fight phase with engaged units will need regenerating then; `m9_charge.json` stops at the end
 of the charge for that reason.
+
+## D-020: Fight step alternation and passing (12.04, Appendix: Eligible to Fight, but Unable to Fight)
+**Decided:** 2026-11-02 (M10 plan; the two choices below were made by the user)
+- **Returning to Resolve Fights First Combats** (12.04: "after resolving a fight in the Resolve Remaining
+  Combats step, if one or more Fights First units are now eligible to fight, return to the Resolve Fights
+  First Combats step"): the alternation continues. The opponent of the player who just fought selects
+  next. The step's "starting with the player whose turn it is" applies only when the Fight step begins.
+  This fits the Overrun Fights sidebar ("may even be able to fight next if they are Fights First units").
+- **A pass can't stall the Fights First step.** If a player passes and the next player cannot select a
+  Fights First unit while Fights First units are still eligible (the passer's), the sequence moves to
+  Resolve Remaining Combats with that next player selecting. The passer's units stay eligible and can be
+  selected later. Literally, the sequence would bounce between "the other player selects" and another
+  pass forever, and "both players pass in succession" would never happen.
+- **How the rest is applied** (`engine/fight.cpp`):
+  - A player is asked to select only when they can (a Fights First unit in that step, any eligible unit
+    in Remaining Combats). Otherwise 12.04's "If this is not possible" branches run automatically.
+  - Fights First step: if no Fights First units are eligible, go to Remaining Combats with the same
+    player selecting. Otherwise the other player selects (or, after a pass, as above).
+  - Remaining Combats: if no units are eligible, the Fight step ends. If the other player just passed,
+    the step ends (Appendix: a pass "when their opponent has no remaining units that are eligible to
+    fight"). Otherwise the other player selects.
+  - **Passing** is offered when the selecting player has eligible units and all of them are more than 5"
+    from every enemy unit. Two passes in succession end the step. So does a pass when the opponent has
+    no eligible units.
+  - After each fight the opponent of the player who fought selects next.
+- Fights forced by an Engaging Consolidation (12.08) happen in the Consolidate step and don't touch the
+  sequence.
+- Supersedes D-019.
+
+## D-021: Melee declarations (04.01, 04.02 While Fighting)
+**Decided:** 2026-11-02 (M10)
+- **Who must declare.** Every model that has a melee weapon and is engaged with at least one enemy unit
+  must select exactly one melee weapon and one profile (D-001). The rules: 04.01 While Fighting says
+  "you must select one melee weapon", and the 12 sidebar says "you have to fight with all units that
+  can". The 04 sidebar's "choose not to select a target" covers only ranged weapons.
+- **Targets.** A model's targets must be enemy units engaged with that model (04.02).
+- **Splitting.** More than one target means at most A targets, at least one attack each, and the attacks
+  summing to A (04.02 Splitting Melee Attacks). A single target takes all A attacks.
+- **No possible attacks.** A model with no possible target declares nothing. If no model of the selected
+  unit can attack, its fight resolves with no attacks and the player isn't asked.
+- **Template.** The `Fight` action carries every declaration. An empty list is the template that
+  `legal_actions` returns (as D-016 does for shooting); `melee_options()` lists the single-target choices.
+
+## D-022: Pile-in and consolidation movement details (12.03, 12.08)
+**Decided:** 2026-11-02 (M10)
+- **Closest target.** "Closer to the closest pile-in target / selected enemy unit" is measured from the
+  moved model's start position, edge to edge. If units tie for closest, any of them counts (D-010: the
+  controlling player chooses). The check applies only to models that are moved (03.01, as D-018 for
+  charges).
+- **Base contact.** A model is in base contact with an enemy model if it is within `EPS_MM` of it at the
+  start of the move. Such a model cannot be moved in a pile-in move or an Ongoing Consolidation.
+- **If possible.** "And engaged with it if possible" is left to the player in V1 (`TODO(if-possible)`).
+- **Reverted moves.** A pile-in or consolidation move that fails its end conditions (03.01), or is
+  reset, returns the models and goes back to the same decision: the Pile In step, the Consolidate step,
+  or the overrun pile-in. The unit may try again (03 sidebar). A unit is marked as having piled in or
+  consolidated only when the move is committed.
+- **Turn order within a step.** In the Pile In and Consolidate steps the player whose turn it is moves
+  first. Their part is over once they end it, or once the opponent acts.
+- **Objectives.** V1 has no objectives, so Objective Consolidation never applies. A unit that is
+  unengaged with no enemy unit within 3" cannot consolidate (09 sidebar "Selecting modes").

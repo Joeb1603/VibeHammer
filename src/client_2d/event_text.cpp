@@ -116,6 +116,27 @@ std::string body(const core::GameEvent& e) {
             } else if constexpr (std::is_same_v<T, ev::ChargeResolved>) {
                 return x.charge_move_made ? unit(x.unit) + " completes its charge (Fights First until end of turn)"
                                           : "Charge fails: " + x.reason;
+            } else if constexpr (std::is_same_v<T, ev::PileInStarted>) {
+                std::string targets;
+                for (const auto t : x.targets) targets += (targets.empty() ? "" : ", ") + unit(t);
+                return unit(x.unit) + " piles in towards " + targets;
+            } else if constexpr (std::is_same_v<T, ev::UnitSelectedToFight>) {
+                return unit(x.unit) + " is selected to fight (" + std::string(core::fight_type_name(x.type)) +
+                       " fight" + (x.forced ? ", forced by an Engaging Consolidation)" : ")");
+            } else if constexpr (std::is_same_v<T, ev::FightPassed>) {
+                return side(x.side) + " passes";
+            } else if constexpr (std::is_same_v<T, ev::MeleeAttacksDeclared>) {
+                return x.selections.empty() ? unit(x.unit) + " has no model that can make melee attacks"
+                                            : unit(x.unit) + " fights with " + std::to_string(x.selections.size()) +
+                                                  " weapon(s)";
+            } else if constexpr (std::is_same_v<T, ev::FightStepEnded>) {
+                return "Fight step ends: " + x.reason;
+            } else if constexpr (std::is_same_v<T, ev::ConsolidationStarted>) {
+                return unit(x.unit) + " consolidates (" + std::string(core::consolidation_mode_name(x.mode)) + ")";
+            } else if constexpr (std::is_same_v<T, ev::UnitsForcedToFight>) {
+                std::string units;
+                for (const auto u : x.units) units += (units.empty() ? "" : ", ") + unit(u);
+                return units + " must now fight (Engaging Consolidation)";
             } else if constexpr (std::is_same_v<T, ev::AttackBatchesGathered>) {
                 int dice = 0;
                 for (const auto& b : x.batches) dice += b.attack_dice;

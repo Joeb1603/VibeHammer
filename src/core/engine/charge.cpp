@@ -152,7 +152,7 @@ void apply_details(GameState& state, Side, const action::StartChargeMove& a, Dic
     MoveInProgress mv;
     mv.unit = u.id;
     mv.type = MoveType::Charge;
-    mv.charge_targets = a.targets;  // until the end of this move, each is a charge target (11.04)
+    mv.targets = a.targets;  // until the end of this move, each is a charge target (11.04)
     for (const Model& m : u.models) {
         mv.starts.push_back(ModelStart{m.id, m.position});
     }
