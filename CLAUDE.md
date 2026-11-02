@@ -13,13 +13,17 @@ CLAUDE.md                 this file
 PLAN.md                   milestone plan with acceptance criteria
 docs/rules/               verbatim 11th ed Core Rules, one file per section (gitignored, regenerate it)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
+docs/decisions.md         rule interpretations and design decisions (D-001 ...), cited in code
 data/units/*.json         unit datasheets generated from BSData (do not hand-edit)
 data/scenarios/*.json     battlefield size, deployment, armies, loadouts
 tools/extract_rules.py    PDF -> docs/rules/   (needs pdftotext on PATH)
 tools/fetch_bsdata.py     BSData wh40k-11e -> data/units/
 src/core/                 wh40k_core: headless rules library
-src/client_2d/            wh40k_client_2d: raylib + Dear ImGui executable
-tests/                    wh40k_tests: GoogleTest, run via CTest
+src/client_2d/            wh40k_client_2d: raylib + Dear ImGui executable (hotseat play + replay viewer)
+  logic/                  wh40k_client_logic: the client's raylib-free code (GameSession, editors) (D-024)
+tests/                    wh40k_tests: GoogleTest for wh40k_core, run via CTest
+  client/                 wh40k_client_tests: GoogleTest for wh40k_client_logic
+  replays/*.json          saved replays; each must replay cleanly (regression tests, D-014)
 ```
 
 ## Build and test (Windows, VS 2026 Community, CMake 4.x)
@@ -32,6 +36,16 @@ cmake --build --preset debug                 # build all targets
 ctest --preset debug                         # run all tests
 ctest --preset debug -R AttackSequence       # run a subset
 .\build\default\src\client_2d\Debug\wh40k_client_2d.exe
+```
+
+The presets are Windows-only. On Linux (e.g. cloud sessions) configure with Ninja and GCC instead; raylib
+needs the X11/GL dev packages (libxrandr, libxinerama, libxcursor, libxi, libgl1-mesa):
+
+```bash
+cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/linux && (cd build/linux && ctest)
+# Regenerate tests/replays/ on purpose only, then check the diff:
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=Replay.DISABLED_RegenerateReplays
 ```
 
 - Dependencies come from CMake `FetchContent` pinned to exact tags: raylib, Dear ImGui, rlImGui, nlohmann_json, GoogleTest.
@@ -62,8 +76,9 @@ Each unit JSON records the BSData commit it came from in `source.commit`. Pin to
 
 ### Library split
 - `wh40k_core` is a pure C++20 static library. **It must never include raylib, ImGui, Windows or any rendering/IO-device headers.** It depends only on the standard library and nlohmann_json.
-- `wh40k_client_2d` links `wh40k_core` and owns everything visual. It **never mutates `GameState`**. It only calls the engine API below.
-- `wh40k_tests` links only `wh40k_core`.
+- `wh40k_client_2d` links `wh40k_client_logic` (which links `wh40k_core`) and owns everything visual. It **never mutates `GameState`**. Every game change goes through `GameSession::submit`, which calls `validate_action` before `apply_action`. The client may call core's read-only queries for display and editor choices (`shot_options`, `melee_options`, `max_move_distance_mm`, `move_end_problems`, ...) but contains no rules logic (D-024).
+- `wh40k_client_logic` must not include raylib, ImGui or OS headers (checked on every build, like core).
+- `wh40k_tests` links only `wh40k_core`. `wh40k_client_tests` links `wh40k_client_logic`.
 
 ### Two sides
 - There are exactly two sides: `enum class Side : uint8_t { A, B };`. Every unit belongs to a side.

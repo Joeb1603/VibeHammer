@@ -35,7 +35,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M1: Build skeleton
+## M1: Build skeleton ✅ (done)
 **Effort:** `medium` · **Plan mode:** no
 
 > Read CLAUDE.md. Create the CMake project: `CMakeLists.txt`, `CMakePresets.json` (configure preset `default` using the "Visual Studio 18 2026" generator, x64; build/test presets `debug` and `release`), and the three targets `wh40k_core` (static lib), `wh40k_client_2d` (exe), `wh40k_tests` (GoogleTest, registered with CTest via `gtest_discover_tests`). Fetch raylib, Dear ImGui, rlImGui, nlohmann_json and GoogleTest with FetchContent, pinned to exact release tags. Core gets `/W4 /WX /permissive-`. Add a placeholder core function with one test, and a client that opens an 1280x800 raylib window with an ImGui demo panel. Add a CMake check that fails the build if any file under `src/core` includes raylib or imgui headers.
@@ -47,7 +47,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M2: Core types, data loading, serialization
+## M2: Core types, data loading, serialization ✅ (done)
 **Effort:** `high` · **Plan mode:** yes
 **Rules:** 01.01–01.03, 02.01–02.07
 
@@ -62,7 +62,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M3: Geometry
+## M3: Geometry ✅ (done)
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 01.04, 03.01–03.04
 
@@ -76,7 +76,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M4: Dice and the attack sequence (pure functions)
+## M4: Dice and the attack sequence (pure functions) ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** no
 **Rules:** 01.05–01.07, 04.01–04.03, 05.01–05.04, 06.02, 06.03, 24.04, 24.07, 24.16, 24.27, 24.30, 24.37
 
@@ -91,7 +91,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M5: Game flow, PendingDecision and the action engine
+## M5: Game flow, PendingDecision and the action engine ✅ (done)
 **Effort:** `max` · **Plan mode:** yes
 **Rules:** 01.03, 07.01–07.03, 08.01–08.05 (structure only), 09.01–09.03, 10.01–10.03, 11.01–11.03, 12.01–12.04 (structure only)
 
@@ -106,7 +106,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M6: Read-only 2D viewer
+## M6: Read-only 2D viewer ✅ (done)
 **Effort:** `medium` · **Plan mode:** no
 
 > Read CLAUDE.md. In `wh40k_client_2d`, render a `GameState`: a 24"x24" board with 1" minor and 6" major grid lines, deployment zones, and model bases to scale, coloured by side, with wounds shown on multi-wound models. Add a pan/zoom camera (mouse wheel zoom to cursor, right-drag pan) and a mm→pixel transform in one place. Add an ImGui panel showing battle round, turn, phase, active side and the pending decision, plus a scrolling event log. Add a "Load replay" button that steps through a replay file forward and back. No interaction with the rules yet.
@@ -117,7 +117,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M7: Movement phase
+## M7: Movement phase ✅ (done)
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 03.01–03.03, 09.01–09.07, 06.03
 
@@ -130,7 +130,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M8: Shooting phase
+## M8: Shooting phase ✅ (done)
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 06.01, 10.01–10.06, 04.01–04.02, 24.04, 24.07, 24.16, 24.27, 24.30
 
@@ -144,7 +144,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M9: Charge phase
+## M9: Charge phase ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** no
 **Rules:** 11.01–11.04, 24.13
 
@@ -160,7 +160,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M10: Fight phase
+## M10: Fight phase ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** yes
 **Rules:** 12.01–12.09, 04.02 (splitting melee attacks), Appendix "Passing in the Fight Phase"
 
@@ -175,7 +175,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M11: Command phase, battle-shock, end of turn, game end
+## M11: Command phase, battle-shock, end of turn, game end ✅ (done)
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 08.01–08.05, 03.03 (Regaining Coherency), Appendix (Starting Strength, Half-strength); uses the 01.06/01.07 roll functions from M4
 
@@ -190,7 +190,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M12: Interactive client
+## M12: Interactive client ✅ (done)
 **Effort:** `high` · **Plan mode:** yes
 
 > Read CLAUDE.md. Make the M6 viewer playable via the engine API only. Clicking a model selects its unit, and clicking a model in the selected unit selects that model. Model drag builds a segment path, with a ghost marker at the start position and a live inch ruler. Add a "Move unit" handle that translates the whole unit and becomes per-model paths. Overlays (toggleable): 2"/9" coherency rings for the selected unit, red 2" engagement rings around enemies, weapon range rings, and charge distance after the roll. Add an ImGui decision panel generated from `PendingDecision` and `legal_actions` (no hard-coded phase buttons), Shooting and fight selections default to one weapon profile and target for the whole unit, which the client expands into per-model choices; selecting a single model overrides just that model (D-001). Commit/Reset Move, validation failures shown with their rule-cited reasons, and a dice log with per-roll results.
