@@ -41,6 +41,9 @@ struct WeaponSelection {
     // Recorded in the Select Targets step, because Gather Attack Dice refers back to it:
     bool target_within_half_range = false;  // 24.30 [RAPID FIRE]
     int target_models_at_selection = 0;     // 24.05 [BLAST]
+    // Hit roll modifier from the shooting type, before the D-011 cap (10.06: -1 for a MONSTER/VEHICLE
+    // model unless a [CLOSE-QUARTERS] weapon targets a unit its unit is engaged with).
+    int hit_modifier = 0;
     friend bool operator==(const WeaponSelection&, const WeaponSelection&) = default;
 };
 

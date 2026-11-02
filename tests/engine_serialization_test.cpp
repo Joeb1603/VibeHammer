@@ -85,6 +85,22 @@ TEST(Serialization, StateMidAttackRoundTrips) {
     EXPECT_EQ(round_trip(*gs.flow.attack), *gs.flow.attack);
 }
 
+TEST(Serialization, StateMidShootingRoundTrips) {
+    GameState gs = shoot_step_state();
+    action::Shoot shoot{gs.units[0].id, ShootingType::Normal, {}};
+    for (const Model& m : gs.units[0].models) {
+        shoot.shots.push_back(ShotDeclaration{m.id, 0, 1, gs.units[1].id});  // Saturation: 3 dice each
+    }
+    ScriptedDice dice{3, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1,  // hits: 6
+                      3, 3, 1, 1, 1, 1,                              // wounds: 2
+                      1, 1};                                         // saves: both fail
+    apply_action(gs, Side::A, shoot, dice);
+    ASSERT_TRUE(gs.flow.attack.has_value());
+    ASSERT_TRUE(gs.units[0].phase_flags.selected_to_shoot);
+    gs.flow.attack->selections[0].hit_modifier = -1;  // exercise every field (10.06)
+    EXPECT_EQ(round_trip(gs), gs);
+}
+
 TEST(Serialization, StateMidMoveRoundTrips) {
     GameState gs = wh40k::test::load_v1_scenario();
     start_game(gs);
@@ -116,6 +132,8 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::ProposeModelMove{ModelId{3}, {Position{10.5f, 20.25f, 0.0f}, Position{30.0f, 40.0f, 0.0f}}},
         action::CommitUnitMove{},
         action::ResetUnitMove{},
+        action::Shoot{UnitId{1}, ShootingType::CloseQuarters,
+                      {ShotDeclaration{ModelId{3}, 1, 0, UnitId{2}}, ShotDeclaration{ModelId{4}, 0, 1, UnitId{2}}}},
         action::EndShootStep{},
         action::EndChargeStep{},
         action::SelectAttackBatch{3},
@@ -134,6 +152,8 @@ TEST(Serialization, EveryActionKindRoundTrips) {
     EXPECT_EQ(old_form, GameAction{(action::StartMove{UnitId{1}, MoveType::RemainStationary, std::nullopt})});
     EXPECT_EQ(round_trip_action(action::OrderCasualties{UnitId{2}, {}}),
               GameAction{(action::OrderCasualties{UnitId{2}, {}})});  // a template
+    EXPECT_EQ(round_trip_action(action::Shoot{UnitId{1}, ShootingType::Assault, {}}),
+              GameAction{(action::Shoot{UnitId{1}, ShootingType::Assault, {}})});  // a template (D-016)
 }
 
 TEST(Serialization, EveryEventKindRoundTrips) {
@@ -156,6 +176,14 @@ TEST(Serialization, EveryEventKindRoundTrips) {
     batch.selections = {0, 2};
     batch.attack_dice = 7;
     const AllocationGroup group{{ModelId{7}, ModelId{8}}, false, 1, 5, std::nullopt};
+    WeaponSelection selection;
+    selection.attacker = ModelId{3};
+    selection.weapon_index = 1;
+    selection.profile_index = 1;
+    selection.target = UnitId{2};
+    selection.target_within_half_range = true;
+    selection.target_models_at_selection = 10;
+    selection.hit_modifier = -1;  // 10.06 MONSTER/VEHICLE penalty
 
     const std::vector<GameEvent> all{
         event::BattleRoundStarted{2},
@@ -174,6 +202,7 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::UnitMoveCommitted{UnitId{1}, MoveType::Advance},
         event::UnitMoveReverted{UnitId{1}, {"03.03: model 2 is more than 2\" from every other model in unit 1"}},
         event::BattleShockRolled{UnitId{1}, BattleShockRoll{LeadershipRoll{TwoD6{{1, 2}}, 6, false}, true}},
+        event::ShootingStarted{UnitId{1}, ShootingType::Normal, {selection}},
         event::AttackBatchesGathered{UnitId{1}, {batch}},
         event::AttackBatchSelected{UnitId{1}, 0, UnitId{2}, 7},
         event::HitRollsMade{0, hits},

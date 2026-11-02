@@ -186,4 +186,59 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     }
     moves.expect = replay_expectation(g);
     save_replay(moves, kReplayDir / "m7_movement.json");
+
+    // M8: shooting. Normal shooting after a 3" move (Heavy and Rapid Fire apply), then the Termagants
+    // shoot back, both resolved with seeded dice; the defender orders casualties (D-013).
+    Replay shots;
+    shots.description =
+        "M8: Side A Normal-moves its Intercessors 3\" north (no model more than 3\", so [HEAVY] applies) and "
+        "fires every Bolt Rifle on Focused Fire at the Termagants, 9\" away (within half range: [RAPID FIRE 1]). "
+        "Side B remains stationary and fires every Fleshborer back (Normal shooting, 18\"). Casualties are "
+        "removed in unit order (D-013). Every later decision passes.";
+    shots.initial.scenario = "data/scenarios/v1_skirmish.json";
+    shots.initial.seed = 8;
+    GameState s8 = replay_initial_state(shots, repo_root());
+    start_game(s8);
+    auto play = [&](const GameAction& a) {
+        const Side side = decider(s8);
+        const auto v = validate_action(s8, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        shots.steps.push_back(ReplayStep{side, a});
+        apply_action(s8, side, a);
+    };
+    // The first legal action, with a casualty-order template filled in unit order.
+    auto first_legal = [&]() -> GameAction {
+        GameAction a = legal_actions(s8, decider(s8)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*s8.find_unit(oc->target));
+        }
+        return a;
+    };
+    auto volley = [&](std::size_t unit, std::size_t weapon, std::size_t profile, std::size_t target) {
+        action::Shoot a{s8.units[unit].id, ShootingType::Normal, {}};
+        for (const Model& m : s8.units[unit].models) {
+            a.shots.push_back(ShotDeclaration{m.id, weapon, profile, s8.units[target].id});
+        }
+        return a;
+    };
+    auto resolve_attacks = [&]() {
+        while (s8.flow.attack) play(first_legal());
+    };
+    play(action::StartMove{s8.units[0].id, MoveType::Normal, std::nullopt});
+    for (const Model& m : s8.units[0].models) {
+        const Position p = *move_start_position(s8, m.id);
+        play(action::ProposeModelMove{m.id, {Position{p.x, p.y + wh40k::test::in(3), 0}}});
+    }
+    play(action::CommitUnitMove{});
+    play(volley(0, 0, 0, 1));  // Bolt Rifle, Focused Fire
+    resolve_attacks();
+    ASSERT_FALSE(s8.units[1].models.empty()) << "pick a seed where the Termagants survive";
+    play(action::EndShootStep{});
+    play(action::EndChargeStep{});
+    play(action::StartMove{s8.units[1].id, MoveType::RemainStationary, std::nullopt});
+    play(volley(1, 0, 0, 0));  // Fleshborer
+    resolve_attacks();
+    while (s8.pending) play(first_legal());
+    shots.expect = replay_expectation(s8);
+    save_replay(shots, kReplayDir / "m8_shooting.json");
 }

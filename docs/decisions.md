@@ -238,3 +238,41 @@ Applied as:
 D-009, D-010, D-011, D-012 and D-015 use wording the user obtained from an AI assistant, not copied from the
 Warhammer 40,000 app. Treat them as working assumptions: if the official app text differs, update the
 decision, the code that cites it, and its tests.
+
+## D-016: The Shoot action (10.02, 04.01, 04.02; extends D-001 and D-004)
+**Decided:** 2026-11-02 (M8)
+- **One action per unit.** `Shoot{unit, type, shots}` answers the Shoot decision: it selects the unit
+  (10.02 Select Unit), its shooting type (Select Shooting Type), and every model's weapons, profiles and
+  targets (04.01, 04.02) in one go, and the attacks are resolved through the attack flow (04.03). The
+  engine validates the whole declaration before any dice are rolled.
+- **One profile and one target per weapon.** Each `ShotDeclaration` is one model firing one weapon with
+  one profile at one target. A model may declare several weapons (04.01 "one or more ranged weapons"),
+  but the same weapon only once. This reads D-001 (profiles chosen per model) as "one profile per
+  weapon"; revisit if the app's Multiple Weapon Profiles wording says otherwise.
+- **Template.** The declarations are combinatorial, so `legal_actions` lists a `Shoot` template with an
+  empty `shots` list for each unit and shooting type it is eligible for and that has at least one valid
+  shot (D-004). An empty declaration is never valid: selecting a unit to shoot with no weapons is the
+  same as not selecting it. `shot_options()` (rules/shooting.hpp) lists every valid single declaration
+  for clients.
+- **Not tracked:** "After Shooting: not eligible to start an action" (10.04-10.06). Actions (16) are not
+  in V1.
+- **10.06 MONSTER/VEHICLE models** are implemented (eligibility, the -1 to hit, [BLAST] not targeting an
+  engaged unit) though no V1 unit has the keywords; tests use a stand-in MONSTER unit.
+
+## D-017: Line of sight geometry (06.01)
+**Decided:** 2026-11-02 (M8)
+06.01: a straight line 1 mm wide from any part of the observing model's base to any part of the
+observed model's base. Models in either of those two units are ignored; every other model blocks.
+- The line's centre runs between a point of each base. It is blocked if it passes within
+  `r + 0.5 mm` of another model's centre (that base overlaps the 1 mm strip), with the usual `EPS_MM`
+  tolerance: an overlap of up to 0.01 mm does not block. So a gap of exactly 1 mm between two bases lets
+  a line through, and touching bases do not.
+- Only the stretch of the line between the two bases is checked (any part of a base may be the end).
+- Candidate lines (`geometry/visibility.cpp`): centre to centre; every pair of 33 sample points on the
+  two bases (centre plus 32 on the edge); and every common tangent of two of the circles (the two bases
+  and the blocking bases widened by 0.5 mm). Where a free line exists, one tangent to two of these
+  circles usually exists too, so the tangent candidates find narrow gaps that sampling misses (tested
+  at a 1.28 mm gap crossed at a slant). This is not a proof of exactness: it could miss a sightline that
+  only exists in a configuration bounded by other constraints. V1 has only two units, so in V1 play no
+  model can ever block line of sight; only tests with extra units exercise this.
+- V1 has no terrain (13.07). "Fully visible" is not needed in V1 and is not implemented.

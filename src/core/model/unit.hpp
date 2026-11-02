@@ -45,6 +45,7 @@ struct UnitPhaseFlags {
     // D-005: dice rolled for a move stand for the rest of the phase, even if the move is reverted.
     std::optional<int> advance_roll;           // 09.06
     bool desperate_escape_hazards_made = false;  // 09.07
+    bool selected_to_shoot = false;  // 10.02; reset when the Shooting phase starts
     friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
 };
 

@@ -157,7 +157,8 @@ std::vector<AttackBatch> gather_attack_batches(const GameState& state,
     for (std::size_t i = 0; i < selections.size(); ++i) {
         const WeaponSelection& sel = selections[i];
         const WeaponProfile& wp = selected_profile(state, sel);
-        const AttackProfile profile = make_attack_profile(wp, context);
+        AttackProfile profile = make_attack_profile(wp, context);
+        profile.hit_modifier += sel.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
         const int dice = gather_attack_dice(wp, sel, context);
 
         if (std::find(target_order.begin(), target_order.end(), sel.target) == target_order.end()) {

@@ -12,6 +12,7 @@
 #include "core/model/unit.hpp"
 #include "core/model/weapon.hpp"
 #include "core/rules/attack_types.hpp"
+#include "core/rules/shooting_types.hpp"
 #include "core/state/decision.hpp"
 #include "core/state/flow.hpp"
 #include "core/state/game_state.hpp"
@@ -92,6 +93,10 @@ void to_json(Json& j, const ModelPath& v);
 void from_json(const Json& j, ModelPath& v);
 void to_json(Json& j, const MoveInProgress& v);
 void from_json(const Json& j, MoveInProgress& v);
+void to_json(Json& j, ShootingType v);
+void from_json(const Json& j, ShootingType& v);
+void to_json(Json& j, const ShotDeclaration& v);
+void from_json(const Json& j, ShotDeclaration& v);
 void to_json(Json& j, const BatchInProgress& v);
 void from_json(const Json& j, BatchInProgress& v);
 void to_json(Json& j, const AttackFlow& v);

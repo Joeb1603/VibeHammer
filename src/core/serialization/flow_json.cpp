@@ -41,13 +41,15 @@ std::vector<WeaponAbility> abilities_from_json(const Json& j) {
 // ---- unit phase flags ----
 void to_json(Json& j, const UnitPhaseFlags& v) {
     j = Json{{"selected_to_move", v.selected_to_move},
-             {"desperate_escape_hazards_made", v.desperate_escape_hazards_made}};
+             {"desperate_escape_hazards_made", v.desperate_escape_hazards_made},
+             {"selected_to_shoot", v.selected_to_shoot}};
     put_opt(j, "advance_roll", v.advance_roll);
 }
 void from_json(const Json& j, UnitPhaseFlags& v) {
     j.at("selected_to_move").get_to(v.selected_to_move);
     get_opt(j, "advance_roll", v.advance_roll);
     j.at("desperate_escape_hazards_made").get_to(v.desperate_escape_hazards_made);
+    j.at("selected_to_shoot").get_to(v.selected_to_shoot);
 }
 
 // ---- moves ----
@@ -90,6 +92,24 @@ void from_json(const Json& j, MoveInProgress& v) {
     j.at("pending_mortal_wounds").get_to(v.pending_mortal_wounds);
 }
 
+// ---- shooting ----
+void to_json(Json& j, ShootingType v) { j = std::string(shooting_type_name(v)); }
+void from_json(const Json& j, ShootingType& v) {
+    const auto t = shooting_type_from_name(j.get<std::string>());
+    if (!t) bad_enum("ShootingType", j);
+    v = *t;
+}
+void to_json(Json& j, const ShotDeclaration& v) {
+    j = Json{{"model", v.model}, {"weapon_index", v.weapon_index}, {"profile_index", v.profile_index},
+             {"target", v.target}};
+}
+void from_json(const Json& j, ShotDeclaration& v) {
+    j.at("model").get_to(v.model);
+    j.at("weapon_index").get_to(v.weapon_index);
+    j.at("profile_index").get_to(v.profile_index);
+    j.at("target").get_to(v.target);
+}
+
 // ---- attack data ----
 void to_json(Json& j, AttackType v) { j = (v == AttackType::Shooting) ? "Shooting" : "Fighting"; }
 void from_json(const Json& j, AttackType& v) {
@@ -113,7 +133,8 @@ void to_json(Json& j, const WeaponSelection& v) {
              {"profile_index", v.profile_index},
              {"target", v.target},
              {"target_within_half_range", v.target_within_half_range},
-             {"target_models_at_selection", v.target_models_at_selection}};
+             {"target_models_at_selection", v.target_models_at_selection},
+             {"hit_modifier", v.hit_modifier}};
     put_opt(j, "declared_attacks", v.declared_attacks);
 }
 void from_json(const Json& j, WeaponSelection& v) {
@@ -124,6 +145,7 @@ void from_json(const Json& j, WeaponSelection& v) {
     get_opt(j, "declared_attacks", v.declared_attacks);
     j.at("target_within_half_range").get_to(v.target_within_half_range);
     j.at("target_models_at_selection").get_to(v.target_models_at_selection);
+    j.at("hit_modifier").get_to(v.hit_modifier);
 }
 
 void to_json(Json& j, const AttackProfile& v) {

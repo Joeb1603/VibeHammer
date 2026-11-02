@@ -14,8 +14,8 @@
 namespace wh40k::core {
 
 // Starts resolving `attacker`'s attacks with the given weapon selections and advances to the next
-// decision. Called by the Shoot (M8) and Fight (M10) actions once their selections are validated;
-// in M5 only tests call it. Preconditions (std::logic_error otherwise): the game is in the Shoot or
+// decision. The Shoot action (M8) and the Fight action (M10) use the same flow once their selections
+// are validated; tests call this directly to start mid-phase. Preconditions (std::logic_error otherwise): the game is in the Shoot or
 // Fight step, nothing else is in progress, the attacker has models, every selection's attacker
 // belongs to it, and every target is an enemy unit.
 std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId attacker,

@@ -11,6 +11,7 @@
 
 #include "core/geometry/primitives.hpp"
 #include "core/rules/move_types.hpp"
+#include "core/rules/shooting_types.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -41,6 +42,15 @@ struct CommitUnitMove {
 struct ResetUnitMove {
     friend bool operator==(const ResetUnitMove&, const ResetUnitMove&) = default;
 };
+// 10.02 Select Unit + Select Shooting Type, then 04.01/04.02 for every model: the weapons each model
+// fires, with their profiles (D-001) and targets, and the attacks are resolved (04.03). An empty
+// `shots` list is the template legal_actions returns (D-004, D-016).
+struct Shoot {
+    UnitId unit;
+    ShootingType type = ShootingType::Normal;
+    std::vector<ShotDeclaration> shots;
+    friend bool operator==(const Shoot&, const Shoot&) = default;
+};
 // 10.02: no more units will be selected to shoot this phase.
 struct EndShootStep {
     friend bool operator==(const EndShootStep&, const EndShootStep&) = default;
@@ -70,7 +80,7 @@ struct OrderCasualties {
 }  // namespace action
 
 using GameAction = std::variant<action::StartMove, action::ProposeModelMove, action::CommitUnitMove,
-                                action::ResetUnitMove, action::EndShootStep, action::EndChargeStep,
+                                action::ResetUnitMove, action::Shoot, action::EndShootStep, action::EndChargeStep,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties>;
 

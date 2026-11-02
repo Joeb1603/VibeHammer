@@ -1,5 +1,6 @@
 // Stage entry/exit work, stage decisions and the turn-structure actions (07-12).
-// M5: phases are stubs (remain stationary, end shooting, end charges). Later milestones fill them in.
+// Movement (M7) is in movement.cpp and shooting (M8) in shooting.cpp; the Charge and Fight phases are
+// still stubs (end charges; no fights). Later milestones fill them in.
 
 #include <stdexcept>
 #include <string>
@@ -64,6 +65,11 @@ void on_enter_stage(GameState& state, Events& events) {
         case Stage::StartOfMovementPhase:
             for (Unit& u : state.units) {
                 u.phase_flags = UnitPhaseFlags{};  // 09.02 "not been selected to move this phase"; D-005 rolls
+            }
+            break;
+        case Stage::StartOfShootingPhase:
+            for (Unit& u : state.units) {
+                u.phase_flags.selected_to_shoot = false;  // 10.02 "not already been selected to shoot this phase"
             }
             break;
         case Stage::PileIn:
@@ -166,20 +172,6 @@ void apply_details(GameState& state, Side, const action::StartMove& a, DiceSourc
         return;
     }
     begin_move(state, a, dice, events);
-}
-
-// ---- 10.02 Shoot (M5 stub: the only option is to end the step) ----
-
-std::vector<GameAction> legal_for(const GameState&, const decision::Shoot&) {
-    return {action::EndShootStep{}};
-}
-
-ValidationResult validate_details(const GameState&, Side, const action::EndShootStep&) {
-    return ValidationResult::success();
-}
-
-void apply_details(GameState& state, Side, const action::EndShootStep&, DiceSource&, Events& events) {
-    next_stage(state, events);  // 10.03 End of Shooting Phase
 }
 
 // ---- 11.02 Charge (M5 stub: the only option is to end the step) ----

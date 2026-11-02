@@ -98,6 +98,9 @@ std::string body(const core::GameEvent& e) {
                        std::to_string(x.roll.leadership.roll.total()) + " vs " +
                        std::to_string(x.roll.leadership.target) + "+ -> " +
                        (x.roll.becomes_battle_shocked ? "battle-shocked" : "passed");
+            } else if constexpr (std::is_same_v<T, ev::ShootingStarted>) {
+                return unit(x.unit) + " shoots (" + std::string(core::shooting_type_name(x.type)) + " shooting, " +
+                       std::to_string(x.selections.size()) + " weapon(s))";
             } else if constexpr (std::is_same_v<T, ev::AttackBatchesGathered>) {
                 int dice = 0;
                 for (const auto& b : x.batches) dice += b.attack_dice;

@@ -181,6 +181,10 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, ProposeModelMove>) {
                 j["model"] = a.model;
                 j["path"] = a.path;
+            } else if constexpr (std::is_same_v<T, Shoot>) {
+                j["unit"] = a.unit;
+                j["type"] = a.type;
+                j["shots"] = a.shots;
             } else if constexpr (std::is_same_v<T, SelectAttackBatch>) {
                 j["batch"] = a.batch;
             } else if constexpr (std::is_same_v<T, DeclareAllocationOrder>) {
@@ -206,6 +210,9 @@ void from_json(const Json& j, GameAction& v) {
         v = CommitUnitMove{};
     } else if (kind == "ResetUnitMove") {
         v = ResetUnitMove{};
+    } else if (kind == "Shoot") {
+        v = Shoot{j.at("unit").get<UnitId>(), j.at("type").get<ShootingType>(),
+                  j.at("shots").get<std::vector<ShotDeclaration>>()};
     } else if (kind == "EndShootStep") {
         v = EndShootStep{};
     } else if (kind == "EndChargeStep") {
@@ -269,6 +276,10 @@ void to_json(Json& j, const GameEvent& v) {
             } else if constexpr (std::is_same_v<T, BattleShockRolled>) {
                 j["unit"] = e.unit;
                 j["roll"] = e.roll;
+            } else if constexpr (std::is_same_v<T, ShootingStarted>) {
+                j["unit"] = e.unit;
+                j["type"] = e.type;
+                j["selections"] = e.selections;
             } else if constexpr (std::is_same_v<T, AttackBatchesGathered>) {
                 j["attacker"] = e.attacker;
                 j["batches"] = e.batches;
@@ -341,6 +352,9 @@ void from_json(const Json& j, GameEvent& v) {
         v = UnitMoveReverted{j.at("unit").get<UnitId>(), j.at("reasons").get<std::vector<std::string>>()};
     } else if (kind == "BattleShockRolled") {
         v = BattleShockRolled{j.at("unit").get<UnitId>(), j.at("roll").get<BattleShockRoll>()};
+    } else if (kind == "ShootingStarted") {
+        v = ShootingStarted{j.at("unit").get<UnitId>(), j.at("type").get<ShootingType>(),
+                            j.at("selections").get<std::vector<WeaponSelection>>()};
     } else if (kind == "AttackBatchesGathered") {
         v = AttackBatchesGathered{j.at("attacker").get<UnitId>(), j.at("batches").get<std::vector<AttackBatch>>()};
     } else if (kind == "AttackBatchSelected") {

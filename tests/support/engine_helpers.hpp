@@ -19,6 +19,7 @@
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/shooting.hpp"
 #include "test_helpers.hpp"
 
 namespace wh40k::test {
@@ -99,13 +100,39 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
         }
         return filled;
     }
+    if (const auto* sh = std::get_if<core::action::Shoot>(&tmpl)) {
+        // D-016: each model fires at most one of its valid single-weapon options (so 24.07 and the
+        // one-profile-per-weapon rule always hold), and at least one model fires.
+        core::action::Shoot filled = *sh;
+        const core::Unit& unit = *gs.find_unit(sh->unit);
+        const auto options = core::shot_options(gs, unit, sh->type);
+        for (const core::Model& m : unit.models) {
+            std::vector<core::ShotDeclaration> mine;
+            for (const auto& o : options) {
+                if (o.model == m.id) mine.push_back(o);
+            }
+            if (!mine.empty() && rng.below(4) != 0) filled.shots.push_back(mine[rng.below(mine.size())]);
+        }
+        if (filled.shots.empty() && !options.empty()) filled.shots.push_back(options[rng.below(options.size())]);
+        if (corrupt) {
+            switch (rng.below(4)) {
+                case 0: filled.shots.push_back(filled.shots.front()); break;  // one weapon selected twice
+                case 1: filled.shots.back().model = core::ModelId{9999}; break;  // not in the unit
+                case 2: filled.shots.back().target = sh->unit; break;            // not an enemy unit
+                default: filled.shots.clear(); break;                            // the template itself
+            }
+        }
+        return filled;
+    }
     ADD_FAILURE() << "unknown template kind " << core::action_name(tmpl);
     return tmpl;
 }
 
-// Templates whose clean random fill is always valid (casualty orders). Path fills may be rejected.
+// Templates whose clean random fill is always valid (casualty orders, shot declarations). Path fills
+// may be rejected.
 inline bool clean_fill_always_valid(const core::GameAction& tmpl) {
-    return std::holds_alternative<core::action::OrderCasualties>(tmpl);
+    return std::holds_alternative<core::action::OrderCasualties>(tmpl) ||
+           std::holds_alternative<core::action::Shoot>(tmpl);
 }
 
 // One random legal action for whoever must decide. Templates are filled until one validates (a few
