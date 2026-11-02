@@ -3,8 +3,9 @@
 // applying it (D-024). Replays are stepped through Timeline (read-only).
 //
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
-//                        [--steps <n>] [--select <unit id>] [--select-model <model id>]
+//                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
 //   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
+//   --seed n: the dice seed for the first new game (M13; the panel can change it for later games).
 
 #include <imgui.h>
 #include <raylib.h>
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <filesystem>
@@ -47,6 +49,8 @@ constexpr float kDragThresholdPx = 3.0f;
 const fs::path kRepoRoot{WH40K_REPO_ROOT};
 const fs::path kScenario = kRepoRoot / "data/scenarios/v1_skirmish.json";
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
+const fs::path kSavePath = kRepoRoot / "saves/game.json";              // gitignored
+const fs::path kExportPath = kRepoRoot / "replays/exported_replay.json";  // gitignored
 
 struct Options {
     std::optional<std::string> replay;
@@ -56,6 +60,7 @@ struct Options {
     int steps = 0;
     std::optional<unsigned> select_unit;
     std::optional<unsigned> select_model;
+    std::optional<std::uint64_t> seed;
 };
 
 Options parse_args(int argc, char** argv) {
@@ -70,6 +75,7 @@ Options parse_args(int argc, char** argv) {
         else if (key == "--steps") o.steps = std::stoi(value);
         else if (key == "--select") o.select_unit = static_cast<unsigned>(std::stoul(value));
         else if (key == "--select-model") o.select_model = static_cast<unsigned>(std::stoul(value));
+        else if (key == "--seed") o.seed = std::stoull(value);
     }
     return o;
 }
@@ -92,21 +98,67 @@ struct Drag {
 
 class App {
 public:
-    App() {
+    explicit App(std::optional<std::uint64_t> seed) {
+        try {
+            seed_ = seed ? *seed : core::load_scenario(kScenario, kRepoRoot).dice.seed;
+        } catch (const std::exception&) {
+            seed_ = 0;
+        }
         new_game();
         std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
+        std::snprintf(save_path_, sizeof(save_path_), "%s", kSavePath.string().c_str());
+        std::snprintf(export_path_, sizeof(export_path_), "%s", kExportPath.string().c_str());
     }
 
     void new_game() {
         try {
-            session_.emplace(core::load_scenario(kScenario, kRepoRoot));
-            mode_ = Mode::Play;
-            status_ = "New game: V1 scenario. Hotseat: each side acts when the panel names it.";
-            reasons_.clear();
-            fit_pending_ = true;
-            scroll_log_ = true;
+            // M13: the dice seed is chosen at game start (shown and editable in the panel).
+            start_session(GameSession::new_game(core::load_scenario(kScenario, kRepoRoot), seed_));
+            status_ = "New game: V1 scenario, seed " + std::to_string(seed_) +
+                      ". Hotseat: each side acts when the panel names it.";
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the scenario: ") + e.what();
+        }
+    }
+
+    void start_session(GameSession session) {
+        session_.emplace(std::move(session));
+        mode_ = Mode::Play;
+        reasons_.clear();
+        drag_.reset();
+        fit_pending_ = true;
+        scroll_log_ = true;
+    }
+
+    void save_game() {
+        try {
+            session_->save(save_path_);
+            status_ = std::string("Saved to ") + save_path_;
+        } catch (const std::exception& e) {
+            status_ = std::string("Could not save: ") + e.what();
+        }
+    }
+
+    void load_game() {
+        try {
+            start_session(GameSession::load(save_path_));
+            status_ = std::string("Loaded ") + save_path_ + " (seed " + std::to_string(session_->seed()) + ")";
+        } catch (const std::exception& e) {
+            status_ = std::string("Could not load the save: ") + e.what();
+        }
+    }
+
+    void export_replay() {
+        try {
+            const fs::path path = export_path_;
+            if (path.has_parent_path()) fs::create_directories(path.parent_path());
+            core::save_replay(session_->to_replay("Exported from VibeHammer: " +
+                                                  std::to_string(session_->history().size()) + " steps, seed " +
+                                                  std::to_string(session_->seed()) + "."),
+                              path);
+            status_ = "Exported replay to " + path.string();
+        } catch (const std::exception& e) {
+            status_ = std::string("Could not export the replay: ") + e.what();
         }
     }
 
@@ -361,13 +413,13 @@ private:
         const float x = static_cast<float>(GetScreenWidth()) - kPanelWidth;
         const float h = static_cast<float>(GetScreenHeight());
         ImGui::SetNextWindowPos(ImVec2(x, 0.0f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.34f), cond);
+        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.44f), cond);
         ImGui::Begin("VibeHammer");
         draw_game_section();
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(x, h * 0.34f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.40f), cond);
+        ImGui::SetNextWindowPos(ImVec2(x, h * 0.44f), cond);
+        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.32f), cond);
         ImGui::Begin(mode_ == Mode::Play ? "Decision" : "Replay");
         if (mode_ == Mode::Play) {
             draw_decision();
@@ -376,8 +428,8 @@ private:
         }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(x, h * 0.74f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.26f), cond);
+        ImGui::SetNextWindowPos(ImVec2(x, h * 0.76f), cond);
+        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.24f), cond);
         ImGui::Begin("Log");
         draw_logs();
         ImGui::End();
@@ -386,6 +438,32 @@ private:
     void draw_game_section() {
         if (ImGui::Button("New game (V1 scenario)")) new_game();
         ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);
+        ImGui::InputScalar("seed", ImGuiDataType_U64, &seed_);
+        if (mode_ == Mode::Play) {
+            ImGui::Text("This game's seed: %llu", static_cast<unsigned long long>(session_->seed()));
+            ImGui::SameLine();
+            ImGui::BeginDisabled(!session_->can_undo());
+            if (ImGui::Button("Undo")) {
+                session_->undo();  // M13: rebuilt from the initial state without the last action
+                reasons_.clear();
+                drag_.reset();
+                scroll_log_ = true;
+            }
+            ImGui::EndDisabled();
+        }
+        ImGui::InputText("##save", save_path_, sizeof(save_path_));
+        ImGui::SameLine();
+        ImGui::BeginDisabled(mode_ != Mode::Play);
+        if (ImGui::Button("Save")) save_game();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Load")) load_game();
+        ImGui::InputText("##export", export_path_, sizeof(export_path_));
+        ImGui::SameLine();
+        ImGui::BeginDisabled(mode_ != Mode::Play);
+        if (ImGui::Button("Export replay")) export_replay();
+        ImGui::EndDisabled();
         ImGui::InputText("##path", path_, sizeof(path_));
         if (ImGui::Button("Load replay")) load_replay(path_);
         ImGui::SameLine();
@@ -513,6 +591,9 @@ private:
     bool fit_pending_ = true;
     bool scroll_log_ = true;
     char path_[512] = {};
+    char save_path_[512] = {};
+    char export_path_[512] = {};
+    std::uint64_t seed_ = 0;
     std::string status_;
 };
 
@@ -529,7 +610,7 @@ int main(int argc, char** argv) {
     SetTargetFPS(60);
     rlImGuiSetup(true);
 
-    App app;
+    App app(options.seed);
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
     app.auto_steps(options.steps);

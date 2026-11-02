@@ -418,3 +418,23 @@ of the charge for that reason.
   - **Casualties.** The casualty editor starts in unit order (D-013).
   - **Decision panel.** It is generated from `legal_actions`: one button per fully specified action,
     and one editor per template.
+
+## D-025: Save files, undo and the seed (M13)
+**Decided:** 2026-11-02 (M13)
+- **Save format.** A save is JSON:
+  `{"format": 1, "kind": "vibehammer-save", "initial": GameState, "steps": [(side, action)], "state": GameState}`.
+  - It stores the initial state and the accepted steps, so a loaded game still has its event log
+    (events are not stored, D-014), undo and replay export.
+  - Loading rebuilds the game by validating and applying every step from "initial", then requires the
+    result to equal "state". A mismatch, or an invalid step, is a corrupt file (`DataError`).
+  - A bare `GameState` JSON also loads, as a game with no history.
+  - The client saves to `saves/game.json` by default; `/saves/` is gitignored.
+- **Replay export.** `GameSession::to_replay` writes the initial-state form of a replay (D-014), with
+  the current state as its `expect` block. The client exports to `replays/exported_replay.json` by
+  default (gitignored); the file can be copied into `tests/replays/` to make it a regression test.
+- **Undo** (hotseat). Undo rebuilds the game from the initial state with every step but the last.
+  - The dice state is part of `GameState`, so the rebuilt game is exactly the earlier state, dice
+    position included: undoing an action and repeating it gives the same rolls.
+  - In V1 both players share the screen, so undo has no permission model.
+- **Seed.** A new game takes the seed from the panel (or `--seed`). It defaults to the scenario's own
+  seed, and the dice position starts at 0. The panel shows the current game's seed.

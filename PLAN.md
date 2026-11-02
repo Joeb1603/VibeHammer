@@ -202,7 +202,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M13: Save, load and replay polish
+## M13: Save, load and replay polish ✅ (done)
 **Effort:** `medium` · **Plan mode:** no
 
 > Add save/load of `GameState` JSON, export of the action log as a replay, undo (rebuild from replay minus the last action, in hotseat only), and a seed display/override at game start.
