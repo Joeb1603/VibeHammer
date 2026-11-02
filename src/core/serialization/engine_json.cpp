@@ -193,6 +193,9 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, StartPileIn> || std::is_same_v<T, StartConsolidation>) {
                 j["unit"] = a.unit;
                 j["targets"] = a.targets;
+            } else if constexpr (std::is_same_v<T, RemoveModelForCoherency>) {
+                j["unit"] = a.unit;
+                j["model"] = a.model;
             } else if constexpr (std::is_same_v<T, SkipPileIn>) {
                 j["unit"] = a.unit;
             } else if constexpr (std::is_same_v<T, SelectToFight>) {
@@ -251,6 +254,8 @@ void from_json(const Json& j, GameAction& v) {
         v = Fight{j.at("unit").get<UnitId>(), j.at("declarations").get<std::vector<MeleeDeclaration>>()};
     } else if (kind == "StartConsolidation") {
         v = StartConsolidation{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "RemoveModelForCoherency") {
+        v = RemoveModelForCoherency{j.at("unit").get<UnitId>(), j.at("model").get<ModelId>()};
     } else if (kind == "EndConsolidations") {
         v = EndConsolidations{};
     } else if (kind == "EndChargeStep") {
@@ -351,6 +356,14 @@ void to_json(Json& j, const GameEvent& v) {
                 j["targets"] = e.targets;
             } else if constexpr (std::is_same_v<T, UnitsForcedToFight>) {
                 j["units"] = e.units;
+            } else if constexpr (std::is_same_v<T, CommandPointGained>) {
+                j["side"] = e.side;
+                j["total"] = e.total;
+            } else if constexpr (std::is_same_v<T, BattleShockEnded>) {
+                j["unit"] = e.unit;
+            } else if constexpr (std::is_same_v<T, ModelRemovedForCoherency>) {
+                j["unit"] = e.unit;
+                j["model"] = e.model;
             } else if constexpr (std::is_same_v<T, AttackBatchesGathered>) {
                 j["attacker"] = e.attacker;
                 j["batches"] = e.batches;
@@ -451,6 +464,12 @@ void from_json(const Json& j, GameEvent& v) {
                                  j.at("targets").get<std::vector<UnitId>>()};
     } else if (kind == "UnitsForcedToFight") {
         v = UnitsForcedToFight{j.at("units").get<std::vector<UnitId>>()};
+    } else if (kind == "CommandPointGained") {
+        v = CommandPointGained{j.at("side").get<Side>(), j.at("total").get<int>()};
+    } else if (kind == "BattleShockEnded") {
+        v = BattleShockEnded{j.at("unit").get<UnitId>()};
+    } else if (kind == "ModelRemovedForCoherency") {
+        v = ModelRemovedForCoherency{j.at("unit").get<UnitId>(), j.at("model").get<ModelId>()};
     } else if (kind == "AttackBatchesGathered") {
         v = AttackBatchesGathered{j.at("attacker").get<UnitId>(), j.at("batches").get<std::vector<AttackBatch>>()};
     } else if (kind == "AttackBatchSelected") {

@@ -46,6 +46,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::SelectUnitToFight>(d);
             else if constexpr (std::is_same_v<T, action::Fight>)
                 return std::holds_alternative<decision::DeclareMeleeAttacks>(d);
+            else if constexpr (std::is_same_v<T, action::RemoveModelForCoherency>)
+                return std::holds_alternative<decision::RestoreCoherency>(d);
             else if constexpr (std::is_same_v<T, action::StartConsolidation> ||
                                std::is_same_v<T, action::EndConsolidations>)
                 return std::holds_alternative<decision::Consolidate>(d);
@@ -67,7 +69,7 @@ std::vector<GameEvent> start_game_impl(GameState& state, DiceSource& dice) {
     Events events;
     state.flow.battle_round = 1;
     state.flow.turn_in_round = 0;
-    detail::enter_stage(state, Stage::StartOfBattleRound, events);  // D-003: straight into round 1
+    detail::enter_stage(state, Stage::StartOfBattleRound, dice, events);  // D-003: straight into round 1
     detail::advance(state, dice, events);
     return events;
 }

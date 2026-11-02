@@ -389,7 +389,8 @@ void to_json(Json& j, const PendingDecision& v) {
             using T = std::decay_t<decltype(k)>;
             if constexpr (std::is_same_v<T, decision::MoveModels> || std::is_same_v<T, decision::SelectChargeTargets> ||
                           std::is_same_v<T, decision::OverrunPileIn> ||
-                          std::is_same_v<T, decision::DeclareMeleeAttacks>) {
+                          std::is_same_v<T, decision::DeclareMeleeAttacks> ||
+                          std::is_same_v<T, decision::RestoreCoherency>) {
                 j["unit"] = k.unit;
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 j["attacker"] = k.attacker;
@@ -414,6 +415,7 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "DeclareMeleeAttacks") v.kind = decision::DeclareMeleeAttacks{j.at("unit").get<UnitId>()};
     else if (kind == "Consolidate") v.kind = decision::Consolidate{};
     else if (kind == "ForcedFight") v.kind = decision::ForcedFight{};
+    else if (kind == "RestoreCoherency") v.kind = decision::RestoreCoherency{j.at("unit").get<UnitId>()};
     else if (kind == "SelectAttackBatch") v.kind = decision::SelectAttackBatch{j.at("attacker").get<UnitId>()};
     else if (kind == "DeclareAllocationOrder") v.kind = decision::DeclareAllocationOrder{j.at("target").get<UnitId>()};
     else if (kind == "OrderCasualties") v.kind = decision::OrderCasualties{j.at("target").get<UnitId>()};

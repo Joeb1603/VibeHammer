@@ -55,12 +55,12 @@ bool end_game_if_side_wiped_out(GameState& state, Events& events) {
 
 }  // namespace
 
-void enter_stage(GameState& state, Stage stage, Events& events) {
+void enter_stage(GameState& state, Stage stage, DiceSource& dice, Events& events) {
     state.flow.stage = stage;
-    on_enter_stage(state, events);
+    on_enter_stage(state, dice, events);
 }
 
-void next_stage(GameState& state, Events& events) {
+void next_stage(GameState& state, DiceSource& dice, Events& events) {
     const Stage current = state.flow.stage;
     on_leave_stage(state, events);
     switch (current) {
@@ -70,9 +70,9 @@ void next_stage(GameState& state, Events& events) {
         case Stage::EndOfTurn:
             if (state.flow.turn_in_round == 0) {
                 state.flow.turn_in_round = 1;  // 07.02: the opponent takes their turn
-                enter_stage(state, Stage::StartOfTurn, events);
+                enter_stage(state, Stage::StartOfTurn, dice, events);
             } else {
-                enter_stage(state, Stage::EndOfBattleRound, events);
+                enter_stage(state, Stage::EndOfBattleRound, dice, events);
             }
             return;
         case Stage::EndOfBattleRound:
@@ -86,11 +86,11 @@ void next_stage(GameState& state, Events& events) {
             }
             state.flow.battle_round += 1;  // 07.03: the next battle round starts
             state.flow.turn_in_round = 0;
-            enter_stage(state, Stage::StartOfBattleRound, events);
+            enter_stage(state, Stage::StartOfBattleRound, dice, events);
             return;
         default:
             // Every other stage is followed by the next one in declaration order.
-            enter_stage(state, static_cast<Stage>(static_cast<int>(current) + 1), events);
+            enter_stage(state, static_cast<Stage>(static_cast<int>(current) + 1), dice, events);
             return;
     }
 }
@@ -143,7 +143,7 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
         if (fight_stage_progress(state, events)) {
             continue;
         }
-        next_stage(state, events);
+        next_stage(state, dice, events);
     }
     throw std::logic_error("advance: the engine made no progress");
 }

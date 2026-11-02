@@ -240,7 +240,7 @@ Warhammer 40,000 app. Treat them as working assumptions: if the official app tex
 decision, the code that cites it, and its tests.
 
 ## D-016: The Shoot action (10.02, 04.01, 04.02; extends D-001 and D-004)
-**Decided:** 2026-11-02 (M8)
+**Decided:** 2026-11-02 (M8). **Confirmed by the user** (2026-11-02).
 - **One action per unit.** `Shoot{unit, type, shots}` answers the Shoot decision: it selects the unit
   (10.02 Select Unit), its shooting type (Select Shooting Type), and every model's weapons, profiles and
   targets (04.01, 04.02) in one go, and the attacks are resolved through the attack flow (04.03). The
@@ -278,7 +278,7 @@ observed model's base. Models in either of those two units are ignored; every ot
 - V1 has no terrain (13.07). "Fully visible" is not needed in V1 and is not implemented.
 
 ## D-018: Charge flow and a reverted charge move (11.02, 11.04, 03.01; extends D-005)
-**Decided:** 2026-11-02 (M9)
+**Decided:** 2026-11-02 (M9). **Confirmed by the user** (2026-11-02).
 - **Flow.** `DeclareCharge{unit}` (11.02 Declare Charge) makes the charge roll at once (Make Charge Roll).
   If no enemy unit is within 12" and within the roll (11.04 Before Moving), no charge move is possible:
   the charge is resolved and fails, and the models don't move (11.02 Attempt Charge). Otherwise the
@@ -338,7 +338,7 @@ of the charge for that reason.
 - Supersedes D-019.
 
 ## D-021: Melee declarations (04.01, 04.02 While Fighting)
-**Decided:** 2026-11-02 (M10)
+**Decided:** 2026-11-02 (M10). **Confirmed by the user** (2026-11-02).
 - **Who must declare.** Every model that has a melee weapon and is engaged with at least one enemy unit
   must select exactly one melee weapon and one profile (D-001). The rules: 04.01 While Fighting says
   "you must select one melee weapon", and the 12 sidebar says "you have to fight with all units that
@@ -352,7 +352,7 @@ of the charge for that reason.
   `legal_actions` returns (as D-016 does for shooting); `melee_options()` lists the single-target choices.
 
 ## D-022: Pile-in and consolidation movement details (12.03, 12.08)
-**Decided:** 2026-11-02 (M10)
+**Decided:** 2026-11-02 (M10). **Confirmed by the user** (2026-11-02).
 - **Closest target.** "Closer to the closest pile-in target / selected enemy unit" is measured from the
   moved model's start position, edge to edge. If units tie for closest, any of them counts (D-010: the
   controlling player chooses). The check applies only to models that are moved (03.01, as D-018 for
@@ -368,3 +368,24 @@ of the charge for that reason.
   first. Their part is over once they end it, or once the opponent acts.
 - **Objectives.** V1 has no objectives, so Objective Consolidation never applies. A unit that is
   unengaged with no enemy unit within 3" cannot consolidate (09 sidebar "Selecting modes").
+
+## D-023: Command points, battle-shock order and Regaining Coherency (08.02, 08.03, 03.03)
+**Decided:** 2026-11-02 (M11)
+- **Command points.** Each side's CP is tracked in `GameState::command_points`. Both sides start at 0:
+  starting CP comes from the mission, and V1 has none. Nothing spends CP until stratagems are added
+  (post-V1).
+- **Battle-shock step (08.03).** The active player's units are processed in unit order, one roll each
+  (D-015). The rolls are automatic, so no decision is needed. A unit already battle-shocked at the start
+  of the step that passes its roll is no longer battle-shocked (`BattleShockEnded` event). A unit at or
+  below half-strength that fails becomes battle-shocked. One that passes stays as it was.
+- **Effects (01.07).** While battle-shocked, a unit's models have OC '-' (`objective_control()` returns
+  nullopt), and the unit cannot select Ordered Retreat (09.07, M7). Stratagems and actions aren't in V1.
+- **Regaining Coherency (03.03).** In the End of Turn step, each unit on the battlefield that is not in
+  coherency is fixed by its controlling player, one model at a time, through the `RestoreCoherency`
+  decision. Any model of the unit may be removed. Units are taken the turn player's first, then the
+  opponent's, each in unit order; the order can't change the outcome.
+- **Removed models.** They are destroyed, but they trigger no rules that apply on destruction. The
+  engine emits `ModelRemovedForCoherency`, not `ModelDestroyed`. A one-model unit is always coherent,
+  so removal never destroys a unit and can't trigger D-007.
+- **Stage entry and dice.** Entering a stage can now roll dice: `enter_stage`, `next_stage` and
+  `on_enter_stage` take the `DiceSource`.

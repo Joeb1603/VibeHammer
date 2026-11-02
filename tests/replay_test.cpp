@@ -354,4 +354,34 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_EQ(*f10.pending, (PendingDecision{Side::B, decision::MoveUnits{}}));
     fight.expect = replay_expectation(f10);
     save_replay(fight, kReplayDir / "m10_fight.json");
+
+    // M11: the same game played to the end. Every later decision takes the first legal action (templates
+    // filled: every model fights with its first melee option; casualties in unit order).
+    Replay full;
+    full.description =
+        "M11: the M10 game continued to the end. Every later decision takes the first legal action: units "
+        "remain stationary, skip shooting and charges, make no pile-in or consolidation moves, and fight "
+        "whenever they are eligible (each model's first melee option). Both players gain 1 CP each Command "
+        "phase (08.02). In Side B's Command phase the Termagants, below half-strength, make a battle-shock "
+        "roll (08.03). The fight goes on in Side B's Fight phase until the Termagants are destroyed: Side A "
+        "wins in battle round 1 (D-007).";
+    full.initial = fight.initial;
+    full.steps = fight.steps;
+    GameState g11 = f10;
+    while (g11.pending) {
+        GameAction a = legal_actions(g11, decider(g11)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g11.find_unit(oc->target));
+        } else if (auto* f = std::get_if<action::Fight>(&a); f != nullptr && f->declarations.empty()) {
+            a = wh40k::test::first_melee_options(g11, f->unit);
+        }
+        const Side side = decider(g11);
+        const auto v = validate_action(g11, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        full.steps.push_back(ReplayStep{side, a});
+        apply_action(g11, side, a);
+    }
+    ASSERT_TRUE(g11.result.has_value());
+    full.expect = replay_expectation(g11);
+    save_replay(full, kReplayDir / "m11_full_game.json");
 }

@@ -137,6 +137,12 @@ std::string body(const core::GameEvent& e) {
                 std::string units;
                 for (const auto u : x.units) units += (units.empty() ? "" : ", ") + unit(u);
                 return units + " must now fight (Engaging Consolidation)";
+            } else if constexpr (std::is_same_v<T, ev::CommandPointGained>) {
+                return side(x.side) + " gains 1 CP (" + std::to_string(x.total) + " CP)";
+            } else if constexpr (std::is_same_v<T, ev::BattleShockEnded>) {
+                return unit(x.unit) + " is no longer battle-shocked";
+            } else if constexpr (std::is_same_v<T, ev::ModelRemovedForCoherency>) {
+                return model(x.model) + " of " + unit(x.unit) + " is removed to restore coherency (destroyed)";
             } else if constexpr (std::is_same_v<T, ev::AttackBatchesGathered>) {
                 int dice = 0;
                 for (const auto& b : x.batches) dice += b.attack_dice;

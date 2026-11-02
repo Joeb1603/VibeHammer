@@ -61,6 +61,11 @@ struct Consolidate {
 struct ForcedFight {
     friend bool operator==(const ForcedFight&, const ForcedFight&) = default;
 };
+// 03.03 Regaining Coherency (End of Turn step): remove one model from an incoherent unit.
+struct RestoreCoherency {
+    UnitId unit;
+    friend bool operator==(const RestoreCoherency&, const RestoreCoherency&) = default;
+};
 // 04.03 Select Enemy Unit / Gather Attack Dice: the attacker picks the next batch to resolve.
 struct SelectAttackBatch {
     UnitId attacker;
@@ -82,7 +87,7 @@ struct OrderCasualties {
 using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, decision::Shoot, decision::Charge,
                                   decision::SelectChargeTargets, decision::PileIn, decision::OverrunPileIn,
                                   decision::SelectUnitToFight, decision::DeclareMeleeAttacks,
-                                  decision::Consolidate, decision::ForcedFight,
+                                  decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties>;
 

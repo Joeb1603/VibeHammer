@@ -26,7 +26,7 @@ bool is_phase_end(Stage s) {
 
 }  // namespace
 
-void on_enter_stage(GameState& state, Events& events) {
+void on_enter_stage(GameState& state, DiceSource& dice, Events& events) {
     const Stage stage = state.flow.stage;
     const Side side = turn_side(state);
     if (is_phase_start(stage)) {
@@ -40,10 +40,10 @@ void on_enter_stage(GameState& state, Events& events) {
             events.push_back(event::TurnStarted{state.flow.battle_round, side});  // 07.02
             break;
         case Stage::GainCoreCP:
-            // TODO(M11): 08.02 both players gain 1 CP.
+            gain_core_cp(state, events);  // 08.02
             break;
         case Stage::BattleShock:
-            // TODO(M11): 08.03 battle-shock rolls for units below half-strength or battle-shocked.
+            battle_shock_step(state, dice, events);  // 08.03
             break;
         case Stage::StartOfMovementPhase:
             for (Unit& u : state.units) {
@@ -68,8 +68,7 @@ void on_enter_stage(GameState& state, Events& events) {
             on_enter_fight_stage(state, events);  // fight.cpp
             break;
         case Stage::EndOfTurn:
-            // TODO(M11): 03.03 Regaining Coherency.
-            break;
+            break;  // 03.03 Regaining Coherency is a decision (stage_decision)
         default:
             break;
     }
@@ -115,6 +114,8 @@ std::optional<PendingDecision> stage_decision(const GameState& state) {
         case Stage::Fight:
         case Stage::Consolidate:
             return fight_stage_decision(state);
+        case Stage::EndOfTurn:
+            return coherency_decision(state);  // 03.03 Regaining Coherency
         default:
             return std::nullopt;
     }

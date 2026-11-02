@@ -21,16 +21,16 @@ using Events = std::vector<GameEvent>;
 // Runs automatic work until a decision is needed or the game is over; sets state.pending.
 void advance(GameState& state, DiceSource& dice, Events& events);
 // Leaves the current stage and enters the next one (with its entry work and events).
-void next_stage(GameState& state, Events& events);
+void next_stage(GameState& state, DiceSource& dice, Events& events);
 // Enters `stage` (sets it and runs its entry work).
-void enter_stage(GameState& state, Stage stage, Events& events);
+void enter_stage(GameState& state, Stage stage, DiceSource& dice, Events& events);
 
 // ---- turn_phases.cpp: stage decisions and the turn-structure actions ----
 
 // The decision the current stage needs (pure), or nullopt if the stage has nothing to ask.
 [[nodiscard]] std::optional<PendingDecision> stage_decision(const GameState& state);
 // Entry work for a stage, after state.flow.stage is set to it.
-void on_enter_stage(GameState& state, Events& events);
+void on_enter_stage(GameState& state, DiceSource& dice, Events& events);
 // Exit work for the current stage, before the next stage is set.
 void on_leave_stage(GameState& state, Events& events);
 
@@ -63,6 +63,18 @@ void apply_details(GameState& state, Side side, const action::DeclareCharge& a, 
 void apply_details(GameState& state, Side side, const action::StartChargeMove& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::SkipChargeMove& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::EndChargeStep& a, DiceSource& dice, Events& events);
+
+// ---- command.cpp: 08 Command phase, 03.03 Regaining Coherency ----
+
+void gain_core_cp(GameState& state, Events& events);                           // 08.02
+void battle_shock_step(GameState& state, DiceSource& dice, Events& events);    // 08.03
+// 03.03: the End of Turn step's decision while a unit on the battlefield is not in coherency.
+[[nodiscard]] std::optional<PendingDecision> coherency_decision(const GameState& state);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RestoreCoherency& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
+                                                const action::RemoveModelForCoherency& a);
+void apply_details(GameState& state, Side side, const action::RemoveModelForCoherency& a, DiceSource& dice,
+                   Events& events);
 
 // ---- fight.cpp: 12 Fight phase ----
 
