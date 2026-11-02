@@ -76,6 +76,9 @@ Each unit JSON records the BSData commit it came from in `source.commit`. Pin to
 std::vector<GameAction> legal_actions(const GameState&, Side);          // what this side may do now
 ValidationResult        validate_action(const GameState&, Side, const GameAction&); // ok + rule-cited reasons
 std::vector<GameEvent>  apply_action(GameState&, Side, const GameAction&);          // precondition: validated
+std::vector<GameEvent>  start_game(GameState&);                                     // NotStarted -> first decision
+Side                    active_side(const GameState&);                              // 01.03
+// apply_action/start_game also have DiceSource& overloads so engine tests can use ScriptedDice.
 ```
 - `GameState` holds a **`PendingDecision`** describing whose input the engine is waiting for, and of what kind (choose unit to move, choose move type, place model, select targets, order allocation groups, pick model to remove, pile-in, pass, ...). Every action answers the current pending decision. Reactive decisions belong to the opposing side (allocation order, model removal, etc.) and flow through this same mechanism.
 - `GameAction` and `GameEvent` are `std::variant`s of small serializable structs. Events drive UI animation and the dice/combat log, and they carry rule numbers.

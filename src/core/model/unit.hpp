@@ -38,6 +38,12 @@ struct UnitTurnFlags {
     friend bool operator==(const UnitTurnFlags&, const UnitTurnFlags&) = default;
 };
 
+// Per-phase selection flags. Reset when the phase starts.
+struct UnitPhaseFlags {
+    bool selected_to_move = false;  // 09.02
+    friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
+};
+
 // 01.02: a unit of one or more models.
 struct Unit {
     UnitId id;
@@ -50,6 +56,7 @@ struct Unit {
     int starting_strength = 0;  // number of models when added to the army (Rules Appendix)
     bool battle_shocked = false;  // 01.07
     UnitTurnFlags turn_flags;
+    UnitPhaseFlags phase_flags;
 
     friend bool operator==(const Unit&, const Unit&) = default;
 };

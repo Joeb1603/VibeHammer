@@ -3,6 +3,13 @@ add_library(wh40k_core STATIC
     data/scenario_loader.cpp
     data/unit_loader.cpp
     dice/dice.cpp
+    engine/actions.cpp
+    engine/advance.cpp
+    engine/attack_flow.cpp
+    engine/engine.cpp
+    engine/events.cpp
+    engine/replay.cpp
+    engine/turn_phases.cpp
     geometry/closest.cpp
     geometry/coherency.cpp
     geometry/distance.cpp
@@ -15,7 +22,11 @@ add_library(wh40k_core STATIC
     rules/attacks.cpp
     rules/leadership.cpp
     rules/mortal_wounds.cpp
+    serialization/engine_json.cpp
+    serialization/flow_json.cpp
     serialization/json.cpp
+    state/decision.cpp
+    state/flow.cpp
     state/game_state.cpp
     state/queries.cpp)
 

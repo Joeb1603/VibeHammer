@@ -187,6 +187,36 @@ Applied as:
 - Implemented in M5 when attack resolution moves into the engine; until then
   `resolve_attack_batch` treats a destroyed target as a precondition violation.
 
+## D-013: One casualty-order decision per batch (05.04, 06.02; extends D-004)
+**Decided:** 2026-11-02 (M5 plan)
+05.04 asks the opposing player to Select Model once per save roll that inflicts damage, which can be
+many prompts per volley. All save rolls are made before Inflict Damage starts and each attack's damage
+is fixed, so no new information appears while 05.04 resolves. A priority order over the target unit's
+models is therefore exactly as expressive as answering each Select Model step separately.
+
+- When an attack batch reaches 05.04, the opposing player answers once with
+  `OrderCasualties{target, priority}`: every model in the target unit, exactly once. At each Select
+  Model step the engine selects the first model in that order that is legal (05.04 still forces a
+  wounded model when there is one).
+- The decision is **skipped** when no Select Model step has more than one legal model (the engine
+  checks by simulating `inflict_damage` on a copy of the unit).
+- The same approach applies to mortal wounds (06.02) when they are wired into the engine.
+- D-004 extension: a permutation is too large to enumerate, so `legal_actions` returns
+  `OrderCasualties` as a **template** with an empty `priority`; any permutation of the target unit's
+  models fills it.
+- Revisit if a rule adds dice during 05.04 (e.g. Feel No Pain, 24.12; not in V1).
+
+## D-014: Event log and replay files (engine design)
+**Decided:** 2026-11-02 (M5 plan)
+- `apply_action` returns the events it caused. They are not stored in `GameState` (saves stay small);
+  the `Match` class keeps the running event log, the initial state and the action list.
+- A replay file (`tests/replays/*.json`, format 1) holds `initial` (either `{scenario, seed}` or a
+  full `{state}`), the `(side, action)` steps, and an `expect` block (result, stage, battle round, and
+  every model's wounds and position). Rebuilding the initial state from scenario + seed keeps replay
+  files valid when later milestones add state fields; `expect` compares only what the replay is
+  about.
+- Replay regression test: every file must run with every step valid and match its `expect` block.
+
 ## Note on app-only rule wording (2026-11-02)
 D-009, D-010, D-011 and D-012 use wording the user obtained from an AI assistant, not copied from the
 Warhammer 40,000 app. Treat them as working assumptions: if the official app text differs, update the

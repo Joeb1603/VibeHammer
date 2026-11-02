@@ -5,9 +5,13 @@
 #include <string>
 #include <vector>
 
+#include <optional>
+
 #include "core/dice/dice.hpp"
 #include "core/geometry/primitives.hpp"
 #include "core/model/unit.hpp"
+#include "core/state/decision.hpp"
+#include "core/state/flow.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -44,6 +48,10 @@ struct GameState {
     std::array<SideInfo, 2> sides;  // indexed by side_index(Side)
     std::vector<Unit> units;        // ordered by UnitId
     DiceState dice;                 // production PRNG (SeededDice) seed and position
+    FlowState flow;                 // where the game is (07-12) and what is in progress
+    std::optional<PendingDecision> pending;  // whose input the engine waits for; nullopt when not
+                                             // started or over
+    std::optional<GameResult> result;        // set when the game ends (D-007)
 
     [[nodiscard]] const SideInfo& side(Side s) const { return sides[side_index(s)]; }
     [[nodiscard]] const Unit* find_unit(UnitId id) const;

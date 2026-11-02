@@ -14,6 +14,7 @@
 
 #include "core/dice/dice.hpp"
 #include "core/model/unit.hpp"
+#include "core/rules/attack_types.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/types/ids.hpp"
 
@@ -74,17 +75,8 @@ struct WoundRolls {
 
 // ---- 05.03 Save Rolls ----
 
-// 05.03 Create Groups: one group per CHARACTER model; one group for all other models with the same
-// W, Sv and InSv characteristics. Groups are in order of their first model in the unit.
-struct AllocationGroup {
-    std::vector<ModelId> models;
-    bool character = false;
-    int wounds = 0;  // W characteristic shared by the group
-    std::optional<int> save;
-    std::optional<int> invuln_save;
-    friend bool operator==(const AllocationGroup&, const AllocationGroup&) = default;
-};
-
+// 05.03 Create Groups (AllocationGroup is in attack_types.hpp). Groups are in order of their first
+// model in the unit.
 [[nodiscard]] std::vector<AllocationGroup> create_allocation_groups(const Unit& target);
 
 // 05.03 Allocation Order: `order` lists indices into `groups`. Returns nullopt if legal, otherwise a

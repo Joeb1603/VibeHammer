@@ -11,6 +11,9 @@
 #include "core/model/dice_expr.hpp"
 #include "core/model/unit.hpp"
 #include "core/model/weapon.hpp"
+#include "core/rules/attack_types.hpp"
+#include "core/state/decision.hpp"
+#include "core/state/flow.hpp"
 #include "core/state/game_state.hpp"
 #include "core/types/ids.hpp"
 
@@ -51,8 +54,44 @@ void to_json(Json& j, const AbilityText& v);
 void from_json(const Json& j, AbilityText& v);
 void to_json(Json& j, const UnitTurnFlags& v);
 void from_json(const Json& j, UnitTurnFlags& v);
+void to_json(Json& j, const UnitPhaseFlags& v);
+void from_json(const Json& j, UnitPhaseFlags& v);
 void to_json(Json& j, const Unit& v);
 void from_json(const Json& j, Unit& v);
+
+// ---- attack data (rules/attack_types.hpp), stored while an attack is in progress ----
+void to_json(Json& j, AttackType v);
+void from_json(const Json& j, AttackType& v);
+void to_json(Json& j, const AttackContext& v);
+void from_json(const Json& j, AttackContext& v);
+void to_json(Json& j, const WeaponSelection& v);
+void from_json(const Json& j, WeaponSelection& v);
+void to_json(Json& j, const AttackProfile& v);
+void from_json(const Json& j, AttackProfile& v);
+void to_json(Json& j, const AttackBatch& v);
+void from_json(const Json& j, AttackBatch& v);
+void to_json(Json& j, const AllocationGroup& v);
+void from_json(const Json& j, AllocationGroup& v);
+
+// ---- flow (state/flow.hpp) and decisions (state/decision.hpp) ----
+void to_json(Json& j, Stage v);
+void from_json(const Json& j, Stage& v);
+void to_json(Json& j, Phase v);
+void from_json(const Json& j, Phase& v);
+void to_json(Json& j, ActivationKind v);
+void from_json(const Json& j, ActivationKind& v);
+void to_json(Json& j, const Activation& v);
+void from_json(const Json& j, Activation& v);
+void to_json(Json& j, const BatchInProgress& v);
+void from_json(const Json& j, BatchInProgress& v);
+void to_json(Json& j, const AttackFlow& v);
+void from_json(const Json& j, AttackFlow& v);
+void to_json(Json& j, const FlowState& v);
+void from_json(const Json& j, FlowState& v);
+void to_json(Json& j, const GameResult& v);
+void from_json(const Json& j, GameResult& v);
+void to_json(Json& j, const PendingDecision& v);
+void from_json(const Json& j, PendingDecision& v);
 
 void to_json(Json& j, const DiceState& v);
 void from_json(const Json& j, DiceState& v);

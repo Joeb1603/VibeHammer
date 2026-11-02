@@ -1,41 +1,18 @@
 #include "core/serialization/json.hpp"
 
-#include "core/data/load_error.hpp"
-
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 
+#include "core/serialization/json_util.hpp"
+
 namespace wh40k::core {
 
-namespace {
-
-template <typename T>
-void put_opt(Json& j, const char* key, const std::optional<T>& v) {
-    if (v) {
-        j[key] = *v;
-    } else {
-        j[key] = nullptr;
-    }
-}
-
-template <typename T>
-void get_opt(const Json& j, const char* key, std::optional<T>& v) {
-    const Json& e = j.at(key);
-    if (e.is_null()) {
-        v.reset();
-    } else {
-        v = e.get<T>();
-    }
-}
-
-[[noreturn]] void bad_enum(std::string_view type, const Json& j) {
-    throw DataError("state JSON: invalid " + std::string(type) + ": " + j.dump());
-}
-
-}  // namespace
+using json_detail::bad_enum;
+using json_detail::get_opt;
+using json_detail::put_opt;
 
 // ---- ids ----
 void to_json(Json& j, Side v) { j = (v == Side::A) ? "A" : "B"; }
@@ -252,7 +229,8 @@ void to_json(Json& j, const Unit& v) {
              {"models", v.models},
              {"starting_strength", v.starting_strength},
              {"battle_shocked", v.battle_shocked},
-             {"turn_flags", v.turn_flags}};
+             {"turn_flags", v.turn_flags},
+             {"phase_flags", v.phase_flags}};
 }
 void from_json(const Json& j, Unit& v) {
     j.at("id").get_to(v.id);
@@ -265,6 +243,7 @@ void from_json(const Json& j, Unit& v) {
     j.at("starting_strength").get_to(v.starting_strength);
     j.at("battle_shocked").get_to(v.battle_shocked);
     j.at("turn_flags").get_to(v.turn_flags);
+    j.at("phase_flags").get_to(v.phase_flags);
 }
 
 // ---- dice ----
@@ -320,7 +299,10 @@ void to_json(Json& j, const GameState& v) {
              {"first_turn", v.first_turn},
              {"sides", v.sides},
              {"units", v.units},
-             {"dice", v.dice}};
+             {"dice", v.dice},
+             {"flow", v.flow}};
+    put_opt(j, "pending", v.pending);
+    put_opt(j, "result", v.result);
 }
 void from_json(const Json& j, GameState& v) {
     j.at("scenario_name").get_to(v.scenario_name);
@@ -330,6 +312,9 @@ void from_json(const Json& j, GameState& v) {
     j.at("sides").get_to(v.sides);
     j.at("units").get_to(v.units);
     j.at("dice").get_to(v.dice);
+    j.at("flow").get_to(v.flow);
+    get_opt(j, "pending", v.pending);
+    get_opt(j, "result", v.result);
 }
 
 }  // namespace wh40k::core
