@@ -17,6 +17,7 @@
 #include "core/rules/leadership.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/rules/move_types.hpp"
+#include "core/rules/shooting_types.hpp"
 #include "core/state/flow.hpp"
 #include "core/types/ids.hpp"
 
@@ -99,6 +100,12 @@ struct BattleShockRolled {  // 01.07 (e.g. after a Desperate Escape, 09.07)
     BattleShockRoll roll;
     friend bool operator==(const BattleShockRolled&, const BattleShockRolled&) = default;
 };
+struct ShootingStarted {  // 10.02: the unit is selected to shoot, with its weapons and targets (04.01, 04.02)
+    UnitId unit;
+    ShootingType type = ShootingType::Normal;
+    std::vector<WeaponSelection> selections;
+    friend bool operator==(const ShootingStarted&, const ShootingStarted&) = default;
+};
 struct AttackBatchesGathered {  // 04.03: the attacking unit's attacks, grouped (D-006)
     UnitId attacker;
     std::vector<AttackBatch> batches;
@@ -163,7 +170,7 @@ using GameEvent =
                  event::PhaseStarted, event::PhaseEnded, event::UnitRemainedStationary, event::MoveStarted,
                  event::AdvanceRolled, event::HazardRollsMade, event::MortalWoundsInflicted,
                  event::ModelMoveProposed, event::UnitMoveCommitted, event::UnitMoveReverted,
-                 event::BattleShockRolled, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
+                 event::BattleShockRolled, event::ShootingStarted, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver>;

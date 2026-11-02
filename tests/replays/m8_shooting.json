@@ -1,0 +1,492 @@
+{
+  "description": "M8: Side A Normal-moves its Intercessors 3\" north (no model more than 3\", so [HEAVY] applies) and fires every Bolt Rifle on Focused Fire at the Termagants, 9\" away (within half range: [RAPID FIRE 1]). Side B remains stationary and fires every Fleshborer back (Normal shooting, 18\"). Casualties are removed in unit order (D-013). Every later decision passes.",
+  "expect": {
+    "battle_round": 5,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 1,
+        "x_mm": 189.99998474121094,
+        "y_mm": 212.59999084472656
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 247.39999389648438,
+        "y_mm": 212.59999084472656
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 304.79998779296875,
+        "y_mm": 212.59999084472656
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 362.1999816894531,
+        "y_mm": 212.59999084472656
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 419.5999755859375,
+        "y_mm": 212.59999084472656
+      },
+      {
+        "model": 10,
+        "unit": 2,
+        "wounds_remaining": 1,
+        "x_mm": 412.5999755859375,
+        "y_mm": 471.4499816894531
+      },
+      {
+        "model": 11,
+        "unit": 2,
+        "wounds_remaining": 1,
+        "x_mm": 196.99998474121094,
+        "y_mm": 525.3499755859375
+      },
+      {
+        "model": 12,
+        "unit": 2,
+        "wounds_remaining": 1,
+        "x_mm": 250.89999389648438,
+        "y_mm": 525.3499755859375
+      },
+      {
+        "model": 13,
+        "unit": 2,
+        "wounds_remaining": 1,
+        "x_mm": 304.79998779296875,
+        "y_mm": 525.3499755859375
+      },
+      {
+        "model": 14,
+        "unit": 2,
+        "wounds_remaining": 1,
+        "x_mm": 358.6999816894531,
+        "y_mm": 525.3499755859375
+      },
+      {
+        "model": 15,
+        "unit": 2,
+        "wounds_remaining": 1,
+        "x_mm": 412.5999755859375,
+        "y_mm": 525.3499755859375
+      }
+    ],
+    "result": {
+      "reason": "D-007: battle round 5 has ended with both sides on the battlefield; the game is a draw",
+      "winner": null
+    },
+    "stage": "GameOver"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "data/scenarios/v1_skirmish.json",
+    "seed": 8
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 189.99998474121094,
+            "y": 212.59999084472656,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 247.39999389648438,
+            "y": 212.59999084472656,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 304.79998779296875,
+            "y": 212.59999084472656,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 362.1999816894531,
+            "y": 212.59999084472656,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 419.5999755859375,
+            "y": 212.59999084472656,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 1,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 2,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 3,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 4,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "target": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 10,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 11,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 12,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 13,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    }
+  ]
+}

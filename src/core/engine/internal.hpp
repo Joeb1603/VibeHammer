@@ -35,16 +35,21 @@ void on_enter_stage(GameState& state, Events& events);
 void on_leave_stage(GameState& state, Events& events);
 
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::MoveUnits& d);
-[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Shoot& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Charge& d);
 
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::StartMove& a);
-[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndShootStep& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndChargeStep& a);
 
 void apply_details(GameState& state, Side side, const action::StartMove& a, DiceSource& dice, Events& events);
-void apply_details(GameState& state, Side side, const action::EndShootStep& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::EndChargeStep& a, DiceSource& dice, Events& events);
+
+// ---- shooting.cpp: 10.02 Shoot ----
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Shoot& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::Shoot& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndShootStep& a);
+void apply_details(GameState& state, Side side, const action::Shoot& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::EndShootStep& a, DiceSource& dice, Events& events);
 
 // ---- movement.cpp: 09.04-09.07 / 03.01 as a sub-machine ----
 
@@ -76,6 +81,10 @@ void apply_details(GameState& state, Side side, const action::ResetUnitMove& a, 
 // One step of automatic attack work (rolls, damage, D-012, finishing). Precondition: an attack is in
 // progress and attack_decision(state) is nullopt.
 void attack_progress(GameState& state, DiceSource& dice, Events& events);
+// 04.03: gathers the attack batches and makes `attacker` the selected unit (01.03); the caller then
+// advances. Throws std::logic_error on the begin_attacks preconditions.
+void start_attacks(GameState& state, UnitId attacker, const AttackContext& context,
+                   std::vector<WeaponSelection> selections, Events& events);
 
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectAttackBatch& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::DeclareAllocationOrder& d);

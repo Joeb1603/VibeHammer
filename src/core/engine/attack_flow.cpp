@@ -160,7 +160,8 @@ void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, 
 }
 
 void finish_attacks(GameState& state) {
-    // TODO(M8): 24.15 [HAZARDOUS] hazard rolls after the unit's attacks (no V1 weapon has it).
+    // TODO(24.15): [HAZARDOUS] hazard rolls after the unit's attacks (no V1 loadout has a [HAZARDOUS] weapon;
+    // not in the M8 rule list).
     state.flow.attack.reset();
     state.flow.activation.reset();
 }
@@ -344,8 +345,6 @@ void apply_details(GameState& state, Side, const action::OrderCasualties& a, Dic
     }
 }
 
-}  // namespace detail
-
 namespace {
 
 void check_begin_preconditions(const GameState& state, UnitId attacker, const AttackContext& context,
@@ -379,12 +378,9 @@ void check_begin_preconditions(const GameState& state, UnitId attacker, const At
 
 }  // namespace
 
-std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId attacker,
-                                     const AttackContext& context, std::vector<WeaponSelection> selections) {
+void start_attacks(GameState& state, UnitId attacker, const AttackContext& context,
+                   std::vector<WeaponSelection> selections, Events& events) {
     check_begin_preconditions(state, attacker, context, selections);
-    detail::Events events;
-    state.pending.reset();
-
     AttackFlow f;
     f.attacker = attacker;
     f.context = context;
@@ -397,6 +393,15 @@ std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId 
     state.flow.activation =
         Activation{attacker, context.type == AttackType::Shooting ? ActivationKind::Shoot : ActivationKind::Fight};
     state.flow.attack = std::move(f);
+}
+
+}  // namespace detail
+
+std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId attacker,
+                                     const AttackContext& context, std::vector<WeaponSelection> selections) {
+    detail::Events events;
+    state.pending.reset();
+    detail::start_attacks(state, attacker, context, std::move(selections), events);
     detail::advance(state, dice, events);
     return events;
 }

@@ -126,3 +126,20 @@ TEST(D004_LegalActions, RandomPlayThroughAttackFlows) {
     EXPECT_GT(fills, 0);  // the casualty-order template was exercised
     EXPECT_GT(rejected, 0);
 }
+
+TEST(D004_LegalActions, RandomPlayShootsWithFilledTemplates) {
+    // D-016: random play fills Shoot templates; every clean fill is valid and resolves.
+    int shots = 0;
+    for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+        GameState gs = wh40k::test::load_v1_scenario();
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        for (int i = 0; i < 200 && gs.pending; ++i) {
+            const GameAction a = wh40k::test::random_action(gs, rng);
+            if (std::holds_alternative<action::Shoot>(a)) ++shots;
+            apply_action(gs, decider(gs), a);
+        }
+    }
+    EXPECT_GT(shots, 0);
+}

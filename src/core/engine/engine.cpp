@@ -29,7 +29,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::ProposeModelMove> || std::is_same_v<T, action::CommitUnitMove> ||
                                std::is_same_v<T, action::ResetUnitMove>)
                 return std::holds_alternative<decision::MoveModels>(d);
-            else if constexpr (std::is_same_v<T, action::EndShootStep>) return std::holds_alternative<decision::Shoot>(d);
+            else if constexpr (std::is_same_v<T, action::Shoot> || std::is_same_v<T, action::EndShootStep>)
+                return std::holds_alternative<decision::Shoot>(d);
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return std::holds_alternative<decision::Charge>(d);
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>)
                 return std::holds_alternative<decision::SelectAttackBatch>(d);

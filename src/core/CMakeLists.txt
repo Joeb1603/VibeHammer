@@ -10,12 +10,14 @@ add_library(wh40k_core STATIC
     engine/events.cpp
     engine/movement.cpp
     engine/replay.cpp
+    engine/shooting.cpp
     engine/turn_phases.cpp
     geometry/closest.cpp
     geometry/coherency.cpp
     geometry/distance.cpp
     geometry/engagement.cpp
     geometry/path.cpp
+    geometry/visibility.cpp
     model/dice_expr.cpp
     model/keywords.cpp
     model/weapon.cpp
@@ -24,6 +26,7 @@ add_library(wh40k_core STATIC
     rules/leadership.cpp
     rules/mortal_wounds.cpp
     rules/move_types.cpp
+    rules/shooting.cpp
     serialization/engine_json.cpp
     serialization/flow_json.cpp
     serialization/json.cpp
