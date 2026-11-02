@@ -413,10 +413,8 @@ TEST(R24_13_FightsFirst, LastsUntilTheEndOfTheTurn) {
     apply_action(gs, Side::A, action::CommitUnitMove{});
     ASSERT_TRUE(is_fights_first_unit(gs.units[kMarines]));
 
-    // D-019: until M10 the Fight phase has no fights; the turn ends and so does Fights First.
+    // The Fight phase follows (12.04); the end of the turn is covered in fight_test.cpp.
     apply_action(gs, Side::A, action::EndChargeStep{});
-    EXPECT_EQ(turn_side(gs), Side::B);
-    EXPECT_FALSE(is_fights_first_unit(gs.units[kMarines]));
-    EXPECT_FALSE(gs.units[kMarines].turn_flags.made_charge_move);
-    EXPECT_TRUE(is_engaged(gs, gs.units[kMarines]));  // the units stay engaged
+    EXPECT_EQ(gs.flow.stage, Stage::PileIn);
+    EXPECT_TRUE(is_fights_first_unit(gs.units[kMarines]));
 }

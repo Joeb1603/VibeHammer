@@ -33,6 +33,13 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::ChargeRolled>) return {"ChargeRolled", "11.02"};
     else if constexpr (std::is_same_v<T, event::ChargeTargetsSelected>) return {"ChargeTargetsSelected", "11.04"};
     else if constexpr (std::is_same_v<T, event::ChargeResolved>) return {"ChargeResolved", "11.02"};
+    else if constexpr (std::is_same_v<T, event::PileInStarted>) return {"PileInStarted", "12.03"};
+    else if constexpr (std::is_same_v<T, event::UnitSelectedToFight>) return {"UnitSelectedToFight", "12.04"};
+    else if constexpr (std::is_same_v<T, event::FightPassed>) return {"FightPassed", "Appendix: Eligible to Fight, but Unable to Fight"};
+    else if constexpr (std::is_same_v<T, event::MeleeAttacksDeclared>) return {"MeleeAttacksDeclared", "04.02"};
+    else if constexpr (std::is_same_v<T, event::FightStepEnded>) return {"FightStepEnded", "12.04"};
+    else if constexpr (std::is_same_v<T, event::ConsolidationStarted>) return {"ConsolidationStarted", "12.08"};
+    else if constexpr (std::is_same_v<T, event::UnitsForcedToFight>) return {"UnitsForcedToFight", "12.08"};
     else if constexpr (std::is_same_v<T, event::AttackBatchesGathered>) return {"AttackBatchesGathered", "04.03"};
     else if constexpr (std::is_same_v<T, event::AttackBatchSelected>) return {"AttackBatchSelected", "04.03"};
     else if constexpr (std::is_same_v<T, event::HitRollsMade>) return {"HitRollsMade", "05.01"};

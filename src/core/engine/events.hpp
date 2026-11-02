@@ -14,6 +14,7 @@
 #include "core/geometry/primitives.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attack_types.hpp"
+#include "core/rules/fight_types.hpp"
 #include "core/rules/leadership.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/rules/move_types.hpp"
@@ -127,6 +128,40 @@ struct ChargeResolved {  // 11.02 Attempt Charge: the charge is resolved
     std::string reason;             // rule-cited when no charge move was made; empty otherwise
     friend bool operator==(const ChargeResolved&, const ChargeResolved&) = default;
 };
+struct PileInStarted {  // 12.03 Before Moving: the pile-in targets
+    UnitId unit;
+    std::vector<UnitId> targets;
+    friend bool operator==(const PileInStarted&, const PileInStarted&) = default;
+};
+struct UnitSelectedToFight {  // 12.04: the unit is selected to fight, with its fight type
+    UnitId unit;
+    FightType type = FightType::Normal;
+    bool forced = false;  // 12.08 Engaging Consolidation
+    friend bool operator==(const UnitSelectedToFight&, const UnitSelectedToFight&) = default;
+};
+struct FightPassed {  // Appendix: Eligible to Fight, but Unable to Fight
+    Side side = Side::A;
+    friend bool operator==(const FightPassed&, const FightPassed&) = default;
+};
+struct MeleeAttacksDeclared {  // 04.01 / 04.02 While Fighting: weapons and targets (empty: no attacks)
+    UnitId unit;
+    std::vector<WeaponSelection> selections;
+    friend bool operator==(const MeleeAttacksDeclared&, const MeleeAttacksDeclared&) = default;
+};
+struct FightStepEnded {  // 12.04 / Appendix: why the Fight step ended
+    std::string reason;
+    friend bool operator==(const FightStepEnded&, const FightStepEnded&) = default;
+};
+struct ConsolidationStarted {  // 12.08 Before Moving: the mode and the selected enemy units
+    UnitId unit;
+    ConsolidationMode mode = ConsolidationMode::Ongoing;
+    std::vector<UnitId> targets;
+    friend bool operator==(const ConsolidationStarted&, const ConsolidationStarted&) = default;
+};
+struct UnitsForcedToFight {  // 12.08 Engaging Consolidation After Moving
+    std::vector<UnitId> units;
+    friend bool operator==(const UnitsForcedToFight&, const UnitsForcedToFight&) = default;
+};
 struct AttackBatchesGathered {  // 04.03: the attacking unit's attacks, grouped (D-006)
     UnitId attacker;
     std::vector<AttackBatch> batches;
@@ -192,7 +227,9 @@ using GameEvent =
                  event::AdvanceRolled, event::HazardRollsMade, event::MortalWoundsInflicted,
                  event::ModelMoveProposed, event::UnitMoveCommitted, event::UnitMoveReverted,
                  event::BattleShockRolled, event::ShootingStarted, event::ChargeDeclared, event::ChargeRolled,
-                 event::ChargeTargetsSelected, event::ChargeResolved, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
+                 event::ChargeTargetsSelected, event::ChargeResolved, event::PileInStarted,
+                 event::UnitSelectedToFight, event::FightPassed, event::MeleeAttacksDeclared, event::FightStepEnded,
+                 event::ConsolidationStarted, event::UnitsForcedToFight, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver>;

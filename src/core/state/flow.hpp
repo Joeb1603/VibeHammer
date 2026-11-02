@@ -4,6 +4,7 @@
 // sub-sequences in progress (a unit selected to move/shoot/fight, an attack being resolved).
 
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -12,6 +13,7 @@
 
 #include "core/geometry/primitives.hpp"
 #include "core/rules/attack_types.hpp"
+#include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/types/ids.hpp"
 
@@ -112,7 +114,9 @@ struct MoveInProgress {
     std::vector<ModelStart> starts;    // every model's position when the move started
     std::vector<ModelPath> paths;      // proposed paths, one per moved model
     int pending_mortal_wounds = 0;     // 09.07 Desperate Escape hazard rolls (06.03) not yet allocated
-    std::vector<UnitId> charge_targets;  // 11.04 Before Moving (charge moves only)
+    // 11.04 charge targets, 12.03 pile-in targets or 12.08 selected enemy units (Before Moving).
+    std::vector<UnitId> targets;
+    std::optional<ConsolidationMode> consolidation_mode;  // 12.08 consolidation moves only
     friend bool operator==(const MoveInProgress&, const MoveInProgress&) = default;
 };
 
@@ -123,6 +127,29 @@ struct ChargeInProgress {
     friend bool operator==(const ChargeInProgress&, const ChargeInProgress&) = default;
 };
 
+// 12.04 Fight step: which sub-step the sequence is in and who selects next (D-020).
+enum class FightSubStep : std::uint8_t {
+    FightsFirst,  // Resolve Fights First Combats
+    Remaining,    // Resolve Remaining Combats
+};
+
+struct FightSequence {
+    FightSubStep sub_step = FightSubStep::FightsFirst;
+    Side selecting = Side::A;      // the player who selects the next unit to fight
+    std::optional<Side> last_pass;  // Appendix: the player who just passed, if the last action was a pass
+    friend bool operator==(const FightSequence&, const FightSequence&) = default;
+};
+
+// 12.04: a unit selected to fight, until its attacks are resolved.
+struct FightInProgress {
+    UnitId unit;
+    FightType type = FightType::Normal;
+    bool overrun_pile_in_pending = false;  // 12.06: the additional pile-in move not yet made or skipped
+    bool attacks_started = false;          // 04.03: its attacks are being (or have been) resolved
+    bool forced = false;                   // 12.08 Engaging Consolidation: selected by the opponent's move
+    friend bool operator==(const FightInProgress&, const FightInProgress&) = default;
+};
+
 struct FlowState {
     Stage stage = Stage::NotStarted;
     int battle_round = 0;   // 1-based once started
@@ -131,6 +158,12 @@ struct FlowState {
     std::optional<AttackFlow> attack;
     std::optional<MoveInProgress> move;
     std::optional<ChargeInProgress> charge;
+    // 12.02 / 12.07: the player whose turn it is resolves all of their moves first, then their
+    // opponent. Indexed by side_index; reset when the step starts.
+    std::array<bool, 2> step_done{};
+    std::optional<FightSequence> fight_sequence;  // 12.04, while the Fight step runs
+    std::optional<FightInProgress> fight;
+    std::vector<UnitId> forced_fights;  // 12.08: units the opponent must still select to fight
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

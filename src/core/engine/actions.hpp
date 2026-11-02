@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/geometry/primitives.hpp"
+#include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/types/ids.hpp"
@@ -76,6 +77,51 @@ struct SkipChargeMove {
 struct EndChargeStep {
     friend bool operator==(const EndChargeStep&, const EndChargeStep&) = default;
 };
+// 12.03 Before Moving: the pile-in targets (every engaged enemy unit if the unit is engaged; otherwise
+// one or more enemy units within 5"), then the models move (03.01). Answers PileIn and OverrunPileIn.
+struct StartPileIn {
+    UnitId unit;
+    std::vector<UnitId> targets;
+    friend bool operator==(const StartPileIn&, const StartPileIn&) = default;
+};
+// 12.06: the overrunning unit does not make its additional pile-in move.
+struct SkipPileIn {
+    UnitId unit;
+    friend bool operator==(const SkipPileIn&, const SkipPileIn&) = default;
+};
+// 12.02: this player makes no more pile-in moves this step.
+struct EndPileIns {
+    friend bool operator==(const EndPileIns&, const EndPileIns&) = default;
+};
+// 12.04: select a unit to fight and its fight type (12.05 / 12.06). Answers SelectUnitToFight and
+// ForcedFight.
+struct SelectToFight {
+    UnitId unit;
+    FightType type = FightType::Normal;
+    friend bool operator==(const SelectToFight&, const SelectToFight&) = default;
+};
+// Appendix, Eligible to Fight but Unable to Fight: return the sequence to the opponent.
+struct PassFight {
+    friend bool operator==(const PassFight&, const PassFight&) = default;
+};
+// 04.01 / 04.02 While Fighting: every model's melee weapon and targets (D-021), then the attacks are
+// resolved (04.03). An empty list is the template legal_actions returns.
+struct Fight {
+    UnitId unit;
+    std::vector<MeleeDeclaration> declarations;
+    friend bool operator==(const Fight&, const Fight&) = default;
+};
+// 12.08 Before Moving: the selected enemy units (the mode is the first that applies), then the models
+// move (03.01).
+struct StartConsolidation {
+    UnitId unit;
+    std::vector<UnitId> targets;
+    friend bool operator==(const StartConsolidation&, const StartConsolidation&) = default;
+};
+// 12.07: this player makes no more consolidation moves this step.
+struct EndConsolidations {
+    friend bool operator==(const EndConsolidations&, const EndConsolidations&) = default;
+};
 // 04.03: resolve this batch of attacks next (index into the gathered batches).
 struct SelectAttackBatch {
     std::size_t batch = 0;
@@ -99,6 +145,9 @@ struct OrderCasualties {
 using GameAction = std::variant<action::StartMove, action::ProposeModelMove, action::CommitUnitMove,
                                 action::ResetUnitMove, action::Shoot, action::EndShootStep, action::DeclareCharge,
                                 action::StartChargeMove, action::SkipChargeMove, action::EndChargeStep,
+                                action::StartPileIn, action::SkipPileIn, action::EndPileIns, action::SelectToFight,
+                                action::PassFight, action::Fight, action::StartConsolidation,
+                                action::EndConsolidations,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties>;
 

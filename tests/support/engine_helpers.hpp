@@ -19,7 +19,9 @@
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
+#include "core/state/queries.hpp"
 #include "test_helpers.hpp"
 
 namespace wh40k::test {
@@ -124,6 +126,28 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
         }
         return filled;
     }
+    if (const auto* fi = std::get_if<core::action::Fight>(&tmpl)) {
+        // D-021: every model that can attack declares one random single-target option (always valid).
+        core::action::Fight filled = *fi;
+        const core::Unit& unit = *gs.find_unit(fi->unit);
+        const auto options = core::melee_options(gs, unit);
+        for (const core::Model& m : unit.models) {
+            std::vector<core::MeleeDeclaration> mine;
+            for (const auto& o : options) {
+                if (o.model == m.id) mine.push_back(o);
+            }
+            if (!mine.empty()) filled.declarations.push_back(mine[rng.below(mine.size())]);
+        }
+        if (corrupt) {
+            switch (rng.below(4)) {
+                case 0: filled.declarations.push_back(filled.declarations.front()); break;  // two weapons
+                case 1: filled.declarations.front().model = core::ModelId{9999}; break;     // not in the unit
+                case 2: filled.declarations.front().targets.front().attacks += 1; break;    // too many attacks
+                default: filled.declarations.clear(); break;                                // the template
+            }
+        }
+        return filled;
+    }
     ADD_FAILURE() << "unknown template kind " << core::action_name(tmpl);
     return tmpl;
 }
@@ -132,7 +156,7 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
 // may be rejected.
 inline bool clean_fill_always_valid(const core::GameAction& tmpl) {
     return std::holds_alternative<core::action::OrderCasualties>(tmpl) ||
-           std::holds_alternative<core::action::Shoot>(tmpl);
+           std::holds_alternative<core::action::Shoot>(tmpl) || std::holds_alternative<core::action::Fight>(tmpl);
 }
 
 // One random legal action for whoever must decide. Templates are filled until one validates (a few
@@ -173,6 +197,41 @@ inline core::GameState shoot_step_state(core::Side side = core::Side::A, std::ui
     }
     ADD_FAILURE() << "did not reach the Shoot step";
     return gs;
+}
+
+// Side A's Charge step after a successful Intercessor charge (11.04): the V1 scenario with the
+// Termagants 9.9" away, a charge roll of 10 (4, 6) and every Intercessor moved 8.9" north, ending about
+// 1" from the Termagants' front rank. The Intercessors have Fights First; the units are engaged.
+inline core::GameState after_successful_charge() {
+    core::GameState gs = load_v1_scenario();
+    core::start_game(gs);
+    while (!(gs.flow.stage == core::Stage::Charge && core::turn_side(gs) == core::Side::A)) {
+        core::apply_action(gs, decider(gs), core::legal_actions(gs, decider(gs)).front());
+    }
+    const float gap = core::mm_to_inches(*core::unit_distance(gs.units[0], gs.units[1]));
+    for (auto& m : gs.units[1].models) m.position.y -= in(gap - 9.9f);
+    core::ScriptedDice dice{4, 6};
+    core::apply_action(gs, core::Side::A, core::action::DeclareCharge{gs.units[0].id}, dice);
+    core::apply_action(gs, core::Side::A, core::action::StartChargeMove{gs.units[0].id, {gs.units[1].id}});
+    for (const auto& m : gs.units[0].models) {
+        const core::Position s = *core::move_start_position(gs, m.id);
+        core::apply_action(gs, core::Side::A,
+                           core::action::ProposeModelMove{m.id, {core::Position{s.x, s.y + in(8.9f), 0.0f}}});
+    }
+    core::apply_action(gs, core::Side::A, core::action::CommitUnitMove{});
+    EXPECT_TRUE(gs.units[0].turn_flags.fights_first);
+    return gs;
+}
+
+// Every model's first melee option (D-021): a valid Fight action for `unit`.
+inline core::action::Fight first_melee_options(const core::GameState& gs, core::UnitId unit) {
+    core::action::Fight a{unit, {}};
+    for (const auto& o : core::melee_options(gs, *gs.find_unit(unit))) {
+        const bool seen = std::any_of(a.declarations.begin(), a.declarations.end(),
+                                      [&](const core::MeleeDeclaration& d) { return d.model == o.model; });
+        if (!seen) a.declarations.push_back(o);
+    }
+    return a;
 }
 
 inline core::WeaponSelection select(const core::GameState& gs, std::size_t unit_index, std::size_t model_index,

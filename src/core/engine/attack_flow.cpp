@@ -349,12 +349,17 @@ namespace {
 
 void check_begin_preconditions(const GameState& state, UnitId attacker, const AttackContext& context,
                                const std::vector<WeaponSelection>& selections) {
-    const Stage expected = context.type == AttackType::Shooting ? Stage::Shoot : Stage::Fight;
-    if (state.flow.stage != expected) {
+    const bool fighting = context.type == AttackType::Fighting;
+    const Stage expected = fighting ? Stage::Fight : Stage::Shoot;
+    // 12.08: a unit forced to fight by an Engaging Consolidation fights in the Consolidate step.
+    if (state.flow.stage != expected && !(fighting && state.flow.stage == Stage::Consolidate)) {
         throw std::logic_error("begin_attacks: attacks are made in the " + std::string(stage_name(expected)) +
                                " step");
     }
-    if (state.flow.attack || state.flow.activation) {
+    const bool selected_to_fight = fighting && state.flow.activation &&
+                                   state.flow.activation->unit == attacker &&
+                                   state.flow.activation->kind == ActivationKind::Fight;
+    if (state.flow.attack || (state.flow.activation && !selected_to_fight)) {
         throw std::logic_error("begin_attacks: another unit is already selected");
     }
     const Unit* unit = state.find_unit(attacker);

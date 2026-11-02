@@ -13,12 +13,14 @@ struct MoveTypeInfo {
     std::string_view rule;
 };
 
-constexpr std::array<MoveTypeInfo, 5> kMoveTypes{{
+constexpr std::array<MoveTypeInfo, 7> kMoveTypes{{
     {MoveType::RemainStationary, "RemainStationary", "09.04"},
     {MoveType::Normal, "Normal", "09.05"},
     {MoveType::Advance, "Advance", "09.06"},
     {MoveType::FallBack, "FallBack", "09.07"},
     {MoveType::Charge, "Charge", "11.04"},
+    {MoveType::PileIn, "PileIn", "12.03"},
+    {MoveType::Consolidation, "Consolidation", "12.08"},
 }};
 
 const MoveTypeInfo& info(MoveType t) {
@@ -42,6 +44,22 @@ std::optional<MoveType> move_type_from_name(std::string_view name) {
 
 std::string_view fall_back_mode_name(FallBackMode m) {
     return m == FallBackMode::OrderedRetreat ? "OrderedRetreat" : "DesperateEscape";
+}
+
+std::string_view consolidation_mode_name(ConsolidationMode m) {
+    switch (m) {
+        case ConsolidationMode::Ongoing: return "Ongoing";
+        case ConsolidationMode::Engaging: return "Engaging";
+        case ConsolidationMode::Objective: return "Objective";
+    }
+    throw std::logic_error("invalid ConsolidationMode");
+}
+
+std::optional<ConsolidationMode> consolidation_mode_from_name(std::string_view name) {
+    if (name == "Ongoing") return ConsolidationMode::Ongoing;
+    if (name == "Engaging") return ConsolidationMode::Engaging;
+    if (name == "Objective") return ConsolidationMode::Objective;
+    return std::nullopt;
 }
 
 std::optional<FallBackMode> fall_back_mode_from_name(std::string_view name) {

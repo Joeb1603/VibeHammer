@@ -13,6 +13,7 @@
 #include "core/engine/replay.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 
@@ -289,4 +290,68 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(c9.units[0].turn_flags.fights_first);
     charge.expect = replay_expectation(c9);
     save_replay(charge, kReplayDir / "m9_charge.json");
+
+    // M10: the Fight phase after that charge, stopping when it ends (the next turn's Command phase is M11).
+    Replay fight;
+    fight.description =
+        "M10: the M9 charge, then the Fight phase. No pile-in moves. The Intercessors fight first (Fights First, "
+        "12.04) with Knives and Fists; casualties are removed in unit order (D-013), front rank first. The "
+        "surviving Termagants fight back in Resolve Remaining Combats (an Overrun Fight with a 1.5\" pile-in if "
+        "they are no longer engaged, 12.06). The Intercessors make an Ongoing Consolidation moving one model 0.5\" "
+        "closer (12.08); the Termagants don't consolidate. Stops at Side B's first Move Units decision.";
+    fight.initial = charge.initial;
+    fight.steps = charge.steps;
+    GameState f10 = replay_initial_state(fight, repo_root());
+    start_game(f10);
+    for (const ReplayStep& s : fight.steps) apply_action(f10, s.side, s.action);
+    auto f_act = [&](const GameAction& a) {
+        const Side side = decider(f10);
+        const auto v = validate_action(f10, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        fight.steps.push_back(ReplayStep{side, a});
+        apply_action(f10, side, a);
+    };
+    auto f_resolve = [&]() {
+        while (f10.flow.attack) {
+            GameAction a = legal_actions(f10, decider(f10)).front();
+            if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+                oc->priority = wh40k::test::model_ids(*f10.find_unit(oc->target));
+            }
+            f_act(a);
+        }
+    };
+    const UnitId marines = f10.units[0].id;
+    const UnitId gants = f10.units[1].id;
+    f_act(action::EndChargeStep{});
+    f_act(action::EndPileIns{});
+    f_act(action::EndPileIns{});
+    f_act(action::SelectToFight{marines, FightType::Normal});
+    f_act(wh40k::test::first_melee_options(f10, marines));
+    f_resolve();
+    ASSERT_FALSE(f10.units[1].models.empty()) << "the Termagants must survive to fight back";
+    if (is_engaged(f10, f10.units[1])) {
+        f_act(action::SelectToFight{gants, FightType::Normal});
+    } else {
+        // 12.06: the front rank is gone, so the survivors overrun: a 1.5" pile-in south, then they fight.
+        f_act(action::SelectToFight{gants, FightType::Overrun});
+        f_act(action::StartPileIn{gants, {marines}});
+        for (const Model& m : f10.units[1].models) {
+            const Position p = *move_start_position(f10, m.id);
+            f_act(action::ProposeModelMove{m.id, {Position{p.x, p.y - wh40k::test::in(1.5f), 0}}});
+        }
+        f_act(action::CommitUnitMove{});
+    }
+    f_act(wh40k::test::first_melee_options(f10, gants));
+    f_resolve();
+    ASSERT_EQ(f10.flow.stage, Stage::Consolidate);
+    f_act(action::StartConsolidation{marines, engaged_enemy_units(f10, f10.units[0])});
+    const Model& west = f10.units[0].models.front();
+    f_act(action::ProposeModelMove{west.id, {Position{west.position.x, west.position.y + wh40k::test::in(0.5f), 0}}});
+    f_act(action::CommitUnitMove{});
+    while (f10.pending && std::holds_alternative<decision::Consolidate>(f10.pending->kind)) {
+        f_act(action::EndConsolidations{});
+    }
+    ASSERT_EQ(*f10.pending, (PendingDecision{Side::B, decision::MoveUnits{}}));
+    fight.expect = replay_expectation(f10);
+    save_replay(fight, kReplayDir / "m10_fight.json");
 }

@@ -35,6 +35,32 @@ struct SelectChargeTargets {
     UnitId unit;
     friend bool operator==(const SelectChargeTargets&, const SelectChargeTargets&) = default;
 };
+// 12.02 Pile In: make a pile-in move with an eligible unit, or end this player's pile-in moves.
+struct PileIn {
+    friend bool operator==(const PileIn&, const PileIn&) = default;
+};
+// 12.06 Overrun Fight: make the additional pile-in move, or skip it.
+struct OverrunPileIn {
+    UnitId unit;
+    friend bool operator==(const OverrunPileIn&, const OverrunPileIn&) = default;
+};
+// 12.04 Fight: select a friendly unit to fight and its fight type, or pass (Appendix).
+struct SelectUnitToFight {
+    friend bool operator==(const SelectUnitToFight&, const SelectUnitToFight&) = default;
+};
+// 04.01 / 04.02 While Fighting: each model's melee weapon and targets (D-021).
+struct DeclareMeleeAttacks {
+    UnitId unit;
+    friend bool operator==(const DeclareMeleeAttacks&, const DeclareMeleeAttacks&) = default;
+};
+// 12.07 Consolidate: make a consolidation move with an eligible unit, or end this player's moves.
+struct Consolidate {
+    friend bool operator==(const Consolidate&, const Consolidate&) = default;
+};
+// 12.08 Engaging Consolidation After Moving: select each enemy-engaged unit that hasn't fought.
+struct ForcedFight {
+    friend bool operator==(const ForcedFight&, const ForcedFight&) = default;
+};
 // 04.03 Select Enemy Unit / Gather Attack Dice: the attacker picks the next batch to resolve.
 struct SelectAttackBatch {
     UnitId attacker;
@@ -54,7 +80,9 @@ struct OrderCasualties {
 }  // namespace decision
 
 using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, decision::Shoot, decision::Charge,
-                                  decision::SelectChargeTargets,
+                                  decision::SelectChargeTargets, decision::PileIn, decision::OverrunPileIn,
+                                  decision::SelectUnitToFight, decision::DeclareMeleeAttacks,
+                                  decision::Consolidate, decision::ForcedFight,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties>;
 

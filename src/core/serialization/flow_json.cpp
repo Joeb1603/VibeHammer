@@ -43,7 +43,14 @@ void to_json(Json& j, const UnitPhaseFlags& v) {
     j = Json{{"selected_to_move", v.selected_to_move},
              {"desperate_escape_hazards_made", v.desperate_escape_hazards_made},
              {"selected_to_shoot", v.selected_to_shoot},
-             {"declared_charge", v.declared_charge}};
+             {"declared_charge", v.declared_charge},
+             {"piled_in", v.piled_in},
+             {"engaged_at_fight_step_start", v.engaged_at_fight_step_start},
+             {"selected_to_fight", v.selected_to_fight},
+             {"eligible_to_fight_this_phase", v.eligible_to_fight_this_phase},
+             {"selected_for_overrun", v.selected_for_overrun},
+             {"forced_to_fight", v.forced_to_fight},
+             {"consolidated", v.consolidated}};
     put_opt(j, "advance_roll", v.advance_roll);
     put_opt(j, "charge_roll", v.charge_roll);
 }
@@ -53,6 +60,13 @@ void from_json(const Json& j, UnitPhaseFlags& v) {
     j.at("desperate_escape_hazards_made").get_to(v.desperate_escape_hazards_made);
     j.at("selected_to_shoot").get_to(v.selected_to_shoot);
     j.at("declared_charge").get_to(v.declared_charge);
+    j.at("piled_in").get_to(v.piled_in);
+    j.at("engaged_at_fight_step_start").get_to(v.engaged_at_fight_step_start);
+    j.at("selected_to_fight").get_to(v.selected_to_fight);
+    j.at("eligible_to_fight_this_phase").get_to(v.eligible_to_fight_this_phase);
+    j.at("selected_for_overrun").get_to(v.selected_for_overrun);
+    j.at("forced_to_fight").get_to(v.forced_to_fight);
+    j.at("consolidated").get_to(v.consolidated);
     get_opt(j, "charge_roll", v.charge_roll);
 }
 
@@ -85,8 +99,9 @@ void to_json(Json& j, const MoveInProgress& v) {
              {"starts", v.starts},
              {"paths", v.paths},
              {"pending_mortal_wounds", v.pending_mortal_wounds},
-             {"charge_targets", v.charge_targets}};
+             {"targets", v.targets}};
     put_opt(j, "mode", v.mode);
+    put_opt(j, "consolidation_mode", v.consolidation_mode);
 }
 void from_json(const Json& j, MoveInProgress& v) {
     j.at("unit").get_to(v.unit);
@@ -95,7 +110,65 @@ void from_json(const Json& j, MoveInProgress& v) {
     j.at("starts").get_to(v.starts);
     j.at("paths").get_to(v.paths);
     j.at("pending_mortal_wounds").get_to(v.pending_mortal_wounds);
-    j.at("charge_targets").get_to(v.charge_targets);
+    j.at("targets").get_to(v.targets);
+    get_opt(j, "consolidation_mode", v.consolidation_mode);
+}
+void to_json(Json& j, ConsolidationMode v) { j = std::string(consolidation_mode_name(v)); }
+void from_json(const Json& j, ConsolidationMode& v) {
+    const auto m = consolidation_mode_from_name(j.get<std::string>());
+    if (!m) bad_enum("ConsolidationMode", j);
+    v = *m;
+}
+void to_json(Json& j, FightType v) { j = std::string(fight_type_name(v)); }
+void from_json(const Json& j, FightType& v) {
+    const auto t = fight_type_from_name(j.get<std::string>());
+    if (!t) bad_enum("FightType", j);
+    v = *t;
+}
+void to_json(Json& j, const MeleeTarget& v) { j = Json{{"unit", v.unit}, {"attacks", v.attacks}}; }
+void from_json(const Json& j, MeleeTarget& v) {
+    j.at("unit").get_to(v.unit);
+    j.at("attacks").get_to(v.attacks);
+}
+void to_json(Json& j, const MeleeDeclaration& v) {
+    j = Json{{"model", v.model}, {"weapon_index", v.weapon_index}, {"profile_index", v.profile_index},
+             {"targets", v.targets}};
+}
+void from_json(const Json& j, MeleeDeclaration& v) {
+    j.at("model").get_to(v.model);
+    j.at("weapon_index").get_to(v.weapon_index);
+    j.at("profile_index").get_to(v.profile_index);
+    j.at("targets").get_to(v.targets);
+}
+void to_json(Json& j, FightSubStep v) { j = (v == FightSubStep::FightsFirst) ? "FightsFirst" : "Remaining"; }
+void from_json(const Json& j, FightSubStep& v) {
+    const auto s = j.get<std::string>();
+    if (s == "FightsFirst") v = FightSubStep::FightsFirst;
+    else if (s == "Remaining") v = FightSubStep::Remaining;
+    else bad_enum("FightSubStep", j);
+}
+void to_json(Json& j, const FightSequence& v) {
+    j = Json{{"sub_step", v.sub_step}, {"selecting", v.selecting}};
+    put_opt(j, "last_pass", v.last_pass);
+}
+void from_json(const Json& j, FightSequence& v) {
+    j.at("sub_step").get_to(v.sub_step);
+    j.at("selecting").get_to(v.selecting);
+    get_opt(j, "last_pass", v.last_pass);
+}
+void to_json(Json& j, const FightInProgress& v) {
+    j = Json{{"unit", v.unit},
+             {"type", v.type},
+             {"overrun_pile_in_pending", v.overrun_pile_in_pending},
+             {"attacks_started", v.attacks_started},
+             {"forced", v.forced}};
+}
+void from_json(const Json& j, FightInProgress& v) {
+    j.at("unit").get_to(v.unit);
+    j.at("type").get_to(v.type);
+    j.at("overrun_pile_in_pending").get_to(v.overrun_pile_in_pending);
+    j.at("attacks_started").get_to(v.attacks_started);
+    j.at("forced").get_to(v.forced);
 }
 void to_json(Json& j, const ChargeInProgress& v) { j = Json{{"unit", v.unit}}; }
 void from_json(const Json& j, ChargeInProgress& v) { j.at("unit").get_to(v.unit); }
@@ -280,6 +353,10 @@ void to_json(Json& j, const FlowState& v) {
     put_opt(j, "attack", v.attack);
     put_opt(j, "move", v.move);
     put_opt(j, "charge", v.charge);
+    j["step_done"] = v.step_done;
+    put_opt(j, "fight_sequence", v.fight_sequence);
+    put_opt(j, "fight", v.fight);
+    j["forced_fights"] = v.forced_fights;
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -289,6 +366,10 @@ void from_json(const Json& j, FlowState& v) {
     get_opt(j, "attack", v.attack);
     get_opt(j, "move", v.move);
     get_opt(j, "charge", v.charge);
+    j.at("step_done").get_to(v.step_done);
+    get_opt(j, "fight_sequence", v.fight_sequence);
+    get_opt(j, "fight", v.fight);
+    j.at("forced_fights").get_to(v.forced_fights);
 }
 
 void to_json(Json& j, const GameResult& v) {
@@ -306,7 +387,9 @@ void to_json(Json& j, const PendingDecision& v) {
     std::visit(
         [&j](const auto& k) {
             using T = std::decay_t<decltype(k)>;
-            if constexpr (std::is_same_v<T, decision::MoveModels> || std::is_same_v<T, decision::SelectChargeTargets>) {
+            if constexpr (std::is_same_v<T, decision::MoveModels> || std::is_same_v<T, decision::SelectChargeTargets> ||
+                          std::is_same_v<T, decision::OverrunPileIn> ||
+                          std::is_same_v<T, decision::DeclareMeleeAttacks>) {
                 j["unit"] = k.unit;
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 j["attacker"] = k.attacker;
@@ -325,6 +408,12 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "Shoot") v.kind = decision::Shoot{};
     else if (kind == "Charge") v.kind = decision::Charge{};
     else if (kind == "SelectChargeTargets") v.kind = decision::SelectChargeTargets{j.at("unit").get<UnitId>()};
+    else if (kind == "PileIn") v.kind = decision::PileIn{};
+    else if (kind == "OverrunPileIn") v.kind = decision::OverrunPileIn{j.at("unit").get<UnitId>()};
+    else if (kind == "SelectUnitToFight") v.kind = decision::SelectUnitToFight{};
+    else if (kind == "DeclareMeleeAttacks") v.kind = decision::DeclareMeleeAttacks{j.at("unit").get<UnitId>()};
+    else if (kind == "Consolidate") v.kind = decision::Consolidate{};
+    else if (kind == "ForcedFight") v.kind = decision::ForcedFight{};
     else if (kind == "SelectAttackBatch") v.kind = decision::SelectAttackBatch{j.at("attacker").get<UnitId>()};
     else if (kind == "DeclareAllocationOrder") v.kind = decision::DeclareAllocationOrder{j.at("target").get<UnitId>()};
     else if (kind == "OrderCasualties") v.kind = decision::OrderCasualties{j.at("target").get<UnitId>()};

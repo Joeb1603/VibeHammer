@@ -190,6 +190,17 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, StartChargeMove>) {
                 j["unit"] = a.unit;
                 j["targets"] = a.targets;
+            } else if constexpr (std::is_same_v<T, StartPileIn> || std::is_same_v<T, StartConsolidation>) {
+                j["unit"] = a.unit;
+                j["targets"] = a.targets;
+            } else if constexpr (std::is_same_v<T, SkipPileIn>) {
+                j["unit"] = a.unit;
+            } else if constexpr (std::is_same_v<T, SelectToFight>) {
+                j["unit"] = a.unit;
+                j["type"] = a.type;
+            } else if constexpr (std::is_same_v<T, Fight>) {
+                j["unit"] = a.unit;
+                j["declarations"] = a.declarations;
             } else if constexpr (std::is_same_v<T, SelectAttackBatch>) {
                 j["batch"] = a.batch;
             } else if constexpr (std::is_same_v<T, DeclareAllocationOrder>) {
@@ -226,6 +237,22 @@ void from_json(const Json& j, GameAction& v) {
         v = StartChargeMove{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
     } else if (kind == "SkipChargeMove") {
         v = SkipChargeMove{j.at("unit").get<UnitId>()};
+    } else if (kind == "StartPileIn") {
+        v = StartPileIn{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "SkipPileIn") {
+        v = SkipPileIn{j.at("unit").get<UnitId>()};
+    } else if (kind == "EndPileIns") {
+        v = EndPileIns{};
+    } else if (kind == "SelectToFight") {
+        v = SelectToFight{j.at("unit").get<UnitId>(), j.at("type").get<FightType>()};
+    } else if (kind == "PassFight") {
+        v = PassFight{};
+    } else if (kind == "Fight") {
+        v = Fight{j.at("unit").get<UnitId>(), j.at("declarations").get<std::vector<MeleeDeclaration>>()};
+    } else if (kind == "StartConsolidation") {
+        v = StartConsolidation{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "EndConsolidations") {
+        v = EndConsolidations{};
     } else if (kind == "EndChargeStep") {
         v = EndChargeStep{};
     } else if (kind == "SelectAttackBatch") {
@@ -304,6 +331,26 @@ void to_json(Json& j, const GameEvent& v) {
                 j["unit"] = e.unit;
                 j["charge_move_made"] = e.charge_move_made;
                 j["reason"] = e.reason;
+            } else if constexpr (std::is_same_v<T, PileInStarted>) {
+                j["unit"] = e.unit;
+                j["targets"] = e.targets;
+            } else if constexpr (std::is_same_v<T, UnitSelectedToFight>) {
+                j["unit"] = e.unit;
+                j["type"] = e.type;
+                j["forced"] = e.forced;
+            } else if constexpr (std::is_same_v<T, FightPassed>) {
+                j["side"] = e.side;
+            } else if constexpr (std::is_same_v<T, MeleeAttacksDeclared>) {
+                j["unit"] = e.unit;
+                j["selections"] = e.selections;
+            } else if constexpr (std::is_same_v<T, FightStepEnded>) {
+                j["reason"] = e.reason;
+            } else if constexpr (std::is_same_v<T, ConsolidationStarted>) {
+                j["unit"] = e.unit;
+                j["mode"] = e.mode;
+                j["targets"] = e.targets;
+            } else if constexpr (std::is_same_v<T, UnitsForcedToFight>) {
+                j["units"] = e.units;
             } else if constexpr (std::is_same_v<T, AttackBatchesGathered>) {
                 j["attacker"] = e.attacker;
                 j["batches"] = e.batches;
@@ -389,6 +436,21 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "ChargeResolved") {
         v = ChargeResolved{j.at("unit").get<UnitId>(), j.at("charge_move_made").get<bool>(),
                            j.at("reason").get<std::string>()};
+    } else if (kind == "PileInStarted") {
+        v = PileInStarted{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "UnitSelectedToFight") {
+        v = UnitSelectedToFight{j.at("unit").get<UnitId>(), j.at("type").get<FightType>(), j.at("forced").get<bool>()};
+    } else if (kind == "FightPassed") {
+        v = FightPassed{j.at("side").get<Side>()};
+    } else if (kind == "MeleeAttacksDeclared") {
+        v = MeleeAttacksDeclared{j.at("unit").get<UnitId>(), j.at("selections").get<std::vector<WeaponSelection>>()};
+    } else if (kind == "FightStepEnded") {
+        v = FightStepEnded{j.at("reason").get<std::string>()};
+    } else if (kind == "ConsolidationStarted") {
+        v = ConsolidationStarted{j.at("unit").get<UnitId>(), j.at("mode").get<ConsolidationMode>(),
+                                 j.at("targets").get<std::vector<UnitId>>()};
+    } else if (kind == "UnitsForcedToFight") {
+        v = UnitsForcedToFight{j.at("units").get<std::vector<UnitId>>()};
     } else if (kind == "AttackBatchesGathered") {
         v = AttackBatchesGathered{j.at("attacker").get<UnitId>(), j.at("batches").get<std::vector<AttackBatch>>()};
     } else if (kind == "AttackBatchSelected") {

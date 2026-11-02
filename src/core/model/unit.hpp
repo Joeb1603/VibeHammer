@@ -50,6 +50,14 @@ struct UnitPhaseFlags {
     bool selected_to_shoot = false;  // 10.02; reset when the Shooting phase starts
     bool declared_charge = false;    // 11.02; reset when the Charge phase starts
     std::optional<int> charge_roll;  // 11.02 Make Charge Roll (2D6 total); stands for the phase (D-018)
+    // Fight phase (12); reset when the Fight phase starts.
+    bool piled_in = false;                      // 12.02: one pile-in move per unit in the Pile In step
+    bool engaged_at_fight_step_start = false;   // 12.04 / 12.06
+    bool selected_to_fight = false;             // 12.04
+    bool eligible_to_fight_this_phase = false;  // 12.08 Eligible If
+    bool selected_for_overrun = false;          // 12.03 Eligible If
+    bool forced_to_fight = false;               // 12.08 Engaging Consolidation: became eligible to fight
+    bool consolidated = false;                  // 12.07: one consolidation move per unit
     friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
 };
 

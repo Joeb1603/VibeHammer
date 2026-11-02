@@ -35,6 +35,20 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::Charge>(d);
             else if constexpr (std::is_same_v<T, action::StartChargeMove> || std::is_same_v<T, action::SkipChargeMove>)
                 return std::holds_alternative<decision::SelectChargeTargets>(d);
+            else if constexpr (std::is_same_v<T, action::StartPileIn>)
+                return std::holds_alternative<decision::PileIn>(d) || std::holds_alternative<decision::OverrunPileIn>(d);
+            else if constexpr (std::is_same_v<T, action::SkipPileIn>) return std::holds_alternative<decision::OverrunPileIn>(d);
+            else if constexpr (std::is_same_v<T, action::EndPileIns>) return std::holds_alternative<decision::PileIn>(d);
+            else if constexpr (std::is_same_v<T, action::SelectToFight>)
+                return std::holds_alternative<decision::SelectUnitToFight>(d) ||
+                       std::holds_alternative<decision::ForcedFight>(d);
+            else if constexpr (std::is_same_v<T, action::PassFight>)
+                return std::holds_alternative<decision::SelectUnitToFight>(d);
+            else if constexpr (std::is_same_v<T, action::Fight>)
+                return std::holds_alternative<decision::DeclareMeleeAttacks>(d);
+            else if constexpr (std::is_same_v<T, action::StartConsolidation> ||
+                               std::is_same_v<T, action::EndConsolidations>)
+                return std::holds_alternative<decision::Consolidate>(d);
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>)
                 return std::holds_alternative<decision::SelectAttackBatch>(d);
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>)
@@ -103,6 +117,12 @@ std::optional<PendingDecision> compute_decision(const GameState& state) {
     }
     if (state.flow.charge) {
         return detail::charge_decision(state);
+    }
+    if (state.flow.fight) {
+        return detail::fight_decision(state);
+    }
+    if (!state.flow.forced_fights.empty()) {
+        return detail::forced_fight_decision(state);
     }
     return detail::stage_decision(state);
 }

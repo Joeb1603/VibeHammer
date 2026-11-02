@@ -64,6 +64,50 @@ void apply_details(GameState& state, Side side, const action::StartChargeMove& a
 void apply_details(GameState& state, Side side, const action::SkipChargeMove& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::EndChargeStep& a, DiceSource& dice, Events& events);
 
+// ---- fight.cpp: 12 Fight phase ----
+
+// Entry work for StartOfFightPhase, PileIn, Fight and Consolidate.
+void on_enter_fight_stage(GameState& state, Events& events);
+// The decision the PileIn / Fight / Consolidate stage needs (pure), or nullopt.
+[[nodiscard]] std::optional<PendingDecision> fight_stage_decision(const GameState& state);
+// 12.04 "if this is not possible" branches and the end of the Fight step (D-020). True if it did
+// something; false if the stage has nothing more to do.
+bool fight_stage_progress(GameState& state, Events& events);
+// A unit selected to fight: its overrun pile-in or melee declaration (pure), or nullopt.
+[[nodiscard]] std::optional<PendingDecision> fight_decision(const GameState& state);
+void fight_progress(GameState& state, Events& events);
+// 12.08: the player who must select the next forced unit to fight.
+[[nodiscard]] std::optional<PendingDecision> forced_fight_decision(const GameState& state);
+// Called by the movement sub-machine when a pile-in or consolidation move ends (After Moving).
+void fight_move_committed(GameState& state, const MoveInProgress& mv, Events& events);
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::PileIn& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::OverrunPileIn& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectUnitToFight& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::DeclareMeleeAttacks& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Consolidate& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::ForcedFight& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::StartPileIn& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::SkipPileIn& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndPileIns& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::SelectToFight& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::PassFight& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::Fight& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
+                                                const action::StartConsolidation& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
+                                                const action::EndConsolidations& a);
+void apply_details(GameState& state, Side side, const action::StartPileIn& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::SkipPileIn& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::EndPileIns& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::SelectToFight& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::PassFight& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::Fight& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::StartConsolidation& a, DiceSource& dice,
+                   Events& events);
+void apply_details(GameState& state, Side side, const action::EndConsolidations& a, DiceSource& dice,
+                   Events& events);
+
 // ---- movement.cpp: 09.04-09.07 / 03.01 as a sub-machine ----
 
 // The StartMove actions `unit` may take now (Remain Stationary first).
