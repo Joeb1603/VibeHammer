@@ -4,9 +4,13 @@
 #include <vector>
 
 #include "core/geometry/primitives.hpp"
+#include "core/geometry/units.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
+
+inline constexpr float kCoherencyNearMm = 2.0f * MM_PER_INCH;  // 03.03 first clause
+inline constexpr float kCoherencyFarMm = 9.0f * MM_PER_INCH;   // 03.03 second clause
 
 struct PlacedModel {
     ModelId id;

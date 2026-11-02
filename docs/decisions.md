@@ -389,3 +389,32 @@ of the charge for that reason.
   so removal never destroys a unit and can't trigger D-007.
 - **Stage entry and dice.** Entering a stage can now roll dice: `enter_stage`, `next_stage` and
   `on_enter_stage` take the `DiceSource`.
+
+## D-024: Client architecture (M12)
+**Decided:** 2026-11-02 (M12 plan; both choices made by the user)
+- **Core queries in the client.** The client may call core's read-only queries for display and editor
+  choices: `shot_options`, `melee_options`, `max_move_distance_mm`, `move_start_position`,
+  `move_end_problems`, the geometry constants (coherency, engagement) and the game data. Every action
+  is still checked with `validate_action` before `apply_action`.
+- **Only `GameSession` changes the game.** `GameSession::submit` (`src/client_2d/logic/session.cpp`)
+  validates first, and on a failure nothing changes. `Timeline` (replays) is the other caller of
+  `apply_action`. The client has no rules logic of its own.
+- **Client tests.** The client's non-graphics code is the library `wh40k_client_logic`
+  (`src/client_2d/logic/`). It links `wh40k_core` only, and on every build the same include guard as
+  core (`cmake/CheckCoreIncludes.cmake`) forbids raylib, ImGui and OS headers in it. A separate
+  GoogleTest executable, `wh40k_client_tests`, tests it. `wh40k_tests` still links only `wh40k_core`.
+- **Structural check.** A test (`M12_NoRulesInTheClient`) checks every client source:
+  - `apply_action(` appears only in `session.cpp` and `timeline.cpp`.
+  - Only the logic library includes core rule headers, limited to the query headers
+    (`core/rules/shooting.hpp`, `core/rules/fight.hpp`) and the plain type headers.
+- **UI conventions.**
+  - **Selection.** A click selects a unit; a click on a model of the selected unit selects that model.
+  - **Moves.** A left-drag on a model of the unit being moved adds a straight line, and releasing
+    proposes the whole path. The diamond handle at the unit's centre moves every model by the same
+    offset. A rejected proposal shows its reasons and changes nothing.
+  - **Weapons.** The shooting and melee editors set one weapon profile and target for the whole unit,
+    and each model's row can override it (D-001). The client expands this into a per-model
+    `GameAction`.
+  - **Casualties.** The casualty editor starts in unit order (D-013).
+  - **Decision panel.** It is generated from `legal_actions`: one button per fully specified action,
+    and one editor per template.

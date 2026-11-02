@@ -5,11 +5,6 @@
 
 namespace wh40k::core {
 
-namespace {
-constexpr float kCoherencyNearMm = 2.0f * MM_PER_INCH;  // 03.03 first clause
-constexpr float kCoherencyFarMm = 9.0f * MM_PER_INCH;   // 03.03 second clause
-}  // namespace
-
 CoherencyResult check_coherency(std::span<const PlacedModel> models) {
     CoherencyResult result;
     if (models.size() <= 1) {
