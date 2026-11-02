@@ -105,12 +105,14 @@ TEST(R07_01_StartOfBattleRound, StartGameRunsToTheFirstDecision) {
     GameState gs = load_v1_scenario();
     EXPECT_FALSE(gs.pending.has_value());
     const auto events = start_game(gs);
-    ASSERT_GE(events.size(), 5u);
+    ASSERT_GE(events.size(), 7u);
     EXPECT_EQ(events[0], GameEvent{event::BattleRoundStarted{1}});
     EXPECT_EQ(events[1], GameEvent{(event::TurnStarted{1, Side::A})});
     EXPECT_EQ(events[2], GameEvent{(event::PhaseStarted{Phase::Command, Side::A})});
-    EXPECT_EQ(events[3], GameEvent{(event::PhaseEnded{Phase::Command, Side::A})});
-    EXPECT_EQ(events[4], GameEvent{(event::PhaseStarted{Phase::Movement, Side::A})});
+    EXPECT_EQ(events[3], GameEvent{(event::CommandPointGained{Side::A, 1})});  // 08.02 (M11)
+    EXPECT_EQ(events[4], GameEvent{(event::CommandPointGained{Side::B, 1})});
+    EXPECT_EQ(events[5], GameEvent{(event::PhaseEnded{Phase::Command, Side::A})});
+    EXPECT_EQ(events[6], GameEvent{(event::PhaseStarted{Phase::Movement, Side::A})});
     EXPECT_EQ(gs.flow.stage, Stage::MoveUnits);
     ASSERT_TRUE(gs.pending.has_value());
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::A, decision::MoveUnits{}}));

@@ -70,6 +70,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::DeclareMeleeAttacks{UnitId{2}}},
         {Side::A, decision::Consolidate{}},
         {Side::B, decision::ForcedFight{}},
+        {Side::A, decision::RestoreCoherency{UnitId{1}}},
         {Side::A, decision::SelectAttackBatch{UnitId{1}}},
         {Side::B, decision::DeclareAllocationOrder{UnitId{2}}},
         {Side::B, decision::OrderCasualties{UnitId{2}}},
@@ -170,6 +171,12 @@ TEST(Serialization, StateMidMoveRoundTrips) {
     EXPECT_EQ(round_trip(gs), gs);
 }
 
+TEST(Serialization, CommandPointsRoundTrip) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    gs.command_points = {3, 1};
+    EXPECT_EQ(round_trip(gs), gs);
+}
+
 TEST(Serialization, GameResultWithAndWithoutWinner) {
     const GameResult win{Side::A, "D-007: Side B has no models on the battlefield; Side A wins"};
     const GameResult draw{std::nullopt, "D-007: draw"};
@@ -201,6 +208,7 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::Fight{UnitId{1}, {MeleeDeclaration{ModelId{3}, 2, 0, {MeleeTarget{UnitId{2}, 2}, MeleeTarget{UnitId{4}, 1}}}}},
         action::StartConsolidation{UnitId{1}, {UnitId{2}, UnitId{4}}},
         action::EndConsolidations{},
+        action::RemoveModelForCoherency{UnitId{1}, ModelId{3}},
         action::SelectAttackBatch{3},
         action::DeclareAllocationOrder{UnitId{2}, {1, 0}},
         action::OrderCasualties{UnitId{2}, {ModelId{9}, ModelId{6}}},
@@ -279,6 +287,9 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::FightStepEnded{"Appendix: both players passed in succession"},
         event::ConsolidationStarted{UnitId{1}, ConsolidationMode::Engaging, {UnitId{2}}},
         event::UnitsForcedToFight{{UnitId{2}, UnitId{4}}},
+        event::CommandPointGained{Side::B, 3},
+        event::BattleShockEnded{UnitId{2}},
+        event::ModelRemovedForCoherency{UnitId{1}, ModelId{3}},
         event::AttackBatchesGathered{UnitId{1}, {batch}},
         event::AttackBatchSelected{UnitId{1}, 0, UnitId{2}, 7},
         event::HitRollsMade{0, hits},

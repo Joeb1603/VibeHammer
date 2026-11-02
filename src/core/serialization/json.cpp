@@ -306,6 +306,7 @@ void to_json(Json& j, const GameState& v) {
              {"sides", v.sides},
              {"units", v.units},
              {"dice", v.dice},
+             {"command_points", v.command_points},
              {"flow", v.flow}};
     put_opt(j, "pending", v.pending);
     put_opt(j, "result", v.result);
@@ -318,6 +319,7 @@ void from_json(const Json& j, GameState& v) {
     j.at("sides").get_to(v.sides);
     j.at("units").get_to(v.units);
     j.at("dice").get_to(v.dice);
+    j.at("command_points").get_to(v.command_points);
     j.at("flow").get_to(v.flow);
     get_opt(j, "pending", v.pending);
     get_opt(j, "result", v.result);

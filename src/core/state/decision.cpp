@@ -25,6 +25,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::DeclareMeleeAttacks>) return "04.02";
             else if constexpr (std::is_same_v<T, decision::Consolidate>) return "12.07";
             else if constexpr (std::is_same_v<T, decision::ForcedFight>) return "12.08";
+            else if constexpr (std::is_same_v<T, decision::RestoreCoherency>) return "03.03";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "05.04";
@@ -48,6 +49,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::DeclareMeleeAttacks>) return "DeclareMeleeAttacks";
             else if constexpr (std::is_same_v<T, decision::Consolidate>) return "Consolidate";
             else if constexpr (std::is_same_v<T, decision::ForcedFight>) return "ForcedFight";
+            else if constexpr (std::is_same_v<T, decision::RestoreCoherency>) return "RestoreCoherency";
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "OrderCasualties";
@@ -82,6 +84,8 @@ std::string describe(const PendingDecision& d) {
                 return "make a consolidation move, or end consolidation moves";
             } else if constexpr (std::is_same_v<T, decision::ForcedFight>) {
                 return "select a unit engaged by an engaging consolidation to fight";
+            } else if constexpr (std::is_same_v<T, decision::RestoreCoherency>) {
+                return "remove a model from unit " + std::to_string(k.unit.v) + " to restore coherency";
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 return "select the next attacks to resolve for unit " + std::to_string(k.attacker.v);
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) {

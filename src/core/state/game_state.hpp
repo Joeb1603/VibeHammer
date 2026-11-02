@@ -48,6 +48,7 @@ struct GameState {
     std::array<SideInfo, 2> sides;  // indexed by side_index(Side)
     std::vector<Unit> units;        // ordered by UnitId
     DiceState dice;                 // production PRNG (SeededDice) seed and position
+    std::array<int, 2> command_points{};  // indexed by side_index; 08.02 (D-023: both start at 0)
     FlowState flow;                 // where the game is (07-12) and what is in progress
     std::optional<PendingDecision> pending;  // whose input the engine waits for; nullopt when not
                                              // started or over

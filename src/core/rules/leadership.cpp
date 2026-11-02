@@ -36,4 +36,9 @@ void apply_battle_shock_roll(Unit& unit, const BattleShockRoll& roll) {
     }
 }
 
+std::optional<int> objective_control(const Unit& unit, const Model& model) {
+    if (unit.battle_shocked) return std::nullopt;  // 01.07
+    return model.characteristics.objective_control;
+}
+
 }  // namespace wh40k::core

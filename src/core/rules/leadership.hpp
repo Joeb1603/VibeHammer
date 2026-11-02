@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "core/dice/dice.hpp"
 #include "core/model/unit.hpp"
 
@@ -31,5 +33,9 @@ struct BattleShockRoll {
 // only that the unit "does not become battle-shocked"; clearing an existing battle-shock is the
 // Command phase's job (08.03, M11), so a success leaves the flag unchanged here.
 void apply_battle_shock_roll(Unit& unit, const BattleShockRoll& roll);
+
+// 01.07: while a unit is battle-shocked, the OC of all of its models is '-' (nullopt). Otherwise the
+// model's own OC.
+[[nodiscard]] std::optional<int> objective_control(const Unit& unit, const Model& model);
 
 }  // namespace wh40k::core

@@ -7,6 +7,7 @@ add_library(wh40k_core STATIC
     engine/advance.cpp
     engine/attack_flow.cpp
     engine/charge.cpp
+    engine/command.cpp
     engine/engine.cpp
     engine/events.cpp
     engine/fight.cpp
@@ -31,6 +32,7 @@ add_library(wh40k_core STATIC
     rules/mortal_wounds.cpp
     rules/move_types.cpp
     rules/shooting.cpp
+    rules/unit_strength.cpp
     serialization/engine_json.cpp
     serialization/flow_json.cpp
     serialization/json.cpp

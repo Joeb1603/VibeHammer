@@ -64,8 +64,8 @@ ValidationResult validate_details(const GameState&, Side, const action::EndShoot
     return ValidationResult::success();
 }
 
-void apply_details(GameState& state, Side, const action::EndShootStep&, DiceSource&, Events& events) {
-    next_stage(state, events);  // 10.03 End of Shooting Phase
+void apply_details(GameState& state, Side, const action::EndShootStep&, DiceSource& dice, Events& events) {
+    next_stage(state, dice, events);  // 10.03 End of Shooting Phase
 }
 
 }  // namespace wh40k::core::detail

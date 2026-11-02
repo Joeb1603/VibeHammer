@@ -96,8 +96,8 @@ ValidationResult validate_details(const GameState&, Side, const action::EndCharg
     return ValidationResult::success();
 }
 
-void apply_details(GameState& state, Side, const action::EndChargeStep&, DiceSource&, Events& events) {
-    next_stage(state, events);  // 11.03 End of Charge Phase
+void apply_details(GameState& state, Side, const action::EndChargeStep&, DiceSource& dice, Events& events) {
+    next_stage(state, dice, events);  // 11.03 End of Charge Phase
 }
 
 // ---- 11.04 Before Moving: select charge targets, or make no charge move ----

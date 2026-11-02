@@ -162,6 +162,20 @@ struct UnitsForcedToFight {  // 12.08 Engaging Consolidation After Moving
     std::vector<UnitId> units;
     friend bool operator==(const UnitsForcedToFight&, const UnitsForcedToFight&) = default;
 };
+struct CommandPointGained {  // 08.02 Gain Core CP
+    Side side = Side::A;
+    int total = 0;  // the side's CP after gaining
+    friend bool operator==(const CommandPointGained&, const CommandPointGained&) = default;
+};
+struct BattleShockEnded {  // 08.03: the unit was battle-shocked and passed its battle-shock roll
+    UnitId unit;
+    friend bool operator==(const BattleShockEnded&, const BattleShockEnded&) = default;
+};
+struct ModelRemovedForCoherency {  // 03.03 Regaining Coherency: destroyed, with no on-death rules
+    UnitId unit;
+    ModelId model;
+    friend bool operator==(const ModelRemovedForCoherency&, const ModelRemovedForCoherency&) = default;
+};
 struct AttackBatchesGathered {  // 04.03: the attacking unit's attacks, grouped (D-006)
     UnitId attacker;
     std::vector<AttackBatch> batches;
@@ -229,7 +243,8 @@ using GameEvent =
                  event::BattleShockRolled, event::ShootingStarted, event::ChargeDeclared, event::ChargeRolled,
                  event::ChargeTargetsSelected, event::ChargeResolved, event::PileInStarted,
                  event::UnitSelectedToFight, event::FightPassed, event::MeleeAttacksDeclared, event::FightStepEnded,
-                 event::ConsolidationStarted, event::UnitsForcedToFight, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
+                 event::ConsolidationStarted, event::UnitsForcedToFight, event::CommandPointGained,
+                 event::BattleShockEnded, event::ModelRemovedForCoherency, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver>;

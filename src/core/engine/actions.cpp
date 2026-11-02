@@ -26,6 +26,7 @@ std::string_view action_name(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::Fight>) return "Fight";
             else if constexpr (std::is_same_v<T, action::StartConsolidation>) return "StartConsolidation";
             else if constexpr (std::is_same_v<T, action::EndConsolidations>) return "EndConsolidations";
+            else if constexpr (std::is_same_v<T, action::RemoveModelForCoherency>) return "RemoveModelForCoherency";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "OrderCasualties";
@@ -56,6 +57,7 @@ std::string_view action_rule(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::Fight>) return "04.02";
             else if constexpr (std::is_same_v<T, action::StartConsolidation>) return "12.08";
             else if constexpr (std::is_same_v<T, action::EndConsolidations>) return "12.07";
+            else if constexpr (std::is_same_v<T, action::RemoveModelForCoherency>) return "03.03";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "05.04";

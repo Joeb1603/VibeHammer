@@ -122,6 +122,12 @@ struct StartConsolidation {
 struct EndConsolidations {
     friend bool operator==(const EndConsolidations&, const EndConsolidations&) = default;
 };
+// 03.03 Regaining Coherency: remove this model (destroyed, with no on-death rules).
+struct RemoveModelForCoherency {
+    UnitId unit;
+    ModelId model;
+    friend bool operator==(const RemoveModelForCoherency&, const RemoveModelForCoherency&) = default;
+};
 // 04.03: resolve this batch of attacks next (index into the gathered batches).
 struct SelectAttackBatch {
     std::size_t batch = 0;
@@ -147,7 +153,7 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::StartChargeMove, action::SkipChargeMove, action::EndChargeStep,
                                 action::StartPileIn, action::SkipPileIn, action::EndPileIns, action::SelectToFight,
                                 action::PassFight, action::Fight, action::StartConsolidation,
-                                action::EndConsolidations,
+                                action::EndConsolidations, action::RemoveModelForCoherency,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties>;
 
