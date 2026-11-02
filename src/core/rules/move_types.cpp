@@ -13,11 +13,12 @@ struct MoveTypeInfo {
     std::string_view rule;
 };
 
-constexpr std::array<MoveTypeInfo, 4> kMoveTypes{{
+constexpr std::array<MoveTypeInfo, 5> kMoveTypes{{
     {MoveType::RemainStationary, "RemainStationary", "09.04"},
     {MoveType::Normal, "Normal", "09.05"},
     {MoveType::Advance, "Advance", "09.06"},
     {MoveType::FallBack, "FallBack", "09.07"},
+    {MoveType::Charge, "Charge", "11.04"},
 }};
 
 const MoveTypeInfo& info(MoveType t) {

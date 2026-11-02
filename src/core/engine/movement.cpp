@@ -14,6 +14,7 @@
 #include "core/geometry/path.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
+#include "core/rules/charge.hpp"
 #include "core/rules/leadership.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/state/queries.hpp"
@@ -58,10 +59,12 @@ std::vector<ModelId> ids_of(const Unit& u) {
     return out;
 }
 
-// Returns every model to its start position (03.01), clears the move and the activation.
+// Clears the move, and the activation unless a charge is still being resolved (11.02).
 void finish_move(GameState& state) {
     state.flow.move.reset();
-    state.flow.activation.reset();
+    if (!state.flow.charge) {
+        state.flow.activation.reset();
+    }
 }
 
 void revert_move(GameState& state, std::vector<std::string> reasons, Events& events) {
@@ -72,8 +75,11 @@ void revert_move(GameState& state, std::vector<std::string> reasons, Events& eve
             m->position = s.position;
         }
     }
-    // 03 sidebar: the unit has not been selected to make that move, so it can be selected again.
-    u->phase_flags.selected_to_move = false;
+    // 03 sidebar: the unit has not been selected to make that move, so it can be selected again. A charge
+    // move goes back to selecting charge targets with the same charge roll (D-018).
+    if (mv.type != MoveType::Charge) {
+        u->phase_flags.selected_to_move = false;
+    }
     events.push_back(event::UnitMoveReverted{mv.unit, std::move(reasons)});
     finish_move(state);
 }
@@ -125,6 +131,8 @@ ValidationResult validate_move_type(const GameState& state, const Unit& u, const
                     "09.07: a battle-shocked unit cannot select Ordered Retreat; it must select Desperate Escape");
             }
             return ValidationResult::success();
+        case MoveType::Charge:
+            return ValidationResult::failure("09.02: a Charge move is made in the Charge phase (11.02, 11.04)");
         case MoveType::RemainStationary:
             break;
     }
@@ -263,6 +271,14 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
     for (const PathViolation& v : check_model_path(a.model, m->base, points, context)) {
         r.reasons.push_back(v.reason);
     }
+    if (mv.type == MoveType::Charge &&
+        !ends_closer_to_a_charge_target(state, *m, points.front(), points.back(), mv.charge_targets)) {
+        // 11.04 While Moving (03.01: checked for each model that is moved).
+        r.reasons.push_back("11.04: " + model_label(a.model) + " must end its move closer to one or more charge "
+                            "targets");
+    }
+    // TODO(if-possible): 11.04 While Moving: each model that can end its move within 1" of (and engaged
+    // with) a charge target must do so. V1 leaves this to the player (CLAUDE.md "If possible" rules).
     return r;
 }
 
@@ -302,6 +318,14 @@ void apply_details(GameState& state, Side, const action::CommitUnitMove&, DiceSo
     if (mv.type == MoveType::Advance) u.turn_flags.advanced = true;   // 09.06 After Moving
     if (mv.type == MoveType::FallBack) u.turn_flags.fell_back = true;  // 09.07 After Moving
     events.push_back(event::UnitMoveCommitted{u.id, mv.type});
+    if (mv.type == MoveType::Charge) {
+        // 11.04 After Moving: every model has Fights First (24.13) until the end of the turn.
+        u.turn_flags.made_charge_move = true;
+        u.turn_flags.fights_first = true;
+        finish_move(state);
+        resolve_charge(state, true, "", events);  // 11.02 Attempt Charge: the charge is resolved
+        return;
+    }
     if (mv.mode == FallBackMode::DesperateEscape && !u.battle_shocked) {
         // 09.07 After Moving: Desperate Escape battle-shock roll (01.07; one roll, D-015).
         const BattleShockRoll roll = make_battle_shock_roll(dice, u);
@@ -329,6 +353,10 @@ std::optional<float> max_move_distance_mm(const GameState& state, ModelId model)
     const Unit* u = state.find_unit(mv.unit);
     const Model* m = u == nullptr ? nullptr : find_model(*u, model);
     if (m == nullptr || !m->characteristics.move_mm) return std::nullopt;
+    if (mv.type == MoveType::Charge) {
+        if (!u->phase_flags.charge_roll) return std::nullopt;
+        return inches_to_mm(static_cast<float>(*u->phase_flags.charge_roll));  // 11.04: the charge roll
+    }
     float max = *m->characteristics.move_mm;  // 09.05 / 09.07: M
     if (mv.type == MoveType::Advance && u->phase_flags.advance_roll) {
         max += inches_to_mm(static_cast<float>(*u->phase_flags.advance_roll));  // 09.06: advance roll + M
@@ -371,6 +399,13 @@ std::vector<std::string> move_end_problems(const GameState& state) {
     for (const ModelId id : coherency.too_far) {
         out.push_back("03.03: model " + std::to_string(id.v) + " is more than 9\" from another model in " +
                       detail::unit_label(u.id));
+    }
+    if (mv.type == MoveType::Charge) {
+        // 11.04 After Moving: engaged with every charge target, and with no other enemy unit.
+        for (std::string& p : charge_after_moving_problems(state, u, mv.charge_targets)) {
+            out.push_back(std::move(p));
+        }
+        return out;
     }
     // 09.05 / 09.06 / 09.07 After Moving: the unit must be unengaged.
     if (is_engaged(state, u)) {

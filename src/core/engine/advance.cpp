@@ -25,6 +25,8 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.stage = Stage::GameOver;
     state.flow.activation.reset();
     state.flow.attack.reset();
+    state.flow.move.reset();
+    state.flow.charge.reset();
     state.pending.reset();
     events.push_back(event::GameOver{winner, std::move(reason)});
 }
@@ -111,6 +113,10 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
             }
             move_progress(state, dice, events);
             continue;
+        }
+        if (state.flow.charge) {
+            state.pending = charge_decision(state);  // 11.04 Before Moving: always the player's choice
+            return;
         }
         if (!state.flow.activation && end_game_if_side_wiped_out(state, events)) {
             return;

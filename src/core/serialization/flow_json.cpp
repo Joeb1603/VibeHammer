@@ -42,14 +42,18 @@ std::vector<WeaponAbility> abilities_from_json(const Json& j) {
 void to_json(Json& j, const UnitPhaseFlags& v) {
     j = Json{{"selected_to_move", v.selected_to_move},
              {"desperate_escape_hazards_made", v.desperate_escape_hazards_made},
-             {"selected_to_shoot", v.selected_to_shoot}};
+             {"selected_to_shoot", v.selected_to_shoot},
+             {"declared_charge", v.declared_charge}};
     put_opt(j, "advance_roll", v.advance_roll);
+    put_opt(j, "charge_roll", v.charge_roll);
 }
 void from_json(const Json& j, UnitPhaseFlags& v) {
     j.at("selected_to_move").get_to(v.selected_to_move);
     get_opt(j, "advance_roll", v.advance_roll);
     j.at("desperate_escape_hazards_made").get_to(v.desperate_escape_hazards_made);
     j.at("selected_to_shoot").get_to(v.selected_to_shoot);
+    j.at("declared_charge").get_to(v.declared_charge);
+    get_opt(j, "charge_roll", v.charge_roll);
 }
 
 // ---- moves ----
@@ -80,7 +84,8 @@ void to_json(Json& j, const MoveInProgress& v) {
              {"type", v.type},
              {"starts", v.starts},
              {"paths", v.paths},
-             {"pending_mortal_wounds", v.pending_mortal_wounds}};
+             {"pending_mortal_wounds", v.pending_mortal_wounds},
+             {"charge_targets", v.charge_targets}};
     put_opt(j, "mode", v.mode);
 }
 void from_json(const Json& j, MoveInProgress& v) {
@@ -90,7 +95,10 @@ void from_json(const Json& j, MoveInProgress& v) {
     j.at("starts").get_to(v.starts);
     j.at("paths").get_to(v.paths);
     j.at("pending_mortal_wounds").get_to(v.pending_mortal_wounds);
+    j.at("charge_targets").get_to(v.charge_targets);
 }
+void to_json(Json& j, const ChargeInProgress& v) { j = Json{{"unit", v.unit}}; }
+void from_json(const Json& j, ChargeInProgress& v) { j.at("unit").get_to(v.unit); }
 
 // ---- shooting ----
 void to_json(Json& j, ShootingType v) { j = std::string(shooting_type_name(v)); }
@@ -271,6 +279,7 @@ void to_json(Json& j, const FlowState& v) {
     put_opt(j, "activation", v.activation);
     put_opt(j, "attack", v.attack);
     put_opt(j, "move", v.move);
+    put_opt(j, "charge", v.charge);
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -279,6 +288,7 @@ void from_json(const Json& j, FlowState& v) {
     get_opt(j, "activation", v.activation);
     get_opt(j, "attack", v.attack);
     get_opt(j, "move", v.move);
+    get_opt(j, "charge", v.charge);
 }
 
 void to_json(Json& j, const GameResult& v) {
@@ -296,7 +306,7 @@ void to_json(Json& j, const PendingDecision& v) {
     std::visit(
         [&j](const auto& k) {
             using T = std::decay_t<decltype(k)>;
-            if constexpr (std::is_same_v<T, decision::MoveModels>) {
+            if constexpr (std::is_same_v<T, decision::MoveModels> || std::is_same_v<T, decision::SelectChargeTargets>) {
                 j["unit"] = k.unit;
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) {
                 j["attacker"] = k.attacker;
@@ -314,6 +324,7 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "MoveModels") v.kind = decision::MoveModels{j.at("unit").get<UnitId>()};
     else if (kind == "Shoot") v.kind = decision::Shoot{};
     else if (kind == "Charge") v.kind = decision::Charge{};
+    else if (kind == "SelectChargeTargets") v.kind = decision::SelectChargeTargets{j.at("unit").get<UnitId>()};
     else if (kind == "SelectAttackBatch") v.kind = decision::SelectAttackBatch{j.at("attacker").get<UnitId>()};
     else if (kind == "DeclareAllocationOrder") v.kind = decision::DeclareAllocationOrder{j.at("target").get<UnitId>()};
     else if (kind == "OrderCasualties") v.kind = decision::OrderCasualties{j.at("target").get<UnitId>()};

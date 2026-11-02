@@ -29,6 +29,10 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::UnitMoveReverted>) return {"UnitMoveReverted", "03.01"};
     else if constexpr (std::is_same_v<T, event::BattleShockRolled>) return {"BattleShockRolled", "01.07"};
     else if constexpr (std::is_same_v<T, event::ShootingStarted>) return {"ShootingStarted", "10.02"};
+    else if constexpr (std::is_same_v<T, event::ChargeDeclared>) return {"ChargeDeclared", "11.02"};
+    else if constexpr (std::is_same_v<T, event::ChargeRolled>) return {"ChargeRolled", "11.02"};
+    else if constexpr (std::is_same_v<T, event::ChargeTargetsSelected>) return {"ChargeTargetsSelected", "11.04"};
+    else if constexpr (std::is_same_v<T, event::ChargeResolved>) return {"ChargeResolved", "11.02"};
     else if constexpr (std::is_same_v<T, event::AttackBatchesGathered>) return {"AttackBatchesGathered", "04.03"};
     else if constexpr (std::is_same_v<T, event::AttackBatchSelected>) return {"AttackBatchSelected", "04.03"};
     else if constexpr (std::is_same_v<T, event::HitRollsMade>) return {"HitRollsMade", "05.01"};

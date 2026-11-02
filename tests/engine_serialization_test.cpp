@@ -15,6 +15,7 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::decider;
 using wh40k::test::select;
 using wh40k::test::shoot_step_state;
 
@@ -62,6 +63,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::A, decision::MoveModels{UnitId{1}}},
         {Side::B, decision::Shoot{}},
         {Side::A, decision::Charge{}},
+        {Side::B, decision::SelectChargeTargets{UnitId{2}}},
         {Side::A, decision::SelectAttackBatch{UnitId{1}}},
         {Side::B, decision::DeclareAllocationOrder{UnitId{2}}},
         {Side::B, decision::OrderCasualties{UnitId{2}}},
@@ -101,6 +103,22 @@ TEST(Serialization, StateMidShootingRoundTrips) {
     EXPECT_EQ(round_trip(gs), gs);
 }
 
+TEST(Serialization, StateMidChargeRoundTrips) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    start_game(gs);
+    while (gs.flow.stage != Stage::Charge) apply_action(gs, decider(gs), legal_actions(gs, decider(gs)).front());
+    ScriptedDice dice{6, 6};  // 12": the Termagants, exactly 12" away, can be charge targets
+    apply_action(gs, Side::A, action::DeclareCharge{gs.units[0].id}, dice);
+    ASSERT_TRUE(gs.flow.charge.has_value());
+    EXPECT_EQ(round_trip(gs), gs);  // selecting charge targets
+    apply_action(gs, Side::A, action::StartChargeMove{gs.units[0].id, {gs.units[1].id}});
+    ASSERT_TRUE(gs.flow.move.has_value());
+    ASSERT_EQ(gs.flow.move->charge_targets.size(), 1u);
+    gs.units[1].turn_flags.made_charge_move = true;  // exercise every field
+    gs.units[1].turn_flags.fights_first = true;
+    EXPECT_EQ(round_trip(gs), gs);
+}
+
 TEST(Serialization, StateMidMoveRoundTrips) {
     GameState gs = wh40k::test::load_v1_scenario();
     start_game(gs);
@@ -135,6 +153,9 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::Shoot{UnitId{1}, ShootingType::CloseQuarters,
                       {ShotDeclaration{ModelId{3}, 1, 0, UnitId{2}}, ShotDeclaration{ModelId{4}, 0, 1, UnitId{2}}}},
         action::EndShootStep{},
+        action::DeclareCharge{UnitId{1}},
+        action::StartChargeMove{UnitId{1}, {UnitId{2}, UnitId{3}}},
+        action::SkipChargeMove{UnitId{1}},
         action::EndChargeStep{},
         action::SelectAttackBatch{3},
         action::DeclareAllocationOrder{UnitId{2}, {1, 0}},
@@ -203,6 +224,10 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::UnitMoveReverted{UnitId{1}, {"03.03: model 2 is more than 2\" from every other model in unit 1"}},
         event::BattleShockRolled{UnitId{1}, BattleShockRoll{LeadershipRoll{TwoD6{{1, 2}}, 6, false}, true}},
         event::ShootingStarted{UnitId{1}, ShootingType::Normal, {selection}},
+        event::ChargeDeclared{UnitId{1}},
+        event::ChargeRolled{UnitId{1}, TwoD6{{4, 5}}, {UnitId{2}, UnitId{3}}},
+        event::ChargeTargetsSelected{UnitId{1}, {UnitId{2}}},
+        event::ChargeResolved{UnitId{1}, true, ""},
         event::AttackBatchesGathered{UnitId{1}, {batch}},
         event::AttackBatchSelected{UnitId{1}, 0, UnitId{2}, 7},
         event::HitRollsMade{0, hits},
@@ -223,6 +248,8 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         EXPECT_EQ(j.at("rule").get<std::string>(), std::string(event_rule(e)));
     }
     EXPECT_EQ(round_trip_event(event::GameOver{std::nullopt, "draw"}), GameEvent{(event::GameOver{std::nullopt, "draw"})});
+    const event::ChargeResolved failed{UnitId{1}, false, "11.02: unit 1 does not make a charge move; the charge fails"};
+    EXPECT_EQ(round_trip_event(failed), GameEvent{failed});
 }
 
 TEST(Serialization, UnknownKindsAreDataErrors) {

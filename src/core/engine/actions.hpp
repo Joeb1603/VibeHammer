@@ -55,6 +55,23 @@ struct Shoot {
 struct EndShootStep {
     friend bool operator==(const EndShootStep&, const EndShootStep&) = default;
 };
+// 11.02 Declare Charge: the unit declares a charge; the engine makes its charge roll (2D6).
+struct DeclareCharge {
+    UnitId unit;
+    friend bool operator==(const DeclareCharge&, const DeclareCharge&) = default;
+};
+// 11.04 Before Moving: select the charge targets (one or more enemy units within 12" and within the
+// charge roll), then move the models (03.01: ProposeModelMove, CommitUnitMove / ResetUnitMove).
+struct StartChargeMove {
+    UnitId unit;
+    std::vector<UnitId> targets;
+    friend bool operator==(const StartChargeMove&, const StartChargeMove&) = default;
+};
+// 11.02 Attempt Charge: the unit does not make a charge move; the charge is resolved (it fails).
+struct SkipChargeMove {
+    UnitId unit;
+    friend bool operator==(const SkipChargeMove&, const SkipChargeMove&) = default;
+};
 // 11.02: no more units will declare a charge this phase.
 struct EndChargeStep {
     friend bool operator==(const EndChargeStep&, const EndChargeStep&) = default;
@@ -80,7 +97,8 @@ struct OrderCasualties {
 }  // namespace action
 
 using GameAction = std::variant<action::StartMove, action::ProposeModelMove, action::CommitUnitMove,
-                                action::ResetUnitMove, action::Shoot, action::EndShootStep, action::EndChargeStep,
+                                action::ResetUnitMove, action::Shoot, action::EndShootStep, action::DeclareCharge,
+                                action::StartChargeMove, action::SkipChargeMove, action::EndChargeStep,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties>;
 

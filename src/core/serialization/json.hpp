@@ -93,6 +93,8 @@ void to_json(Json& j, const ModelPath& v);
 void from_json(const Json& j, ModelPath& v);
 void to_json(Json& j, const MoveInProgress& v);
 void from_json(const Json& j, MoveInProgress& v);
+void to_json(Json& j, const ChargeInProgress& v);
+void from_json(const Json& j, ChargeInProgress& v);
 void to_json(Json& j, ShootingType v);
 void from_json(const Json& j, ShootingType& v);
 void to_json(Json& j, const ShotDeclaration& v);

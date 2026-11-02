@@ -112,7 +112,15 @@ struct MoveInProgress {
     std::vector<ModelStart> starts;    // every model's position when the move started
     std::vector<ModelPath> paths;      // proposed paths, one per moved model
     int pending_mortal_wounds = 0;     // 09.07 Desperate Escape hazard rolls (06.03) not yet allocated
+    std::vector<UnitId> charge_targets;  // 11.04 Before Moving (charge moves only)
     friend bool operator==(const MoveInProgress&, const MoveInProgress&) = default;
+};
+
+// 11.02: a unit that has declared a charge and made its charge roll, until the charge is resolved.
+// While no charge move is in progress, the player selects charge targets (or makes no charge move).
+struct ChargeInProgress {
+    UnitId unit;
+    friend bool operator==(const ChargeInProgress&, const ChargeInProgress&) = default;
 };
 
 struct FlowState {
@@ -122,6 +130,7 @@ struct FlowState {
     std::optional<Activation> activation;
     std::optional<AttackFlow> attack;
     std::optional<MoveInProgress> move;
+    std::optional<ChargeInProgress> charge;
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

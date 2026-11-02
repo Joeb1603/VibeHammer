@@ -14,6 +14,9 @@ std::string_view action_name(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::ResetUnitMove>) return "ResetUnitMove";
             else if constexpr (std::is_same_v<T, action::Shoot>) return "Shoot";
             else if constexpr (std::is_same_v<T, action::EndShootStep>) return "EndShootStep";
+            else if constexpr (std::is_same_v<T, action::DeclareCharge>) return "DeclareCharge";
+            else if constexpr (std::is_same_v<T, action::StartChargeMove>) return "StartChargeMove";
+            else if constexpr (std::is_same_v<T, action::SkipChargeMove>) return "SkipChargeMove";
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return "EndChargeStep";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "DeclareAllocationOrder";
@@ -33,6 +36,9 @@ std::string_view action_rule(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::ResetUnitMove>) return "03.01";
             else if constexpr (std::is_same_v<T, action::Shoot>) return "10.02";
             else if constexpr (std::is_same_v<T, action::EndShootStep>) return "10.02";
+            else if constexpr (std::is_same_v<T, action::DeclareCharge>) return "11.02";
+            else if constexpr (std::is_same_v<T, action::StartChargeMove>) return "11.04";
+            else if constexpr (std::is_same_v<T, action::SkipChargeMove>) return "11.02";
             else if constexpr (std::is_same_v<T, action::EndChargeStep>) return "11.02";
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "05.03";

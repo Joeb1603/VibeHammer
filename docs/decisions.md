@@ -276,3 +276,35 @@ observed model's base. Models in either of those two units are ignored; every ot
   only exists in a configuration bounded by other constraints. V1 has only two units, so in V1 play no
   model can ever block line of sight; only tests with extra units exercise this.
 - V1 has no terrain (13.07). "Fully visible" is not needed in V1 and is not implemented.
+
+## D-018: Charge flow and a reverted charge move (11.02, 11.04, 03.01; extends D-005)
+**Decided:** 2026-11-02 (M9)
+- **Flow.** `DeclareCharge{unit}` (11.02 Declare Charge) makes the charge roll at once (Make Charge Roll).
+  If no enemy unit is within 12" and within the roll (11.04 Before Moving), no charge move is possible:
+  the charge is resolved and fails, and the models don't move (11.02 Attempt Charge). Otherwise the
+  player answers `SelectChargeTargets` with `StartChargeMove{targets}` (one or more eligible units;
+  `legal_actions` lists every non-empty set) or `SkipChargeMove` ("if you still want to"). The charge
+  move then runs model by model like other moves (03.01), with the charge roll as the maximum distance.
+- **Reverted charge move.** If the move fails its end conditions (03.01 Ending a Move, 11.04 After
+  Moving), or the player resets it, the models return to their start positions and the unit "has not
+  been selected to make that move" (03 sidebar). It has still declared a charge, so it goes back to
+  selecting charge targets (it may select different ones) or skipping. The charge roll stands: it
+  belongs to Declare Charge, not to the move, and is never re-rolled (as D-005 does for the advance
+  roll). The charge is resolved only by a committed charge move or `SkipChargeMove`.
+- **"End closer" (11.04 While Moving)** applies to each model that is moved (03.01: "each time you move
+  a model ... all stated While Moving conditions must be met"); a model that is not moved is not
+  checked. Closer means the edge-to-edge distance to the closest model of one or more charge targets
+  goes down by more than `EPS_MM`. A path that ends back where it started is not closer.
+- **If possible:** "within 1" if it can" and "engaged if it can" (11.04 While Moving) are left to the
+  player in V1 (`TODO(if-possible)` in `engine/movement.cpp`).
+- A successful charge sets the unit's turn flags `made_charge_move` and `fights_first` (11.04 After
+  Moving, 24.13); both end with the turn.
+
+## D-019: Fight phase placeholder until M10
+**Decided:** 2026-11-02 (M9)
+Before M9 no unit could become engaged in play, and the Fight-phase steps threw if one was. A successful
+charge now leaves units engaged, so until M10 the Pile In, Fight and Consolidate steps (12.02-12.08) pass
+with no fights. Engaged units stay engaged into the next turn (they can then fall back, make
+close-quarters shooting, and so on). This is scaffolding, not a rule: M10 replaces it. Replays that
+reach a Fight phase with engaged units will need regenerating then; `m9_charge.json` stops at the end
+of the charge for that reason.
