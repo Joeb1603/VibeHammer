@@ -68,6 +68,8 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 > Read CLAUDE.md (Geometry section) and rules 01.04 and 03. Implement `src/core/geometry/`: base-to-base distance, the tolerance helpers (`within`, `more_than`, `in_base_contact`), coherency check (03.03, which returns the offending models), engagement checks (03.04, model and unit level), path length for segment lists, path validation (cannot cross enemy bases, cannot leave the battlefield, can pass through friendly bases; the end position must not overlap any base), and "closest model / closest distance between units" ("Closest Model/Unit" and "Within/Wholly Within" are app-only rules that aren't in docs/rules: ask me for the wording before implementing them). Write tests in inches with explicit coordinates, including edge cases at exactly 2", 2"+ε and 9".
 
+> Note: M2 already added `geometry/units.hpp`, `base_distance`, `within`/`more_than`, `wholly_within` (D-009) and a basic `check_coherency` for the loader. Extend and test them here; don't duplicate them.
+
 **Acceptance**
 - Coherency handles the 2"-of-one and 9"-of-all clauses independently (test a line of 6 Intercessors, 32 mm bases, with a 1.9" edge-to-edge gap between neighbours: the 2" clause passes, and the 9" clause fails because the end models are about 14.5" apart edge-to-edge. Also test the reverse: models within 9" of every other model but one model more than 2" from all the others).
 - A path that clips an enemy base by 0.5 mm is rejected. A path through a friendly base is accepted, but ending on it is rejected.

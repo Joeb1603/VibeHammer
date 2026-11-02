@@ -99,3 +99,14 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
   wide and breaks the 9" clause).
 - The loader must check the result is in coherency (03.03) and wholly within the deployment zone, and
   fail with an exception (corrupt data) if not.
+
+## D-009: Wholly Within (01.04 "See also", app-only rule)
+**Decided:** 2026-11-02 (wording confirmed by the user)
+"Within/Wholly Within" is an app-only rule; its wording is not in `docs/rules/`. Needed by D-008's
+deployment-zone check.
+
+- A model is **wholly within** an area if every part of its base is inside that area. In V1 (2D, round
+  bases) this means the base circle lies inside the area, using the `EPS_MM` tolerance
+  (`geometry/distance.hpp`: `wholly_within`).
+- A unit is wholly within an area if every one of its models is.
+- Plain **within** (e.g. "within range of an objective") is not covered here; M3 asks for its wording.

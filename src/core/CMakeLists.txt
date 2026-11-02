@@ -1,5 +1,13 @@
 add_library(wh40k_core STATIC
-    version.cpp)
+    version.cpp
+    data/scenario_loader.cpp
+    data/unit_loader.cpp
+    geometry/coherency.cpp
+    geometry/distance.cpp
+    model/dice_expr.cpp
+    model/weapon.cpp
+    serialization/json.cpp
+    state/game_state.cpp)
 
 # Consumers include core headers as "core/....hpp".
 target_include_directories(wh40k_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -7,7 +15,7 @@ target_compile_features(wh40k_core PUBLIC cxx_std_20)
 target_link_libraries(wh40k_core PUBLIC nlohmann_json::nlohmann_json)
 
 if(MSVC)
-    target_compile_options(wh40k_core PRIVATE /W4 /WX /permissive-)
+    target_compile_options(wh40k_core PRIVATE /W4 /WX /permissive- /utf-8)
 else()
     target_compile_options(wh40k_core PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
