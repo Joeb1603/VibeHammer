@@ -1,7 +1,10 @@
-// wh40k_client_2d (M6): read-only viewer. Renders a GameState and steps through replays.
-// The client never mutates game state itself: it only calls the engine API (via Timeline) on its own copies.
+// wh40k_client_2d (M12): hotseat play and replay viewing. The client never mutates game state itself: every
+// game change is a GameAction submitted through GameSession, which validates it with the engine before
+// applying it (D-024). Replays are stepped through Timeline (read-only).
 //
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
+//                        [--steps <n>] [--select <unit id>] [--select-model <model id>]
+//   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
 
 #include <imgui.h>
 #include <raylib.h>
@@ -23,7 +26,12 @@
 #include "core/engine/replay.hpp"
 #include "core/geometry/units.hpp"
 #include "core/version.hpp"
+#include "decision_panel.hpp"
+#include "decision_view.hpp"
 #include "event_text.hpp"
+#include "move_plan.hpp"
+#include "overlays.hpp"
+#include "session.hpp"
 #include "timeline.hpp"
 
 namespace wh40k::client {
@@ -31,9 +39,11 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr int kWindowWidth = 1280;
-constexpr int kWindowHeight = 800;
-constexpr float kPanelWidth = 430.0f;
+constexpr int kWindowWidth = 1400;
+constexpr int kWindowHeight = 860;
+constexpr float kPanelWidth = 470.0f;
+constexpr float kHandlePx = 11.0f;
+constexpr float kDragThresholdPx = 3.0f;
 const fs::path kRepoRoot{WH40K_REPO_ROOT};
 const fs::path kScenario = kRepoRoot / "data/scenarios/v1_skirmish.json";
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
@@ -43,6 +53,9 @@ struct Options {
     std::optional<std::size_t> frame;
     std::optional<float> zoom;
     std::optional<std::string> screenshot;
+    int steps = 0;
+    std::optional<unsigned> select_unit;
+    std::optional<unsigned> select_model;
 };
 
 Options parse_args(int argc, char** argv) {
@@ -54,22 +67,44 @@ Options parse_args(int argc, char** argv) {
         else if (key == "--frame") o.frame = static_cast<std::size_t>(std::stoul(value));
         else if (key == "--zoom") o.zoom = std::stof(value);
         else if (key == "--screenshot") o.screenshot = value;
+        else if (key == "--steps") o.steps = std::stoi(value);
+        else if (key == "--select") o.select_unit = static_cast<unsigned>(std::stoul(value));
+        else if (key == "--select-model") o.select_model = static_cast<unsigned>(std::stoul(value));
     }
     return o;
 }
 
 std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Side B"; }
 
-class Viewer {
+float distance_px(Vector2 a, Vector2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
+
+enum class Mode { Play, Replay };
+
+// A drag on the board: one model's next straight line, or the whole unit (the "Move unit" handle).
+struct Drag {
+    bool whole_unit = false;
+    core::ModelId model;     // whole_unit: unused
+    core::UnitId unit;
+    core::Position grab;     // world position where the drag started
+    core::Position current;  // world position of the cursor now
+    Vector2 grab_screen{0, 0};
+};
+
+class App {
 public:
-    Viewer() {
+    App() {
         new_game();
-        std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m5_full_game_all_pass.json").string().c_str());
+        std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
     }
 
     void new_game() {
         try {
-            set_timeline(Timeline::from_state(core::load_scenario(kScenario, kRepoRoot), "New game: V1 scenario"));
+            session_.emplace(core::load_scenario(kScenario, kRepoRoot));
+            mode_ = Mode::Play;
+            status_ = "New game: V1 scenario. Hotseat: each side acts when the panel names it.";
+            reasons_.clear();
+            fit_pending_ = true;
+            scroll_log_ = true;
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the scenario: ") + e.what();
         }
@@ -77,13 +112,15 @@ public:
 
     bool load_replay(const fs::path& requested) {
         fs::path path = requested;
-        if (!fs::exists(path) && fs::exists(kRepoRoot / path)) {
-            path = kRepoRoot / path;
-        }
+        if (!fs::exists(path) && fs::exists(kRepoRoot / path)) path = kRepoRoot / path;
         try {
             const core::Replay replay = core::load_replay(path);
-            set_timeline(Timeline::from_replay(replay, kRepoRoot, "Replay: " + path.filename().string()));
+            timeline_ = Timeline::from_replay(replay, kRepoRoot, "Replay: " + path.filename().string());
+            frame_ = 0;
+            mode_ = Mode::Replay;
             status_ = replay.description;
+            fit_pending_ = true;
+            scroll_log_ = true;
             return true;
         } catch (const std::exception& e) {
             status_ = std::string("Could not load replay: ") + e.what();
@@ -92,16 +129,30 @@ public:
     }
 
     void go_to(std::size_t frame) {
+        if (timeline_.size() == 0) return;
         frame_ = std::min(frame, timeline_.size() - 1);
         scroll_log_ = true;
+    }
+
+    // --steps: click the first decision button (never a template) `n` times.
+    void auto_steps(int n) {
+        for (int i = 0; i < n && mode_ == Mode::Play && session_->pending(); ++i) {
+            const DecisionView view = make_decision_view(session_->legal());
+            if (view.buttons.empty()) break;
+            submit(view.buttons.front());
+        }
+    }
+
+    void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
+        if (unit) selected_unit_ = core::UnitId{*unit};
+        if (model) selected_model_ = core::ModelId{*model};
     }
 
     void set_zoom(float px_per_mm) { camera_.set_zoom(px_per_mm, board_centre()); }
 
     void frame(bool layout_fixed) {
         if (fit_pending_ || IsWindowResized()) {
-            const core::GameState& s = state();
-            camera_.fit(s.battlefield.width_mm, s.battlefield.depth_mm, board_area());
+            camera_.fit(state().battlefield.width_mm, state().battlefield.depth_mm, board_area());
             fit_pending_ = false;
         }
         const ImGuiIO& io = ImGui::GetIO();
@@ -110,11 +161,19 @@ public:
 
         ClearBackground(Color{24, 26, 30, 255});
         draw_board(state(), camera_);
+        draw_overlays(state(), camera_, overlays_, selected_unit_, selected_model_, friendly_side());
+        draw_selection_and_moves();
         draw_ui(layout_fixed);
     }
 
 private:
-    const core::GameState& state() const { return timeline_.frame(frame_).state; }
+    const core::GameState& state() const {
+        return mode_ == Mode::Play ? session_->state() : timeline_.frame(frame_).state;
+    }
+
+    core::Side friendly_side() const {
+        return mode_ == Mode::Play ? session_->deciding_side() : core::active_side(state());
+    }
 
     Rectangle board_area() const {
         return Rectangle{0.0f, 0.0f, static_cast<float>(GetScreenWidth()) - kPanelWidth,
@@ -126,40 +185,175 @@ private:
         return Vector2{a.x + a.width * 0.5f, a.y + a.height * 0.5f};
     }
 
-    void set_timeline(Timeline t) {
-        timeline_ = std::move(t);
-        frame_ = 0;
-        fit_pending_ = true;
-        scroll_log_ = true;
+    // Every game change goes through here (and so through validate_action).
+    void submit(const core::GameAction& action) {
+        const core::ValidationResult r = session_->submit(action);
+        reasons_ = r.reasons;
+        if (r.ok()) scroll_log_ = true;
+    }
+
+    // The unit being moved model by model, if it is this player's MoveModels decision.
+    std::optional<core::UnitId> moving_unit() const {
+        if (mode_ != Mode::Play || !session_->pending()) return std::nullopt;
+        if (const auto* d = std::get_if<core::decision::MoveModels>(&session_->pending()->kind)) return d->unit;
+        return std::nullopt;
+    }
+
+    std::optional<Vector2> unit_handle_screen() const {
+        const auto unit = moving_unit();
+        if (!unit) return std::nullopt;
+        const core::Unit* u = state().find_unit(*unit);
+        if (u == nullptr || u->models.empty()) return std::nullopt;
+        float x = 0, y = 0;
+        for (const core::Model& m : u->models) {
+            x += m.position.x;
+            y += m.position.y;
+        }
+        const float n = static_cast<float>(u->models.size());
+        return camera_.to_screen(x / n, y / n);
     }
 
     void handle_mouse() {
+        const Vector2 mouse = GetMousePosition();
         const float wheel = GetMouseWheelMove();
-        if (wheel != 0.0f) {
-            camera_.zoom_by(std::pow(1.15f, wheel), GetMousePosition());  // zoom to cursor
+        if (wheel != 0.0f) camera_.zoom_by(std::pow(1.15f, wheel), mouse);  // zoom to cursor
+        if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) camera_.pan(GetMouseDelta());
+
+        const auto hovered = model_at(state(), camera_, mouse);
+        if (hovered && !drag_) draw_tooltip(*hovered);
+
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
+        if (drag_) drag_->current = camera_.to_world(mouse);
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && drag_) release(mouse);
+    }
+
+    void press(Vector2 mouse, const std::optional<HoveredModel>& hovered) {
+        const auto moving = moving_unit();
+        if (const auto handle = unit_handle_screen(); handle && distance_px(*handle, mouse) <= kHandlePx) {
+            drag_ = Drag{true, {}, *moving, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
+            return;
         }
-        if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-            camera_.pan(GetMouseDelta());
+        if (!hovered) {
+            selected_model_.reset();
+            return;
         }
-        if (const auto hovered = model_at(state(), camera_, GetMousePosition())) {
-            const core::Model& m = *hovered->model;
-            ImGui::BeginTooltip();
-            ImGui::Text("%s (unit %u, %s)", hovered->unit->name.c_str(), hovered->unit->id.v,
-                        side_name(hovered->unit->side).c_str());
-            ImGui::Text("Model %u: %s", m.id.v, m.type_name.c_str());
-            ImGui::Text("Wounds %d/%d, base %.1f mm", m.wounds_remaining, m.characteristics.wounds,
-                        m.base.diameter_mm);
-            ImGui::Text("Position (%.2f\", %.2f\")", core::mm_to_inches(m.position.x),
-                        core::mm_to_inches(m.position.y));
-            ImGui::EndTooltip();
+        const core::UnitId unit = hovered->unit->id;
+        if (selected_unit_ == unit) {
+            selected_model_ = hovered->model->id;  // a model in the selected unit
+        } else {
+            selected_unit_ = unit;
+            selected_model_.reset();
+        }
+        if (moving && *moving == unit) {
+            selected_model_ = hovered->model->id;
+            drag_ = Drag{false, hovered->model->id, unit, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
         }
     }
 
+    void release(Vector2 mouse) {
+        const Drag d = *drag_;
+        drag_.reset();
+        if (distance_px(d.grab_screen, mouse) < kDragThresholdPx) return;  // a click, not a drag
+        if (d.whole_unit) {
+            // The "Move unit" handle: one ProposeModelMove per model, each validated by the engine.
+            std::vector<std::string> all;
+            for (const auto& a : translate_unit(state(), d.unit, d.current.x - d.grab.x, d.current.y - d.grab.y)) {
+                submit(a);
+                all.insert(all.end(), reasons_.begin(), reasons_.end());
+            }
+            reasons_ = all;
+            return;
+        }
+        submit(extend_path(state(), d.model, d.current));
+    }
+
     void handle_keys() {
+        if (mode_ != Mode::Replay) return;
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) go_to(frame_ + 1);
         if ((IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) && frame_ > 0) go_to(frame_ - 1);
         if (IsKeyPressed(KEY_HOME)) go_to(0);
         if (IsKeyPressed(KEY_END)) go_to(timeline_.size() - 1);
+    }
+
+    void draw_tooltip(const HoveredModel& h) {
+        const core::Model& m = *h.model;
+        ImGui::BeginTooltip();
+        ImGui::Text("%s (unit %u, %s)", h.unit->name.c_str(), h.unit->id.v, side_name(h.unit->side).c_str());
+        ImGui::Text("Model %u: %s", m.id.v, m.type_name.c_str());
+        ImGui::Text("Wounds %d/%d, base %.1f mm", m.wounds_remaining, m.characteristics.wounds, m.base.diameter_mm);
+        ImGui::Text("Position (%.2f\", %.2f\")", core::mm_to_inches(m.position.x), core::mm_to_inches(m.position.y));
+        if (h.unit->battle_shocked) ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "Battle-shocked");
+        ImGui::EndTooltip();
+    }
+
+    void draw_ruler(Vector2 at, const std::optional<Ruler>& r) {
+        if (!r) return;
+        char text[64];
+        std::snprintf(text, sizeof(text), "%.2f\" / %.2f\"", static_cast<double>(core::mm_to_inches(r->moved_mm)),
+                      static_cast<double>(core::mm_to_inches(r->max_mm)));
+        DrawText(text, static_cast<int>(at.x) + 14, static_cast<int>(at.y) - 22, 18, r->over ? RED : RAYWHITE);
+    }
+
+    void draw_selection_and_moves() {
+        const core::GameState& gs = state();
+        // Selection.
+        if (selected_unit_) {
+            if (const core::Unit* u = gs.find_unit(*selected_unit_)) {
+                for (const core::Model& m : u->models) {
+                    const float r = camera_.to_px(m.base.diameter_mm * 0.5f) + 3.0f;
+                    const bool chosen = selected_model_ == m.id;
+                    DrawCircleLinesV(camera_.to_screen(m.position), r, chosen ? YELLOW : WHITE);
+                    if (chosen) DrawCircleLinesV(camera_.to_screen(m.position), r + 2.0f, YELLOW);
+                }
+            }
+        }
+        // The move in progress: ghost markers at the start positions and the proposed paths.
+        if (gs.flow.move) {
+            const core::Unit* u = gs.find_unit(gs.flow.move->unit);
+            for (const core::Model& m : u->models) {
+                const std::vector<core::Position> path = model_path(gs, m.id);
+                if (path.size() < 2) continue;
+                const float r = camera_.to_px(m.base.diameter_mm * 0.5f);
+                DrawCircleV(camera_.to_screen(path.front()), r, Color{255, 255, 255, 40});
+                DrawCircleLinesV(camera_.to_screen(path.front()), r, Color{255, 255, 255, 140});
+                for (std::size_t i = 1; i < path.size(); ++i) {
+                    DrawLineEx(camera_.to_screen(path[i - 1]), camera_.to_screen(path[i]), 2.0f,
+                               Color{255, 255, 255, 160});
+                }
+            }
+        }
+        if (const auto handle = unit_handle_screen()) {
+            const Vector2 h = *handle;
+            DrawPoly(h, 4, kHandlePx, 45.0f, Color{255, 220, 80, 230});
+            DrawPolyLines(h, 4, kHandlePx, 45.0f, BLACK);
+        }
+        // The drag preview and the live ruler.
+        if (drag_) {
+            const Vector2 cursor = camera_.to_screen(drag_->current);
+            if (drag_->whole_unit) {
+                const float dx = drag_->current.x - drag_->grab.x;
+                const float dy = drag_->current.y - drag_->grab.y;
+                const core::Unit* u = gs.find_unit(drag_->unit);
+                std::optional<Ruler> worst;
+                for (const core::Model& m : u->models) {
+                    const core::Position to{m.position.x + dx, m.position.y + dy, 0.0f};
+                    DrawCircleV(camera_.to_screen(to), camera_.to_px(m.base.diameter_mm * 0.5f), Color{255, 255, 255, 60});
+                    const auto r = ruler(gs, m.id, to);
+                    if (r && (!worst || r->moved_mm > worst->moved_mm)) worst = r;
+                }
+                draw_ruler(cursor, worst);
+            } else {
+                const core::Model* m = nullptr;
+                for (const core::Model& x : gs.find_unit(drag_->unit)->models) {
+                    if (x.id == drag_->model) m = &x;
+                }
+                if (m != nullptr) {
+                    DrawLineEx(camera_.to_screen(m->position), cursor, 2.0f, YELLOW);
+                    DrawCircleV(cursor, camera_.to_px(m->base.diameter_mm * 0.5f), Color{255, 255, 255, 70});
+                    draw_ruler(cursor, ruler(gs, m->id, drag_->current));
+                }
+            }
+        }
     }
 
     void draw_ui(bool layout_fixed) {
@@ -167,38 +361,35 @@ private:
         const float x = static_cast<float>(GetScreenWidth()) - kPanelWidth;
         const float h = static_cast<float>(GetScreenHeight());
         ImGui::SetNextWindowPos(ImVec2(x, 0.0f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.6f), cond);
+        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.34f), cond);
         ImGui::Begin("VibeHammer");
-        draw_source_section();
-        ImGui::Separator();
-        draw_frame_controls();
-        ImGui::Separator();
-        draw_state_section();
-        ImGui::Separator();
-        draw_view_section();
+        draw_game_section();
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(x, h * 0.6f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.4f), cond);
-        ImGui::Begin("Event log");
-        draw_event_log();
+        ImGui::SetNextWindowPos(ImVec2(x, h * 0.34f), cond);
+        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.40f), cond);
+        ImGui::Begin(mode_ == Mode::Play ? "Decision" : "Replay");
+        if (mode_ == Mode::Play) {
+            draw_decision();
+        } else {
+            draw_replay_controls();
+        }
+        ImGui::End();
+
+        ImGui::SetNextWindowPos(ImVec2(x, h * 0.74f), cond);
+        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.26f), cond);
+        ImGui::Begin("Log");
+        draw_logs();
         ImGui::End();
     }
 
-    void draw_source_section() {
-        ImGui::TextWrapped("%s", timeline_.source().c_str());
-        if (!timeline_.error().empty()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", timeline_.error().c_str());
-        }
-        if (!status_.empty()) {
-            ImGui::TextWrapped("%s", status_.c_str());
-        }
-        ImGui::InputText("##path", path_, sizeof(path_));
+    void draw_game_section() {
+        if (ImGui::Button("New game (V1 scenario)")) new_game();
         ImGui::SameLine();
-        if (ImGui::Button("Load replay")) {
-            load_replay(path_);
-        }
-        if (fs::is_directory(kReplayDir) && ImGui::TreeNode("tests/replays")) {
+        ImGui::InputText("##path", path_, sizeof(path_));
+        if (ImGui::Button("Load replay")) load_replay(path_);
+        ImGui::SameLine();
+        if (fs::is_directory(kReplayDir) && ImGui::BeginCombo("##replays", "tests/replays")) {
             std::vector<fs::path> files;
             for (const auto& entry : fs::directory_iterator(kReplayDir)) {
                 if (entry.path().extension() == ".json") files.push_back(entry.path());
@@ -210,15 +401,54 @@ private:
                     load_replay(f);
                 }
             }
-            ImGui::TreePop();
+            ImGui::EndCombo();
         }
-        if (ImGui::Button("New game (V1 scenario)")) {
-            new_game();
-            status_.clear();
+        if (!status_.empty()) ImGui::TextWrapped("%s", status_.c_str());
+        ImGui::Separator();
+        const core::GameState& s = state();
+        const core::Stage stage = s.flow.stage;
+        ImGui::Text("Round %d/%d   %s", s.flow.battle_round, s.battle_rounds,
+                    stage != core::Stage::NotStarted && stage != core::Stage::GameOver
+                        ? ("Turn: " + side_name(core::turn_side(s))).c_str()
+                        : "");
+        ImGui::Text("%s phase, %s (%s)", std::string(core::phase_name(core::phase_of(stage))).c_str(),
+                    std::string(core::stage_name(stage)).c_str(), std::string(core::stage_rule(stage)).c_str());
+        ImGui::Text("CP: Side A %d, Side B %d", s.command_points[0], s.command_points[1]);
+        for (const core::Unit& u : s.units) {
+            ImGui::Text("%s: %s (unit %u), %zu/%d models%s", side_name(u.side).c_str(), u.name.c_str(), u.id.v,
+                        u.models.size(), u.starting_strength, u.battle_shocked ? ", battle-shocked" : "");
         }
+        if (s.result) ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%s", s.result->reason.c_str());
+        ImGui::Separator();
+        ImGui::Checkbox("Coherency", &overlays_.coherency);
+        ImGui::SameLine();
+        ImGui::Checkbox("Engagement", &overlays_.engagement);
+        ImGui::SameLine();
+        ImGui::Checkbox("Ranges", &overlays_.ranges);
+        ImGui::SameLine();
+        ImGui::Checkbox("Charge", &overlays_.charge);
+        if (ImGui::Button("Fit board")) fit_pending_ = true;
+        ImGui::SameLine();
+        ImGui::TextDisabled("click: select, left-drag: move, right-drag: pan, wheel: zoom");
     }
 
-    void draw_frame_controls() {
+    void draw_decision() {
+        if (!reasons_.empty()) {
+            ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Not allowed:");
+            for (const std::string& r : reasons_) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.55f, 0.55f, 1));
+                ImGui::BulletText("%s", r.c_str());
+                ImGui::PopStyleColor();
+            }
+            if (ImGui::SmallButton("Dismiss")) reasons_.clear();
+            ImGui::Separator();
+        }
+        if (const auto chosen = panel_.draw(*session_, selected_model_)) submit(*chosen);
+    }
+
+    void draw_replay_controls() {
+        ImGui::TextWrapped("%s", timeline_.source().c_str());
+        if (!timeline_.error().empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", timeline_.error().c_str());
         const std::size_t last = timeline_.size() - 1;
         if (ImGui::Button("|<")) go_to(0);
         ImGui::SameLine();
@@ -230,64 +460,56 @@ private:
         ImGui::SameLine();
         ImGui::Text("%zu / %zu", frame_, last);
         int slider = static_cast<int>(frame_);
-        if (ImGui::SliderInt("##frame", &slider, 0, static_cast<int>(last))) {
-            go_to(static_cast<std::size_t>(slider));
-        }
+        if (ImGui::SliderInt("##frame", &slider, 0, static_cast<int>(last))) go_to(static_cast<std::size_t>(slider));
         ImGui::TextUnformatted(timeline_.frame(frame_).label.c_str());
+        if (state().pending) ImGui::TextWrapped("Waiting for: %s", core::describe(*state().pending).c_str());
     }
 
-    void draw_state_section() {
-        const core::GameState& s = state();
-        const core::Stage stage = s.flow.stage;
-        ImGui::Text("Battle round: %d / %d", s.flow.battle_round, s.battle_rounds);
-        if (stage != core::Stage::NotStarted && stage != core::Stage::GameOver) {
-            ImGui::Text("Turn: %s", side_name(core::turn_side(s)).c_str());
-        }
-        ImGui::Text("Phase: %s", std::string(core::phase_name(core::phase_of(stage))).c_str());
-        ImGui::Text("Step: %s (%s)", std::string(core::stage_name(stage)).c_str(),
-                    std::string(core::stage_rule(stage)).c_str());
-        ImGui::Text("Active side: %s", side_name(core::active_side(s)).c_str());
-        if (s.pending) {
-            ImGui::TextWrapped("Waiting for: %s", core::describe(*s.pending).c_str());
+    void draw_log_lines(bool dice_only) {
+        auto line = [&](const core::GameEvent& e) {
+            if (!dice_only || is_roll_event(e)) ImGui::TextUnformatted(format_event(e).c_str());
+        };
+        if (mode_ == Mode::Play) {
+            for (const LogEntry& entry : session_->log()) {
+                if (!dice_only) ImGui::TextDisabled("-- %s", entry.label.c_str());
+                for (const auto& e : entry.events) line(e);
+            }
         } else {
-            ImGui::TextUnformatted("Waiting for: nothing");
-        }
-        if (s.result) {
-            ImGui::TextWrapped("Result: %s", s.result->reason.c_str());
-        }
-        for (const core::Unit& u : s.units) {
-            ImGui::Text("%s: %s (unit %u), %zu/%d models", side_name(u.side).c_str(), u.name.c_str(), u.id.v,
-                        u.models.size(), u.starting_strength);
-        }
-    }
-
-    void draw_view_section() {
-        ImGui::Text("Zoom: %.2f px/mm", camera_.px_per_mm());
-        ImGui::Text("32 mm base = %.1f px, 28.5 mm base = %.1f px", camera_.to_px(32.0f), camera_.to_px(28.5f));
-        if (ImGui::Button("Fit board")) fit_pending_ = true;
-        ImGui::SameLine();
-        ImGui::TextDisabled("wheel: zoom, right-drag: pan, arrows: step");
-    }
-
-    void draw_event_log() {
-        ImGui::BeginChild("log");
-        for (std::size_t f = 0; f <= frame_; ++f) {
-            const Frame& fr = timeline_.frame(f);
-            if (f > 0) ImGui::TextDisabled("-- %s", fr.label.c_str());
-            for (const auto& e : fr.events) {
-                ImGui::TextUnformatted(format_event(e).c_str());
+            for (std::size_t f = 0; f <= frame_; ++f) {
+                const Frame& fr = timeline_.frame(f);
+                if (!dice_only && f > 0) ImGui::TextDisabled("-- %s", fr.label.c_str());
+                for (const auto& e : fr.events) line(e);
             }
         }
-        if (scroll_log_) {
-            ImGui::SetScrollHereY(1.0f);
-            scroll_log_ = false;
-        }
-        ImGui::EndChild();
     }
 
+    void draw_logs() {
+        if (ImGui::BeginTabBar("logs")) {
+            for (const bool dice : {false, true}) {
+                if (ImGui::BeginTabItem(dice ? "Dice" : "Events")) {
+                    ImGui::BeginChild(dice ? "dice" : "events");
+                    draw_log_lines(dice);
+                    if (scroll_log_) ImGui::SetScrollHereY(1.0f);
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+        scroll_log_ = false;
+    }
+
+    Mode mode_ = Mode::Play;
+    std::optional<GameSession> session_;
     Timeline timeline_;
     std::size_t frame_ = 0;
     BoardCamera camera_;
+    OverlayToggles overlays_;
+    DecisionPanel panel_;
+    std::optional<core::UnitId> selected_unit_;
+    std::optional<core::ModelId> selected_model_;
+    std::optional<Drag> drag_;
+    std::vector<std::string> reasons_;  // the last rejection, rule-cited
     bool fit_pending_ = true;
     bool scroll_log_ = true;
     char path_[512] = {};
@@ -307,9 +529,11 @@ int main(int argc, char** argv) {
     SetTargetFPS(60);
     rlImGuiSetup(true);
 
-    Viewer viewer;
-    if (options.replay) viewer.load_replay(*options.replay);
-    if (options.frame) viewer.go_to(*options.frame);
+    App app;
+    if (options.replay) app.load_replay(*options.replay);
+    if (options.frame) app.go_to(*options.frame);
+    app.auto_steps(options.steps);
+    app.select(options.select_unit, options.select_model);
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;
@@ -317,9 +541,9 @@ int main(int argc, char** argv) {
     while (!WindowShouldClose() && frames_left != 0) {
         BeginDrawing();
         rlImGuiBegin();
-        viewer.frame(options.screenshot.has_value());
+        app.frame(options.screenshot.has_value());
         if (options.zoom && !zoom_applied) {
-            viewer.set_zoom(*options.zoom);  // after the first fit
+            app.set_zoom(*options.zoom);  // after the first fit
             zoom_applied = true;
         }
         rlImGuiEnd();

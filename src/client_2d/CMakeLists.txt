@@ -1,11 +1,13 @@
+add_subdirectory(logic)
+
 add_executable(wh40k_client_2d
     main.cpp
     board_view.cpp
     camera.cpp
-    event_text.cpp
-    timeline.cpp)
+    decision_panel.cpp
+    overlays.cpp)
 
-target_link_libraries(wh40k_client_2d PRIVATE wh40k_core imgui_rlimgui raylib)
+target_link_libraries(wh40k_client_2d PRIVATE wh40k_client_logic imgui_rlimgui raylib)
 # The viewer loads data/scenarios and tests/replays from the source tree.
 target_compile_definitions(wh40k_client_2d PRIVATE WH40K_REPO_ROOT="${PROJECT_SOURCE_DIR}")
 

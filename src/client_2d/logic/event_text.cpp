@@ -185,6 +185,13 @@ std::string body(const core::GameEvent& e) {
 
 }  // namespace
 
+bool is_roll_event(const core::GameEvent& event) {
+    return std::holds_alternative<ev::HitRollsMade>(event) || std::holds_alternative<ev::WoundRollsMade>(event) ||
+           std::holds_alternative<ev::SaveRollsMade>(event) || std::holds_alternative<ev::AdvanceRolled>(event) ||
+           std::holds_alternative<ev::ChargeRolled>(event) || std::holds_alternative<ev::HazardRollsMade>(event) ||
+           std::holds_alternative<ev::BattleShockRolled>(event);
+}
+
 std::string format_event(const core::GameEvent& event) {
     return "[" + std::string(core::event_rule(event)) + "] " + body(event);
 }
