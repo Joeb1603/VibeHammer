@@ -51,12 +51,14 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `high` · **Plan mode:** yes
 **Rules:** 01.01–01.03, 02.01–02.07
 
-> Read CLAUDE.md and rules 01 and 02. Design the core data model: `Side`, strong IDs, `Characteristics` (M, T, Sv, InSv, W, Ld, OC; nullable where the datasheet shows '-'), `WeaponProfile` (range or melee, A as fixed or dice expression like D3, BS/WS nullable for Torrent, S, AP, D, parsed abilities such as `RapidFire{1}`, `Assault`, `Heavy`, `CloseQuarters`, `Blast{1}`, `TwinLinked`), `Weapon` (one or more profiles; each model picks its own profile, see D-001 in `docs/decisions.md`; random characteristics are parsed into a `DiceExpr` but never rolled, see D-002), `Model` (position, base, wounds remaining, weapons), `Unit` (side, keywords, models, per-turn flags), `GameState`. Write loaders for `data/units/*.json` and `data/scenarios/v1_skirmish.json` that produce an initial `GameState` with both units deployed in formation inside their deployment zones. Give every type JSON round-trip support and equality. Don't add game flow yet.
+> Read CLAUDE.md and rules 01 and 02. Design the core data model: `Side`, strong IDs, `Characteristics` (M, T, Sv, InSv, W, Ld, OC; nullable where the datasheet shows '-'), `WeaponProfile` (range or melee, A as fixed or dice expression like D3, BS/WS nullable for Torrent, S, AP, D, parsed abilities such as `RapidFire{1}`, `Assault`, `Heavy`, `CloseQuarters`, `Blast{1}`, `TwinLinked`), `Weapon` (one or more profiles; each model picks its own profile, see D-001 in `docs/decisions.md`; random characteristics are parsed into a `DiceExpr` but never rolled, see D-002), `Model` (position, base, wounds remaining, weapons), `Unit` (side, keywords, models, per-turn flags), `GameState`. Write loaders for `data/units/*.json` and `data/scenarios/v1_skirmish.json` that produce an initial `GameState` with both units deployed using the scenario's `formation` (D-008) inside their deployment zones. The loader must accept the data quirks as they are (don't hand-edit the unit files): skill as an integer, `null` or the string `"N/A"` (Torrent weapons); A as an integer or a dice string (`"D3"`, `"D6"`); `"Pistol"` loads as Close-quarters (24.27); `"Blast"` with no number is `Blast{1}` (24.05), `"Blast 1"` likewise; `"Rapid Fire 1"` is `RapidFire{1}`. Give every type JSON round-trip support and equality. Don't add game flow yet.
 
 **Acceptance**
 - Loading the scenario gives 5 Intercessors (32 mm bases, M6 T5 Sv3+ W2 Ld6+ OC2) and 10 Termagants (28.5 mm, M6 T3 Sv5+ W1 Ld8+ OC2) with the right weapons.
 - Bolt Rifle loads with both profiles (Focused Fire: Heavy, Rapid Fire 1; Saturation: Assault, Rapid Fire 1).
 - `GameState` → JSON → `GameState` round-trips equal. Tests cover unknown weapon abilities, which should load as `Unknown{text}` and not throw.
+- The loaded formation matches D-008: Intercessors in one line of 5, Termagants in two ranks of 5, 1" gaps, front ranks touching their zone fronts (front lines exactly 12" apart). Both units are in coherency and wholly within their zones. A test formation that breaks coherency (e.g. 10 Termagants in 1 rank) is rejected with an exception.
+- Strangleweb (skill `"N/A"`, A `"D6"`) and Termagant spinefist (`"Pistol"`) load without error.
 
 ---
 
@@ -64,10 +66,10 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 01.04, 03.01–03.04
 
-> Read CLAUDE.md (Geometry section) and rules 01.04 and 03. Implement `src/core/geometry/`: base-to-base distance, the tolerance helpers (`within`, `more_than`, `in_base_contact`), coherency check (03.03, which returns the offending models), engagement checks (03.04, model and unit level), path length for segment lists, path validation (cannot cross enemy bases, cannot leave the battlefield, can pass through friendly bases; the end position must not overlap any base), and "closest model / closest distance between units". Write tests in inches with explicit coordinates, including edge cases at exactly 2", 2"+ε and 9".
+> Read CLAUDE.md (Geometry section) and rules 01.04 and 03. Implement `src/core/geometry/`: base-to-base distance, the tolerance helpers (`within`, `more_than`, `in_base_contact`), coherency check (03.03, which returns the offending models), engagement checks (03.04, model and unit level), path length for segment lists, path validation (cannot cross enemy bases, cannot leave the battlefield, can pass through friendly bases; the end position must not overlap any base), and "closest model / closest distance between units" ("Closest Model/Unit" and "Within/Wholly Within" are app-only rules that aren't in docs/rules: ask me for the wording before implementing them). Write tests in inches with explicit coordinates, including edge cases at exactly 2", 2"+ε and 9".
 
 **Acceptance**
-- Coherency handles the 2"-of-one and 9"-of-all clauses independently (test a line of 6 models spaced 1.9" each: 2" passes, 9" fails).
+- Coherency handles the 2"-of-one and 9"-of-all clauses independently (test a line of 6 Intercessors, 32 mm bases, with a 1.9" edge-to-edge gap between neighbours: the 2" clause passes, and the 9" clause fails because the end models are about 14.5" apart edge-to-edge. Also test the reverse: models within 9" of every other model but one model more than 2" from all the others).
 - A path that clips an enemy base by 0.5 mm is rejected. A path through a friendly base is accepted, but ending on it is rejected.
 
 ---
@@ -76,12 +78,13 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `xhigh` · **Plan mode:** no
 **Rules:** 01.05–01.07, 04.01–04.03, 05.01–05.04, 06.02, 06.03, 24.04, 24.07, 24.16, 24.27, 24.30, 24.37
 
-> Read CLAUDE.md and rules 01.05–01.07, 04, 05, 06 and the listed 24.xx abilities. Implement leadership and battle-shock rolls (01.06, 01.07) as pure functions too; M7 (Desperate Escape) needs them before M11 wires up the Command phase. Implement `DiceSource` (seeded PRNG with state in GameState) and `ScriptedDice`. Implement the attack sequence as pure functions over a snapshot: gather attack dice with identical-attack batching (04.03), Rapid Fire within half range, hit rolls (unmodified 1 fails, unmodified 6 critical, Heavy +1 when eligible; "Modifying Dice Rolls" is an app-only rule that isn't in docs/rules, so ask me how to cap modifiers before implementing it), wound rolls against the S vs T table, allocation groups and allocation order (05.03), save rolls resolved lowest to highest against the current group, prioritising wounded models (05.04), damage, destruction, mortal wounds (06.02) and hazard rolls (06.03). Where the opposing side must choose (allocation order, which model in a group), expose that choice as an input parameter for now. M5 turns it into a PendingDecision.
+> Read CLAUDE.md, D-006 in `docs/decisions.md`, and rules 01.05–01.07, 04, 05, 06 and the listed 24.xx abilities. Batch identical attacks per D-006 (compare attack-time abilities only). Implement leadership and battle-shock rolls (01.06, 01.07) as pure functions too; M7 (Desperate Escape) needs them before M11 wires up the Command phase. Implement `DiceSource` (seeded PRNG with state in GameState) and `ScriptedDice`. Implement the attack sequence as pure functions over a snapshot: gather attack dice with identical-attack batching (04.03), Rapid Fire within half range, hit rolls (unmodified 1 fails, unmodified 6 critical, Heavy +1 when eligible; "Modifying Dice Rolls" is an app-only rule that isn't in docs/rules, so ask me how to cap modifiers before implementing it), wound rolls against the S vs T table, allocation groups and allocation order (05.03), save rolls resolved lowest to highest against the current group, prioritising wounded models (05.04), damage, destruction, mortal wounds (06.02) and hazard rolls (06.03). Where the opposing side must choose (allocation order, which model in a group), expose that choice as an input parameter for now. M5 turns it into a PendingDecision.
 
 **Acceptance**
 - With scripted dice, 5 Intercessors firing Saturation at 10 Termagants within 12" roll 15 attack dice (A2 + Rapid Fire 1 within half range = 3 per model, 24.30). Hits, wounds (S5 vs T3 → 3+) and saves (5+ with AP-1 → needs 6) match a hand-calculated expected result.
 - Termagant Fleshborer vs Intercessor: S5 vs T5 → 4+. Damage carries correctly onto a wounded model first.
 - Excess damage on a destroyed model is lost, not spilled (05.04). There's a test for this.
+- Per D-006, Bolt pistol attacks and Bolt Rifle Saturation attacks from different models at the same target are gathered as one batch. Focused Fire attacks are a separate batch, and Focused Fire with and without the Heavy bonus are separate batches.
 - Whatever modifier-cap behaviour I confirm is recorded in `docs/decisions.md` and tested.
 
 ---
@@ -90,7 +93,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `max` · **Plan mode:** yes
 **Rules:** 01.03, 07.01–07.03, 08.01–08.05 (structure only), 09.01–09.03, 10.01–10.03, 11.01–11.03, 12.01–12.04 (structure only)
 
-> Read CLAUDE.md (Engine API) and rules 07 to 12, focusing on the sequence structure of each phase. Design and implement the state machine: battle round → turns → phases → steps, with `PendingDecision` as the single source of "who must act and how". Define the `GameAction` and `GameEvent` variants, `legal_actions`, `validate_action` and `apply_action`, the active-side switching from 01.03 (`legal_actions` returns full actions for discrete decisions and action templates for continuous ones, per D-004 in `docs/decisions.md`), an event log, and replay (initial state + action list → final state). Phases may be stubs that only let units "remain stationary / not shoot / not charge / pass", but the full turn loop for 5 battle rounds must run. Hook the M4 attack functions through PendingDecisions for the opposing side's allocation choices.
+> Read CLAUDE.md (Engine API) and rules 07 to 12, focusing on the sequence structure of each phase. Design and implement the state machine: battle round → turns → phases → steps, with `PendingDecision` as the single source of "who must act and how". Define the `GameAction` and `GameEvent` variants, `legal_actions`, `validate_action` and `apply_action`, the active-side switching from 01.03 (`legal_actions` returns full actions for discrete decisions and action templates for continuous ones, per D-004 in `docs/decisions.md`), an event log, and replay (initial state + action list → final state). Phases may be stubs that only let units "remain stationary / not shoot / not charge / pass", but the full turn loop for 5 battle rounds must run. Hook the M4 attack functions through PendingDecisions for the opposing side's allocation choices. In the plan, decide how to keep 05.04 "Select Model" from prompting once per failed save (10 Termagants can mean 10 prompts per volley): for example skip the prompt when only one model is legal, and/or accept a full casualty order in one action. Also include the D-007 game end (immediate end on wipe-out).
 
 **Acceptance**
 - A test plays 5 battle rounds of all-pass actions and reaches `GameOver`.
@@ -115,11 +118,12 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 03.01–03.03, 09.01–09.07, 06.03
 
-> Read rules 03 and 09. Implement Remain Stationary, Normal Move, Advance Move (D6 roll as an event), and Fall-back Move with both Ordered Retreat and Desperate Escape (hazard rolls before moving, can move through enemy models, battle-shock roll after). Units move model by model (`ProposeModelMove` with a segment path), then `CommitUnitMove`, which validates distance, path, coherency, engagement and the 'After Moving' conditions, or reverts every model (03.01). Track per-turn flags (advanced, fell back, moved more than 3" for Heavy). The active player must select every unit (09.03).
+> Read rules 03 and 09, and D-005 in `docs/decisions.md`. Implement Remain Stationary, Normal Move, Advance Move (D6 roll as an event), and Fall-back Move with both Ordered Retreat and Desperate Escape (hazard rolls before moving, can move through enemy models, battle-shock roll after). Units move model by model (`ProposeModelMove` with a segment path), then `CommitUnitMove`, which validates distance, path, coherency, engagement and the 'After Moving' conditions, or reverts every model (03.01). A reverted unit has not been selected to make that move and can be selected again (03 sidebar, "If you cannot set up a unit"), but dice already rolled stand (D-005). Desperate Escape's battle-shock roll needs "Multiple Battle-shock Rolls", an app-only rule: ask me for the wording if it comes up. Track per-turn flags (advanced, fell back, moved more than 3" for Heavy). The active player must select every unit (09.02 and its "Selecting units to move" sidebar).
 
 **Acceptance**
 - Tests cover each move type's eligibility, the distance limit (M, or M + D6 for an advance), ending engaged on a normal move being rejected, and incoherent ends reverting all models.
 - Desperate Escape through an enemy base is legal, and Ordered Retreat through one is not.
+- D-005: after a reverted Advance, selecting Advance again reuses the same roll (no new dice consumed). After a reverted Desperate Escape, its mortal wounds stand and no new hazard rolls are made.
 
 ---
 
@@ -130,7 +134,8 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 > Read rules 04, 06.01 and 10. Implement shooting type selection (Normal, Assault, Close-quarters; Indirect is out of scope), weapon and profile selection per model (Bolt Rifle mode, chosen independently per model per D-001, Close-quarters weapons excluding other ranged weapons for non-MONSTER/VEHICLE models), target eligibility (visible, in range, unengaged for non-close-quarters), and resolution through the M4 attack sequence and the M5 decision flow. Visibility is model-to-model line of sight with a 1 mm-wide line, blocked only by models of other units (there's no terrain in V1).
 
 **Acceptance**
-- A unit that advanced can only use Assault shooting, with [ASSAULT] weapons only. A unit that fell back cannot shoot.
+- A unit that advanced can only use Assault shooting, with [ASSAULT] weapons only. [ASSAULT] is checked per profile: after an Advance a Bolt Rifle may fire Saturation but not Focused Fire. A unit that fell back cannot shoot.
+- Engaged Intercessors can use Close-quarters shooting with Bolt pistols at the unit they're engaged with. Engaged Termagants (no [CLOSE-QUARTERS] weapons) can't shoot. In Normal shooting each Intercessor fires either its Bolt pistol or its Bolt Rifle, not both (24.07).
 - Heavy applies only when no model moved more than 3" and the unit is unengaged.
 - The Termagants can shoot from 18" but not from 18.1".
 
@@ -143,7 +148,11 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 > Read rule 11. Implement charge eligibility (unengaged, within 12" of an enemy, didn't advance or fall back), target selection, the 2D6 charge roll, and the charge move with its constraints: end closer to a target, end engaged with all selected targets and no other enemy units, coherency, distance ≤ roll. Mark the "within 1" if possible / engaged if possible" clauses with `TODO(if-possible)` per CLAUDE.md. A successful charge grants Fights First until end of turn. A failed charge leaves the unit where it was.
 
 **Acceptance**
-- A charge declared at 11.9" with a roll of 11 that can't reach engagement fails, and the models don't move.
+- Charge targets must be within 12" **and within the charge roll** (11.04 Before Moving), measured edge-to-edge. That is a stricter test than whether the unit can reach engagement, which needs only (distance − 2"). Tests:
+  - An enemy at 11.9" with a roll of 11: no charge target can be selected, so the charge fails and the models don't move.
+  - An enemy at 9.9" with a roll of 9: the target can't be selected either, even though a 9" move would reach within 2". This guards against the 10th-edition reach check.
+  - An enemy at 9.9" with a roll of 10: the target is selectable and the charge succeeds.
+  - A roll of 2 never succeeds (11 sidebar "Failed charges").
 - A charge that would end engaged with a non-target enemy unit is rejected (add a second Termagant unit in the test scenario for this).
 
 ---
@@ -152,12 +161,14 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `xhigh` · **Plan mode:** yes
 **Rules:** 12.01–12.09, 04.02 (splitting melee attacks), Appendix "Passing in the Fight Phase"
 
-> Read rule 12 and the Rules Appendix. Plan the alternation flow first. Implement pile-in (3", models in base contact can't move, end closer to the closest pile-in target, end engaged), the Fight step with the Fights First Combats and Remaining Combats sub-steps alternating as written, Normal Fight vs Overrun Fight (extra 3" pile-in), melee weapon selection (one per model, splitting attacks across engaged targets), and consolidation with the three priority modes (Ongoing, Engaging, Objective; V1 has no objectives). Implement fight-phase passing from the appendix.
+> Read rule 12 and the Rules Appendix. Plan the alternation flow first. Implement pile-in (3", models in base contact can't move, end closer to the closest pile-in target, end engaged), the Fight step with the Fights First Combats and Remaining Combats sub-steps alternating as written, Normal Fight vs Overrun Fight (extra 3" pile-in), melee weapon selection (one per model, splitting attacks across engaged targets), and consolidation with the three priority modes (Ongoing, Engaging, Objective; V1 has no objectives). A unit that meets no mode's conditions can't consolidate (09 sidebar "Selecting modes"). An Engaging Consolidation that ends engaged with enemy units that haven't been selected to fight forces the opponent to select each of them to fight (12.08 After Moving). The flow must support fights after the Fight step has ended. Implement fight-phase passing from the appendix ("Eligible to fight, but unable to fight"). A player may pass only if all of their eligible units are more than 5" from all enemy units. The Fight step ends when both players pass in succession, or when one passes and the opponent has no eligible units. Per the appendix FAQ, an Overrun Fight requires the unit to still be eligible to fight.
 
 **Acceptance**
 - After a successful Intercessor charge, the Intercessors fight first. The alternation then continues per 12.04, which a test asserts step by step.
 - A unit that is no longer engaged when selected makes an Overrun Fight.
 - Consolidation picks the mandatory mode by priority, and a test covers each reachable mode.
+- An Engaging Consolidation into an enemy unit that hasn't fought makes that unit fight (12.08), and a test asserts the forced selection.
+- Passing is rejected while an eligible unit is within 5" of an enemy, and accepted otherwise.
 
 ---
 
@@ -165,10 +176,13 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 08.01–08.05, 03.03 (Regaining Coherency), Appendix (Starting Strength, Half-strength); uses the 01.06/01.07 roll functions from M4
 
-> Read rules 01.06–01.07, 08 and 03.03, and the appendix entries on starting strength and half-strength. Reuse the M4 leadership/battle-shock roll functions. Implement CP gain (track CP; no stratagems yet), the battle-shock step for units below half-strength or already battle-shocked, battle-shock effects (OC becomes '-', blocks Ordered Retreat), the End of Turn coherency removal (the owning side picks models via PendingDecision, no on-death triggers), and the game end after 5 battle rounds or when a side is wiped out, with the result as an event.
+> Read rules 01.06–01.07, 08 and 03.03, and the appendix entries on starting strength and half-strength. Reuse the M4 leadership/battle-shock roll functions. Implement CP gain (track CP; no stratagems yet), the battle-shock step for units below half-strength or already battle-shocked, battle-shock effects (OC becomes '-', blocks Ordered Retreat), the End of Turn coherency removal (the owning side picks models via PendingDecision, no on-death triggers), and the game end and result per D-007 (an immediate win on wipe-out; otherwise a draw after battle round 5), emitted as a `GameOver` event.
 
 **Acceptance**
 - 10 Termagants reduced to 5 at the start of their Command phase must take a battle-shock test (5 is at half), and 6 don't.
+- 5 Intercessors (an odd starting strength, so they can never be *at* half-strength): with 3 left there's no test, and with 2 left (below half) they test.
+- A battle-shocked unit tests every Command phase until it passes, and passing clears battle-shock (08.03). Both players gain 1 CP in every Command phase (08.02).
+- D-007: wiping out a side ends the game immediately with a win. Reaching the end of round 5 with both sides alive gives a draw.
 - An incoherent unit at End of Turn has models removed until it's coherent.
 
 ---
