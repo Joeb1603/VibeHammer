@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/data/load_error.hpp"
@@ -21,9 +22,11 @@ namespace {
     throw DataError("scenario: " + what);
 }
 
-const Json& require(const Json& j, const char* key, const std::string& where) {
+// `where` is a by-value string_view so a string literal argument doesn't bind a temporary
+// std::string to a reference parameter (GCC 13 -Wdangling-reference false positive).
+const Json& require(const Json& j, const char* key, std::string_view where) {
     if (!j.is_object() || !j.contains(key)) {
-        fail(where + ": missing field '" + key + "'");
+        fail(std::string(where) + ": missing field '" + key + "'");
     }
     return j.at(key);
 }
