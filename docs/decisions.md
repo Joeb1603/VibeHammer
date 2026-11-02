@@ -99,9 +99,14 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
   wide and breaks the 9" clause).
 - The loader must check the result is in coherency (03.03) and wholly within the deployment zone, and
   fail with an exception (corrupt data) if not.
+- Accepted consequence (2026-11-02): at these positions only the centre Intercessor is within 12" (half
+  Bolt Rifle range) of the Termagants; the other four are 0.01-0.07 mm further, so on turn 1 they don't
+  get [RAPID FIRE] (24.30). This is intentional: it exercises per-model range checks. Two of them miss
+  by only 0.008 mm, just beyond `EPS_MM` (0.01 mm), so changing `EPS_MM` would change this; see
+  `R24_30_RapidFire.HalfRangeIsMeasuredToTheClosestTargetModel`.
 
 ## D-009: Within / Wholly Within (01.04 "See also", app-only rule)
-**Decided:** 2026-11-02 (wording supplied by the user)
+**Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**)
 "Within/Wholly Within" is an app-only rule; its wording is not in `docs/rules/`. Wording as supplied:
 
 > **Within:** A model is within a specified distance or area if any part of its base (or hull, for
@@ -120,7 +125,7 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
   (`wholly_within`). Used by the D-008 deployment-zone check.
 
 ## D-010: Closest Model / Unit (01.04 "See also", app-only rule)
-**Decided:** 2026-11-02 (wording supplied by the user)
+**Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**)
 "Closest Model/Unit" is an app-only rule. Wording as supplied:
 
 > **Closest Model/Unit:** When a rule refers to the closest model/unit, this is measured relative to the
@@ -135,8 +140,8 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
   using the rule to choose, through `PendingDecision` (M5 onwards). It never breaks ties itself.
 
 ## D-011: Modifying Dice Rolls and Re-rolls (05 "See also", app-only rules)
-**Decided:** 2026-11-02 (wording supplied by the user; **not yet verified against the app**, so revisit
-if the official text differs)
+**Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**, so
+revisit if the official text differs)
 "Modifying Dice Rolls" and "Re-rolls" are app-only rules. Wording as supplied:
 
 > **Order:** Modifiers are applied after any re-rolls of that dice roll.
@@ -162,3 +167,27 @@ Applied as (`dice/modifiers.hpp`):
   (05.01, 05.02, 05.04 tables).
 - Re-rolls: not used in V1 (no V1 weapon has [TWIN-LINKED], no stratagems). When implemented: re-roll
   the raw die once, then apply modifiers.
+
+## D-012: Target No Longer Eligible or Viable (04 "See also", app-only rule)
+**Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**)
+"Target No Longer Eligible or Viable" is an app-only rule. The supplied text (it was labelled
+"04.03.03", but the rulebook has no such number) says, in summary:
+
+> If a unit that was an eligible target for a rule or attack when it was selected stops being an
+> eligible target (e.g. it is moved out of range by a reactive rule, or destroyed by an earlier attack
+> during the resolution sequence), any remaining attacks or effects allocated to it can no longer be
+> resolved against it, and those attacks are lost. Remaining attacks are never re-allocated to a
+> different enemy unit: targets are locked in at the Select Targets step.
+
+Applied as:
+- When resolving attacks (04.03), a batch whose target has been destroyed (or is otherwise no longer a
+  valid target) is not resolved: its attack dice are lost, with an event recording that. No dice are
+  rolled for it and the attacks are never moved to another target.
+- Within a batch, 05.04 already loses excess attacks once every target model is destroyed.
+- Implemented in M5 when attack resolution moves into the engine; until then
+  `resolve_attack_batch` treats a destroyed target as a precondition violation.
+
+## Note on app-only rule wording (2026-11-02)
+D-009, D-010, D-011 and D-012 use wording the user obtained from an AI assistant, not copied from the
+Warhammer 40,000 app. Treat them as working assumptions: if the official app text differs, update the
+decision, the code that cites it, and its tests.
