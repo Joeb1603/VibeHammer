@@ -100,13 +100,36 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
 - The loader must check the result is in coherency (03.03) and wholly within the deployment zone, and
   fail with an exception (corrupt data) if not.
 
-## D-009: Wholly Within (01.04 "See also", app-only rule)
-**Decided:** 2026-11-02 (wording confirmed by the user)
-"Within/Wholly Within" is an app-only rule; its wording is not in `docs/rules/`. Needed by D-008's
-deployment-zone check.
+## D-009: Within / Wholly Within (01.04 "See also", app-only rule)
+**Decided:** 2026-11-02 (wording supplied by the user)
+"Within/Wholly Within" is an app-only rule; its wording is not in `docs/rules/`. Wording as supplied:
 
-- A model is **wholly within** an area if every part of its base is inside that area. In V1 (2D, round
-  bases) this means the base circle lies inside the area, using the `EPS_MM` tolerance
-  (`geometry/distance.hpp`: `wholly_within`).
-- A unit is wholly within an area if every one of its models is.
-- Plain **within** (e.g. "within range of an objective") is not covered here; M3 asks for its wording.
+> **Within:** A model is within a specified distance or area if any part of its base (or hull, for
+> model types without a base) is within that distance or area. A unit is within if one or more of its
+> models are within it.
+>
+> **Wholly Within:** A model is wholly within a specified distance or area if every part of its base
+> (or hull) is within that distance or area. A unit is wholly within only if every model in that unit
+> is wholly within it.
+
+- Distances between models are base edge to base edge (01.04), so "model A within X of model B" is
+  `base_distance(A, B) <= X + EPS_MM` (`geometry/distance.hpp`: `within`).
+- A unit is within X of another unit if any pair of their models is (`geometry/closest.hpp`:
+  `closest_distance`).
+- Wholly within an area: the whole base circle lies inside it, with `EPS_MM` tolerance
+  (`wholly_within`). Used by the D-008 deployment-zone check.
+
+## D-010: Closest Model / Unit (01.04 "See also", app-only rule)
+**Decided:** 2026-11-02 (wording supplied by the user)
+"Closest Model/Unit" is an app-only rule. Wording as supplied:
+
+> **Closest Model/Unit:** When a rule refers to the closest model/unit, this is measured relative to the
+> model or unit using that specific rule.
+>
+> **Tie-breaker:** If two or more models or units are equally close, the controlling player of the
+> model/unit using the rule selects which one is treated as the closest for the purposes of that rule.
+
+- Geometry (`geometry/closest.hpp`) returns **every** candidate tied for closest (distances equal within
+  `EPS_MM`), never picks one. Measurement is from the model/unit using the rule, edge to edge (01.04).
+- When more than one candidate is tied, the engine must ask the controlling player of the model/unit
+  using the rule to choose, through `PendingDecision` (M5 onwards). It never breaks ties itself.

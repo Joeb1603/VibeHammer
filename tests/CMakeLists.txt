@@ -2,6 +2,10 @@ add_executable(wh40k_tests
     version_test.cpp
     dice_expr_test.cpp
     geometry_basics_test.cpp
+    coherency_test.cpp
+    engagement_test.cpp
+    path_test.cpp
+    closest_test.cpp
     weapon_ability_test.cpp
     datasheet_test.cpp
     scenario_test.cpp

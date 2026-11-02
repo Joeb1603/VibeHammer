@@ -9,14 +9,13 @@
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/units.hpp"
+#include "core/state/queries.hpp"
 
 namespace wh40k::core {
 
 using Json = nlohmann::json;
 
 namespace {
-
-constexpr float kEngagementRangeMm = 2.0f * MM_PER_INCH;  // 03.04
 
 [[noreturn]] void fail(const std::string& what) {
     throw DataError("scenario: " + what);
@@ -183,11 +182,7 @@ void place_formation(std::vector<Model>& models, const Formation& f, const Battl
 
 // 03.02 Set up: unit in coherency (03.03); D-009: wholly within its deployment zone.
 void check_set_up(const Unit& unit, const Rect& zone, const std::string& where) {
-    std::vector<PlacedModel> placed;
-    for (const Model& m : unit.models) {
-        placed.push_back(PlacedModel{m.id, m.position, m.base});
-    }
-    const CoherencyResult coh = check_coherency(placed);
+    const CoherencyResult coh = unit_coherency(unit);
     if (!coh.ok()) {
         std::string msg = where + ": 03.03: unit '" + unit.name + "' is not in coherency:";
         for (const ModelId id : coh.isolated) {
@@ -206,22 +201,13 @@ void check_set_up(const Unit& unit, const Rect& zone, const std::string& where) 
     }
 }
 
-// 03.02: a set-up unit must be unengaged (03.04: no enemy model within 2").
-void check_unengaged(const std::vector<Unit>& units) {
-    for (const Unit& a : units) {
-        for (const Unit& b : units) {
-            if (a.side == b.side || a.side != Side::A) {
-                continue;
-            }
-            for (const Model& ma : a.models) {
-                for (const Model& mb : b.models) {
-                    if (within(base_distance(ma.position, ma.base, mb.position, mb.base),
-                               kEngagementRangeMm)) {
-                        fail("03.02: units '" + a.name + "' and '" + b.name +
-                             "' are set up engaged (03.04)");
-                    }
-                }
-            }
+// 03.02: a set-up unit must be unengaged (03.04).
+void check_unengaged(const GameState& gs) {
+    for (const Unit& u : gs.units) {
+        const std::vector<UnitId> engaged = engaged_enemy_units(gs, u);
+        if (!engaged.empty()) {
+            fail("03.02: unit '" + u.name + "' is set up engaged (03.04) with unit " +
+                 std::to_string(engaged.front().v));
         }
     }
 }
@@ -290,7 +276,7 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
             gs.units.push_back(std::move(unit));
         }
     }
-    check_unengaged(gs.units);
+    check_unengaged(gs);
     return gs;
 }
 

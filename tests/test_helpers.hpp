@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include "core/data/scenario_loader.hpp"
+#include "core/geometry/coherency.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/game_state.hpp"
 
@@ -10,6 +11,17 @@ namespace wh40k::test {
 
 // Inches -> mm, so test coordinates read like the rulebook.
 constexpr float in(float inches) { return core::inches_to_mm(inches); }
+
+// Battlefield position given in inches.
+inline core::Position at(float x_in, float y_in) { return core::Position{in(x_in), in(y_in), 0.0f}; }
+
+inline const core::Base kIntercessorBase{core::BaseShape::Round, 32.0f, 0.0f};
+inline const core::Base kTermagantBase{core::BaseShape::Round, 28.5f, 0.0f};
+
+inline core::PlacedModel placed(std::uint32_t id, core::Position pos,
+                                const core::Base& base = kIntercessorBase) {
+    return core::PlacedModel{core::ModelId{id}, pos, base};
+}
 
 inline std::filesystem::path repo_root() { return std::filesystem::path(WH40K_REPO_ROOT); }
 

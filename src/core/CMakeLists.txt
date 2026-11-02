@@ -2,12 +2,16 @@ add_library(wh40k_core STATIC
     version.cpp
     data/scenario_loader.cpp
     data/unit_loader.cpp
+    geometry/closest.cpp
     geometry/coherency.cpp
     geometry/distance.cpp
+    geometry/engagement.cpp
+    geometry/path.cpp
     model/dice_expr.cpp
     model/weapon.cpp
     serialization/json.cpp
-    state/game_state.cpp)
+    state/game_state.cpp
+    state/queries.cpp)
 
 # Consumers include core headers as "core/....hpp".
 target_include_directories(wh40k_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
