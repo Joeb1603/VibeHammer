@@ -50,8 +50,8 @@ __pycache__/
 .venv/
 
 # ---- Runtime output ----
-saves/
-replays/
+/saves/
+/replays/
 imgui.ini
 *.log
 

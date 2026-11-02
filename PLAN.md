@@ -51,7 +51,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `high` · **Plan mode:** yes
 **Rules:** 01.01–01.03, 02.01–02.07
 
-> Read CLAUDE.md and rules 01 and 02. Design the core data model: `Side`, strong IDs, `Characteristics` (M, T, Sv, InSv, W, Ld, OC; nullable where the datasheet shows '-'), `WeaponProfile` (range or melee, A as fixed or dice expression like D3, BS/WS nullable for Torrent, S, AP, D, parsed abilities such as `RapidFire{1}`, `Assault`, `Heavy`, `CloseQuarters`, `Blast{1}`, `TwinLinked`), `Weapon` (one or more profiles; a model picks one profile per attack declaration), `Model` (position, base, wounds remaining, weapons), `Unit` (side, keywords, models, per-turn flags), `GameState`. Write loaders for `data/units/*.json` and `data/scenarios/v1_skirmish.json` that produce an initial `GameState` with both units deployed in formation inside their deployment zones. Give every type JSON round-trip support and equality. Don't add game flow yet.
+> Read CLAUDE.md and rules 01 and 02. Design the core data model: `Side`, strong IDs, `Characteristics` (M, T, Sv, InSv, W, Ld, OC; nullable where the datasheet shows '-'), `WeaponProfile` (range or melee, A as fixed or dice expression like D3, BS/WS nullable for Torrent, S, AP, D, parsed abilities such as `RapidFire{1}`, `Assault`, `Heavy`, `CloseQuarters`, `Blast{1}`, `TwinLinked`), `Weapon` (one or more profiles; each model picks its own profile, see D-001 in `docs/decisions.md`; random characteristics are parsed into a `DiceExpr` but never rolled, see D-002), `Model` (position, base, wounds remaining, weapons), `Unit` (side, keywords, models, per-turn flags), `GameState`. Write loaders for `data/units/*.json` and `data/scenarios/v1_skirmish.json` that produce an initial `GameState` with both units deployed in formation inside their deployment zones. Give every type JSON round-trip support and equality. Don't add game flow yet.
 
 **Acceptance**
 - Loading the scenario gives 5 Intercessors (32 mm bases, M6 T5 Sv3+ W2 Ld6+ OC2) and 10 Termagants (28.5 mm, M6 T3 Sv5+ W1 Ld8+ OC2) with the right weapons.
@@ -74,12 +74,12 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## M4: Dice and the attack sequence (pure functions)
 **Effort:** `xhigh` · **Plan mode:** no
-**Rules:** 01.05, 04.01–04.03, 05.01–05.04, 06.02, 06.03, 24.04, 24.07, 24.16, 24.27, 24.30, 24.37
+**Rules:** 01.05–01.07, 04.01–04.03, 05.01–05.04, 06.02, 06.03, 24.04, 24.07, 24.16, 24.27, 24.30, 24.37
 
-> Read CLAUDE.md and rules 04, 05, 06 and the listed 24.xx abilities. Implement `DiceSource` (seeded PRNG with state in GameState) and `ScriptedDice`. Implement the attack sequence as pure functions over a snapshot: gather attack dice with identical-attack batching (04.03), Rapid Fire within half range, hit rolls (unmodified 1 fails, unmodified 6 critical, Heavy +1 when eligible; "Modifying Dice Rolls" is an app-only rule that isn't in docs/rules, so ask me how to cap modifiers before implementing it), wound rolls against the S vs T table, allocation groups and allocation order (05.03), save rolls resolved lowest to highest against the current group, prioritising wounded models (05.04), damage, destruction, mortal wounds (06.02) and hazard rolls (06.03). Where the opposing side must choose (allocation order, which model in a group), expose that choice as an input parameter for now. M5 turns it into a PendingDecision.
+> Read CLAUDE.md and rules 01.05–01.07, 04, 05, 06 and the listed 24.xx abilities. Implement leadership and battle-shock rolls (01.06, 01.07) as pure functions too; M7 (Desperate Escape) needs them before M11 wires up the Command phase. Implement `DiceSource` (seeded PRNG with state in GameState) and `ScriptedDice`. Implement the attack sequence as pure functions over a snapshot: gather attack dice with identical-attack batching (04.03), Rapid Fire within half range, hit rolls (unmodified 1 fails, unmodified 6 critical, Heavy +1 when eligible; "Modifying Dice Rolls" is an app-only rule that isn't in docs/rules, so ask me how to cap modifiers before implementing it), wound rolls against the S vs T table, allocation groups and allocation order (05.03), save rolls resolved lowest to highest against the current group, prioritising wounded models (05.04), damage, destruction, mortal wounds (06.02) and hazard rolls (06.03). Where the opposing side must choose (allocation order, which model in a group), expose that choice as an input parameter for now. M5 turns it into a PendingDecision.
 
 **Acceptance**
-- With scripted dice, 5 Intercessors firing Saturation at 10 Termagants within 12" roll 20 attack dice. Hits, wounds (S5 vs T3 → 3+) and saves (5+ with AP-1 → needs 6) match a hand-calculated expected result.
+- With scripted dice, 5 Intercessors firing Saturation at 10 Termagants within 12" roll 15 attack dice (A2 + Rapid Fire 1 within half range = 3 per model, 24.30). Hits, wounds (S5 vs T3 → 3+) and saves (5+ with AP-1 → needs 6) match a hand-calculated expected result.
 - Termagant Fleshborer vs Intercessor: S5 vs T5 → 4+. Damage carries correctly onto a wounded model first.
 - Excess damage on a destroyed model is lost, not spilled (05.04). There's a test for this.
 - Whatever modifier-cap behaviour I confirm is recorded in `docs/decisions.md` and tested.
@@ -90,11 +90,11 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `max` · **Plan mode:** yes
 **Rules:** 01.03, 07.01–07.03, 08.01–08.05 (structure only), 09.01–09.03, 10.01–10.03, 11.01–11.03, 12.01–12.04 (structure only)
 
-> Read CLAUDE.md (Engine API) and rules 07 to 12, focusing on the sequence structure of each phase. Design and implement the state machine: battle round → turns → phases → steps, with `PendingDecision` as the single source of "who must act and how". Define the `GameAction` and `GameEvent` variants, `legal_actions`, `validate_action` and `apply_action`, the active-side switching from 01.03, an event log, and replay (initial state + action list → final state). Phases may be stubs that only let units "remain stationary / not shoot / not charge / pass", but the full turn loop for 5 battle rounds must run. Hook the M4 attack functions through PendingDecisions for the opposing side's allocation choices.
+> Read CLAUDE.md (Engine API) and rules 07 to 12, focusing on the sequence structure of each phase. Design and implement the state machine: battle round → turns → phases → steps, with `PendingDecision` as the single source of "who must act and how". Define the `GameAction` and `GameEvent` variants, `legal_actions`, `validate_action` and `apply_action`, the active-side switching from 01.03 (`legal_actions` returns full actions for discrete decisions and action templates for continuous ones, per D-004 in `docs/decisions.md`), an event log, and replay (initial state + action list → final state). Phases may be stubs that only let units "remain stationary / not shoot / not charge / pass", but the full turn loop for 5 battle rounds must run. Hook the M4 attack functions through PendingDecisions for the opposing side's allocation choices.
 
 **Acceptance**
 - A test plays 5 battle rounds of all-pass actions and reaches `GameOver`.
-- `legal_actions` returns only actions that `validate_action` accepts (a property test over random play with a fixed seed).
+- Every fully specified action from `legal_actions` is accepted by `validate_action`. Templates filled with seeded random parameters get a deterministic, rule-cited result (a property test over random play with a fixed seed, D-004).
 - A replay of 200 random legal actions reproduces an identical final `GameState` JSON.
 - Submitting an action for the wrong side, or out of phase, is rejected with a rule-cited reason.
 
@@ -127,7 +127,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 **Effort:** `high` · **Plan mode:** no
 **Rules:** 06.01, 10.01–10.06, 04.01–04.02, 24.04, 24.07, 24.16, 24.27, 24.30
 
-> Read rules 04, 06.01 and 10. Implement shooting type selection (Normal, Assault, Close-quarters; Indirect is out of scope), weapon and profile selection per model (Bolt Rifle mode, Close-quarters weapons excluding other ranged weapons for non-MONSTER/VEHICLE models), target eligibility (visible, in range, unengaged for non-close-quarters), and resolution through the M4 attack sequence and the M5 decision flow. Visibility is model-to-model line of sight with a 1 mm-wide line, blocked only by models of other units (there's no terrain in V1).
+> Read rules 04, 06.01 and 10. Implement shooting type selection (Normal, Assault, Close-quarters; Indirect is out of scope), weapon and profile selection per model (Bolt Rifle mode, chosen independently per model per D-001, Close-quarters weapons excluding other ranged weapons for non-MONSTER/VEHICLE models), target eligibility (visible, in range, unengaged for non-close-quarters), and resolution through the M4 attack sequence and the M5 decision flow. Visibility is model-to-model line of sight with a 1 mm-wide line, blocked only by models of other units (there's no terrain in V1).
 
 **Acceptance**
 - A unit that advanced can only use Assault shooting, with [ASSAULT] weapons only. A unit that fell back cannot shoot.
@@ -163,9 +163,9 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## M11: Command phase, battle-shock, end of turn, game end
 **Effort:** `high` · **Plan mode:** no
-**Rules:** 01.06, 01.07, 08.01–08.05, 03.03 (Regaining Coherency), Appendix (Starting Strength, Half-strength)
+**Rules:** 08.01–08.05, 03.03 (Regaining Coherency), Appendix (Starting Strength, Half-strength); uses the 01.06/01.07 roll functions from M4
 
-> Read rules 01.06–01.07, 08 and 03.03, and the appendix entries on starting strength and half-strength. Implement CP gain (track CP; no stratagems yet), the battle-shock step for units below half-strength or already battle-shocked, battle-shock effects (OC becomes '-', blocks Ordered Retreat), the End of Turn coherency removal (the owning side picks models via PendingDecision, no on-death triggers), and the game end after 5 battle rounds or when a side is wiped out, with the result as an event.
+> Read rules 01.06–01.07, 08 and 03.03, and the appendix entries on starting strength and half-strength. Reuse the M4 leadership/battle-shock roll functions. Implement CP gain (track CP; no stratagems yet), the battle-shock step for units below half-strength or already battle-shocked, battle-shock effects (OC becomes '-', blocks Ordered Retreat), the End of Turn coherency removal (the owning side picks models via PendingDecision, no on-death triggers), and the game end after 5 battle rounds or when a side is wiped out, with the result as an event.
 
 **Acceptance**
 - 10 Termagants reduced to 5 at the start of their Command phase must take a battle-shock test (5 is at half), and 6 don't.
@@ -176,10 +176,11 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 ## M12: Interactive client
 **Effort:** `high` · **Plan mode:** yes
 
-> Read CLAUDE.md. Make the M6 viewer playable via the engine API only. Clicking a model selects its unit, and clicking a model in the selected unit selects that model. Model drag builds a segment path, with a ghost marker at the start position and a live inch ruler. Add a "Move unit" handle that translates the whole unit and becomes per-model paths. Overlays (toggleable): 2"/9" coherency rings for the selected unit, red 2" engagement rings around enemies, weapon range rings, and charge distance after the roll. Add an ImGui decision panel generated from `PendingDecision` and `legal_actions` (no hard-coded phase buttons), Commit/Reset Move, validation failures shown with their rule-cited reasons, and a dice log with per-roll results.
+> Read CLAUDE.md. Make the M6 viewer playable via the engine API only. Clicking a model selects its unit, and clicking a model in the selected unit selects that model. Model drag builds a segment path, with a ghost marker at the start position and a live inch ruler. Add a "Move unit" handle that translates the whole unit and becomes per-model paths. Overlays (toggleable): 2"/9" coherency rings for the selected unit, red 2" engagement rings around enemies, weapon range rings, and charge distance after the roll. Add an ImGui decision panel generated from `PendingDecision` and `legal_actions` (no hard-coded phase buttons), Shooting and fight selections default to one weapon profile and target for the whole unit, which the client expands into per-model choices; selecting a single model overrides just that model (D-001). Commit/Reset Move, validation failures shown with their rule-cited reasons, and a dice log with per-roll results.
 
 **Acceptance**
-- A full V1 game can be played hotseat from deployment to GameOver using only the mouse.
+- A full V1 game can be played hotseat from battle round 1 (scenario formation, D-003) to GameOver using only the mouse.
+- In one shooting activation, the unit-wide default plus a single-model override produce a `GameAction` with mixed Bolt Rifle profiles, and the engine accepts it.
 - The client source contains no rules logic: every legality question goes through `validate_action` or `legal_actions`.
 
 ---
@@ -196,6 +197,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 ---
 
 ## Later (post-V1, rough order)
+0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
 2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
