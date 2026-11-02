@@ -13,6 +13,12 @@ namespace wh40k::core {
 
 [[nodiscard]] std::vector<PlacedModel> placed_models(const Unit& unit);
 
+// The unit containing model `id`, or nullptr if no (surviving) model has that id.
+[[nodiscard]] const Unit* find_unit_of_model(const GameState& state, ModelId id);
+[[nodiscard]] const Model* find_model(const GameState& state, ModelId id);
+[[nodiscard]] const Model* find_model(const Unit& unit, ModelId id);
+[[nodiscard]] Model* find_model(Unit& unit, ModelId id);
+
 // Every model of `side`'s opponent, in unit then model order.
 [[nodiscard]] std::vector<PlacedModel> enemy_models(const GameState& state, Side side);
 

@@ -54,6 +54,9 @@ void from_json(const Json& j, UnitTurnFlags& v);
 void to_json(Json& j, const Unit& v);
 void from_json(const Json& j, Unit& v);
 
+void to_json(Json& j, const DiceState& v);
+void from_json(const Json& j, DiceState& v);
+
 void to_json(Json& j, BattlefieldEdge v);
 void from_json(const Json& j, BattlefieldEdge& v);
 void to_json(Json& j, const Battlefield& v);

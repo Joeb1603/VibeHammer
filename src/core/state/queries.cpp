@@ -14,6 +14,38 @@ std::vector<PlacedModel> placed_models(const Unit& unit) {
     return out;
 }
 
+const Model* find_model(const Unit& unit, ModelId id) {
+    for (const Model& m : unit.models) {
+        if (m.id == id) {
+            return &m;
+        }
+    }
+    return nullptr;
+}
+
+Model* find_model(Unit& unit, ModelId id) {
+    for (Model& m : unit.models) {
+        if (m.id == id) {
+            return &m;
+        }
+    }
+    return nullptr;
+}
+
+const Unit* find_unit_of_model(const GameState& state, ModelId id) {
+    for (const Unit& u : state.units) {
+        if (find_model(u, id) != nullptr) {
+            return &u;
+        }
+    }
+    return nullptr;
+}
+
+const Model* find_model(const GameState& state, ModelId id) {
+    const Unit* u = find_unit_of_model(state, id);
+    return u == nullptr ? nullptr : find_model(*u, id);
+}
+
 std::vector<PlacedModel> enemy_models(const GameState& state, Side side) {
     std::vector<PlacedModel> out;
     for (const Unit& u : state.units) {

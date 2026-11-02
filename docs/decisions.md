@@ -133,3 +133,32 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
   `EPS_MM`), never picks one. Measurement is from the model/unit using the rule, edge to edge (01.04).
 - When more than one candidate is tied, the engine must ask the controlling player of the model/unit
   using the rule to choose, through `PendingDecision` (M5 onwards). It never breaks ties itself.
+
+## D-011: Modifying Dice Rolls and Re-rolls (05 "See also", app-only rules)
+**Decided:** 2026-11-02 (wording supplied by the user; **not yet verified against the app**, so revisit
+if the official text differs)
+"Modifying Dice Rolls" and "Re-rolls" are app-only rules. Wording as supplied:
+
+> **Order:** Modifiers are applied after any re-rolls of that dice roll.
+> **Maximums:** A dice roll can be modified above its maximum possible value (for example, a D6 roll
+> can be modified above 6).
+> **Minimums:** A dice roll can never be modified below 1. If, after all modifiers have been applied, a
+> dice roll would be less than 1, count that result as a 1.
+> **The Cap (Hit/Wound Rolls):** Hit rolls and wound rolls can never be modified by a net total of more
+> than +1 or -1. All individual modifiers are cumulative, but after all cumulative modifiers are
+> calculated, if the total modifier would be +2 or better, it is changed to +1; if it is -2 or worse,
+> it is changed to -1.
+> **Re-rolls:** If a rule allows you to re-roll a dice roll, you roll the dice again. Re-rolls must
+> always be made before any modifiers are applied to the result. You cannot re-roll a dice more than
+> once, and re-rolls do not stack. If multiple rules trigger a re-roll on the same die, it is only
+> rolled a second time.
+
+Applied as (`dice/modifiers.hpp`):
+- Hit and wound rolls: sum all modifiers, clamp the net to -1..+1, add it to the unmodified roll.
+- Save rolls: AP (and any other save modifier) is **not** capped. In V1 the cap applies to hit and wound
+  rolls only.
+- Every modified result is floored at 1 and has no maximum: a 5 with +1 is a 6 (passes a 6+ test) and a
+  6 with +1 is a 7. Critical hits/wounds still need an **unmodified** 6, and an unmodified 1 still fails
+  (05.01, 05.02, 05.04 tables).
+- Re-rolls: not used in V1 (no V1 weapon has [TWIN-LINKED], no stratagems). When implemented: re-roll
+  the raw die once, then apply modifiers.

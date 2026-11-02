@@ -2,13 +2,19 @@ add_library(wh40k_core STATIC
     version.cpp
     data/scenario_loader.cpp
     data/unit_loader.cpp
+    dice/dice.cpp
     geometry/closest.cpp
     geometry/coherency.cpp
     geometry/distance.cpp
     geometry/engagement.cpp
     geometry/path.cpp
     model/dice_expr.cpp
+    model/keywords.cpp
     model/weapon.cpp
+    rules/attack_sequence.cpp
+    rules/attacks.cpp
+    rules/leadership.cpp
+    rules/mortal_wounds.cpp
     serialization/json.cpp
     state/game_state.cpp
     state/queries.cpp)

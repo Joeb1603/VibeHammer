@@ -267,6 +267,13 @@ void from_json(const Json& j, Unit& v) {
     j.at("turn_flags").get_to(v.turn_flags);
 }
 
+// ---- dice ----
+void to_json(Json& j, const DiceState& v) { j = Json{{"seed", v.seed}, {"position", v.position}}; }
+void from_json(const Json& j, DiceState& v) {
+    j.at("seed").get_to(v.seed);
+    j.at("position").get_to(v.position);
+}
+
 // ---- state ----
 void to_json(Json& j, BattlefieldEdge v) {
     switch (v) {
@@ -312,7 +319,8 @@ void to_json(Json& j, const GameState& v) {
              {"battle_rounds", v.battle_rounds},
              {"first_turn", v.first_turn},
              {"sides", v.sides},
-             {"units", v.units}};
+             {"units", v.units},
+             {"dice", v.dice}};
 }
 void from_json(const Json& j, GameState& v) {
     j.at("scenario_name").get_to(v.scenario_name);
@@ -321,6 +329,7 @@ void from_json(const Json& j, GameState& v) {
     j.at("first_turn").get_to(v.first_turn);
     j.at("sides").get_to(v.sides);
     j.at("units").get_to(v.units);
+    j.at("dice").get_to(v.dice);
 }
 
 }  // namespace wh40k::core

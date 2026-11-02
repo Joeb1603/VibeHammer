@@ -29,6 +29,17 @@ inline core::GameState load_v1_scenario() {
     return core::load_scenario(repo_root() / "data/scenarios/v1_skirmish.json", repo_root());
 }
 
+// The V1 scenario with the Termagants moved 1" towards the Intercessors, so every Intercessor is
+// within 12" (half Bolt Rifle range) of the Termagant unit. At the D-008 start positions only the
+// centre Intercessor is (the others are 0.01-0.07 mm further than 12").
+inline core::GameState load_v1_scenario_closer() {
+    core::GameState gs = load_v1_scenario();
+    for (auto& m : gs.units[1].models) {
+        m.position.y -= in(1);
+    }
+    return gs;
+}
+
 inline const core::Unit& unit_of(const core::GameState& gs, core::Side side) {
     for (const auto& u : gs.units) {
         if (u.side == side) {

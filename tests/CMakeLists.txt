@@ -6,6 +6,11 @@ add_executable(wh40k_tests
     engagement_test.cpp
     path_test.cpp
     closest_test.cpp
+    dice_test.cpp
+    leadership_test.cpp
+    attacks_test.cpp
+    attack_sequence_test.cpp
+    mortal_wounds_test.cpp
     weapon_ability_test.cpp
     datasheet_test.cpp
     scenario_test.cpp

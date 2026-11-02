@@ -236,6 +236,10 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     gs.battlefield.depth_mm = inches_to_mm(require_inches(bf, "depth_in", "battlefield"));
     gs.battle_rounds = require(scenario, "battle_rounds", "root").get<int>();
     gs.first_turn = parse_side(require(scenario, "first_turn", "root").get<std::string>());
+    // Optional PRNG seed; GameState::dice starts at position 0 (M13 adds a seed override).
+    if (scenario.contains("seed")) {
+        gs.dice.seed = scenario.at("seed").get<std::uint64_t>();
+    }
 
     const Json& sides = require(scenario, "sides", "root");
     std::uint32_t next_unit = 1;
