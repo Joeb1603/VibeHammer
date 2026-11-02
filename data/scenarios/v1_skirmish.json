@@ -1,0 +1,34 @@
+{
+  "name": "V1 Skirmish - Intercessors vs Termagants",
+  "battlefield": { "width_in": 24, "depth_in": 24 },
+  "battle_rounds": 5,
+  "first_turn": "A",
+  "sides": {
+    "A": {
+      "name": "Space Marines",
+      "deployment_zone": { "edge": "south", "depth_in": 6 },
+      "units": [
+        {
+          "unit_file": "data/units/intercessor_squad.json",
+          "models": [
+            { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
+            { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
+          ]
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": { "edge": "north", "depth_in": 6 },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ]
+        }
+      ]
+    }
+  },
+  "notes": "Unit-specific abilities (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse, Combat Doctrines) are present in the unit data but out of scope for V1; the engine ignores them until a milestone implements them."
+}

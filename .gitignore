@@ -1,0 +1,64 @@
+# ---- Games Workshop source material (copyrighted; keep local) ----
+*.pdf
+rules-summary.txt
+# Verbatim rules text extracted from the PDF. Regenerate with:
+#   python tools/extract_rules.py
+# Delete this line ONLY if the repo will stay private forever.
+docs/rules/
+
+# ---- Data tool cache ----
+data/.cache/
+
+# ---- CMake / build output ----
+build/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+_deps/
+compile_commands.json
+Testing/
+
+# ---- Visual Studio / MSVC ----
+.vs/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.ipch
+*.pdb
+*.ilk
+*.obj
+*.exe
+*.lib
+*.dll
+*.exp
+*.idb
+
+# ---- Other IDEs ----
+.idea/
+.vscode/
+*.swp
+*~
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+
+# ---- Runtime output ----
+saves/
+replays/
+imgui.ini
+*.log
+
+# ---- OS ----
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---- Claude Code local settings ----
+.claude/settings.local.json
