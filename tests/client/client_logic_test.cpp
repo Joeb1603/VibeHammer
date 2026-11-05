@@ -385,9 +385,19 @@ TEST(M15_OverlayPlan, MovingAUnitShowsEngagementAroundEnemiesAndCoherencyAroundT
     GameSession session(wh40k::test::load_v1_scenario());
     const Unit& marines = session.state().units[0];
     ASSERT_TRUE(session.submit(action::StartMove{marines.id, MoveType::Normal, std::nullopt}).ok());
-    const auto rings = plan_overlays(session.state(), std::nullopt, OverlayToggles{});
-    EXPECT_EQ(count_rings(rings, RingKind::Engagement), 10u);  // every Termagant
-    EXPECT_EQ(count_rings(rings, RingKind::Coherency), 5u);    // every Intercessor
+    const auto all = plan_overlays(session.state(), std::nullopt, OverlayToggles{});
+    EXPECT_EQ(count_rings(all, RingKind::MoveRange), 5u);    // every Intercessor: M 6"
+    EXPECT_EQ(count_rings(all, RingKind::Engagement), 10u);  // every Termagant
+    EXPECT_EQ(count_rings(all, RingKind::Coherency), 5u);    // every Intercessor
+    EXPECT_EQ(all.size(), 20u);
+    for (const Ring& r : all) {
+        if (r.kind != RingKind::MoveRange) continue;
+        EXPECT_FLOAT_EQ(r.distance_mm, in(6));
+        EXPECT_TRUE(r.centre.has_value());  // the start position
+    }
+    OverlayToggles no_move;
+    no_move.move_range = false;
+    const auto rings = plan_overlays(session.state(), std::nullopt, no_move);
     EXPECT_EQ(rings.size(), 15u);
     for (const Ring& r : rings) {
         const bool gant = r.model.v >= session.state().units[1].models.front().id.v;
@@ -395,7 +405,7 @@ TEST(M15_OverlayPlan, MovingAUnitShowsEngagementAroundEnemiesAndCoherencyAroundT
         EXPECT_FLOAT_EQ(r.distance_mm, in(2));
     }
     // Each ring can be switched off.
-    OverlayToggles off;
+    OverlayToggles off = no_move;
     off.engagement = false;
     EXPECT_EQ(plan_overlays(session.state(), std::nullopt, off).size(), 5u);
     off.coherency = false;
@@ -559,7 +569,9 @@ TEST(M15_RingCircles, AnOverrideMovesOnlyThatModelsCircle) {
     GameSession session(wh40k::test::load_v1_scenario());
     const Unit& marines = session.state().units[0];
     ASSERT_TRUE(session.submit(action::StartMove{marines.id, MoveType::Normal, std::nullopt}).ok());
-    const auto rings = plan_overlays(session.state(), std::nullopt, OverlayToggles{});
+    OverlayToggles two_inch;
+    two_inch.move_range = false;
+    const auto rings = plan_overlays(session.state(), std::nullopt, two_inch);
     const ModelId dragged = marines.models[0].id;
     const Position preview{100.0f, 100.0f, 0.0f};
     const auto circles = ring_circles(session.state(), rings, {{dragged, preview}});
@@ -577,8 +589,43 @@ TEST(M15_RingCircles, AnOverrideMovesOnlyThatModelsCircle) {
     }
 }
 
+TEST(M15_OverlayPlan, TheMovementRangeStaysAtTheStartWhileTheModelIsDragged) {
+    GameSession session(wh40k::test::load_v1_scenario());
+    const Unit& marines = session.state().units[0];
+    ASSERT_TRUE(session.submit(action::StartMove{marines.id, MoveType::Normal, std::nullopt}).ok());
+    const Model& first = session.state().units[0].models[0];
+    const Position start = first.position;
+    ASSERT_TRUE(session.submit(action::ProposeModelMove{first.id, {Position{start.x, start.y + in(3), 0}}}).ok());
+    OverlayToggles only_move;
+    only_move.engagement = false;
+    only_move.coherency = false;
+    const auto rings = plan_overlays(session.state(), std::nullopt, only_move);
+    ASSERT_EQ(rings.size(), 5u);
+    // Its bubble is still round where it started, M 6" out from the edge of its base, even with a preview.
+    const auto circles = ring_circles(session.state(), rings, {{first.id, Position{0, 0, 0}}});
+    EXPECT_EQ(circles[0].centre, start);
+    EXPECT_FLOAT_EQ(circles[0].radius_mm, first.base.diameter_mm * 0.5f + in(6));
+}
+
+TEST(M15_OverlayPlan, AChargeMoveShowsTheChargeDistanceNotAMovementRange) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    start_game(gs);
+    while (!(gs.flow.stage == Stage::Charge && turn_side(gs) == Side::A)) {
+        apply_action(gs, wh40k::test::decider(gs), legal_actions(gs, wh40k::test::decider(gs)).front());
+    }
+    for (auto& m : gs.units[1].models) m.position.y -= in(3);  // within charge range
+    ScriptedDice dice{6, 6};
+    apply_action(gs, Side::A, action::DeclareCharge{gs.units[0].id}, dice);
+    apply_action(gs, Side::A, action::StartChargeMove{gs.units[0].id, {gs.units[1].id}});
+    ASSERT_TRUE(std::holds_alternative<decision::MoveModels>(gs.pending->kind));
+    const auto rings = plan_overlays(gs, std::nullopt, OverlayToggles{});
+    EXPECT_EQ(count_rings(rings, RingKind::MoveRange), 0u);
+    EXPECT_EQ(count_rings(rings, RingKind::ChargeDistance), 5u);
+}
+
 TEST(M15_RingText, EveryRingHasANameAndAnExplanation) {
-    for (const RingKind k : {RingKind::Engagement, RingKind::Coherency, RingKind::WeaponRange, RingKind::ChargeDistance}) {
+    for (const RingKind k : {RingKind::MoveRange, RingKind::Engagement, RingKind::Coherency, RingKind::WeaponRange,
+                             RingKind::ChargeDistance}) {
         EXPECT_FALSE(ring_name(k).empty());
         EXPECT_FALSE(ring_meaning(k).empty());
     }

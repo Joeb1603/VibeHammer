@@ -7,6 +7,7 @@ namespace wh40k::client {
 
 Color ring_color(RingKind kind) {
     switch (kind) {
+        case RingKind::MoveRange: return Color{110, 190, 255, 200};
         case RingKind::Engagement: return Color{230, 60, 60, 190};
         case RingKind::Coherency: return Color{120, 220, 120, 190};
         case RingKind::WeaponRange: return Color{240, 200, 80, 160};

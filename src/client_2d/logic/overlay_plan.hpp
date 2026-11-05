@@ -15,24 +15,28 @@
 namespace wh40k::client {
 
 struct OverlayToggles {
+    bool move_range = true;  // how far each model of a unit being moved can go, from its start position
     bool engagement = true;  // 2" around the enemies of a unit being moved (03.04)
     bool coherency = true;   // 2" around a unit being moved (03.03)
     bool ranges = true;      // the selected model's ranged weapon ranges, while choosing shots
     bool charge = true;      // the charge roll around a unit that has rolled to charge (11.02)
 };
 
-// A ring `distance_mm` out from the edge of `model`'s base (distances are edge to edge, 01.04).
+// A ring `distance_mm` out from the edge of `model`'s base (distances are edge to edge, 01.04), centred
+// on the model, or on `centre` when set (a movement range is drawn round the model's start position).
 struct Ring {
     core::ModelId model;
     RingKind kind = RingKind::Engagement;
     float distance_mm = 0.0f;
+    std::optional<core::Position> centre;
     friend bool operator==(const Ring&, const Ring&) = default;
 };
 
 [[nodiscard]] std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core::ModelId> selected_model,
                                               const OverlayToggles& toggles);
 
-// Preview positions for models being dragged (D-028): their rings follow the cursor.
+// Preview positions for models being dragged (D-028): their rings follow the cursor (a ring with a fixed
+// `centre` stays put).
 using PositionOverrides = std::vector<std::pair<core::ModelId, core::Position>>;
 
 // The circles of `rings`: centred on each model (or its override), radius = base radius + the ring's

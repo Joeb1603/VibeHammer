@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <variant>
 
+#include "core/engine/movement.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
@@ -36,6 +37,17 @@ std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core
     if (const auto* d = std::get_if<core::decision::MoveModels>(&pending.kind)) {
         const core::Unit* mover = state.find_unit(d->unit);
         if (mover != nullptr) {
+            // Movement range: the model's base can end anywhere inside this bubble round its start position
+            // (03.01: measured from the same point on the base; a new proposal replaces the whole path). A
+            // charge move has the charge distance ring instead.
+            const bool charge = state.flow.move && state.flow.move->type == core::MoveType::Charge;
+            if (toggles.move_range && !charge) {
+                for (const core::Model& m : mover->models) {
+                    const auto max = core::max_move_distance_mm(state, m.id);
+                    const auto start = core::move_start_position(state, m.id);
+                    if (max && start) out.push_back({m.id, RingKind::MoveRange, *max, *start});
+                }
+            }
             if (toggles.engagement) {
                 for (const core::Unit& u : state.units) {
                     if (u.side == mover->side) continue;
@@ -83,9 +95,9 @@ std::vector<Circle> ring_circles(const core::GameState& state, const std::vector
         const core::Unit* unit = nullptr;
         const core::Model* m = find_model(state, ring.model, &unit);
         if (m == nullptr) continue;
-        core::Position centre = m->position;
+        core::Position centre = ring.centre.value_or(m->position);
         for (const auto& [id, at] : overrides) {
-            if (id == ring.model) centre = at;
+            if (id == ring.model && !ring.centre) centre = at;
         }
         out.push_back(Circle{centre, core::base_radius(m->base) + ring.distance_mm, ring.kind});
     }
@@ -94,6 +106,7 @@ std::vector<Circle> ring_circles(const core::GameState& state, const std::vector
 
 std::string_view ring_name(RingKind kind) {
     switch (kind) {
+        case RingKind::MoveRange: return "Movement range";
         case RingKind::Engagement: return "Engagement range";
         case RingKind::Coherency: return "Coherency";
         case RingKind::WeaponRange: return "Weapon ranges";
@@ -104,6 +117,9 @@ std::string_view ring_name(RingKind kind) {
 
 std::string_view ring_meaning(RingKind kind) {
     switch (kind) {
+        case RingKind::MoveRange:
+            return "how far the moving unit's models can go: each model's base can end anywhere inside this "
+                   "line, measured from where it started the move (03.01)";
         case RingKind::Engagement:
             return "2\" around the enemy models: a model inside it is engaged, and a Normal or Advance move "
                    "can't end there (03.04)";

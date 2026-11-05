@@ -260,7 +260,13 @@ public:
 
         draw_board(state(), camera_);
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
+        // Rings stop at the battlefield edge (no model can be beyond it).
+        const Rectangle field = camera_.to_screen(core::Rect{0.0f, 0.0f, state().battlefield.width_mm,
+                                                             state().battlefield.depth_mm});
+        BeginScissorMode(static_cast<int>(field.x), static_cast<int>(field.y), static_cast<int>(field.width),
+                         static_cast<int>(field.height));
         draw_overlays(camera_, outline_arcs(ring_circles_), ui_scale());
+        EndScissorMode();
         draw_selection_and_moves();
         draw_ui();
     }
@@ -652,6 +658,7 @@ private:
         }
         ImGui::Spacing();
         ImGui::TextDisabled("Rings, each shown only when it is relevant:");
+        overlay_toggle(RingKind::MoveRange, &overlays_.move_range);
         overlay_toggle(RingKind::Engagement, &overlays_.engagement);
         overlay_toggle(RingKind::Coherency, &overlays_.coherency);
         overlay_toggle(RingKind::WeaponRange, &overlays_.ranges);

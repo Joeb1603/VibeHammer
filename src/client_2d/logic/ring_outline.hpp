@@ -9,7 +9,7 @@
 
 namespace wh40k::client {
 
-enum class RingKind { Engagement, Coherency, WeaponRange, ChargeDistance };
+enum class RingKind { MoveRange, Engagement, Coherency, WeaponRange, ChargeDistance };
 
 struct Circle {
     core::Position centre;

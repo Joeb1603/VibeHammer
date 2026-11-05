@@ -490,6 +490,11 @@ of the charge for that reason.
   Movement, Shooting, Charge, Fight with the current phase highlighted, the current step with its rule,
   and the side being waited for when it is not the turn side (reactive decisions, 01.03).
 - **Rings** (`plan_overlays`, client logic), each only when relevant and each switchable off:
+  - movement range, around each model's start position at the move's maximum distance
+    (`max_move_distance_mm`) out from the edge of its base, while a `MoveModels` decision is pending for
+    any move type except a charge (which has the charge distance ring). It stays at the start while the
+    model is dragged: 03.01 measures from the same point on the base, and a new proposal replaces the
+    whole path;
   - engagement range (2", 03.04), around the enemy models of the unit being moved, while a
     `MoveModels` decision is pending (any move type);
   - coherency (2", 03.03), around the unit being moved, during `MoveModels`. The 9" clause gets no
@@ -498,6 +503,7 @@ of the charge for that reason.
   - charge distance, around a unit with a charge roll, in the Charge phase.
 - **Wounds.** A model at full wounds shows nothing; a damaged model shows a pip per wound, filled for
   wounds remaining. The tooltip gives the numbers.
+- **Clipping.** Rings are drawn only inside the battlefield.
 - **Merged outlines.** Overlapping rings of one kind are drawn as a single border, the outer edge of the
   union of their circles (`outline_arcs`, client logic). Different kinds are never merged.
 - **Dragging.** While a model or the whole unit is dragged, its rings are drawn at the preview
