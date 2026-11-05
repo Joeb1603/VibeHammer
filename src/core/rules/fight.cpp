@@ -32,17 +32,17 @@ std::vector<UnitId> enemy_units_within(const GameState& state, const Unit& unit,
     return out;
 }
 
-// 01.04 / D-009: edge-to-edge distance from `model` at `pos` to the closest model of `target`.
-std::optional<float> distance_to_unit(const Model& model, const Position& pos, const Unit& target) {
-    const PlacedModel from{model.id, pos, model.base};
-    const auto targets = placed_models(target);
-    return closest_distance(std::span<const PlacedModel>(&from, 1), targets);
+
+// A melee profile V1 can resolve: fixed A and D (D-002) and no unimplemented ability (D-026). A model
+// whose only melee weapons fail this cannot make melee attacks in V1, so it is not required to (D-021).
+bool usable_melee_profile(const WeaponProfile& p) {
+    return p.kind == WeaponKind::Melee && p.attacks.is_fixed() && p.damage.is_fixed() &&
+           !unimplemented_ability_problem(p);
 }
 
 bool has_melee_weapon(const Model& m) {
     return std::any_of(m.weapons.begin(), m.weapons.end(), [](const Weapon& w) {
-        return std::any_of(w.profiles.begin(), w.profiles.end(),
-                           [](const WeaponProfile& p) { return p.kind == WeaponKind::Melee; });
+        return std::any_of(w.profiles.begin(), w.profiles.end(), usable_melee_profile);
     });
 }
 
@@ -66,6 +66,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
     if (!profile.attacks.is_fixed() || !profile.damage.is_fixed()) {
         return "D-002: '" + profile.name + "' has a random characteristic, which V1 does not roll";
     }
+    if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026
     const int a = profile.attacks.fixed_value();
     if (d.targets.empty()) {
         return "04.02: select one or more targets for " + model_label(d.model) + "'s '" + profile.name + "'";
@@ -246,20 +247,20 @@ std::optional<std::string> consolidation_targets_problem(const GameState& state,
 
 bool ends_closer_to_closest_target(const GameState& state, const Model& model, const Position& start,
                                    const Position& end, std::span<const UnitId> targets) {
-    std::vector<std::pair<const Unit*, float>> distances;
-    float closest = 0.0f;
+    std::vector<const Unit*> units;
+    std::vector<std::vector<PlacedModel>> candidates;
     for (const UnitId id : targets) {
         const Unit* t = state.find_unit(id);
         if (t == nullptr || is_destroyed(*t)) continue;
-        if (const auto d = distance_to_unit(model, start, *t)) {
-            if (distances.empty() || *d < closest) closest = *d;
-            distances.emplace_back(t, *d);
-        }
+        units.push_back(t);
+        candidates.push_back(placed_models(*t));
     }
-    for (const auto& [t, d] : distances) {
-        if (more_than(d, closest)) continue;  // not (tied for) the closest (D-010)
-        const auto after = distance_to_unit(model, end, *t);
-        if (after && more_than(d, *after)) return true;
+    // D-010: every unit tied for closest to the model's start position counts (geometry's tie tolerance).
+    const PlacedModel from{model.id, start, model.base};
+    for (const std::size_t i : closest_units(std::span<const PlacedModel>(&from, 1), candidates)) {
+        const auto before = model_distance_to_unit(model, start, *units[i]);
+        const auto after = model_distance_to_unit(model, end, *units[i]);
+        if (before && after && more_than(*before, *after)) return true;
     }
     return false;
 }
@@ -326,7 +327,7 @@ std::vector<MeleeDeclaration> melee_options(const GameState& state, const Unit& 
         for (std::size_t w = 0; w < m.weapons.size(); ++w) {
             for (std::size_t p = 0; p < m.weapons[w].profiles.size(); ++p) {
                 const WeaponProfile& profile = m.weapons[w].profiles[p];
-                if (profile.kind != WeaponKind::Melee || !profile.attacks.is_fixed() || !profile.damage.is_fixed()) {
+                if (!usable_melee_profile(profile)) {
                     continue;
                 }
                 for (const UnitId target : engaged) {

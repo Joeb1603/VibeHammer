@@ -156,12 +156,18 @@ void place_formation(std::vector<Model>& models, const Formation& f, const Battl
             fail(where + ": D-008 formation supports north/south deployment zones only");
     }
 
+    // V1 geometry supports round bases only (CLAUDE.md, Geometry); anything else is unsupported data.
+    for (const Model& m : models) {
+        if (m.base.shape != BaseShape::Round) {
+            fail(where + ": model type '" + m.type_name + "' has a non-round base; V1 supports round bases only");
+        }
+    }
     const std::size_t n = models.size();
     const std::size_t ranks = static_cast<std::size_t>(f.ranks);
     const std::size_t per_rank = (n + ranks - 1) / ranks;
     float max_diameter = 0.0f;
     for (const Model& m : models) {
-        max_diameter = std::max(max_diameter, m.base.diameter_mm);
+        max_diameter = std::max(max_diameter, 2.0f * base_radius(m.base));
     }
 
     for (std::size_t rank = 0; rank * per_rank < n; ++rank) {
@@ -169,16 +175,16 @@ void place_formation(std::vector<Model>& models, const Formation& f, const Battl
         const std::size_t last = std::min(n, first + per_rank);
         float width = f.gap_mm * static_cast<float>(last - first - 1);
         for (std::size_t i = first; i < last; ++i) {
-            width += models[i].base.diameter_mm;
+            width += 2.0f * base_radius(models[i].base);
         }
         const float rank_centre_y =
             front_line + inward * (max_diameter * 0.5f +
                                    static_cast<float>(rank) * (max_diameter + f.gap_mm));
         float x = f.centre_x_mm - width * 0.5f;
         for (std::size_t i = first; i < last; ++i) {
-            const float r = models[i].base.diameter_mm * 0.5f;
+            const float r = base_radius(models[i].base);
             models[i].position = Position{x + r, rank_centre_y, 0.0f};
-            x += models[i].base.diameter_mm + f.gap_mm;
+            x += 2.0f * r + f.gap_mm;
         }
     }
 }

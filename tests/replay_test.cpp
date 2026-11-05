@@ -46,6 +46,17 @@ void expect_replays_identically(const Match& match) {
     EXPECT_EQ(replay_expectation(result.final_state), replay.expect);
 }
 
+// Writes a regenerated replay only if nothing has failed so far: an ASSERT inside a scripting lambda
+// returns from the lambda, not the test, so a failed step must not let a different game overwrite a
+// committed regression replay.
+void save_if_clean(const Replay& replay, const std::filesystem::path& path) {
+    if (::testing::Test::HasFailure()) {
+        ADD_FAILURE() << "not writing " << path << ": an earlier step failed";
+        return;
+    }
+    save_replay(replay, path);
+}
+
 }  // namespace
 
 TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
@@ -141,7 +152,7 @@ TEST(Replay, DISABLED_RegenerateReplays) {
         apply_action(gs, side, a);
     }
     replay.expect = replay_expectation(gs);
-    save_replay(replay, kReplayDir / "m5_full_game_all_pass.json");
+    save_if_clean(replay, kReplayDir / "m5_full_game_all_pass.json");
 
     // M7: movement. A Normal move, an Advance (seeded roll), a move reverted for coherency (03.01), then
     // every later decision passes.
@@ -186,7 +197,7 @@ TEST(Replay, DISABLED_RegenerateReplays) {
         act(legal_actions(g, decider(g)).front());
     }
     moves.expect = replay_expectation(g);
-    save_replay(moves, kReplayDir / "m7_movement.json");
+    save_if_clean(moves, kReplayDir / "m7_movement.json");
 
     // M8: shooting. Normal shooting after a 3" move (Heavy and Rapid Fire apply), then the Termagants
     // shoot back, both resolved with seeded dice; the defender orders casualties (D-013).
@@ -241,7 +252,7 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     resolve_attacks();
     while (s8.pending) play(first_legal());
     shots.expect = replay_expectation(s8);
-    save_replay(shots, kReplayDir / "m8_shooting.json");
+    save_if_clean(shots, kReplayDir / "m8_shooting.json");
 
     // M9: a charge. The replay stops when the charge is resolved, before the Fight phase (M10), so it
     // stays valid when M10 adds fight decisions.
@@ -289,7 +300,7 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     c_act(action::CommitUnitMove{});
     ASSERT_TRUE(c9.units[0].turn_flags.fights_first);
     charge.expect = replay_expectation(c9);
-    save_replay(charge, kReplayDir / "m9_charge.json");
+    save_if_clean(charge, kReplayDir / "m9_charge.json");
 
     // M10: the Fight phase after that charge, stopping when it ends (the next turn's Command phase is M11).
     Replay fight;
@@ -353,7 +364,7 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     }
     ASSERT_EQ(*f10.pending, (PendingDecision{Side::B, decision::MoveUnits{}}));
     fight.expect = replay_expectation(f10);
-    save_replay(fight, kReplayDir / "m10_fight.json");
+    save_if_clean(fight, kReplayDir / "m10_fight.json");
 
     // M11: the same game played to the end. Every later decision takes the first legal action (templates
     // filled: every model fights with its first melee option; casualties in unit order).
@@ -383,5 +394,5 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     }
     ASSERT_TRUE(g11.result.has_value());
     full.expect = replay_expectation(g11);
-    save_replay(full, kReplayDir / "m11_full_game.json");
+    save_if_clean(full, kReplayDir / "m11_full_game.json");
 }

@@ -12,6 +12,7 @@
 #include "core/dice/dice.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/charge.hpp"
 #include "core/rules/fight.hpp"
@@ -20,6 +21,10 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::events_of;
+using wh40k::test::contains;
+using wh40k::test::rejection;
+using wh40k::test::expect_valid;
 using wh40k::test::add_unit_copy;
 using wh40k::test::after_successful_charge;
 using wh40k::test::decider;
@@ -36,33 +41,6 @@ constexpr std::size_t kBoltRifle = 0;
 constexpr std::size_t kKnives = 2;
 constexpr float kMarineRadius = 16.0f;
 constexpr float kGantRadius = 14.25f;
-
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
-
-bool contains(const std::vector<std::string>& v, const std::string& s) {
-    return std::find(v.begin(), v.end(), s) != v.end();
-}
-
-std::vector<std::string> rejection(const GameState& gs, Side side, const GameAction& a) {
-    const auto r = validate_action(gs, side, a);
-    EXPECT_FALSE(r.ok()) << action_name(a) << " was accepted";
-    for (const auto& reason : r.reasons) {
-        EXPECT_TRUE(is_rule_cited(reason)) << reason;
-    }
-    return r.reasons;
-}
-
-void expect_valid(const GameState& gs, Side side, const GameAction& a) {
-    const auto r = validate_action(gs, side, a);
-    EXPECT_TRUE(r.ok()) << (r.ok() ? "" : r.reasons.front());
-}
 
 ScriptedDice rolls(int n, int face) { return ScriptedDice(std::vector<int>(static_cast<std::size_t>(n), face)); }
 
@@ -568,4 +546,93 @@ TEST(R12_08_ConsolidationMove, AUnitThatMeetsNoModeCannotConsolidate) {
     // Unengaged, no enemy unit within 3" and no objectives in V1 (D-022): the Consolidate step asks nothing.
     EXPECT_FALSE(consolidation_mode(gs, gs.units[kMarines]).has_value());
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::B, decision::MoveUnits{}}));
+}
+
+// ==== D-026: weapons with abilities V1 does not implement ====
+
+TEST(D026_UnimplementedAbilities, ADevastatingWoundsMeleeWeaponIsRejectedAndTheModelNeedNotFightWithIt) {
+    GameState gs = after_successful_charge();
+    // Every Intercessor's only melee weapon gets [DEVASTATING WOUNDS] (24.10, not implemented in V1).
+    for (Model& m : gs.units[kMarines].models) m.weapons[kKnives].profiles[0].abilities.push_back(ability::DevastatingWounds{});
+    to_fight_step(gs);
+    act(gs, action::SelectToFight{id_of(gs, kMarines), FightType::Normal});
+    // No model can make a melee attack V1 can resolve, so the fight resolves with no attacks (D-021).
+    EXPECT_TRUE(melee_options(gs, gs.units[kMarines]).empty());
+    EXPECT_EQ(*gs.pending, (PendingDecision{Side::B, decision::SelectUnitToFight{}}));
+
+    // A declaration naming the weapon anyway is rejected with the rule.
+    GameState probe = after_successful_charge();
+    for (Model& m : probe.units[kMarines].models) m.weapons[kKnives].profiles[0].abilities.push_back(ability::DevastatingWounds{});
+    probe.units[kMarines].models[0].weapons[kKnives].profiles[0].abilities.clear();  // one model can fight
+    to_fight_step(probe);
+    act(probe, action::SelectToFight{id_of(probe, kMarines), FightType::Normal});
+    ASSERT_EQ(*probe.pending, (PendingDecision{Side::A, decision::DeclareMeleeAttacks{id_of(probe, kMarines)}}));
+    action::Fight a = first_melee_options(probe, id_of(probe, kMarines));
+    ASSERT_EQ(a.declarations.size(), 1u);
+    a.declarations.push_back(MeleeDeclaration{probe.units[kMarines].models[1].id, kKnives, 0,
+                                              {MeleeTarget{id_of(probe, kGants), 3}}});
+    const auto reasons = rejection(probe, Side::A, a);
+    EXPECT_EQ(reasons.at(0), "24.10: 'Knives and Fists' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)");
+}
+
+// ==== D-007 with forced fights ====
+
+TEST(D007_GameEnd, AWipeOutDuringForcedFightsEndsTheGameAtOnce) {
+    // One Intercessor (1 wound left) has charged one Termagant. Two more one-Termagant units stand 2.5"
+    // away, north-east and south-east of it.
+    GameState gs = after_successful_charge();
+    Unit& marines = gs.units[kMarines];
+    const Model east = marines.models[4];
+    marines.models = {east};
+    marines.models[0].wounds_remaining = 1;
+    const Model* front = &gs.units[kGants].models[0];
+    for (const Model& m : gs.units[kGants].models) {
+        if (base_distance(m.position, m.base, east.position, east.base) <
+            base_distance(front->position, front->base, east.position, east.base)) {
+            front = &m;
+        }
+    }
+    const Model gant = *front;
+    gs.units[kGants].models = {gant};
+    const float d = 92.0f;  // centre offset east: about 2.5" edge to edge at +/-18 mm north/south
+    const UnitId third = add_one_model_unit(gs, kGants, Position{east.position.x + d, east.position.y + 18.0f, 0});
+    const UnitId fourth = add_one_model_unit(gs, kGants, Position{east.position.x + d, east.position.y - 18.0f, 0});
+    ASSERT_FALSE(is_engaged(gs, *gs.find_unit(third)));
+    to_fight_step(gs);
+
+    // The Intercessor destroys the Termagant it charged; units 3 and 4 are not eligible to fight.
+    act(gs, action::SelectToFight{id_of(gs, kMarines), FightType::Normal});
+    ScriptedDice kill{6, 6, 6, 6, 6, 6, 1, 1, 1};
+    act(gs, first_melee_options(gs, id_of(gs, kMarines)), kill);
+    ASSERT_EQ(gs.flow.stage, Stage::Consolidate);
+
+    // Engaging Consolidation into both: Side B must make both fight (12.08).
+    act(gs, action::StartConsolidation{id_of(gs, kMarines), {third, fourth}});
+    const Model& m = gs.units[kMarines].models[0];
+    act(gs, action::ProposeModelMove{m.id, {Position{m.position.x + in(0.9f), m.position.y, 0}}});
+    act(gs, action::CommitUnitMove{});
+    ASSERT_EQ(gs.flow.forced_fights, (std::vector<UnitId>{third, fourth}));
+
+    // The first forced fight destroys Side A's last model: the game ends now (D-007), with no fight for
+    // unit 4.
+    act(gs, action::SelectToFight{third, FightType::Normal});
+    ScriptedDice lethal{6, 6, 1};
+    const auto events = act(gs, first_melee_options(gs, third), lethal);
+    EXPECT_EQ(gs.flow.stage, Stage::GameOver);
+    ASSERT_TRUE(gs.result.has_value());
+    EXPECT_EQ(gs.result->winner, Side::B);
+    EXPECT_FALSE(gs.pending.has_value());
+    EXPECT_EQ(events_of<event::GameOver>(events).size(), 1u);
+}
+
+TEST(R02_02_Profiles, AModelWithMoveDashCannotBeMovedInAPileIn) {
+    // 02.02: M '-' means the model can be set up but cannot otherwise be moved. A stand-in: the charging
+    // Intercessors lose their M characteristic before piling in.
+    GameState gs = after_successful_charge();
+    for (Model& m : gs.units[kMarines].models) m.characteristics.move_mm.reset();
+    act(gs, action::EndChargeStep{});
+    act(gs, action::StartPileIn{id_of(gs, kMarines), {id_of(gs, kGants)}});
+    const Model& west = gs.units[kMarines].models[0];
+    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{west.id, {Position{west.position.x, west.position.y + in(0.5f), 0}}}),
+              (std::vector<std::string>{"02.02: model 1 has M '-' and cannot be moved"}));
 }

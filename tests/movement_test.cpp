@@ -13,6 +13,8 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::events_of;
+using wh40k::test::starts_with;
 using wh40k::test::decider;
 using wh40k::test::in;
 using wh40k::test::load_v1_scenario;
@@ -41,17 +43,6 @@ action::ProposeModelMove move_by(const GameState& gs, std::size_t model, float d
     const Model& m = gs.units[kMarines].models[model];
     return action::ProposeModelMove{m.id, {shifted(*move_start_position(gs, m.id), dx_in, dy_in)}};
 }
-
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
-
-bool starts_with(const std::string& s, const std::string& prefix) { return s.rfind(prefix, 0) == 0; }
 
 // Puts a Termagant 1" west of the first Intercessor: the units are engaged (03.04).
 void engage_first_marine(GameState& gs) {

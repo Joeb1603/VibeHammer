@@ -170,6 +170,9 @@ void apply_details(GameState& state, Side side, const action::DeclareAllocationO
 void apply_details(GameState& state, Side side, const action::OrderCasualties& a, DiceSource& dice, Events& events);
 
 // ---- helpers ----
+// Every non-empty subset of `ids` (at most 2^10 - 1), in bit order: the target sets legal_actions lists
+// for charges (11.04), pile-ins (12.03) and consolidations (12.08). Defined in fight.cpp.
+[[nodiscard]] std::vector<std::vector<UnitId>> nonempty_subsets(const std::vector<UnitId>& ids);
 [[nodiscard]] std::string side_label(Side side);  // "Side A"
 [[nodiscard]] std::string unit_label(UnitId id);  // "unit 3"
 

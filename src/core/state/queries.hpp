@@ -34,4 +34,8 @@ namespace wh40k::core {
 // D-009: closest base-to-base distance between two units; nullopt if either has no models.
 [[nodiscard]] std::optional<float> unit_distance(const Unit& a, const Unit& b);
 
+// 01.04 / D-009: edge-to-edge distance from `model`, placed at `pos`, to the closest model of `target`;
+// nullopt if `target` has no models.
+[[nodiscard]] std::optional<float> model_distance_to_unit(const Model& model, const Position& pos, const Unit& target);
+
 }  // namespace wh40k::core

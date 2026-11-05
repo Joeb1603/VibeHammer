@@ -282,3 +282,20 @@ TEST(R02_06_UnitComposition, UnknownModelTypeIsRejected) {
     s["sides"]["A"]["units"][0]["models"][0]["type"] = "Captain";
     EXPECT_THROW((void)build(s), DataError);
 }
+
+TEST(D008_Formation, ANonRoundBaseIsRejectedAsUnsupportedData) {
+    // V1 geometry is round only (CLAUDE.md, Geometry): an oval base is a clean DataError, not a crash in
+    // the geometry code.
+    try {
+        (void)build_game_state(v1_scenario_json(), [](const std::string& unit_file) {
+            Datasheet d = load_datasheet(repo_root() / unit_file);
+            for (auto& t : d.model_types) {
+                t.base = Base{BaseShape::Oval, 28.5f, 40.0f};
+            }
+            return d;
+        });
+        FAIL() << "expected DataError";
+    } catch (const DataError& e) {
+        EXPECT_NE(std::string(e.what()).find("V1 supports round bases only"), std::string::npos) << e.what();
+    }
+}

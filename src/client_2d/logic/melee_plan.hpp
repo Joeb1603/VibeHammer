@@ -41,8 +41,8 @@ public:
     void set_default(const MeleeChoice& choice) { default_ = choice; }
 
     void override_model(core::ModelId model, core::MeleeDeclaration declaration);
-    void clear_override(core::ModelId model) { overrides_.erase(model.v); }
-    [[nodiscard]] bool is_overridden(core::ModelId model) const { return overrides_.count(model.v) > 0; }
+    void clear_override(core::ModelId model) { overrides_.erase(model); }
+    [[nodiscard]] bool is_overridden(core::ModelId model) const { return overrides_.count(model) > 0; }
 
     // Every model that can fight, in unit order: its override, else the default if it is one of its
     // options, else its first option.
@@ -54,7 +54,7 @@ private:
     std::vector<core::ModelId> models_;
     std::vector<MeleeOption> options_;
     std::optional<MeleeChoice> default_;
-    std::map<std::uint32_t, core::MeleeDeclaration> overrides_;
+    std::map<core::ModelId, core::MeleeDeclaration> overrides_;
 };
 
 }  // namespace wh40k::client

@@ -18,6 +18,7 @@
 #include "casualty_plan.hpp"
 #include "core/state/queries.hpp"
 #include "decision_view.hpp"
+#include "event_text.hpp"
 #include "melee_plan.hpp"
 #include "move_plan.hpp"
 #include "session.hpp"
@@ -32,18 +33,10 @@
 
 using namespace wh40k::core;
 using namespace wh40k::client;
+using wh40k::test::events_of;
 using wh40k::test::in;
 
 namespace {
-
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
 
 const std::vector<GameEvent>& last_events(const GameSession& s) { return s.log().back().events; }
 
@@ -481,4 +474,23 @@ TEST(M13_Seed, TheSeedCanBeOverriddenAtGameStart) {
     EXPECT_EQ(a.seed(), 42u);
     EXPECT_EQ(a.state(), b.state());
     EXPECT_EQ(GameSession::new_game(scenario, std::nullopt).seed(), scenario.dice.seed);  // the scenario's own
+}
+
+// ==== review fixes ====
+
+TEST(M13_SaveLoad, StructurallyInvalidSavesAreDataErrors) {
+    // Missing fields are corrupt data (DataError), not raw JSON library exceptions.
+    GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 3);
+    for (const char* key : {"steps", "initial", "format", "state"}) {
+        nlohmann::json j = s.to_save_json();
+        j.erase(key);
+        EXPECT_THROW((void)GameSession::from_save_json(j), DataError) << "without " << key;
+    }
+    EXPECT_THROW((void)GameSession::from_save_json(nlohmann::json::array()), DataError);
+}
+
+TEST(M12_EventText, MoveDistancesAreRoundedNotTruncated) {
+    // 6" of float millimetres can be 5.9999995"; the log must still read 6.00".
+    const event::ModelMoveProposed moved{UnitId{1}, ModelId{2}, {}, 152.39999f};
+    EXPECT_EQ(format_event(GameEvent{moved}), "[03.01] model 2 moves 6.00\"");
 }

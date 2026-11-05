@@ -50,6 +50,38 @@ inline bool is_rule_cited(const std::string& reason) {
 
 inline core::Side decider(const core::GameState& gs) { return gs.pending.value().side; }
 
+// ---- shared assertions (formerly copied into each test file) ----
+
+template <typename E>
+std::vector<E> events_of(const std::vector<core::GameEvent>& events) {
+    std::vector<E> out;
+    for (const auto& e : events) {
+        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
+    }
+    return out;
+}
+
+inline bool starts_with(const std::string& s, const std::string& prefix) { return s.rfind(prefix, 0) == 0; }
+
+inline bool contains(const std::vector<std::string>& v, const std::string& s) {
+    return std::find(v.begin(), v.end(), s) != v.end();
+}
+
+// The validation reasons for an action that must be rejected; each must be rule-cited.
+inline std::vector<std::string> rejection(const core::GameState& gs, core::Side side, const core::GameAction& a) {
+    const auto r = core::validate_action(gs, side, a);
+    EXPECT_FALSE(r.ok()) << core::action_name(a) << " was accepted";
+    for (const auto& reason : r.reasons) {
+        EXPECT_TRUE(is_rule_cited(reason)) << reason;
+    }
+    return r.reasons;
+}
+
+inline void expect_valid(const core::GameState& gs, core::Side side, const core::GameAction& a) {
+    const auto r = core::validate_action(gs, side, a);
+    EXPECT_TRUE(r.ok()) << (r.ok() ? "" : r.reasons.front());
+}
+
 inline std::vector<core::ModelId> model_ids(const core::Unit& u) {
     std::vector<core::ModelId> out;
     for (const auto& m : u.models) out.push_back(m.id);

@@ -40,12 +40,6 @@ MoveInProgress& move_of(GameState& state) {
     return *state.flow.move;
 }
 
-std::string inches(float mm) {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%.2f\"", static_cast<double>(mm_to_inches(mm)));
-    return buf;
-}
-
 std::string model_label(ModelId id) { return "model " + std::to_string(id.v); }
 
 bool can_move(const Unit& u) {
@@ -267,13 +261,19 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
     std::vector<Position> points{*move_start_position(state, a.model)};
     points.insert(points.end(), a.path.begin(), a.path.end());
 
+    // 02.02: a model with M '-' can be set up but cannot otherwise be moved (any move type, including
+    // pile-in, consolidation and charge moves).
+    const std::optional<float> max_mm = max_move_distance_mm(state, a.model);
+    if (!m->characteristics.move_mm || !max_mm) {
+        return ValidationResult::failure("02.02: " + model_label(a.model) + " has M '-' and cannot be moved");
+    }
     ValidationResult r;
     // 03.01 Moving a Model in a Straight Line: total distance <= the move type's maximum distance.
     const float length = path_length(points);
-    const float max = *max_move_distance_mm(state, a.model);
+    const float max = *max_mm;
     if (more_than(length, max)) {
         r.reasons.push_back(std::string(move_type_rule(mv.type)) + ": " + model_label(a.model) + " would move " +
-                            inches(length) + " but the maximum distance is " + inches(max));
+                            format_inches(length) + " but the maximum distance is " + format_inches(max));
     }
     // 03.01: enemy models and battlefield edges (models of the moving unit are checked at commit).
     const std::vector<PlacedModel> enemies = enemy_models(state, u.side);

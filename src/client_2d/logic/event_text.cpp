@@ -86,8 +86,7 @@ std::string body(const core::GameEvent& e) {
                 return std::to_string(x.result.steps.size()) + " mortal wound(s) on " + unit(x.unit) + ", " +
                        std::to_string(x.result.models_destroyed) + " destroyed";
             } else if constexpr (std::is_same_v<T, ev::ModelMoveProposed>) {
-                return model(x.model) + " moves " + std::to_string(core::mm_to_inches(x.distance_mm)).substr(0, 4) +
-                       "\"";
+                return model(x.model) + " moves " + core::format_inches(x.distance_mm);
             } else if constexpr (std::is_same_v<T, ev::UnitMoveCommitted>) {
                 return unit(x.unit) + " ends its " + std::string(core::move_type_name(x.move_type)) + " move";
             } else if constexpr (std::is_same_v<T, ev::UnitMoveReverted>) {

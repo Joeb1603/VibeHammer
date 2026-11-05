@@ -92,6 +92,15 @@ TEST(Serialization, StateMidAttackRoundTrips) {
     gs.units[0].phase_flags.selected_to_move = true;
     EXPECT_EQ(round_trip(gs), gs);
     EXPECT_EQ(round_trip(*gs.flow.attack), *gs.flow.attack);
+    // Every stage of a batch: order and save rolls not yet made (null), then each one set.
+    BatchInProgress& b = *gs.flow.attack->current;
+    b.order.reset();
+    b.save_rolls.reset();
+    EXPECT_EQ(round_trip(gs), gs);
+    b.order = std::vector<std::size_t>{0};
+    EXPECT_EQ(round_trip(gs), gs);
+    b.save_rolls = std::vector<int>{1, 6};
+    EXPECT_EQ(round_trip(gs), gs);
 }
 
 TEST(Serialization, StateMidShootingRoundTrips) {

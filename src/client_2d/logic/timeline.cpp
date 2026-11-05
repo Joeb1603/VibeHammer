@@ -22,13 +22,6 @@ std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Si
 
 }  // namespace
 
-Timeline Timeline::from_state(core::GameState initial, std::string source) {
-    Timeline t;
-    t.source_ = std::move(source);
-    t.frames_.push_back(first_frame(std::move(initial)));
-    return t;
-}
-
 Timeline Timeline::from_replay(const core::Replay& replay, const std::filesystem::path& repo_root,
                                std::string source) {
     Timeline t;

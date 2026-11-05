@@ -9,20 +9,12 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::events_of;
 using wh40k::test::add_unit_copy;
 using wh40k::test::decider;
 using wh40k::test::load_v1_scenario;
 
 namespace {
-
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
 
 // Plays every decision with its only legal action until the game ends. Returns all events.
 std::vector<GameEvent> play_all_pass(GameState& gs, int& actions) {

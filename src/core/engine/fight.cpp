@@ -21,19 +21,6 @@ namespace wh40k::core::detail {
 
 namespace {
 
-// Every non-empty subset of `ids` (at most 2^10 - 1), in bit order.
-std::vector<std::vector<UnitId>> nonempty_subsets(const std::vector<UnitId>& ids) {
-    std::vector<std::vector<UnitId>> out;
-    const std::size_t n = std::min<std::size_t>(ids.size(), 10);
-    for (std::size_t mask = 1; mask < (std::size_t{1} << n); ++mask) {
-        std::vector<UnitId> s;
-        for (std::size_t i = 0; i < n; ++i) {
-            if ((mask >> i) & 1u) s.push_back(ids[i]);
-        }
-        out.push_back(std::move(s));
-    }
-    return out;
-}
 
 bool has_pile_in_option(const GameState& state, const Unit& u) {
     return eligible_to_pile_in(state, u) && !u.phase_flags.piled_in && !pile_in_target_options(state, u).empty();
@@ -112,6 +99,20 @@ void finish_fight(GameState& state) {
 }
 
 }  // namespace
+
+// Every non-empty subset of `ids` (at most 2^10 - 1), in bit order.
+std::vector<std::vector<UnitId>> nonempty_subsets(const std::vector<UnitId>& ids) {
+    std::vector<std::vector<UnitId>> out;
+    const std::size_t n = std::min<std::size_t>(ids.size(), 10);
+    for (std::size_t mask = 1; mask < (std::size_t{1} << n); ++mask) {
+        std::vector<UnitId> s;
+        for (std::size_t i = 0; i < n; ++i) {
+            if ((mask >> i) & 1u) s.push_back(ids[i]);
+        }
+        out.push_back(std::move(s));
+    }
+    return out;
+}
 
 // ---- stage entry, decisions and automatic progress ----
 

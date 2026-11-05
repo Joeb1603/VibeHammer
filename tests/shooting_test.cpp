@@ -16,6 +16,10 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::events_of;
+using wh40k::test::starts_with;
+using wh40k::test::rejection;
+using wh40k::test::expect_valid;
 using wh40k::test::add_unit_copy;
 using wh40k::test::decider;
 using wh40k::test::in;
@@ -34,32 +38,6 @@ constexpr std::size_t kSaturation = 1;
 constexpr std::size_t kFleshborer = 0;
 constexpr float kMarineRadius = 16.0f;
 constexpr float kGantRadius = 14.25f;
-
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
-
-bool starts_with(const std::string& s, const std::string& prefix) { return s.rfind(prefix, 0) == 0; }
-
-// The validation reasons, or a test failure if the action is valid.
-std::vector<std::string> rejection(const GameState& gs, Side side, const GameAction& a) {
-    const auto r = validate_action(gs, side, a);
-    EXPECT_FALSE(r.ok()) << action_name(a) << " was accepted";
-    for (const auto& reason : r.reasons) {
-        EXPECT_TRUE(is_rule_cited(reason)) << reason;
-    }
-    return r.reasons;
-}
-
-void expect_valid(const GameState& gs, Side side, const GameAction& a) {
-    const auto r = validate_action(gs, side, a);
-    EXPECT_TRUE(r.ok()) << (r.ok() ? "" : r.reasons.front());
-}
 
 ShotDeclaration shot(const GameState& gs, std::size_t unit, std::size_t model, std::size_t weapon,
                      std::size_t profile, std::size_t target) {
@@ -455,7 +433,7 @@ TEST(R04_02_SelectTargets, TermagantsShootFrom18InchesButNotFrom18Point1) {
 
     gant.position = Position{marine.x, marine.y + kMarineRadius + kGantRadius + in(18.1f), 0.0f};
     const auto reasons = rejection(gs, Side::B, a);
-    EXPECT_EQ(reasons.at(0), "04.02: unit 1 is not within range (18\") of model 6's 'Fleshborer'");
+    EXPECT_EQ(reasons.at(0), "04.02: unit 1 is not within range (18.00\") of model 6's 'Fleshborer'");
 }
 
 TEST(R04_02_SelectTargets, EachWeaponNeedsItsOwnTargetInRange) {
@@ -465,7 +443,7 @@ TEST(R04_02_SelectTargets, EachWeaponNeedsItsOwnTargetInRange) {
     expect_valid(gs, Side::A, marines_fire(gs, ShootingType::Normal, kBoltRifle, kFocused));
     const auto reasons = rejection(gs, Side::A, marines_fire(gs, ShootingType::Normal, kBoltPistol, 0));
     EXPECT_EQ(reasons.size(), 5u);
-    EXPECT_TRUE(starts_with(reasons.at(0), "04.02: unit 2 is not within range (12\")")) << reasons[0];
+    EXPECT_TRUE(starts_with(reasons.at(0), "04.02: unit 2 is not within range (12.00\")")) << reasons[0];
 }
 
 TEST(R04_02_SelectTargets, TheTargetMustBeAnEnemyUnit) {
@@ -572,4 +550,17 @@ TEST(R24_30_RapidFire, ExtraAttackOnlyForModelsWithTheTargetWithinHalfRange) {
     ScriptedDice dice = all_misses(6);
     const auto events = apply_action(gs, Side::A, marines_fire(gs, ShootingType::Normal, kBoltRifle, kFocused), dice);
     EXPECT_EQ(events_of<event::AttackBatchesGathered>(events).at(0).batches.at(0).attack_dice, 6);  // 5 + 1
+}
+
+// ==== D-026: weapons with abilities V1 does not implement are rejected when selected ====
+
+TEST(D026_UnimplementedAbilities, ATwinLinkedWeaponIsRejectedAndNotOffered) {
+    // The Termagant spinefist is [ASSAULT, PISTOL, TWIN-LINKED] (24.38 needs Re-rolls, D-011).
+    GameState gs = shoot_step_state(Side::B);
+    for (Model& m : gs.units[kGants].models) m.weapons[kFleshborer].profiles[0].abilities.push_back(ability::TwinLinked{});
+    EXPECT_TRUE(shot_options(gs, gs.units[kGants], ShootingType::Normal).empty());
+    EXPECT_EQ(legal_actions(gs, Side::B), (std::vector<GameAction>{action::EndShootStep{}}));
+    const action::Shoot a{gs.units[kGants].id, ShootingType::Normal, {shot(gs, kGants, 0, kFleshborer, 0, kMarines)}};
+    const auto reasons = rejection(gs, Side::B, a);
+    EXPECT_TRUE(starts_with(reasons.at(0), "24.38: 'Fleshborer' has [TWIN-LINKED]")) << reasons[0];
 }

@@ -81,6 +81,12 @@ bool is_engaged(const GameState& state, const Unit& unit) {
     return !engaged_enemy_units(state, unit).empty();
 }
 
+std::optional<float> model_distance_to_unit(const Model& model, const Position& pos, const Unit& target) {
+    const PlacedModel from{model.id, pos, model.base};
+    const auto targets = placed_models(target);
+    return closest_distance(std::span<const PlacedModel>(&from, 1), targets);
+}
+
 std::optional<float> unit_distance(const Unit& a, const Unit& b) {
     const auto ma = placed_models(a);
     const auto mb = placed_models(b);

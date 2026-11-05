@@ -1,8 +1,9 @@
 #pragma once
 
 // GameSession: a live game driven through the engine API only. Every change goes through submit(), which
-// validates the action (validate_action) before applying it (apply_action). The client never mutates a
-// GameState itself (CLAUDE.md, D-024).
+// hands the action to core::Match (validate_action, then apply_action). The client never mutates a
+// GameState itself (CLAUDE.md, D-024). On top of Match it keeps a per-step log, save/load, undo and the
+// seed.
 
 #include <cstdint>
 #include <filesystem>
@@ -50,14 +51,14 @@ public:
     [[nodiscard]] core::Replay to_replay(std::string description) const;
 
     // Undo (hotseat): rebuild from the initial state with every step but the last. False if there is none.
-    [[nodiscard]] bool can_undo() const noexcept { return !history_.empty(); }
+    [[nodiscard]] bool can_undo() const noexcept { return !history().empty(); }
     bool undo();
 
-    [[nodiscard]] std::uint64_t seed() const noexcept { return initial_.dice.seed; }
+    [[nodiscard]] std::uint64_t seed() const noexcept { return match_.initial_state().dice.seed; }
 
-    [[nodiscard]] const core::GameState& state() const noexcept { return state_; }
-    [[nodiscard]] const core::GameState& initial() const noexcept { return initial_; }
-    [[nodiscard]] const std::optional<core::PendingDecision>& pending() const noexcept { return state_.pending; }
+    [[nodiscard]] const core::GameState& state() const noexcept { return match_.state(); }
+    [[nodiscard]] const core::GameState& initial() const noexcept { return match_.initial_state(); }
+    [[nodiscard]] const std::optional<core::PendingDecision>& pending() const noexcept { return state().pending; }
     // legal_actions for the side whose decision is pending (empty when nothing is pending).
     [[nodiscard]] std::vector<core::GameAction> legal() const;
     // The side that must act now (the pending decision's side, or the active side).
@@ -65,17 +66,16 @@ public:
 
     // validate_action for the deciding side, without applying it.
     [[nodiscard]] core::ValidationResult check(const core::GameAction& action) const;
-    // Validates, then applies. On a failure nothing changes and the rule-cited reasons are returned.
+    // Validates, then applies. On a failure nothing changes and the rule-cited reasons are returned. An
+    // engine exception (a programmer error) is also returned as a failure, with the state unchanged.
     core::ValidationResult submit(const core::GameAction& action);
 
     [[nodiscard]] const std::vector<LogEntry>& log() const noexcept { return log_; }
-    [[nodiscard]] const std::vector<core::ReplayStep>& history() const noexcept { return history_; }
+    [[nodiscard]] const std::vector<core::ReplayStep>& history() const noexcept { return match_.steps(); }
 
 private:
-    core::GameState initial_;
-    core::GameState state_;
+    core::Match match_;
     std::vector<LogEntry> log_;
-    std::vector<core::ReplayStep> history_;
 };
 
 }  // namespace wh40k::client

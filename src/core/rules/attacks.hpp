@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "core/model/weapon.hpp"
@@ -28,6 +29,11 @@ namespace wh40k::core {
 [[nodiscard]] const WeaponProfile& selected_profile(const GameState& state, const WeaponSelection& sel);
 
 [[nodiscard]] AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context);
+
+// D-026: V1 rejects weapons whose abilities act during the attack sequence but are not implemented yet
+// ([TWIN-LINKED] 24.38, [DEVASTATING WOUNDS] 24.10), when they are selected, as D-002 does for random
+// characteristics. Rule-cited reason, or nullopt if the profile can be used.
+[[nodiscard]] std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon);
 
 // 04.03 Gather Attack Dice for one selection: A (D-002: must be fixed), plus [RAPID FIRE X] if the
 // target was within half range at selection (24.30), plus [BLAST X] per five target models at
