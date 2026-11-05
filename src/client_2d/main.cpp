@@ -34,6 +34,7 @@
 #include "core/engine/replay.hpp"
 #include "core/geometry/units.hpp"
 #include "core/version.hpp"
+#include "datasheet_view.hpp"
 #include "decision_panel.hpp"
 #include "decision_view.hpp"
 #include "dice_cards.hpp"
@@ -150,6 +151,7 @@ public:
         ++generation_;
         reasons_.clear();
         drag_.reset();
+        open_sheets_.clear();  // D-034
         fit_pending_ = true;
         scroll_log_ = true;
         // D-033: no pop-ups for rolls made before this session started (a load, or the game start).
@@ -442,6 +444,15 @@ private:
 
         const auto hovered = model_at(state(), camera_, mouse);
         if (hovered && !drag_) draw_tooltip(*hovered);
+        // D-034: a right-click (not a right-drag, which pans) on a model opens its unit's datasheet.
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+            right_press_ = RightPress{mouse, hovered ? std::optional(hovered->unit->id) : std::nullopt};
+        }
+        if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT) && right_press_) {
+            const RightPress p = *right_press_;
+            right_press_.reset();
+            if (p.unit && distance_px(p.screen, mouse) < kDragThresholdPx * ui_scale()) open_sheet(*p.unit);
+        }
         if (distance_px(mouse, rest_mouse_) > 2.0f * ui_scale()) {
             rest_mouse_ = mouse;
             rest_since_ = GetTime();
@@ -534,9 +545,107 @@ private:
         ImGui::Text("%s (unit %u, %s)", h.unit->name.c_str(), h.unit->id.v, side_name(h.unit->side).c_str());
         ImGui::Text("Model %u: %s", m.id.v, m.type_name.c_str());
         ImGui::Text("Wounds %d/%d, base %.1f mm", m.wounds_remaining, m.characteristics.wounds, m.base.diameter_mm);
+        ImGui::TextUnformatted(stat_line(m.characteristics).c_str());  // D-034
         ImGui::Text("Position (%.2f\", %.2f\")", core::mm_to_inches(m.position.x), core::mm_to_inches(m.position.y));
         if (h.unit->battle_shocked) ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "Battle-shocked");
+        ImGui::TextDisabled("Right-click: datasheet");
         ImGui::EndTooltip();
+    }
+
+    // ---- D-034: datasheet windows ----
+    void open_sheet(core::UnitId unit) {
+        if (std::find(open_sheets_.begin(), open_sheets_.end(), unit) == open_sheets_.end()) {
+            open_sheets_.push_back(unit);
+        }
+        ImGui::SetWindowFocus(sheet_title(unit).c_str());  // bring an already open sheet to the front
+    }
+
+    std::string sheet_title(core::UnitId id) const {
+        const core::Unit* u = state().find_unit(id);
+        return "Datasheet: " + (u ? u->name : std::string("unit")) + "##sheet" + std::to_string(id.v);
+    }
+
+    void draw_datasheets() {
+        const Rectangle area = board_area();
+        std::vector<core::UnitId> keep;
+        for (std::size_t i = 0; i < open_sheets_.size(); ++i) {
+            const core::UnitId id = open_sheets_[i];
+            const core::Unit* u = state().find_unit(id);
+            if (u == nullptr) continue;  // not in this game
+            const float em = ImGui::GetFontSize();
+            const float offset = em * 2.0f * static_cast<float>(id.v % 4);
+            ImGui::SetNextWindowPos(ImVec2(area.x + em + offset, area.y + em + offset), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(em * 44.0f, em * 30.0f), ImGuiCond_FirstUseEver);
+            const ImVec4 colour = to_imvec(side_color(u->side));
+            ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(colour.x * 0.6f, colour.y * 0.6f, colour.z * 0.6f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour);
+            bool open = true;
+            const bool visible = ImGui::Begin(sheet_title(id).c_str(), &open, ImGuiWindowFlags_NoCollapse);
+            ImGui::PopStyleColor(2);
+            if (visible) draw_datasheet(datasheet_view(*u));
+            ImGui::End();
+            if (open) keep.push_back(id);
+        }
+        open_sheets_ = std::move(keep);
+    }
+
+    static void draw_datasheet(const DatasheetView& v) {
+        ImGui::Text("%s, %s", v.side.c_str(), v.models.c_str());
+        if (v.battle_shocked) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "Battle-shocked");
+        }
+        constexpr ImGuiTableFlags kTable = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit;
+        if (ImGui::BeginTable("##stats", 8, kTable)) {
+            for (const char* h : {"Model", "M", "T", "Sv", "InSv", "W", "Ld", "OC"}) ImGui::TableSetupColumn(h);
+            ImGui::TableHeadersRow();
+            for (const DatasheetStatRow& r : v.stats) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%s x%d", r.model_type.c_str(), r.count);
+                for (const std::string* s : {&r.move, &r.toughness, &r.save, &r.invuln_save, &r.wounds, &r.leadership,
+                                             &r.objective_control}) {
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(s->c_str());
+                }
+            }
+            ImGui::EndTable();
+        }
+        weapon_table("Ranged weapons", "BS", v.ranged);
+        weapon_table("Melee weapons", "WS", v.melee);
+        ImGui::SeparatorText("Abilities (shown only: not applied in V1)");
+        ImGui::PushTextWrapPos(0.0f);
+        for (const DatasheetAbility& a : v.abilities) {
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.4f, 1.0f), "%s", a.name.c_str());
+            ImGui::TextUnformatted(a.text.c_str());
+            ImGui::Spacing();
+        }
+        ImGui::SeparatorText("Keywords");
+        ImGui::TextUnformatted(v.keywords.c_str());
+        ImGui::TextDisabled("Faction: %s", v.faction_keywords.c_str());
+        ImGui::PopTextWrapPos();
+    }
+
+    static void weapon_table(const char* title, const char* skill, const std::vector<DatasheetWeaponRow>& rows) {
+        if (rows.empty()) return;
+        ImGui::SeparatorText(title);
+        constexpr ImGuiTableFlags kTable = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit;
+        if (!ImGui::BeginTable(title, 9, kTable)) return;
+        for (const char* h : {"Weapon", "Range", "A", skill, "S", "AP", "D", "Abilities", "Models"}) {
+            ImGui::TableSetupColumn(h);
+        }
+        ImGui::TableHeadersRow();
+        for (const DatasheetWeaponRow& r : rows) {
+            ImGui::TableNextRow();
+            for (const std::string* s : {&r.name, &r.range, &r.attacks, &r.skill, &r.strength, &r.armour_penetration,
+                                         &r.damage, &r.abilities}) {
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(s->c_str());
+            }
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", r.carried_by);
+        }
+        ImGui::EndTable();
     }
 
     void draw_ruler(Vector2 at, const std::optional<Ruler>& r) {
@@ -756,6 +865,7 @@ private:
         ImGui::Begin("##sidebar", nullptr, kFixed);
         draw_sidebar();
         ImGui::End();
+        if (has_view()) draw_datasheets();  // D-034
         // D-033: the dice pop-up, over everything else.
         if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale());
     }
@@ -886,7 +996,7 @@ private:
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
         int percent = static_cast<int>(std::lround(user_scale_ * 100.0f));
         if (ImGui::SliderInt("UI scale", &percent, 75, 250, "%d%%")) user_scale_ = static_cast<float>(percent) / 100.0f;
-        ImGui::TextDisabled("click a unit to act, left-drag: move, right-drag: pan, wheel: zoom, Esc: cancel");
+        ImGui::TextDisabled("click a unit to act, left-drag: move, right-click: datasheet, right-drag: pan, wheel: zoom, Esc: cancel");
     }
 
     static void overlay_toggle(RingKind kind, bool* value) {
@@ -1110,6 +1220,12 @@ private:
     std::optional<core::UnitId> selected_unit_;
     std::optional<core::ModelId> selected_model_;
     std::optional<Drag> drag_;
+    struct RightPress {
+        Vector2 screen;
+        std::optional<core::UnitId> unit;  // the unit under the cursor when the right button went down
+    };
+    std::optional<RightPress> right_press_;  // D-034: a right-click opens a datasheet, a right-drag pans
+    std::vector<core::UnitId> open_sheets_;  // D-034: the open datasheet windows
     std::vector<std::string> reasons_;  // the last rejection, rule-cited
     DicePopup dice_;                    // D-033: the rolls waiting to be shown
     std::optional<core::GameState> before_dice_;  // the state drawn while they show (before the roll's action)

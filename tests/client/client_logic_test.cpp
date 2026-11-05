@@ -19,6 +19,7 @@
 #include "casualty_plan.hpp"
 #include "core/engine/movement.hpp"
 #include "core/state/queries.hpp"
+#include "datasheet_view.hpp"
 #include "decision_view.hpp"
 #include "dice_cards.hpp"
 #include "event_text.hpp"
@@ -1451,4 +1452,101 @@ TEST(M12_EventText, MoveDistancesAreRoundedNotTruncated) {
     // 6" of float millimetres can be 5.9999995"; the log must still read 6.00".
     const event::ModelMoveProposed moved{UnitId{1}, ModelId{2}, {}, 152.39999f};
     EXPECT_EQ(format_event(GameEvent{moved}), "[03.01] model 2 moves 6.00\"");
+}
+
+// ==== M21: datasheet windows (D-034) ====
+
+namespace {
+
+const DatasheetWeaponRow* find_row(const std::vector<DatasheetWeaponRow>& rows, const std::string& name) {
+    const auto it = std::find_if(rows.begin(), rows.end(), [&](const DatasheetWeaponRow& r) { return r.name == name; });
+    return it == rows.end() ? nullptr : &*it;
+}
+
+}  // namespace
+
+TEST(M21_Datasheet, IntercessorStatsAndBoltRifleProfiles) {
+    const GameState gs = wh40k::test::load_v1_scenario();
+    const DatasheetView v = datasheet_view(gs.units[0]);
+    EXPECT_EQ(v.name, "Intercessor Squad");
+    EXPECT_EQ(v.side, "Side A");
+    EXPECT_EQ(v.models, "5/5 models");
+    ASSERT_EQ(v.stats.size(), 2u);  // Intercessor Sergeant x1, Intercessor x4
+    EXPECT_EQ(v.stats[0].model_type, "Intercessor Sergeant");
+    EXPECT_EQ(v.stats[0].count, 1);
+    EXPECT_EQ(v.stats[1].count, 4);
+    const DatasheetStatRow& r = v.stats[1];
+    EXPECT_EQ(r.move, "6\"");
+    EXPECT_EQ(r.toughness, "5");
+    EXPECT_EQ(r.save, "3+");
+    EXPECT_EQ(r.invuln_save, "-");
+    EXPECT_EQ(r.wounds, "2");
+    EXPECT_EQ(r.leadership, "6+");
+    EXPECT_EQ(r.objective_control, "2");
+    EXPECT_EQ(stat_line(gs.units[0].models[1].characteristics), "M 6\"  T 5  Sv 3+  W 2  Ld 6+  OC 2");
+
+    const DatasheetWeaponRow* focused = find_row(v.ranged, "Bolt Rifle - Focused Fire");
+    const DatasheetWeaponRow* saturation = find_row(v.ranged, "Bolt Rifle - Saturation");
+    ASSERT_NE(focused, nullptr);
+    ASSERT_NE(saturation, nullptr);
+    EXPECT_EQ(focused->range, "24\"");
+    EXPECT_EQ(focused->skill, "3+");
+    EXPECT_EQ(focused->armour_penetration, "-1");
+    EXPECT_EQ(focused->damage, "2");
+    EXPECT_EQ(focused->abilities, "[HEAVY] [RAPID FIRE 1]");
+    EXPECT_EQ(saturation->abilities, "[ASSAULT] [RAPID FIRE 1]");
+    EXPECT_EQ(focused->carried_by, 5);
+    const DatasheetWeaponRow* knives = find_row(v.melee, "Knives and Fists");
+    ASSERT_NE(knives, nullptr);
+    EXPECT_EQ(knives->range, "Melee");
+    EXPECT_EQ(knives->carried_by, 5);
+    EXPECT_EQ(v.ranged.size(), 3u);  // two Bolt Rifle profiles and the Bolt pistol: only what is carried
+}
+
+TEST(M21_Datasheet, TermagantFleshborerAndKeywords) {
+    const GameState gs = wh40k::test::load_v1_scenario();
+    const DatasheetView v = datasheet_view(gs.units[1]);
+    EXPECT_EQ(v.models, "10/10 models");
+    const DatasheetWeaponRow* fleshborer = find_row(v.ranged, "Fleshborer");
+    ASSERT_NE(fleshborer, nullptr);
+    EXPECT_EQ(fleshborer->abilities, "[ASSAULT]");
+    EXPECT_EQ(fleshborer->skill, "4+");
+    EXPECT_EQ(fleshborer->carried_by, 10);
+    EXPECT_NE(v.keywords.find("Endless Multitude"), std::string::npos);
+    EXPECT_EQ(v.faction_keywords, "Tyranids");
+}
+
+TEST(M21_Datasheet, AbilityTextHasNoGlyphsTheFontLacksOrMarkup) {
+    const GameState gs = wh40k::test::load_v1_scenario();
+    for (const Unit& u : gs.units) {
+        const DatasheetView v = datasheet_view(u);
+        ASSERT_FALSE(v.abilities.empty());
+        for (const DatasheetAbility& a : v.abilities) {
+            for (const std::string* s : {&a.name, &a.text}) {
+                EXPECT_EQ(s->find("\xC2\xA0"), std::string::npos) << *s;
+                EXPECT_EQ(s->find("\xE2\x96\xAA"), std::string::npos) << *s;
+                EXPECT_EQ(s->find("\xE2\x96\xA0"), std::string::npos) << *s;
+                EXPECT_EQ(s->find("**"), std::string::npos) << *s;
+                EXPECT_EQ(s->find("^^"), std::string::npos) << *s;
+            }
+        }
+    }
+    EXPECT_EQ(clean_ability_text("If **^^Tyranids^^**,\xC2\xA0\n\xE2\x96\xAA Each"), "If Tyranids,\n- Each");
+}
+
+TEST(M21_Datasheet, ModelCountFollowsCasualties) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    gs.units[1].models.pop_back();
+    gs.units[1].models.pop_back();
+    const DatasheetView v = datasheet_view(gs.units[1]);
+    EXPECT_EQ(v.models, "8/10 models");
+    EXPECT_EQ(v.stats[0].count, 8);
+    EXPECT_EQ(find_row(v.ranged, "Fleshborer")->carried_by, 8);
+}
+
+TEST(M21_Datasheet, WeaponAbilityLabels) {
+    EXPECT_EQ(weapon_ability_label(ability::Blast{1}), "[BLAST 1]");
+    EXPECT_EQ(weapon_ability_label(ability::CloseQuarters{}), "[CLOSE-QUARTERS]");
+    EXPECT_EQ(weapon_ability_label(ability::TwinLinked{}), "[TWIN-LINKED]");
+    EXPECT_EQ(weapon_ability_label(ability::Unknown{"Lethal Hits"}), "[LETHAL HITS]");
 }

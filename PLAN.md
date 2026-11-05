@@ -309,6 +309,20 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M21: Datasheet windows
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> See each unit's datasheet in game (D-034): hovering a model shows its stat line and "Right-click: datasheet"; a right-click (not a right-drag, which still pans) opens a floating, closable window with the unit's stats, the weapon profiles its models carry with their abilities, its unit abilities (marked not applied in V1) and keywords. Built from the live unit, so it follows casualties. Client only.
+
+**Acceptance**
+- Hovering a model shows its stat line and "Right-click: datasheet".
+- A right-click on a model opens that unit's datasheet window; a right-drag pans and opens nothing.
+- Both units' sheets can be open at once and each can be closed.
+- Each sheet shows stats, the current loadout's weapon profiles with abilities, unit abilities and keywords, with no garbled characters (logic test).
+- The model count on the sheet drops as models are destroyed (logic test).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
