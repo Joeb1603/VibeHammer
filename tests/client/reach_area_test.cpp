@@ -30,6 +30,8 @@ MoveReach simple_reach() {
     MoveReach r;
     r.start = Position{100.0f, 100.0f, 0.0f};
     r.max_mm = 50.0f;
+    r.from = r.start;  // not moved yet
+    r.remaining_mm = r.max_mm;
     r.centre_bounds = Rect{0.0f, 0.0f, 130.0f, 1000.0f};  // the east edge cuts the circle at x = 130
     r.forbidden.push_back(ReachCircle{Position{100.0f, 130.0f, 0.0f}, 10.0f, true});
     return r;
@@ -38,7 +40,7 @@ MoveReach simple_reach() {
 }  // namespace
 
 TEST(M27_ReachSpans, TheCircleMinusTheForbiddenCirclesInsideTheBoard) {
-    const MoveReach r = simple_reach();
+    const ReachRegion r = model_region(simple_reach());
     const float step = 1.0f;
     const auto spans = reach_spans(r, step);
     ASSERT_FALSE(spans.empty());
@@ -52,13 +54,13 @@ TEST(M27_ReachSpans, TheCircleMinusTheForbiddenCirclesInsideTheBoard) {
         EXPECT_LT(s.x0, s.x1);
         EXPECT_LE(s.x1, 130.0f);
         const float mid = (s.x0 + s.x1) * 0.5f;
-        EXPECT_TRUE(in_reach(r, Position{mid, s.y, 0.0f})) << mid << ", " << s.y;
+        EXPECT_TRUE(in_region(r, Position{mid, s.y, 0.0f})) << mid << ", " << s.y;
     }
 }
 
 TEST(M27_ReachSpans, ANonPositiveStepGivesNothing) {
-    EXPECT_TRUE(reach_spans(simple_reach(), 0.0f).empty());
-    EXPECT_TRUE(reach_spans(simple_reach(), -1.0f).empty());
+    EXPECT_TRUE(reach_spans(model_region(simple_reach()), 0.0f).empty());
+    EXPECT_TRUE(reach_spans(model_region(simple_reach()), -1.0f).empty());
 }
 
 // The area agrees with the engine: a point in it can be reached in a straight line and ends unengaged; a
@@ -73,7 +75,8 @@ TEST(M27_ReachArea, PointsInTheAreaEndUnengagedAndPointsInAnEngagementCircleDoNo
     const Model& m = session.state().units[0].models[2];  // the middle Intercessor
     const auto reach = move_reach(session.state(), m.id);
     ASSERT_TRUE(reach.has_value());
-    const auto spans = reach_spans(*reach, in(0.25f));
+    const ReachRegion region = model_region(*reach);
+    const auto spans = reach_spans(region, in(0.25f));
     ASSERT_FALSE(spans.empty());
 
     const auto ends_engaged = [&](const Position& to) {
@@ -94,6 +97,6 @@ TEST(M27_ReachArea, PointsInTheAreaEndUnengagedAndPointsInAnEngagementCircleDoNo
     EXPECT_FALSE(ends_engaged(Position{m.position.x, best->y, 0.0f}));
     // 6" straight on is past the edge of the area: within 2" of a Termagant.
     const Position too_far{m.position.x, m.position.y + in(4.5f), 0.0f};
-    EXPECT_FALSE(in_reach(*reach, too_far));
+    EXPECT_FALSE(in_region(region, too_far));
     EXPECT_TRUE(ends_engaged(too_far));
 }

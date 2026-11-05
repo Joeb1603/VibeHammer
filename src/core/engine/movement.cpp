@@ -10,6 +10,7 @@
 
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
+#include "core/geometry/closest.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/path.hpp"
@@ -411,6 +412,12 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
     MoveReach reach;
     reach.start = *start;
     reach.max_mm = *max;
+    reach.from = m->position;
+    float moved = 0.0f;
+    for (const ModelPath& p : mv.paths) {
+        if (p.model == model) moved = path_length(p.points);
+    }
+    reach.remaining_mm = std::max(0.0f, *max - moved);
     const float r = base_radius(m->base);
     reach.centre_bounds = Rect{r, r, state.battlefield.width_mm - r, state.battlefield.depth_mm - r};
     // 09.05 / 09.06 / 09.07 After Moving: the unit must be unengaged.
@@ -422,10 +429,53 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
             const float touching = r + base_radius(o.base);
             if (other.side != u->side && reach.must_end_unengaged) {
                 // 03.04: within 2" is engaged; ending more than 2" away (EPS policy) is unengaged.
-                reach.forbidden.push_back(ReachCircle{o.position, touching + kEngagementRangeMm + EPS_MM, true});
+                reach.forbidden.push_back(ReachCircle{o.position, touching + kEngagementRangeMm + EPS_MM, true, o.id});
             } else {
-                reach.forbidden.push_back(ReachCircle{o.position, touching, false});  // 03.01: not on it
+                reach.forbidden.push_back(ReachCircle{o.position, touching, false, o.id});  // 03.01: not on it
             }
+        }
+    }
+    const bool pile_in = mv.type == MoveType::PileIn;
+    const bool consolidation = mv.type == MoveType::Consolidation;
+    if (!pile_in && !consolidation) return reach;
+    const bool ongoing = mv.consolidation_mode == ConsolidationMode::Ongoing;
+    // 12.03 / 12.08 Ongoing While Moving: a model in base contact with an enemy model cannot be moved.
+    if ((pile_in || ongoing) && in_base_contact_with_enemy(state, *u, *m, *start)) {
+        reach.immobile = true;
+        return reach;
+    }
+    // While Moving: end closer to the closest target, measured from the start (D-022; ties: any, D-010),
+    // as ends_closer_to_closest_target: the end's distance to that unit is "more than" EPS less.
+    std::vector<const Unit*> targets;
+    std::vector<std::vector<PlacedModel>> candidates;
+    for (const UnitId id : mv.targets) {
+        const Unit* t = state.find_unit(id);
+        if (t == nullptr || is_destroyed(*t)) continue;
+        targets.push_back(t);
+        candidates.push_back(placed_models(*t));
+    }
+    const PlacedModel here{m->id, *start, m->base};
+    std::vector<ReachCircle> closer;
+    for (const std::size_t i : closest_units(std::span<const PlacedModel>(&here, 1), candidates)) {
+        const std::optional<float> before = model_distance_to_unit(*m, *start, *targets[i]);
+        if (!before) continue;
+        for (const Model& t : targets[i]->models) {
+            const float radius = r + base_radius(t.base) + *before - EPS_MM;
+            if (radius > 0.0f) closer.push_back(ReachCircle{t.position, radius, false, t.id});
+        }
+    }
+    reach.required_any.push_back(std::move(closer));
+    // 12.03 After Moving / 12.08 Ongoing After Moving: still engaged with every enemy unit it started
+    // engaged with (as still_engaged_problems).
+    if (pile_in || ongoing) {
+        for (const UnitId e : enemy_units_engaged_with_model(state, *u, *m, *start)) {
+            const Unit* enemy = state.find_unit(e);
+            if (enemy == nullptr) continue;
+            std::vector<ReachCircle> engaged;
+            for (const Model& t : enemy->models) {
+                engaged.push_back(ReachCircle{t.position, r + base_radius(t.base) + kEngagementRangeMm + EPS_MM, true, t.id});
+            }
+            reach.required_any.push_back(std::move(engaged));
         }
     }
     return reach;

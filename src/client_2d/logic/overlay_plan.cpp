@@ -124,10 +124,14 @@ std::string_view ring_meaning(RingKind kind) {
     switch (kind) {
         case RingKind::MoveRange:
             return "how far the moving unit's models can go: each model's base can end anywhere inside this "
-                   "line, measured from where it started the move (03.01). The selected model's shaded area is "
-                   "where it can end: not on another model, off the board or, for a Normal, Advance or Fall "
-                   "Back move, within 2\" of an enemy. Its path may pass through engagement range, not "
-                   "through enemy models (D-040)";
+                   "line, measured from where it started the move (03.01). The shaded area is where the dragged "
+                   "(or selected) model's next line can end, from where it is now with the distance it has "
+                   "left: not on another model, off the board or, for a Normal, Advance or Fall Back move, "
+                   "within 2\" of an enemy; for a pile-in or consolidation, closer to the closest target and "
+                   "still engaged with any unit it started engaged with. While the whole unit is dragged, it "
+                   "is where the mouse can be let go. Paths may pass through engagement range, not through "
+                   "enemy models; coherency and unit-wide conditions are checked when the move ends "
+                   "(D-040, D-041)";
         case RingKind::Engagement:
             return "2\" around the enemy models: a model inside it is engaged, and a Normal or Advance move "
                    "can't end there (03.04)";

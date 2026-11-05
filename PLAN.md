@@ -404,6 +404,21 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M28: Movement area follow-ups, Cancel fixes, click-to-remove for coherency ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Follow-ups from playing M25-M27 (D-041, D-042). Cancel on a move menu (or Esc) also clears the clicked unit's selection rings. The shaded area follows each step of a model's move (from where it is now, with the distance it has left). Pile-ins and consolidations shade only end positions meeting the per-model rules. A whole-unit drag shades where the mouse can be let go. Picking a shooting target has a Cancel button. Removing a model for coherency is click a model, then confirm, with no button per model.
+
+**Acceptance**
+- Cancel after clicking a unit leaves no selection rings.
+- `move_reach` reports where the next line starts and the distance left (core test); the area moves with the model after each drag (logic test).
+- Pile-in and consolidation areas match the engine's "closer" and "still engaged" checks over a grid of points, and a model in base contact can't move (core tests).
+- A whole-unit drag's area agrees with the engine: a drop inside is accepted and ends unengaged, a drop outside is refused or ends engaged (logic test).
+- Picking a shooting target shows Cancel, which drops the shooter (logic test).
+- Coherency removal: the board picks one model at a time, confirm gives its removal, and there are no model buttons (logic test).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

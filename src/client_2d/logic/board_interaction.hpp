@@ -53,6 +53,11 @@ public:
     [[nodiscard]] bool active() const noexcept { return mode_ != Mode::Inactive; }
     [[nodiscard]] std::optional<core::UnitId> actor() const noexcept { return actor_; }
     [[nodiscard]] const std::vector<core::UnitId>& chosen_targets() const noexcept { return targets_; }
+    // D-042: removing a model to restore coherency: models are clicked one at a time, then confirmed.
+    [[nodiscard]] bool picking_model() const noexcept { return mode_ == Mode::RemoveModel; }
+    [[nodiscard]] std::optional<core::ModelId> chosen_model() const noexcept { return chosen_model_; }
+    // D-041: a Cancel button while a shooter is picked and its target is being chosen.
+    [[nodiscard]] bool can_cancel() const noexcept { return mode_ == Mode::Shoot; }
     [[nodiscard]] bool clickable(core::UnitId unit) const;
     // Whether the board is waiting for a click now: only then is what can't be clicked drawn grey.
     [[nodiscard]] bool waiting_for_click() const;
@@ -69,6 +74,8 @@ public:
 
     // A click on one of `unit`'s models. Units that aren't clickable do nothing.
     ClickResult click(const core::GameState& state, core::UnitId unit);
+    // A click on one model (D-042: picking the model to remove for coherency); otherwise as click().
+    ClickResult click_model(const core::GameState& state, core::UnitId unit, core::ModelId model);
     // A menu entry was picked (a Shoot template selects that shooter; anything else is submitted).
     ClickResult choose(const core::GameState& state, const core::GameAction& action);
     // The same for a whole entry: "Custom..." opens the custom shot or fight editor (D-031, D-032).
@@ -88,7 +95,8 @@ public:
     [[nodiscard]] std::optional<EndPhase> end_phase() const;
     // The other legal actions that don't belong to a unit on the board: Commit move, Make no charge move, ...
     [[nodiscard]] std::vector<core::GameAction> step_buttons() const;
-    // In target selection: the option whose targets are exactly the chosen ones, if any.
+    // In target selection: the option whose targets are exactly the chosen ones, if any. Removing a model
+    // for coherency (D-042): the chosen model's removal.
     [[nodiscard]] std::optional<core::GameAction> confirm() const;
     // While shooting: the shooter's plan (in the custom-shot editor the panel edits per-model choices on it).
     [[nodiscard]] ShotPlan* shot_plan() {
@@ -111,6 +119,7 @@ private:
         Moving,     // MoveModels: the moving unit is dragged on the board
         Melee,      // DeclareMeleeAttacks: click an engaged enemy unit, then a melee weapon (D-032)
         CustomMelee, // "Custom..." was picked on a fight target: each model's choice is edited in the panel
+        RemoveModel, // RestoreCoherency: click a model of the unit, then confirm its removal (D-042)
     };
 
     [[nodiscard]] std::vector<core::GameAction> actions_of(core::UnitId unit) const;
@@ -125,6 +134,7 @@ private:
     std::optional<core::UnitId> actor_;
     bool actor_fixed_ = false;  // given by the decision (charge targets, overrun pile-in)
     std::vector<core::UnitId> targets_;
+    std::optional<core::ModelId> chosen_model_;  // RemoveModel: the model clicked
     std::optional<ShotPlan> shot_;
     std::optional<ShotPlan> custom_;             // CustomShot: the plan being edited (a copy of shot_)
     std::optional<core::UnitId> custom_target_;  // a custom editor: the target "Custom..." was picked on

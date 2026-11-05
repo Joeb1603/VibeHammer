@@ -11,6 +11,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/rules/fight.hpp"
 #include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
@@ -509,4 +510,101 @@ TEST(D040_MoveReach, NoneForAChargeMove) {
     ASSERT_EQ(gs.flow.move->type, MoveType::Charge);
     EXPECT_TRUE(max_move_distance_mm(gs, gs.units[kMarines].models[0].id).has_value());
     EXPECT_FALSE(move_reach(gs, gs.units[kMarines].models[0].id).has_value());  // the charge ring instead
+}
+
+// ---- D-041: the area follows each step; pile-in shading ----
+
+TEST(D041_MoveReach, TheNextLineStartsWhereTheModelIsWithTheDistanceItHasLeft) {
+    GameState gs = movement_state();
+    apply_action(gs, Side::A, start(gs, MoveType::Normal));
+    const ModelId id = gs.units[kMarines].models[0].id;
+    apply_action(gs, Side::A, move_by(gs, 0, -1.0f, -1.0f));  // 1.41" away from the Termagants
+    const auto reach = move_reach(gs, id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_EQ(reach->from, gs.units[kMarines].models[0].position);
+    EXPECT_EQ(reach->start, *move_start_position(gs, id));
+    EXPECT_NEAR(reach->remaining_mm, *max_move_distance_mm(gs, id) - std::hypot(in(1), in(1)), 0.01f);
+    EXPECT_FALSE(reach->immobile);
+    EXPECT_TRUE(reach->required_any.empty());  // a Normal move has no "must end near" rule
+}
+
+namespace {
+
+// Side A's pile-in after the successful charge (wh40k::test::after_successful_charge), with the centre
+// Intercessor optionally put in base contact with the Termagant in front of it (as R12_03 does).
+GameState pile_in_state(bool centre_in_base_contact) {
+    GameState gs = wh40k::test::after_successful_charge();
+    if (centre_in_base_contact) {
+        Model& centre = gs.units[kMarines].models[2];
+        const Model& gant = *std::min_element(gs.units[kGants].models.begin(), gs.units[kGants].models.end(),
+                                              [&](const Model& a, const Model& b) {
+                                                  return std::abs(a.position.x - centre.position.x) + a.position.y <
+                                                         std::abs(b.position.x - centre.position.x) + b.position.y;
+                                              });
+        centre.position =
+            Position{gant.position.x, gant.position.y - base_radius(gant.base) - base_radius(centre.base), 0.0f};
+    }
+    apply_action(gs, Side::A, action::EndChargeStep{});
+    apply_action(gs, Side::A, action::StartPileIn{gs.units[kMarines].id, {gs.units[kGants].id}});
+    return gs;
+}
+
+bool inside_any(const std::vector<ReachCircle>& group, const Position& p) {
+    return std::any_of(group.begin(), group.end(), [&](const ReachCircle& c) {
+        return std::hypot(p.x - c.centre.x, p.y - c.centre.y) < c.radius_mm;
+    });
+}
+
+// Distance from `p` to the nearest edge of any circle in the group (to skip points on a boundary).
+float edge_gap(const std::vector<ReachCircle>& group, const Position& p) {
+    float best = 1e9f;
+    for (const ReachCircle& c : group) {
+        best = std::min(best, std::fabs(std::hypot(p.x - c.centre.x, p.y - c.centre.y) - c.radius_mm));
+    }
+    return best;
+}
+
+}  // namespace
+
+TEST(D041_MoveReach, APileInsCloserAndStillEngagedGroupsMatchTheEnginesChecks) {
+    const GameState gs = pile_in_state(false);
+    ASSERT_EQ(gs.flow.move->type, MoveType::PileIn);
+    const Model& west = gs.units[kMarines].models[0];
+    const auto reach = move_reach(gs, west.id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_FALSE(reach->must_end_unengaged);
+    EXPECT_FALSE(reach->immobile);
+    // Closer to the closest target, and (it starts engaged) still engaged with the Termagants.
+    ASSERT_EQ(reach->required_any.size(), 2u);
+    const auto& closer = reach->required_any[0];
+    const auto& engaged = reach->required_any[1];
+    ASSERT_FALSE(closer.empty());
+    ASSERT_FALSE(engaged.empty());
+    const std::vector<UnitId> targets = gs.flow.move->targets;
+    int checked = 0;
+    for (float dx = -3.0f; dx <= 3.0f; dx += 0.25f) {
+        for (float dy = -3.0f; dy <= 3.0f; dy += 0.25f) {
+            const Position p = shifted(west.position, dx, dy);
+            if (edge_gap(closer, p) > 0.05f) {
+                EXPECT_EQ(inside_any(closer, p), ends_closer_to_closest_target(gs, west, west.position, p, targets))
+                    << dx << ", " << dy;
+                ++checked;
+            }
+            if (edge_gap(engaged, p) > 0.05f) {
+                const auto after = enemy_units_engaged_with_model(gs, gs.units[kMarines], west, p);
+                EXPECT_EQ(inside_any(engaged, p), !after.empty()) << dx << ", " << dy;
+            }
+        }
+    }
+    EXPECT_GT(checked, 100);
+}
+
+TEST(D041_MoveReach, AModelInBaseContactWithAnEnemyCantPileIn) {
+    const GameState gs = pile_in_state(true);
+    const auto reach = move_reach(gs, gs.units[kMarines].models[2].id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_TRUE(reach->immobile);
+    const auto other = move_reach(gs, gs.units[kMarines].models[0].id);
+    ASSERT_TRUE(other.has_value());
+    EXPECT_FALSE(other->immobile);
 }

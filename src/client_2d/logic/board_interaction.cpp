@@ -156,6 +156,10 @@ BoardInteraction::BoardInteraction(const core::GameState& state, std::vector<cor
         actor_ = o->unit;
         actor_fixed_ = true;
         target_verb_ = "pile in towards";
+    } else if (const auto* rc = std::get_if<d::RestoreCoherency>(&kind)) {
+        mode_ = Mode::RemoveModel;  // D-042
+        actor_ = rc->unit;
+        actor_fixed_ = true;
     } else if (const auto* m = std::get_if<d::MoveModels>(&kind)) {
         mode_ = Mode::Moving;
         actor_ = m->unit;
@@ -207,6 +211,7 @@ bool BoardInteraction::clickable(core::UnitId unit) const {
         case Mode::Moving:
         case Mode::CustomShot:
         case Mode::CustomMelee:
+        case Mode::RemoveModel:
             return unit == actor_;
         case Mode::Melee: {
             const auto choices = melee_->choices();
@@ -224,6 +229,7 @@ bool BoardInteraction::waiting_for_click() const {
         case Mode::Shoot:
         case Mode::Targets:
         case Mode::Melee:
+        case Mode::RemoveModel:
             return true;
         case Mode::Inactive:
         case Mode::Moving:
@@ -283,8 +289,27 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
         }
         case Mode::Moving:
             return "Drag the models (or the yellow diamond, for the whole unit) to move them, then commit the move.";
+        case Mode::RemoveModel: {
+            const std::string name = unit_name(state, *actor_);
+            if (chosen_model_) {
+                return "Model " + std::to_string(chosen_model_->v) + " of the " + name +
+                       " will be removed. Click another model to change it, or confirm.";
+            }
+            return "The " + name + " is out of coherency (03.03 Regaining Coherency): click a model to remove, "
+                   "then confirm.";
+        }
     }
     return "";
+}
+
+ClickResult BoardInteraction::click_model(const core::GameState& state, core::UnitId unit, core::ModelId model) {
+    if (mode_ != Mode::RemoveModel) return click(state, unit);
+    if (!clickable(unit)) return {};
+    for (const core::GameAction& action : legal_) {
+        const auto* r = std::get_if<a::RemoveModelForCoherency>(&action);
+        if (r != nullptr && r->unit == unit && r->model == model) chosen_model_ = model;
+    }
+    return {};
 }
 
 ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId unit) {
@@ -294,6 +319,7 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
         case Mode::Moving:
         case Mode::CustomShot:
         case Mode::CustomMelee:
+        case Mode::RemoveModel:  // models are clicked one at a time (click_model)
             return {};
         case Mode::Melee:
             return melee_menu(state, unit);
@@ -501,6 +527,7 @@ ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEnt
 
 void BoardInteraction::cancel() {
     targets_.clear();
+    chosen_model_.reset();
     custom_.reset();
     custom_melee_.reset();
     custom_target_.reset();
@@ -530,6 +557,7 @@ std::optional<EndPhase> BoardInteraction::end_phase() const {
 std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
     if (custom_editor()) return out;  // the panel's Back and Shoot / Fight only (D-031, D-032)
+    if (mode_ == Mode::RemoveModel) return out;  // D-042: a model is clicked, then confirmed
     for (const core::GameAction& action : legal_) {
         if (core::is_template(action) || board_unit(action)) continue;
         if (!end_label_.empty() && is_end_action(action)) continue;  // the end-phase button covers it
@@ -539,6 +567,10 @@ std::vector<core::GameAction> BoardInteraction::step_buttons() const {
 }
 
 std::optional<core::GameAction> BoardInteraction::confirm() const {
+    if (mode_ == Mode::RemoveModel) {
+        if (!chosen_model_ || !actor_) return std::nullopt;
+        return a::RemoveModelForCoherency{*actor_, *chosen_model_};  // D-042
+    }
     if (mode_ != Mode::Targets || targets_.empty() || !actor_) return std::nullopt;
     for (const core::GameAction& action : actions_of(*actor_)) {
         if (const auto* t = targets_of(action); t != nullptr && same_set(*t, targets_)) return action;

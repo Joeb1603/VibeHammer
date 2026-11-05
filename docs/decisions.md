@@ -764,4 +764,40 @@ logic).
   interval maths), and fills them faintly in the movement-ring colour for the dragged model or, when not
   dragging, the selected model of the moving unit. Not for a whole-unit drag. It is shown with the
   "Movement range" ring toggle.
+- **Extended by D-041 (M28):** the area follows each step, covers pile-ins and consolidations, and is shown
+  for whole-unit drags too.
+
+## D-041: The movement area follows each step, covers pile-ins and whole-unit drags (M28)
+**Decided:** 2026-11-05 (agreed with the user). Read-only core query and client only; movement validation
+is unchanged.
+- **Each step:** the client always adds a straight line to a model's path (`extend_path`), so the next drop
+  is a circle round where the model is *now* (`MoveReach::from`) of the distance it has *left*
+  (`remaining_mm` = maximum less its path so far, 03.01). The movement ring still shows the whole move from
+  the start.
+- **Pile-in (12.03) and consolidation (12.08 Ongoing / Engaging):** per-model rules are shaded as
+  `required_any` groups (inside at least one circle of each group). Engagement range is not forbidden,
+  because these moves end engaged.
+  - **Closer** to the closest target, measured from the start, edge to edge, "more than" EPS closer, any
+    unit tied for closest counting (D-022, D-010, `ends_closer_to_closest_target`).
+  - **Still engaged** with each enemy unit the model started engaged with (12.03 / 12.08 Ongoing After
+    Moving, `still_engaged_problems`).
+  - **Immobile:** a model in base contact with an enemy model at the start (12.03 / 12.08 Ongoing While
+    Moving) shows no area.
+  - Unit-wide conditions (12.03 "your unit must be engaged", 12.08 Engaging "engaged with all selected")
+    and "engaged with it if possible" (TODO(if-possible)) are not shaded; the commit checks the former.
+- **Whole-unit drag:** `translate_unit` moves every model by the mouse's offset from the grab point, so the
+  mouse can be let go where every movable model's area, shifted by (grab − its position), overlaps. The
+  unit's own models don't block each other (they move together). Models that can't move (immobile, or no
+  distance left) are left out, since the engine refuses only their part.
+- **Cancel:** a move menu's Cancel, the new Cancel button while picking a shooting target, and Esc also
+  clear the clicked unit and model, so the board looks as it did before the click (the selection rings
+  were left on a unit that was no longer acting).
+
+## D-042: Removing a model for coherency by clicking it (M28)
+**Decided:** 2026-11-05 (agreed with the user). Client only.
+- `RestoreCoherency` (03.03 Regaining Coherency) is handled on the board: the unit's models are clickable,
+  a click chooses one (a red ring and cross; another click changes it), and the action bar's
+  **Confirm: Remove model N** submits `RemoveModelForCoherency`. There is no longer a button per model.
+- The engine asks again while the unit is still out of coherency, so several models are removed one at a
+  time, each clicked and confirmed.
 

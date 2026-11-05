@@ -38,6 +38,7 @@
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/geometry/units.hpp"
+#include "core/state/queries.hpp"
 #include "core/version.hpp"
 #include "datasheet_view.hpp"
 #include "decision_panel.hpp"
@@ -426,6 +427,12 @@ private:
     // Every game change goes through here (and so through validate_action). True if it was applied.
     // D-036 / D-038: with skipping or automatic damage allocation on, the decisions that follow are answered
     // too.
+    // D-041: forget the clicked unit and model (Cancel puts the board back as it was before the click).
+    void clear_selection() {
+        selected_unit_.reset();
+        selected_model_.reset();
+    }
+
     // D-039: one player input, with what follows automatically, is one Undo group.
     bool submit(const core::GameAction& action) {
         undo_groups_.begin(session_->history().size());
@@ -511,33 +518,38 @@ private:
         return r.ok();
     }
 
-    // D-040: the model whose reach area is shaded: the one being dragged, else the selected model of the
-    // moving unit. None for a whole-unit drag (every model would need its own area).
-    std::optional<core::ModelId> reach_model() const {
+    // D-040 / D-041: what is shaded: where the dragged model (or, when not dragging, the selected model of
+    // the moving unit) can be dropped for its next straight line, or, while the whole unit is dragged, where
+    // the mouse can be dropped.
+    std::optional<ReachRegion> reach_region() const {
         if (!overlays_.move_range) return std::nullopt;
         const auto unit = moving_unit();
         if (!unit) return std::nullopt;
-        if (drag_) return drag_->whole_unit ? std::nullopt : std::optional<core::ModelId>(drag_->model);
-        const core::Unit* u = state().find_unit(*unit);
-        if (u == nullptr || !selected_model_) return std::nullopt;
-        for (const core::Model& m : u->models) {
-            if (m.id == *selected_model_) return m.id;
+        if (drag_ && drag_->whole_unit) return unit_region(state(), *unit, drag_->grab);
+        std::optional<core::ModelId> model;
+        if (drag_) {
+            model = drag_->model;
+        } else if (const core::Unit* u = state().find_unit(*unit); u != nullptr && selected_model_) {
+            for (const core::Model& m : u->models) {
+                if (m.id == *selected_model_) model = m.id;
+            }
         }
-        return std::nullopt;
+        if (!model) return std::nullopt;
+        const std::optional<core::MoveReach> reach = core::move_reach(state(), *model);
+        if (!reach) return std::nullopt;
+        return model_region(*reach);
     }
 
-    // D-040: a faint fill where that model can end its move (core's move_reach), one screen row per span.
+    // D-040: a faint fill of that region, one screen row per span.
     void draw_reach() {
-        const auto model = reach_model();
-        if (!model) return;
-        const std::optional<core::MoveReach> reach = core::move_reach(state(), *model);
-        if (!reach) return;
+        const std::optional<ReachRegion> region = reach_region();
+        if (!region) return;
         const float px = camera_.px_per_mm();
         if (!(px > 0.0f)) return;
         const float step_mm = 1.0f / px;  // one screen pixel
         Color fill = ring_color(RingKind::MoveRange);
         fill.a = 46;
-        for (const ReachSpan& s : reach_spans(*reach, step_mm)) {
+        for (const ReachSpan& s : reach_spans(*region, step_mm)) {
             const Vector2 a = camera_.to_screen(s.x0, s.y);
             const Vector2 b = camera_.to_screen(s.x1, s.y);
             DrawRectangleRec(Rectangle{std::min(a.x, b.x), std::min(a.y, b.y), std::fabs(b.x - a.x), 1.0f}, fill);
@@ -656,6 +668,10 @@ private:
             drag_ = Drag{false, hovered->model->id, unit, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
             return;
         }
+        if (board_.picking_model()) {
+            apply(board_.click_model(state(), unit, hovered->model->id));  // D-042
+            return;
+        }
         if (board_.active()) apply(board_.click(state(), unit));  // D-029
     }
 
@@ -677,7 +693,10 @@ private:
     }
 
     void handle_keys() {
-        if (mode_ == Mode::Play && !waiting_for_dice() && IsKeyPressed(KEY_ESCAPE)) board_.cancel();
+        if (mode_ == Mode::Play && !waiting_for_dice() && IsKeyPressed(KEY_ESCAPE)) {
+            board_.cancel();
+            if (!moving_unit()) clear_selection();  // D-041: as Cancel
+        }
         if (mode_ != Mode::Replay) return;
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) go_to(frame_ + 1);
         if ((IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) && frame_ > 0) go_to(frame_ - 1);
@@ -867,6 +886,20 @@ private:
             }
         }
         for (const core::UnitId id : board_.chosen_targets()) outline(id, Color{255, 90, 90, 255});
+        // D-042: the model chosen for removal (coherency).
+        if (const auto chosen = board_.chosen_model()) {
+            if (const core::Model* m = core::find_model(gs, *chosen)) {
+                const float r = camera_.to_px(m->base.diameter_mm * 0.5f) + 3.0f * ui_scale();
+                DrawRing(camera_.to_screen(m->position), r - ui_scale(), r + 2.5f * ui_scale(), 0.0f, 360.0f, 48,
+                         Color{255, 90, 90, 255});
+                DrawLineEx(camera_.to_screen(m->position.x - m->base.diameter_mm * 0.35f, m->position.y - m->base.diameter_mm * 0.35f),
+                           camera_.to_screen(m->position.x + m->base.diameter_mm * 0.35f, m->position.y + m->base.diameter_mm * 0.35f),
+                           3.0f * ui_scale(), Color{255, 90, 90, 230});
+                DrawLineEx(camera_.to_screen(m->position.x - m->base.diameter_mm * 0.35f, m->position.y + m->base.diameter_mm * 0.35f),
+                           camera_.to_screen(m->position.x + m->base.diameter_mm * 0.35f, m->position.y - m->base.diameter_mm * 0.35f),
+                           3.0f * ui_scale(), Color{255, 90, 90, 230});
+            }
+        }
         // Selection.
         if (selected_unit_) {
             if (const core::Unit* u = gs.find_unit(*selected_unit_)) {
@@ -979,6 +1012,7 @@ private:
         if (picked) {
             menu_.clear();
             menu_anchor_.reset();
+            if (picked->cancel) clear_selection();  // D-041: as before the click
             apply(board_.choose(state(), *picked));
         }
     }
@@ -1284,6 +1318,7 @@ private:
             undo_last();
             return;
         }
+        if (panel_.take_cancel_request()) clear_selection();  // D-041
         // D-038: ending the Shooting phase while a unit can still shoot asks first.
         const bool ends_shooting = std::any_of(actions.begin(), actions.end(), [](const core::GameAction& a) {
             return std::holds_alternative<core::action::EndShootStep>(a);

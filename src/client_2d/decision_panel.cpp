@@ -248,8 +248,16 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     {
         ButtonRow row;
         if ((custom != nullptr || custom_fight != nullptr) && row.button("Back")) back = true;
+        // D-041: Cancel picking a shooting target (drops the shooter, as Esc does).
+        if (board.can_cancel() && row.button("Cancel")) {
+            back = true;
+            cancel_requested_ = true;
+        }
         if (const auto confirm = board.confirm()) {
-            if (row.button(action_label(gs, *confirm))) chosen = *confirm;
+            // D-042: a clicked model's removal for coherency is confirmed here.
+            const bool removal = std::holds_alternative<core::action::RemoveModelForCoherency>(*confirm);
+            const std::string label = removal ? "Confirm: " + action_label(gs, *confirm) : action_label(gs, *confirm);
+            if (row.button(label)) chosen = *confirm;
         }
         const std::vector<core::GameAction> steps = board.step_buttons();
         for (std::size_t i = 0; i < steps.size(); ++i) {
