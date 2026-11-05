@@ -20,6 +20,7 @@
 #include "core/engine/movement.hpp"
 #include "core/state/queries.hpp"
 #include "decision_view.hpp"
+#include "dice_cards.hpp"
 #include "event_text.hpp"
 #include "melee_plan.hpp"
 #include "move_plan.hpp"
@@ -938,6 +939,114 @@ TEST(M19_CustomMelee, CancelReturnsToPickingATarget) {
     EXPECT_TRUE(board.picking_target());
 }
 
+// ==== M20: dice roll pop-ups (D-033) ====
+
+TEST(M20_DiceCards, AShootingAttackGivesHitThenWoundThenSaveCards) {
+    GameSession session(wh40k::test::shoot_step_state());
+    const UnitId marines = session.state().units[0].id;
+    const UnitId gants = session.state().units[1].id;
+    const std::size_t from = session.log().size();
+    BoardInteraction board(session.state(), session.legal());
+    (void)board.click(session.state(), marines);
+    const ClickResult r = board.click(session.state(), gants);
+    ASSERT_TRUE(session.submit(r.menu.front().action).ok());  // Focused Fire, every model
+    // Resolve the attack: the sidebar's batch, allocation and casualty decisions, first choice each.
+    for (int i = 0; i < 50 && session.pending() && !std::holds_alternative<decision::Shoot>(session.pending()->kind);
+         ++i) {
+        const DecisionView view = make_decision_view(session.legal());
+        GameAction a = view.buttons.empty() ? GameAction{} : view.buttons.front();
+        for (const auto& t : view.templates) {
+            if (const auto* c = std::get_if<action::OrderCasualties>(&t)) a = CasualtyPlan(session.state(), c->target).action();
+        }
+        ASSERT_TRUE(session.submit(a).ok());
+    }
+
+    const std::vector<DiceCard> cards = dice_cards(session.state(), session.log(), from);
+    ASSERT_GE(cards.size(), 2u);
+    EXPECT_EQ(cards[0].title, "Hit rolls");
+    EXPECT_EQ(cards[0].rule, "05.01");
+    EXPECT_EQ(cards[0].roller, Side::A);
+    EXPECT_EQ(cards[0].purpose, "Intercessor Squad shooting Termagants (Bolt Rifle - Focused Fire)");
+    EXPECT_EQ(cards[0].need.rfind("Need 3+ to hit", 0), 0u) << cards[0].need;
+    EXPECT_EQ(cards[1].title, "Wound rolls");
+    EXPECT_EQ(cards[1].roller, Side::A);
+
+    // The dice match the engine's events exactly.
+    std::vector<GameEvent> events;
+    for (std::size_t i = from; i < session.log().size(); ++i) {
+        events.insert(events.end(), session.log()[i].events.begin(), session.log()[i].events.end());
+    }
+    const auto hits = events_of<event::HitRollsMade>(events);
+    const auto selected = events_of<event::AttackBatchSelected>(events);
+    ASSERT_FALSE(hits.empty());
+    ASSERT_FALSE(selected.empty());
+    ASSERT_EQ(cards[0].dice.size(), hits[0].rolls.rolls.size());
+    EXPECT_EQ(static_cast<int>(cards[0].dice.size()), selected[0].attack_dice);
+    for (std::size_t i = 0; i < cards[0].dice.size(); ++i) {
+        const HitRoll& h = hits[0].rolls.rolls[i];
+        EXPECT_EQ(cards[0].dice[i].value, h.unmodified.value_or(0));
+        EXPECT_EQ(cards[0].dice[i].pass, h.outcome != HitOutcome::Fail);
+        EXPECT_EQ(cards[0].dice[i].critical, h.outcome == HitOutcome::CriticalHit);
+    }
+    const auto wounds = events_of<event::WoundRollsMade>(events);
+    ASSERT_FALSE(wounds.empty());
+    EXPECT_EQ(cards[1].need.rfind("Need " + std::to_string(wounds[0].rolls.required) + "+ to wound", 0), 0u);
+    const auto saves = events_of<event::SaveRollsMade>(events);
+    if (!saves.empty()) {
+        ASSERT_GE(cards.size(), 3u);
+        EXPECT_EQ(cards[2].title, "Save rolls");
+        EXPECT_EQ(cards[2].roller, Side::B);  // the defender rolls saves
+        EXPECT_EQ(cards[2].dice.size(), saves[0].rolls.size());
+        for (const DieFace& d : cards[2].dice) {
+            if (d.value == 1) EXPECT_FALSE(d.pass);  // an unmodified 1 always fails (05.04)
+        }
+    }
+    // Nothing new, nothing shown.
+    EXPECT_TRUE(dice_cards(session.state(), session.log(), session.log().size()).empty());
+}
+
+TEST(M20_DiceCards, OtherRollsShowTheirDiceAndWhatTheyNeed) {
+    const GameState gs = wh40k::test::load_v1_scenario();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BattleShockRoll shock;
+    shock.leadership = LeadershipRoll{TwoD6{{3, 2}}, 7, false};
+    shock.becomes_battle_shocked = true;
+    HazardRolls hazard;
+    hazard.rolls = {1, 4, 2};
+    hazard.failures = 2;
+    hazard.mortal_wounds = 2;
+    const std::vector<LogEntry> log{
+        LogEntry{"no rolls", {event::CommandPointGained{}}},
+        LogEntry{"rolls",
+                 {event::BattleShockRolled{gants, shock}, event::ChargeRolled{marines, TwoD6{{4, 5}}, {gants}},
+                  event::HazardRollsMade{gants, hazard}, event::AdvanceRolled{marines, 3, false}}}};
+    EXPECT_TRUE(dice_cards(gs, log, 0).size() == 4u);
+    EXPECT_TRUE(dice_cards(gs, {log[0]}, 0).empty());  // no roll events, no cards
+
+    const std::vector<DiceCard> cards = dice_cards(gs, log, 1);
+    ASSERT_EQ(cards.size(), 4u);
+    EXPECT_EQ(cards[0].title, "Battle-shock roll");
+    EXPECT_EQ(cards[0].roller, Side::B);
+    EXPECT_EQ(cards[0].need, "2D6: need 7+ to pass");
+    EXPECT_EQ(cards[0].dice, (std::vector<DieFace>{{3, false, false, false}, {2, false, false, false}}));
+    EXPECT_EQ(cards[0].result, "5: battle-shocked");
+
+    EXPECT_EQ(cards[1].title, "Charge roll");
+    EXPECT_EQ(cards[1].roller, Side::A);
+    EXPECT_EQ(cards[1].dice.size(), 2u);
+    EXPECT_TRUE(cards[1].dice[0].neutral);
+    EXPECT_EQ(cards[1].result, "9\" charge");
+
+    EXPECT_EQ(cards[2].title, "Hazard rolls");
+    EXPECT_EQ(cards[2].dice, (std::vector<DieFace>{{1, false, false, false}, {4, true, false, false},
+                                                   {2, false, false, false}}));
+    EXPECT_EQ(cards[2].result, "2 failures: 2 mortal wounds");
+
+    EXPECT_EQ(cards[3].title, "Advance roll");
+    EXPECT_EQ(cards[3].result, "+3\" to Move");
+}
+
 TEST(M16_BoardInteraction, ClickingTheShooterAgainPicksAnotherUnit) {
     const GameState gs = wh40k::test::shoot_step_state();
     const auto legal = legal_actions(gs, Side::A);
@@ -1180,7 +1289,8 @@ TEST(M12_NoRulesInTheClient, OnlyTheSessionAndTimelineApplyActions) {
     const fs::path client = fs::path(WH40K_REPO_ROOT) / "src" / "client_2d";
     const std::regex apply(R"(\bapply_action\s*\()");
     const std::regex rules_include(R"(#\s*include\s*"core/rules/)");
-    const std::regex allowed_logic_rules(R"(#\s*include\s*"core/rules/(shooting|fight)(_types)?\.hpp"|#\s*include\s*"core/rules/(move_types|attack_types)\.hpp")");
+    // attack_sequence: the dice pop-ups (D-033) call its read-only 05.04 check_save_roll to colour save dice.
+    const std::regex allowed_logic_rules(R"(#\s*include\s*"core/rules/(shooting|fight)(_types)?\.hpp"|#\s*include\s*"core/rules/(move_types|attack_types|attack_sequence)\.hpp")");
     int files = 0;
     for (const auto& entry : fs::recursive_directory_iterator(client)) {
         const auto ext = entry.path().extension();

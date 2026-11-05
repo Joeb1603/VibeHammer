@@ -296,7 +296,21 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M20: Dice roll pop-ups ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Show every dice roll as a pop-up over the board (D-033): what the roll is for, what it needs, the dice face-down until a big green Roll button, then the faces (passes green, fails grey, criticals gold), the result and Continue. Presentation only: the engine has already rolled when the action is applied, and the cards come from its events (Option 1; Option 2 is under Later).
+
+**Acceptance**
+- Each hit, wound, save, advance, charge, hazard and battle-shock roll an action makes gets a card, in order, in the colour of the side rolling (saves: the defender).
+- A card's dice and pass/fail match the engine's events exactly (logic test).
+- The board and the action bar wait while a card is open; Skip rolls and the "Show dice pop-ups" setting turn them off.
+- No cards for replays, loads, undo or rolls made before the session started.
+
+---
+
 ## Later (post-V1, rough order)
+- **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
 0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
 2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.

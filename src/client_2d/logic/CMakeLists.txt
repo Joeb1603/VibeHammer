@@ -5,6 +5,7 @@ add_library(wh40k_client_logic STATIC
     board_interaction.cpp
     casualty_plan.cpp
     decision_view.cpp
+    dice_cards.cpp
     event_text.cpp
     melee_plan.cpp
     move_plan.cpp

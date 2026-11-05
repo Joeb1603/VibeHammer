@@ -4,10 +4,12 @@
 //
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
 //                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
-//                        [--scenario <file>]
+//                        [--scenario <file>] [--dice <n>]
 //   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
 //   --seed n: the dice seed for the first new game (M13; the panel can change it for later games).
 //   --scenario file: the scenario for new games (default data/scenarios/v1_skirmish.json).
+//   --dice n: 1 keeps the dice pop-ups the --steps rolls made (otherwise dropped), 2 also shows the first
+//             card's faces (M20, for screenshots).
 
 #include <imgui.h>
 #include <raylib.h>
@@ -34,6 +36,8 @@
 #include "core/version.hpp"
 #include "decision_panel.hpp"
 #include "decision_view.hpp"
+#include "dice_cards.hpp"
+#include "dice_popup.hpp"
 #include "event_text.hpp"
 #include "move_plan.hpp"
 #include "overlays.hpp"
@@ -70,6 +74,7 @@ struct Options {
     std::optional<unsigned> select_model;
     std::optional<std::uint64_t> seed;
     std::optional<std::string> scenario;
+    int dice = 0;  // --dice: 1 keeps the dice pop-ups from --steps, 2 also shows the first card's faces
 };
 
 // Throws std::invalid_argument naming the flag when a value can't be parsed.
@@ -88,6 +93,7 @@ Options parse_args(int argc, char** argv) {
         else if (key == "--select-model") o.select_model = static_cast<unsigned>(std::stoul(value));
         else if (key == "--seed") o.seed = std::stoull(value);
         else if (key == "--scenario") o.scenario = value;
+        else if (key == "--dice") o.dice = std::stoi(value);
         } catch (const std::exception&) {
             throw std::invalid_argument("invalid value for " + key + ": '" + value + "'");
         }
@@ -146,6 +152,15 @@ public:
         drag_.reset();
         fit_pending_ = true;
         scroll_log_ = true;
+        // D-033: no pop-ups for rolls made before this session started (a load, or the game start).
+        dice_.clear();
+        dice_seen_ = session_->log().size();
+    }
+
+    // --dice: keep (1) or also reveal (2) the pop-ups the --steps rolls made; otherwise drop them.
+    void cli_dice(int mode) {
+        if (mode <= 0) dice_.clear();
+        if (mode >= 2) dice_.reveal();
     }
 
     void save_game() {
@@ -357,7 +372,12 @@ private:
     bool submit(const core::GameAction& action) {
         const core::ValidationResult r = session_->submit(action);
         reasons_ = r.reasons;
-        if (r.ok()) scroll_log_ = true;
+        if (r.ok()) {
+            scroll_log_ = true;
+            // D-033: a pop-up for each roll the action made.
+            if (show_dice_) dice_.push(dice_cards(session_->state(), session_->log(), dice_seen_));
+            dice_seen_ = session_->log().size();
+        }
         return r.ok();
     }
 
@@ -399,6 +419,7 @@ private:
             draw_ring_tooltip(camera_.to_world(mouse));
         }
 
+        if (dice_.active()) return;  // D-033: the board waits while a dice pop-up is open (zoom and pan still work)
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
         if (drag_) drag_->current = camera_.to_world(mouse);
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && drag_) release(mouse);
@@ -678,7 +699,9 @@ private:
                 ImGui::PopStyleColor();
             }
             if (mode_ == Mode::Play) {
+                ImGui::BeginDisabled(dice_.active());  // D-033: the decision waits for the dice pop-ups
                 draw_decision();
+                ImGui::EndDisabled();
             } else {
                 draw_replay_controls();
             }
@@ -691,6 +714,8 @@ private:
         ImGui::Begin("##sidebar", nullptr, kFixed);
         draw_sidebar();
         ImGui::End();
+        // D-033: the dice pop-up, over everything else.
+        if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale(), &show_dice_);
     }
 
     static ImVec4 to_imvec(Color c, float alpha = 1.0f) {
@@ -786,6 +811,8 @@ private:
                 reasons_.clear();
                 drag_.reset();
                 scroll_log_ = true;
+                dice_.clear();  // D-033: no pop-ups for the replayed rolls
+                dice_seen_ = session_->log().size();
             }
             ImGui::EndDisabled();
             ImGui::TextDisabled("This game's seed: %llu", static_cast<unsigned long long>(session_->seed()));
@@ -808,6 +835,8 @@ private:
         overlay_toggle(RingKind::Coherency, &overlays_.coherency);
         overlay_toggle(RingKind::WeaponRange, &overlays_.ranges);
         overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
+        ImGui::Spacing();
+        if (ImGui::Checkbox("Show dice pop-ups", &show_dice_) && !show_dice_) dice_.clear();  // D-033
         ImGui::Spacing();
         if (ImGui::Button("Fit board")) fit_pending_ = true;
         ImGui::SameLine();
@@ -1024,6 +1053,9 @@ private:
     std::optional<core::ModelId> selected_model_;
     std::optional<Drag> drag_;
     std::vector<std::string> reasons_;  // the last rejection, rule-cited
+    DicePopup dice_;                    // D-033: the rolls waiting to be shown
+    std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
+    bool show_dice_ = true;             // the "Show dice pop-ups" setting
     bool fit_pending_ = true;
     bool scroll_log_ = true;
     bool files_open_ = false;
@@ -1081,6 +1113,7 @@ int main(int argc, char** argv) {
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
     app.auto_steps(options.steps);
+    app.cli_dice(options.dice);
     app.select(options.select_unit, options.select_model);
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.

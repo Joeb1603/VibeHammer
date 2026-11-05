@@ -610,3 +610,27 @@ logic).
   earlier/later arrows, Back (restores the default order) and a large "Use custom order".
 - Attack batch, allocation order and coherency removal are plain button choices and stay as they were.
 
+## D-033: Dice roll pop-ups, presentation only (M20)
+**Decided:** 2026-11-05 (agreed with the user). Client only; no engine, replay or determinism change.
+- **Option 1, chosen:** the engine makes every roll when the action is applied, as before. The client turns
+  the roll events of each applied action into dice cards (`dice_cards`, client logic) and shows them one at a
+  time. "Roll" reveals results that already exist; for a hotseat game this can't be told apart from rolling
+  then. **Option 2** (the engine pausing before each roll) is listed under Later in `PLAN.md`.
+- **Cards:** hit (05.01), wound (05.02) and save (05.03) rolls, advance (09.06), charge (11.02), hazard (06.03)
+  and battle-shock (01.07) rolls, in event order. Each card shows the side rolling (attacker for hit and wound,
+  defender for saves, the unit's side otherwise), what the roll is for (unit, target and weapon profile),
+  what it needs, the dice and the result.
+- **Pass/fail:** hit and wound dice use the outcomes in the events. Save dice use core's read-only 05.04
+  `check_save_roll` against the first allocation group in order with the batch's AP. Each V1 unit has one
+  group; with several groups the colours follow the first group. Charge and advance dice are neutral.
+  Hazard dice fail on 1-2, and battle-shock dice share the roll's pass/fail.
+- **Pop-up:** centred over the board and outlined in the roller's colour. The dice are face-down until the
+  big green Roll (or Enter/Space), then tumble for about 0.45 s (faces cycled by time, display only). After
+  that, passes are green, fails grey and criticals have a gold border, with the result and Continue (Done
+  on the last card). "Skip rolls" drops the queue, and "Show dice pop-ups" (also in the sidebar's Game
+  section) turns them off.
+- While a card is open the board takes no clicks or drags (zoom and pan still work) and the action bar is
+  disabled.
+- No cards for replays, loads, undo or new games (the log size at that point is taken as already seen), or
+  for `--steps` runs unless `--dice 1` (keep) or `--dice 2` (keep and reveal the first card).
+
