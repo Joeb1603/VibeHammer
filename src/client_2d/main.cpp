@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include "action_text.hpp"
+#include "auto_skip.hpp"
 #include "board_interaction.hpp"
 #include "board_view.hpp"
 #include "camera.hpp"
@@ -146,6 +148,7 @@ public:
             start_session(GameSession::new_game(core::load_scenario(scenario_path_, kRepoRoot), seed_));
             status_ = "New game: V1 scenario, seed " + std::to_string(seed_) +
                       ". Hotseat: each side acts when the panel names it.";
+            run_auto_skips_now();  // D-036
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the scenario: ") + e.what();
         }
@@ -165,6 +168,7 @@ public:
         dice_.clear();
         before_dice_.reset();
         dice_seen_ = session_->log().size();
+        auto_steps_.clear();  // D-036
     }
 
     // --dice: keep (1) or also reveal (2) the pop-ups the --steps rolls made; otherwise drop them.
@@ -404,7 +408,31 @@ private:
     }
 
     // Every game change goes through here (and so through validate_action). True if it was applied.
+    // D-036: with "Skip steps with nothing to do" on, any lone skips that follow are submitted too.
     bool submit(const core::GameAction& action) {
+        const bool ok = submit_one(action);
+        if (ok) run_auto_skips_now();
+        return ok;
+    }
+
+    // D-036: submit the decisions whose only legal action is a skip, recording them for Undo.
+    void run_auto_skips_now() {
+        if (!auto_skip_ || mode_ != Mode::Play || !session_) return;
+        const std::vector<core::GameAction> skipped = run_auto_skips(*session_, [this](const core::GameAction& a) {
+            const std::size_t index = session_->history().size();
+            if (!submit_one(a)) return false;
+            auto_steps_.push_back(index);
+            return true;
+        });
+        if (skipped.empty()) return;
+        std::string text = "Skipped (nothing to do):";
+        for (std::size_t i = 0; i < skipped.size(); ++i) {
+            text += (i == 0 ? " " : ", ") + action_label(session_->state(), skipped[i]);
+        }
+        status_ = std::move(text);
+    }
+
+    bool submit_one(const core::GameAction& action) {
         core::GameState before = session_->state();
         const std::size_t log_before = session_->log().size();
         const core::ValidationResult r = session_->submit(action);
@@ -1002,7 +1030,9 @@ private:
             ImGui::SameLine();
             ImGui::BeginDisabled(!session_->can_undo());
             if (ImGui::Button("Undo")) {
-                session_->undo();  // M13: rebuilt from the initial state without the last action
+                // M13: rebuilt from the initial state without the last action. D-036: the steps skipped
+                // automatically after it go with it.
+                undo_with_auto_skips(*session_, auto_steps_);
                 panel_.reset();    // the rebuilt state may have the same step count as the editors' old one
                 ++generation_;
                 reasons_.clear();
@@ -1035,6 +1065,8 @@ private:
         overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
         ImGui::Spacing();
         if (ImGui::Checkbox("Show dice pop-ups", &show_dice_) && !show_dice_) dice_.clear();  // D-033
+        if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) run_auto_skips_now();
+        ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
         ImGui::Spacing();
         if (ImGui::Button("Fit board")) fit_pending_ = true;
         ImGui::SameLine();
@@ -1278,6 +1310,8 @@ private:
     std::size_t log_before_dice_ = 0;   // the log entries shown while they show
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
+    bool auto_skip_ = false;            // D-036: the "Skip steps with nothing to do" setting
+    std::vector<std::size_t> auto_steps_;  // D-036: history indices of the steps skipped automatically
     bool fit_pending_ = true;
     bool scroll_log_ = true;
     bool files_open_ = false;

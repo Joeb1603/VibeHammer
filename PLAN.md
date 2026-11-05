@@ -336,6 +336,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M23: Skip steps with nothing to do ✅ (done)
+**Effort:** `low` · **Plan mode:** yes (agreed 2026-11-05)
+
+> An option to stop clicking through steps where ending the step or passing is the only thing a side can do (D-036). A sidebar checkbox, off by default; when on, the client submits the lone skip (end shooting / charge / pile-ins / consolidations, pass fight, skip overrun pile-in) through the session, chaining through consecutive ones. Client only.
+
+**Acceptance**
+- A sidebar checkbox "Skip steps with nothing to do", off by default; with it off, nothing changes.
+- With it on, a decision whose only legal action is a skip is submitted automatically, chaining through consecutive ones, and stops at the first real choice (logic test).
+- One Undo removes the player's last action and the steps skipped after it (logic test).
+- Skipped steps appear in the log, saves and exported replays as ordinary steps (logic test).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

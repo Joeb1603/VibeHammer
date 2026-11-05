@@ -665,3 +665,18 @@ logic).
 - **Release:** the ruler disappears. If the cursor moved less than the drag threshold, the press was a click
   on empty board and does what it did before (drops the selection, cancels a board pick unless a custom
   editor is open); a measuring drag leaves the selection alone. A release over a window ends the ruler too.
+
+## D-036: Skip steps with nothing to do (M23)
+**Decided:** 2026-11-05 (agreed with the user). Client only; no engine, rules or replay change.
+- **Setting:** a sidebar checkbox "Skip steps with nothing to do", off by default.
+- **When:** the deciding side's `legal_actions` is exactly one action and it is a skip: `EndShootStep`,
+  `EndChargeStep`, `EndPileIns`, `EndConsolidations`, `PassFight` or `SkipPileIn`. The engine already
+  offers a unit only when it has a valid option (e.g. a `Shoot` template needs at least one valid shot), so
+  this means nothing else can be done. Single forced choices that aren't skips (one allocation order, one
+  forced fight, one model to remove) are still the player's to click.
+- **How:** after each accepted player action (and at a new game, and when the box is ticked) the client
+  submits the lone skip through `GameSession::submit`, repeating while the next decision is skip-only. They
+  are ordinary steps in the log, saves and exported replays. Not run after a load or an undo. The status line
+  names what was skipped.
+- **Undo:** the client remembers which history steps were skipped automatically; one Undo removes those that
+  follow the player's last action and then that action, so it does not land on a skip-only decision.

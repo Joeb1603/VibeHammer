@@ -2,6 +2,7 @@
 # or other rendering/device headers (checked on every build), so wh40k_client_tests can test it.
 add_library(wh40k_client_logic STATIC
     action_text.cpp
+    auto_skip.cpp
     board_interaction.cpp
     casualty_plan.cpp
     decision_view.cpp

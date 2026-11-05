@@ -1,5 +1,6 @@
 # wh40k_client_tests: tests for wh40k_client_logic (D-024). wh40k_tests stays core-only (CLAUDE.md).
 add_executable(wh40k_client_tests
+    auto_skip_test.cpp
     client_logic_test.cpp)
 
 target_link_libraries(wh40k_client_tests PRIVATE wh40k_client_logic GTest::gtest_main)
