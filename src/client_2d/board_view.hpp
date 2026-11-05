@@ -13,9 +13,11 @@ namespace wh40k::client {
 [[nodiscard]] Color side_color(core::Side side);
 
 // Draws the battlefield (grid, deployment zones) and every model. Read-only. Units for which `dimmed`
-// returns true are drawn slightly grey: they can't be clicked now (D-029).
+// returns true are drawn grey: they can't be clicked now. `emphasised`: the clickable unit under the cursor,
+// whose models get a bold outline (D-029). `ui_scale` scales that outline.
 void draw_board(const core::GameState& state, const BoardCamera& camera,
-                const std::function<bool(core::UnitId)>& dimmed = {});
+                const std::function<bool(core::UnitId)>& dimmed = {},
+                std::optional<core::UnitId> emphasised = std::nullopt, float ui_scale = 1.0f);
 
 // The model whose base is under `screen` (for tooltips), if any.
 struct HoveredModel {

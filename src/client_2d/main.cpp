@@ -261,8 +261,15 @@ public:
         if (!io.WantCaptureKeyboard) handle_keys();
 
         // D-029: units that can't be clicked now are drawn slightly grey.
-        draw_board(state(), camera_,
-                   [this](core::UnitId id) { return board_.waiting_for_click() && !board_.clickable(id); });
+        std::optional<core::UnitId> emphasised;
+        if (!io.WantCaptureMouse && board_.waiting_for_click()) {
+            if (const auto h = model_at(state(), camera_, GetMousePosition()); h && board_.clickable(h->unit->id)) {
+                emphasised = h->unit->id;
+            }
+        }
+        draw_board(
+            state(), camera_, [this](core::UnitId id) { return board_.waiting_for_click() && !board_.clickable(id); },
+            emphasised, ui_scale());
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
         // Rings stop at the battlefield edge (no model can be beyond it).
         const Rectangle field = camera_.to_screen(core::Rect{0.0f, 0.0f, state().battlefield.width_mm,
@@ -340,6 +347,7 @@ private:
         if (!r.menu.empty()) {
             menu_ = r.menu;
             open_menu_ = true;
+            menu_anchor_ = camera_.to_world(GetMousePosition());
         }
     }
 
@@ -380,7 +388,14 @@ private:
 
         const auto hovered = model_at(state(), camera_, mouse);
         if (hovered && !drag_) draw_tooltip(*hovered);
-        if (!hovered && !drag_) draw_ring_tooltip(camera_.to_world(mouse));
+        if (distance_px(mouse, rest_mouse_) > 2.0f * ui_scale()) {
+            rest_mouse_ = mouse;
+            rest_since_ = GetTime();
+        }
+        const bool rested = GetTime() - rest_since_ >= 0.6;
+        if (!hovered && !drag_ && rested && !board_.picking_target() && menu_.empty()) {
+            draw_ring_tooltip(camera_.to_world(mouse));
+        }
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
         if (drag_) drag_->current = camera_.to_world(mouse);
@@ -499,11 +514,15 @@ private:
                     y += m.position.y;
                 }
                 const float n = static_cast<float>(u->models.size());
-                const Vector2 mouse = GetMousePosition();
+                const bool menu_open = !menu_.empty() && menu_anchor_.has_value();
+                const Vector2 mouse = menu_open ? camera_.to_screen(*menu_anchor_) : GetMousePosition();
                 const float s = ui_scale();
                 DrawLineEx(camera_.to_screen(x / n, y / n), mouse, 2.5f * s, Color{255, 220, 80, 200});
-                DrawText("Pick a target", static_cast<int>(mouse.x + 16.0f * s), static_cast<int>(mouse.y + 8.0f * s),
-                         static_cast<int>(kRulerText * s), Color{255, 220, 80, 230});
+                if (!menu_open) {
+                    DrawText("Pick a target", static_cast<int>(mouse.x + 16.0f * s),
+                             static_cast<int>(mouse.y + 8.0f * s), static_cast<int>(kRulerText * s),
+                             Color{255, 220, 80, 230});
+                }
             }
         }
         for (const core::UnitId id : board_.chosen_targets()) outline(id, Color{255, 90, 90, 255});
@@ -576,7 +595,11 @@ private:
             ImGui::OpenPopup("##unit_menu");
             open_menu_ = false;
         }
-        if (!ImGui::BeginPopup("##unit_menu")) return;
+        if (!ImGui::BeginPopup("##unit_menu")) {
+            menu_.clear();  // closed by a click off it (ImGui took that click, so the selection stays)
+            menu_anchor_.reset();
+            return;
+        }
         std::optional<core::GameAction> picked;
         for (std::size_t i = 0; i < menu_.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
@@ -586,6 +609,7 @@ private:
         ImGui::EndPopup();
         if (picked) {
             menu_.clear();
+            menu_anchor_.reset();
             apply(board_.choose(state(), *picked));
         }
     }
@@ -931,6 +955,9 @@ private:
     std::optional<BoardKey> board_key_;  // the decision board_ was built for
     std::vector<MenuEntry> menu_;        // the open click menu's entries
     bool open_menu_ = false;
+    std::optional<core::Position> menu_anchor_;  // where the open menu's click was (the target line ends there)
+    Vector2 rest_mouse_{0.0f, 0.0f};             // ring tooltips wait for the cursor to rest
+    double rest_since_ = 0.0;
     std::optional<core::UnitId> selected_unit_;
     std::optional<core::ModelId> selected_model_;
     std::optional<Drag> drag_;

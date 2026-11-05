@@ -42,13 +42,18 @@ Color mix(Color a, Color b, float t) {
     return Color{channel(a.r, b.r), channel(a.g, b.g), channel(a.b, b.b), channel(a.a, b.a)};
 }
 
-void draw_model(const core::Unit& unit, const core::Model& model, const BoardCamera& cam, bool dimmed) {
+void draw_model(const core::Unit& unit, const core::Model& model, const BoardCamera& cam, bool dimmed,
+                float bold_px) {
     // Bases are round in V1; base.diameter_mm is the true size, drawn to scale.
     const Vector2 c = cam.to_screen(model.position);
     const float r = cam.to_px(model.base.diameter_mm * 0.5f);
     const Color fill = dimmed ? mix(side_color(unit.side), kGrey, 0.8f) : side_color(unit.side);
     DrawCircleV(c, r, fill);
-    DrawCircleLinesV(c, r, dimmed ? Color{95, 95, 100, 255} : RAYWHITE);
+    if (bold_px > 0.0f) {
+        DrawRing(c, std::max(0.0f, r - bold_px), r, 0.0f, 360.0f, 48, RAYWHITE);
+    } else {
+        DrawCircleLinesV(c, r, dimmed ? Color{95, 95, 100, 255} : RAYWHITE);
+    }
 
     // D-028: a damaged model shows one pip per wound, filled for the wounds it has left. Models at full
     // wounds show nothing (the tooltip gives the numbers).
@@ -76,7 +81,8 @@ Color side_color(core::Side side) {
 }
 
 void draw_board(const core::GameState& state, const BoardCamera& cam,
-                const std::function<bool(core::UnitId)>& dimmed) {
+                const std::function<bool(core::UnitId)>& dimmed, std::optional<core::UnitId> emphasised,
+                float ui_scale) {
     const core::Rect board{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm};
     DrawRectangleRec(cam.to_screen(board), kBoardFill);
     for (const core::Side side : {core::Side::A, core::Side::B}) {
@@ -89,7 +95,7 @@ void draw_board(const core::GameState& state, const BoardCamera& cam,
     for (const core::Unit& unit : state.units) {
         const bool grey = dimmed && dimmed(unit.id);
         for (const core::Model& model : unit.models) {
-            draw_model(unit, model, cam, grey);
+            draw_model(unit, model, cam, grey, emphasised == unit.id ? 3.0f * ui_scale : 0.0f);
         }
     }
 }

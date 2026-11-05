@@ -548,4 +548,10 @@ logic).
   editor. Other decisions (melee declarations, allocation order, casualties, attack batches, coherency)
   stay in the sidebar as before, with nothing grey.
 - Esc cancels a board selection; it no longer closes the window.
+- **Hover.** A clickable unit under the cursor gets a bold white outline round each of its models.
+- **Menus.** While a click menu is open (e.g. the weapon menu on a target), the target line stays on the
+  clicked point and the "Pick a target" label is hidden. Closing the menu by clicking off it keeps the
+  selection (ImGui takes that click), and the line follows the cursor again.
+- **Ring tooltips** (D-028) appear only after the cursor has rested for 0.6 s, and never while picking a
+  target or with a menu open, so they don't cover the target prompt.
 
