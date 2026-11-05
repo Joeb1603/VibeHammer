@@ -646,9 +646,25 @@ private:
             }
             ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_));
             ImGui::SetNextWindowSize(ImVec2(w - panel_width(), action_height_));
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.14f, 0.17f, 1.0f));
+            // D-030: outlined and tinted in the colour of the side that must act now (01.03), so it is
+            // obvious whose input the game is waiting for.
+            ImVec4 bg(0.13f, 0.14f, 0.17f, 1.0f);
+            const core::PendingDecision* pending = state().pending ? &*state().pending : nullptr;
+            const bool deciding = mode_ == Mode::Play && pending != nullptr;
+            if (deciding) {
+                const ImVec4 c = to_imvec(side_color(pending->side));
+                constexpr float kTint = 0.22f;
+                bg = ImVec4(bg.x + (c.x - bg.x) * kTint, bg.y + (c.y - bg.y) * kTint, bg.z + (c.z - bg.z) * kTint, 1.0f);
+                ImGui::PushStyleColor(ImGuiCol_Border, c);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ui_scale());
+            }
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, bg);
             ImGui::Begin("##actionbar", nullptr, kFixed);
             ImGui::PopStyleColor();
+            if (deciding) {
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor();
+            }
             if (mode_ == Mode::Play) {
                 draw_decision();
             } else {

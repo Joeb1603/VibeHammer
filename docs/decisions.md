@@ -563,6 +563,9 @@ logic).
   hint and the decision's editor or move status. The right column has the step buttons (Commit / Reset move,
   Confirm, Make no charge move, ...) and, under them, the End-phase button at full column width and taller
   than the rest. A decision with one button and no editor shows that button the same way (not green).
+- **Whose input.** While a decision is pending in play, the bar has a 3px outline in the colour of the side
+  that must act (`PendingDecision::side`, 01.03: blue for A, red for B), its background is tinted 22% towards
+  that colour, and the headline starts with a tag in that colour ("Side A to act: Space Marines").
 - **Fixed height.** Whatever could be long goes into a popup or a tooltip, so the board never refits while a
   decision is made: each model's shooting choice (D-001) is behind "Per-model weapons..." (the model selected on
   the board also gets its own combo inline), the melee per-model choices and attack splits behind

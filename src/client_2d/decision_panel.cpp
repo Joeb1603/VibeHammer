@@ -7,6 +7,7 @@
 #include <variant>
 
 #include "action_text.hpp"
+#include "board_view.hpp"
 #include "core/engine/movement.hpp"
 #include "decision_view.hpp"
 
@@ -74,9 +75,20 @@ private:
     bool first_ = true;
 };
 
-// The decision's headline, a little larger than the body text.
-void headline(const std::string& text) {
+// The decision's headline, a little larger than the body text, after a tag in the colour of the side that
+// must act (D-030): "Side A to act: Space Marines".
+void headline(const core::GameState& gs, core::Side side, const std::string& text) {
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
+    const Color c = side_color(side);
+    const ImVec4 colour(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, colour);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, colour);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, colour);
+    const std::string tag = std::string(side == core::Side::A ? "Side A" : "Side B") + " to act: " + gs.side(side).name;
+    ImGui::Button(tag.c_str());
+    ImGui::PopStyleColor(3);
+    ImGui::SameLine(0.0f, ImGui::GetFontSize() * 0.6f);
+    ImGui::AlignTextToFramePadding();
     ImGui::TextColored(kHighlight, "%s", text.c_str());
     ImGui::PopFont();
 }
@@ -171,7 +183,7 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
     const bool lone = view.buttons.size() == 1 && view.templates.empty();
     if (!begin_bar(lone ? action_label(gs, view.buttons.front()) : std::string())) return std::nullopt;
 
-    headline(core::describe(*session.pending()));
+    headline(gs, session.pending()->side, core::describe(*session.pending()));
     bool path_hint = false;
     for (const core::GameAction& t : view.templates) {
         switch (*editor_kind(t)) {
@@ -220,7 +232,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
 
     // D-029: while picking a target the headline says so; otherwise it is the decision.
     const std::string prompt = board.prompt(gs);
-    headline(prompt.empty() ? core::describe(*session.pending()) : prompt);
+    headline(gs, session.pending()->side, prompt.empty() ? core::describe(*session.pending()) : prompt);
     ImGui::TextWrapped("%s", board.hint(gs).c_str());
     // The selected shooter's choices (D-001): the weapon picked on the target fires these.
     if (ShotPlan* plan = board.shot_plan()) {
