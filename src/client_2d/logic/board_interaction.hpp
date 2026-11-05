@@ -44,6 +44,9 @@ public:
     [[nodiscard]] bool clickable(core::UnitId unit) const;
     // Whether the board is waiting for a click now: only then is what can't be clicked drawn grey.
     [[nodiscard]] bool waiting_for_click() const;
+    // Whether `unit` is drawn grey: while waiting for a click, every unit that can't be clicked; when no
+    // unit is left to act (only the end-phase button), every unit (D-029).
+    [[nodiscard]] bool greyed(core::UnitId unit) const;
     // Picking targets (shooting, charge, pile-in): a line follows the cursor from the actor.
     [[nodiscard]] bool picking_target() const noexcept { return mode_ == Mode::Shoot || mode_ == Mode::Targets; }
     [[nodiscard]] std::string hint(const core::GameState& state) const;

@@ -539,8 +539,9 @@ logic).
   otherwise a confirm button appears in the sidebar. An engaged unit, whose targets are fixed, starts its
   pile-in or consolidation as soon as it is clicked.
 - **Grey.** Only while the board is waiting for a click (a unit to pick, or a target), every unit that
-  can't be clicked is drawn dark grey (80% towards {55, 55, 60}). Nothing is grey while models are being
-  dragged, in the sidebar's decisions, or when only the end-phase button is left. The unit picked first
+  can't be clicked is drawn dark grey (80% towards {55, 55, 60}). When no unit is left to act (only the
+  end-phase button), every unit is grey. Nothing is grey while models are being dragged or in the
+  sidebar's decisions. The unit picked first
   has a yellow outline and chosen targets a red one.
 - **Sidebar.** Unit buttons are not listed while the board handles the decision; the sidebar shows the
   decision, a hint, the step-level buttons (End shooting, End charges, Pass, Commit / Reset move, Make no

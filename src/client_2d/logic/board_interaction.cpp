@@ -165,6 +165,11 @@ bool BoardInteraction::waiting_for_click() const {
     return false;
 }
 
+bool BoardInteraction::greyed(core::UnitId unit) const {
+    if (waiting_for_click()) return !clickable(unit);
+    return mode_ == Mode::PickActor;  // nothing left to pick: everything is grey
+}
+
 std::string BoardInteraction::prompt(const core::GameState& state) const {
     if (mode_ == Mode::Shoot && actor_) return "Pick a target for the " + unit_name(state, *actor_);
     if (mode_ == Mode::Targets) return "Pick the enemy units to " + target_verb_;

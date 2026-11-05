@@ -268,7 +268,7 @@ public:
             }
         }
         draw_board(
-            state(), camera_, [this](core::UnitId id) { return board_.waiting_for_click() && !board_.clickable(id); },
+            state(), camera_, [this](core::UnitId id) { return board_.greyed(id); },
             emphasised, ui_scale());
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
         // Rings stop at the battlefield edge (no model can be beyond it).

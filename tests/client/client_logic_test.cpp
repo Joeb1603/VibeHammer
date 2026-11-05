@@ -682,7 +682,9 @@ TEST(M16_BoardInteraction, AtTheStartOnlyTheIntercessorsAreClickableAndOfferThei
     const UnitId gants = session.state().units[1].id;
     ASSERT_TRUE(board.active());
     EXPECT_TRUE(board.clickable(marines));
-    EXPECT_FALSE(board.clickable(gants));  // drawn grey
+    EXPECT_FALSE(board.clickable(gants));
+    EXPECT_TRUE(board.greyed(gants));
+    EXPECT_FALSE(board.greyed(marines));
     EXPECT_EQ(board.hint(session.state()), "Click a unit to move.");
     EXPECT_TRUE(board.waiting_for_click());
     EXPECT_TRUE(board.step_buttons().empty());
@@ -708,6 +710,8 @@ TEST(M16_BoardInteraction, AtTheStartOnlyTheIntercessorsAreClickableAndOfferThei
     EXPECT_TRUE(moving.clickable(marines));
     EXPECT_FALSE(moving.clickable(gants));
     EXPECT_FALSE(moving.waiting_for_click());  // dragging, not clicking: nothing is grey
+    EXPECT_FALSE(moving.greyed(gants));
+    EXPECT_FALSE(moving.greyed(marines));
     EXPECT_FALSE(moving.end_phase().has_value());
     const auto steps = moving.step_buttons();
     EXPECT_EQ(steps, (std::vector<GameAction>{action::CommitUnitMove{}, action::ResetUnitMove{}}));
@@ -817,8 +821,10 @@ TEST(M16_BoardInteraction, WithNoUnitLeftToActOnlyTheEndPhaseButtonIsOffered) {
     ASSERT_EQ(legal, (std::vector<GameAction>{action::EndShootStep{}}));  // no unit can shoot
     const BoardInteraction board(gs, legal);
     EXPECT_TRUE(board.active());
-    EXPECT_FALSE(board.waiting_for_click());  // nothing is grey
+    EXPECT_FALSE(board.waiting_for_click());
     EXPECT_FALSE(board.clickable(gs.units[0].id));
+    EXPECT_TRUE(board.greyed(gs.units[0].id));  // no unit is left to act: everything is grey
+    EXPECT_TRUE(board.greyed(gs.units[1].id));
     EXPECT_EQ(board.hint(gs), "No units left to shoot with.");
     EXPECT_TRUE(board.step_buttons().empty());
     ASSERT_TRUE(board.end_phase().has_value());
@@ -835,7 +841,9 @@ TEST(M16_BoardInteraction, OtherDecisionsStayInTheSidebarAndNothingIsGrey) {
     const BoardInteraction board(session.state(), session.legal());
     EXPECT_FALSE(board.active());
     EXPECT_FALSE(board.clickable(marines));
+    EXPECT_FALSE(board.greyed(marines));  // the sidebar's decisions grey nothing
     EXPECT_FALSE(BoardInteraction().active());  // replay mode
+    EXPECT_FALSE(BoardInteraction().greyed(marines));
 }
 
 // M16 acceptance (logic-level proxy): full games played with board clicks, menus, step buttons, drags and
