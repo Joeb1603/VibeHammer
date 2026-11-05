@@ -634,7 +634,9 @@ logic).
   action bar shows who is rolling and what for ("Side A rolls: Space Marines", "Hit rolls (05.01)"), outlined
   in the roller's colour, so it always matches the pop-up. When the last card closes, everything moves on to
   the current state and the next decision. The board takes no clicks or drags meanwhile (zoom and pan still
-  work).
+  work), and offers nothing from the next decision: no target line or "Pick a target" label, no grey, no
+  selection outline, no move handle, no menu, and Esc does nothing. The board's click state is rebuilt for the
+  real decision when the last card closes (e.g. after a charge roll, target picking only starts after Done).
 - No cards for replays, loads, undo or new games (the log size at that point is taken as already seen), or
   for `--steps` runs unless `--dice 1` (keep) or `--dice 2` (keep and reveal the first card).
 

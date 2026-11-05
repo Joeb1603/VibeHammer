@@ -311,9 +311,14 @@ private:
     // rolled (the state before that action), so the board and bars don't run ahead of the roll.
     const core::GameState& state() const {
         if (mode_ != Mode::Play) return timeline_.frame(frame_).state;
-        if (before_dice_ && dice_.active()) return *before_dice_;
+        if (before_dice_ && waiting_for_dice()) return *before_dice_;
         return session_->state();
     }
+
+    // D-033: dice pop-ups are open. Nothing from the next decision is drawn or accepted meanwhile: the board
+    // is inactive (no target line, grey, outline, menu or clicks), there is no move handle, and the action
+    // bar shows who is rolling. Everything is rebuilt for the real decision when the last card closes.
+    bool waiting_for_dice() const { return mode_ == Mode::Play && dice_.active(); }
 
     Rectangle board_area() const {
         const float top = bar_height_ + action_height_;
@@ -357,6 +362,15 @@ private:
 
     // D-029: the board's click state for the current decision, rebuilt whenever the decision changes.
     void sync_board() {
+        if (waiting_for_dice()) {
+            // D-033: the session has already moved on to the next decision; don't offer it yet.
+            board_ = BoardInteraction();
+            board_key_.reset();
+            menu_.clear();
+            open_menu_ = false;
+            menu_anchor_.reset();
+            return;
+        }
         const std::size_t step = mode_ == Mode::Play ? session_->history().size() : 0;
         const BoardKey key{generation_, mode_, step};
         if (board_key_ == key) return;
@@ -401,7 +415,7 @@ private:
 
     // The unit being moved model by model, if it is this player's MoveModels decision.
     std::optional<core::UnitId> moving_unit() const {
-        if (mode_ != Mode::Play || !session_->pending()) return std::nullopt;
+        if (mode_ != Mode::Play || !session_->pending() || waiting_for_dice()) return std::nullopt;  // D-033
         if (const auto* d = std::get_if<core::decision::MoveModels>(&session_->pending()->kind)) return d->unit;
         return std::nullopt;
     }
@@ -437,7 +451,7 @@ private:
             draw_ring_tooltip(camera_.to_world(mouse));
         }
 
-        if (dice_.active()) return;  // D-033: the board waits while a dice pop-up is open (zoom and pan still work)
+        if (waiting_for_dice()) return;  // D-033: the board waits while a dice pop-up is open (zoom and pan still work)
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
         if (drag_) drag_->current = camera_.to_world(mouse);
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && drag_) release(mouse);
@@ -488,7 +502,7 @@ private:
     }
 
     void handle_keys() {
-        if (mode_ == Mode::Play && IsKeyPressed(KEY_ESCAPE)) board_.cancel();
+        if (mode_ == Mode::Play && !waiting_for_dice() && IsKeyPressed(KEY_ESCAPE)) board_.cancel();
         if (mode_ != Mode::Replay) return;
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) go_to(frame_ + 1);
         if ((IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) && frame_ > 0) go_to(frame_ - 1);
