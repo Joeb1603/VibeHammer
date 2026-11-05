@@ -227,7 +227,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M15: Client UI improvements
+## M15: Client UI improvements ✅ (done)
 **Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
 
 > Make the client easier to read and use (D-028): scale the UI to the monitor's DPI with a UI scale slider and open maximized; replace the movable windows with a fixed sidebar (Decision, Game, Log, Files) and a phase bar across the top of the board (round, whose turn, the phase track, the current step and who is being waited for); draw each ring overlay only when it is relevant, with a colour legend; replace the wound number with pips on damaged models. Client only: no engine changes.
