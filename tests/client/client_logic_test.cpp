@@ -22,6 +22,8 @@
 #include "event_text.hpp"
 #include "melee_plan.hpp"
 #include "move_plan.hpp"
+#include "overlay_plan.hpp"
+#include "phase_track.hpp"
 #include "session.hpp"
 #include "shot_plan.hpp"
 #include "core/data/load_error.hpp"
@@ -359,6 +361,106 @@ TEST(M12_FullGame, AGameCanBePlayedFromRoundOneToGameOverThroughTheUiLayer) {
                           "SelectToFight", "Fight", "OrderCasualties"}) {
         EXPECT_GT(kinds[k], 0) << k;
     }
+}
+
+// ==== M15: rings only when relevant, and the phase bar (D-028) ====
+
+namespace {
+
+std::size_t count_rings(const std::vector<Ring>& rings, RingKind kind) {
+    return static_cast<std::size_t>(
+        std::count_if(rings.begin(), rings.end(), [&](const Ring& r) { return r.kind == kind; }));
+}
+
+}  // namespace
+
+TEST(M15_OverlayPlan, NoRingsWhileSelectingAUnitToMove) {
+    const GameSession session(wh40k::test::load_v1_scenario());
+    ASSERT_TRUE(std::holds_alternative<decision::MoveUnits>(session.pending()->kind));
+    EXPECT_TRUE(plan_overlays(session.state(), session.state().units[0].models[0].id, OverlayToggles{}).empty());
+}
+
+TEST(M15_OverlayPlan, MovingAUnitShowsEngagementAroundEnemiesAndCoherencyAroundTheMover) {
+    GameSession session(wh40k::test::load_v1_scenario());
+    const Unit& marines = session.state().units[0];
+    ASSERT_TRUE(session.submit(action::StartMove{marines.id, MoveType::Normal, std::nullopt}).ok());
+    const auto rings = plan_overlays(session.state(), std::nullopt, OverlayToggles{});
+    EXPECT_EQ(count_rings(rings, RingKind::Engagement), 10u);  // every Termagant
+    EXPECT_EQ(count_rings(rings, RingKind::Coherency), 5u);    // every Intercessor
+    EXPECT_EQ(rings.size(), 15u);
+    for (const Ring& r : rings) {
+        const bool gant = r.model.v >= session.state().units[1].models.front().id.v;
+        EXPECT_EQ(gant, r.kind == RingKind::Engagement);
+        EXPECT_FLOAT_EQ(r.distance_mm, in(2));
+    }
+    // Each ring can be switched off.
+    OverlayToggles off;
+    off.engagement = false;
+    EXPECT_EQ(plan_overlays(session.state(), std::nullopt, off).size(), 5u);
+    off.coherency = false;
+    EXPECT_TRUE(plan_overlays(session.state(), std::nullopt, off).empty());
+}
+
+TEST(M15_OverlayPlan, WeaponRangesOnlyForTheDecidingSidesSelectedModelWhileChoosingShots) {
+    const GameState gs = wh40k::test::shoot_step_state();
+    ASSERT_TRUE(std::holds_alternative<decision::Shoot>(gs.pending->kind));
+    const auto rings = plan_overlays(gs, gs.units[0].models[0].id, OverlayToggles{});
+    ASSERT_EQ(rings.size(), 2u);  // Bolt Rifle 24" (both profiles) and Bolt pistol 12"
+    EXPECT_EQ(count_rings(rings, RingKind::WeaponRange), 2u);
+    EXPECT_FLOAT_EQ(rings[0].distance_mm, in(24));
+    EXPECT_FLOAT_EQ(rings[1].distance_mm, in(12));
+    EXPECT_TRUE(plan_overlays(gs, gs.units[1].models[0].id, OverlayToggles{}).empty());  // an enemy model
+    EXPECT_TRUE(plan_overlays(gs, std::nullopt, OverlayToggles{}).empty());               // nothing selected
+}
+
+TEST(M15_OverlayPlan, TheChargeRollIsShownInTheChargePhase) {
+    const GameState gs = wh40k::test::after_successful_charge();
+    ASSERT_EQ(gs.flow.stage, Stage::Charge);
+    const auto rings = plan_overlays(gs, std::nullopt, OverlayToggles{});
+    EXPECT_EQ(count_rings(rings, RingKind::ChargeDistance), 5u);
+    EXPECT_FLOAT_EQ(rings.front().distance_mm, in(10));  // the charge roll (4 + 6)
+    OverlayToggles off;
+    off.charge = false;
+    EXPECT_TRUE(plan_overlays(gs, std::nullopt, off).empty());
+}
+
+TEST(M15_PhaseTrack, TheStartOfTheGameIsSideAsMovementPhase) {
+    const GameSession session(wh40k::test::load_v1_scenario());
+    const PhaseTrack t = phase_track(session.state());
+    EXPECT_EQ(t.round, 1);
+    EXPECT_EQ(t.rounds, 5);
+    EXPECT_EQ(t.turn, Side::A);
+    ASSERT_TRUE(t.phase_index.has_value());
+    EXPECT_EQ(kTurnPhases[*t.phase_index], Phase::Movement);
+    EXPECT_EQ(t.step, "Move Units (09.02)");
+    EXPECT_FALSE(t.waiting_for.has_value());
+    EXPECT_FALSE(t.result.has_value());
+}
+
+TEST(M15_PhaseTrack, ADecisionForTheOpponentNamesWhoTheGameIsWaitingFor) {
+    GameSession session(wh40k::test::after_successful_charge());
+    ASSERT_TRUE(session.submit(action::EndChargeStep{}).ok());
+    ASSERT_TRUE(session.submit(action::EndPileIns{}).ok());  // Side A's pile-ins are over: Side B piles in
+    const PhaseTrack t = phase_track(session.state());
+    EXPECT_EQ(t.turn, Side::A);
+    EXPECT_EQ(kTurnPhases[*t.phase_index], Phase::Fight);
+    EXPECT_EQ(t.step, "Pile In (12.02)");
+    EXPECT_EQ(t.waiting_for, Side::B);
+}
+
+TEST(M15_PhaseTrack, AFinishedGameShowsItsResult) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    gs.result = GameResult{Side::A, "D-007: Side B has no models on the battlefield; Side A wins"};
+    const PhaseTrack t = phase_track(gs);
+    ASSERT_TRUE(t.result.has_value());
+    EXPECT_EQ(*t.result, "D-007: Side B has no models on the battlefield; Side A wins");
+    EXPECT_FALSE(t.turn.has_value());
+}
+
+TEST(M15_PhaseTrack, StageNamesAreSpacedForDisplay) {
+    EXPECT_EQ(spaced("MoveUnits"), "Move Units");
+    EXPECT_EQ(spaced("StartOfBattleRound"), "Start Of Battle Round");
+    EXPECT_EQ(spaced("Shoot"), "Shoot");
 }
 
 // ==== M12 acceptance: no rules logic in the client (structural) ====

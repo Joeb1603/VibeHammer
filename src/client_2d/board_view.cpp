@@ -41,13 +41,22 @@ void draw_model(const core::Unit& unit, const core::Model& model, const BoardCam
     DrawCircleV(c, r, fill);
     DrawCircleLinesV(c, r, RAYWHITE);
 
-    // Wounds remaining on multi-wound models.
-    if (model.characteristics.wounds > 1) {
-        const std::string text = std::to_string(model.wounds_remaining);
-        const int size = std::clamp(static_cast<int>(r), 8, 40);
-        const int width = MeasureText(text.c_str(), size);
-        const Color colour = model.wounds_remaining < model.characteristics.wounds ? YELLOW : RAYWHITE;
-        DrawText(text.c_str(), static_cast<int>(c.x) - width / 2, static_cast<int>(c.y) - size / 2, size, colour);
+    // D-028: a damaged model shows one pip per wound, filled for the wounds it has left. Models at full
+    // wounds show nothing (the tooltip gives the numbers).
+    const int wounds = model.characteristics.wounds;
+    if (model.wounds_remaining < wounds && wounds > 0) {
+        const int shown = std::min(wounds, 6);
+        const float pip = std::max(3.0f, r * 0.24f);
+        const float step = pip * 2.4f;
+        const float x0 = c.x - step * static_cast<float>(shown - 1) * 0.5f;
+        for (int i = 0; i < shown; ++i) {
+            const Vector2 p{x0 + step * static_cast<float>(i), c.y};
+            if (i < model.wounds_remaining) {
+                DrawCircleV(p, pip, RAYWHITE);
+            } else {
+                DrawCircleLinesV(p, pip, RAYWHITE);
+            }
+        }
     }
 }
 

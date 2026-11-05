@@ -475,3 +475,27 @@ of the charge for that reason.
 - The commit still checks 03.01 Ending a Move for the whole unit (`move_end_problems`).
 - The client's "Move unit" handle proposes the models furthest along the move first, so translating a
   unit whose bases touch never ends a model on one that has yet to move.
+
+## D-028: Client layout, scaling and overlays (M15)
+**Decided:** 2026-11-05 (agreed with the user). Display only; no rules logic in the client (D-024).
+- **Scale.** The UI scale is the monitor's DPI scale (`GetWindowScaleDPI`) times a user factor from the
+  "UI scale" slider (75-250%), clamped to 0.75-3. It scales ImGui's fonts and sizes and every raylib
+  pixel size (sidebar width, phase bar, text, line widths, the unit handle). The window opens maximized.
+  On Windows the UI font is Segoe UI when `C:/Windows/Fonts/segoeui.ttf` exists, else ImGui's default.
+- **Layout.** Fixed panels that cannot be moved or resized: a phase bar across the top of the board and
+  a sidebar on the right with a toolbar (New game, seed, Undo), Decision (or the replay controls), Game
+  (units, CP, overlays and legend, UI scale), Log, and Files (closed by default: save, load, export and
+  replays).
+- **Phase bar** (`phase_track`, client logic): battle round, whose turn it is, the phase track Command,
+  Movement, Shooting, Charge, Fight with the current phase highlighted, the current step with its rule,
+  and the side being waited for when it is not the turn side (reactive decisions, 01.03).
+- **Rings** (`plan_overlays`, client logic), each only when relevant and each switchable off:
+  - engagement range (2", 03.04), around the enemy models of the unit being moved, while a
+    `MoveModels` decision is pending (any move type);
+  - coherency (2", 03.03), around the unit being moved, during `MoveModels`. The 9" clause gets no
+    ring: one around every model was clutter;
+  - weapon ranges, around the selected model of the deciding side, during the `Shoot` decision;
+  - charge distance, around a unit with a charge roll, in the Charge phase.
+- **Wounds.** A model at full wounds shows nothing; a damaged model shows a pip per wound, filled for
+  wounds remaining. The tooltip gives the numbers.
+

@@ -224,6 +224,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 - The "Move unit" handle moves a touching unit forwards, backwards and sideways without a rejected proposal.
 - Every replay regenerates byte-identically, including a new `m14_close_formation.json`.
 
+
+---
+
+## M15: Client UI improvements
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Make the client easier to read and use (D-028): scale the UI to the monitor's DPI with a UI scale slider and open maximized; replace the movable windows with a fixed sidebar (Decision, Game, Log, Files) and a phase bar across the top of the board (round, whose turn, the phase track, the current step and who is being waited for); draw each ring overlay only when it is relevant, with a colour legend; replace the wound number with pips on damaged models. Client only: no engine changes.
+
+**Acceptance**
+- At the start of a game no rings are drawn. Engagement and coherency rings appear while models are being moved, weapon ranges while choosing shots, the charge distance after a charge roll; each can be switched off.
+- The phase bar shows the battle round, the turn side, the current phase highlighted in the Command → Fight track and the current step; it says who is being waited for when that is not the turn side.
+- The panels cannot be moved or resized; the UI scale slider resizes text and widgets.
+- Models at full wounds carry no number; damaged models show pips.
 ---
 
 ## Later (post-V1, rough order)

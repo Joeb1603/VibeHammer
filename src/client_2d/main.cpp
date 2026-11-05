@@ -35,6 +35,7 @@
 #include "event_text.hpp"
 #include "move_plan.hpp"
 #include "overlays.hpp"
+#include "phase_track.hpp"
 #include "session.hpp"
 #include "timeline.hpp"
 
@@ -45,9 +46,12 @@ namespace fs = std::filesystem;
 
 constexpr int kWindowWidth = 1400;
 constexpr int kWindowHeight = 860;
-constexpr float kPanelWidth = 470.0f;
+// Sizes at UI scale 1 (D-028); multiplied by ui_scale().
+constexpr float kPanelWidth = 440.0f;
 constexpr float kHandlePx = 11.0f;
 constexpr float kDragThresholdPx = 3.0f;
+constexpr float kRulerText = 18.0f;
+constexpr float kFontSize = 15.0f;
 const fs::path kRepoRoot{WH40K_REPO_ROOT};
 const fs::path kScenario = kRepoRoot / "data/scenarios/v1_skirmish.json";
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
@@ -217,13 +221,33 @@ public:
 
     void set_zoom(float px_per_mm) { camera_.set_zoom(px_per_mm, board_centre()); }
 
-    void frame(bool layout_fixed) {
+    // D-028: the UI scale is the screen's scale times the user's "UI scale" slider.
+    void set_auto_scale(float scale) { auto_scale_ = scale; }
+    float ui_scale() const { return std::clamp(auto_scale_ * user_scale_, 0.75f, 3.0f); }
+    float panel_width() const { return kPanelWidth * ui_scale(); }
+
+    void apply_scale() {
+        const float s = ui_scale();
+        if (s == applied_scale_) return;
+        if (applied_scale_ == 0.0f) base_style_ = ImGui::GetStyle();
+        ImGuiStyle& style = ImGui::GetStyle();
+        style = base_style_;
+        style.ScaleAllSizes(s);
+        style.FontSizeBase = kFontSize;
+        style.FontScaleDpi = s;
+        applied_scale_ = s;
+        fit_pending_ = true;
+    }
+
+    void frame() {
+        apply_scale();
         ClearBackground(Color{24, 26, 30, 255});
         if (!has_view()) {
             // No game and no replay (e.g. the scenario could not be loaded): show why, and the panel can
             // still load a save or a replay.
-            DrawText(status_.c_str(), 20, 20, 18, RAYWHITE);
-            draw_ui(layout_fixed);
+            const int size = static_cast<int>(kRulerText * ui_scale());
+            DrawText(status_.c_str(), size, size, size, RAYWHITE);
+            draw_ui();
             return;
         }
         if (fit_pending_ || IsWindowResized()) {
@@ -235,9 +259,9 @@ public:
         if (!io.WantCaptureKeyboard) handle_keys();
 
         draw_board(state(), camera_);
-        draw_overlays(state(), camera_, overlays_, selected_unit_, selected_model_, friendly_side());
+        draw_overlays(state(), camera_, plan_overlays(state(), selected_model_, overlays_), ui_scale());
         draw_selection_and_moves();
-        draw_ui(layout_fixed);
+        draw_ui();
     }
 
 private:
@@ -249,13 +273,9 @@ private:
         return mode_ == Mode::Play ? session_->state() : timeline_.frame(frame_).state;
     }
 
-    core::Side friendly_side() const {
-        return mode_ == Mode::Play ? session_->deciding_side() : core::active_side(state());
-    }
-
     Rectangle board_area() const {
-        return Rectangle{0.0f, 0.0f, static_cast<float>(GetScreenWidth()) - kPanelWidth,
-                         static_cast<float>(GetScreenHeight())};
+        return Rectangle{0.0f, bar_height_, static_cast<float>(GetScreenWidth()) - panel_width(),
+                         static_cast<float>(GetScreenHeight()) - bar_height_};
     }
 
     Vector2 board_centre() const {
@@ -307,7 +327,7 @@ private:
 
     void press(Vector2 mouse, const std::optional<HoveredModel>& hovered) {
         const auto moving = moving_unit();
-        if (const auto handle = unit_handle_screen(); handle && distance_px(*handle, mouse) <= kHandlePx) {
+        if (const auto handle = unit_handle_screen(); handle && distance_px(*handle, mouse) <= kHandlePx * ui_scale()) {
             drag_ = Drag{true, {}, *moving, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
             return;
         }
@@ -331,7 +351,7 @@ private:
     void release(Vector2 mouse) {
         const Drag d = *drag_;
         drag_.reset();
-        if (distance_px(d.grab_screen, mouse) < kDragThresholdPx) return;  // a click, not a drag
+        if (distance_px(d.grab_screen, mouse) < kDragThresholdPx * ui_scale()) return;  // a click, not a drag
         if (d.whole_unit) {
             // The "Move unit" handle: one ProposeModelMove per model, each validated by the engine.
             std::vector<std::string> all;
@@ -369,7 +389,9 @@ private:
         char text[64];
         std::snprintf(text, sizeof(text), "%.2f\" / %.2f\"", static_cast<double>(core::mm_to_inches(r->moved_mm)),
                       static_cast<double>(core::mm_to_inches(r->max_mm)));
-        DrawText(text, static_cast<int>(at.x) + 14, static_cast<int>(at.y) - 22, 18, r->over ? RED : RAYWHITE);
+        const float s = ui_scale();
+        DrawText(text, static_cast<int>(at.x + 14.0f * s), static_cast<int>(at.y - 22.0f * s),
+                 static_cast<int>(kRulerText * s), r->over ? RED : RAYWHITE);
     }
 
     void draw_selection_and_moves() {
@@ -402,8 +424,8 @@ private:
         }
         if (const auto handle = unit_handle_screen()) {
             const Vector2 h = *handle;
-            DrawPoly(h, 4, kHandlePx, 45.0f, Color{255, 220, 80, 230});
-            DrawPolyLines(h, 4, kHandlePx, 45.0f, BLACK);
+            DrawPoly(h, 4, kHandlePx * ui_scale(), 45.0f, Color{255, 220, 80, 230});
+            DrawPolyLines(h, 4, kHandlePx * ui_scale(), 45.0f, BLACK);
         }
         // The drag preview and the live ruler.
         if (drag_) {
@@ -434,42 +456,126 @@ private:
         }
     }
 
-    void draw_ui(bool layout_fixed) {
-        const ImGuiCond cond = layout_fixed ? ImGuiCond_Always : ImGuiCond_FirstUseEver;
-        const float x = static_cast<float>(GetScreenWidth()) - kPanelWidth;
-        const float h = static_cast<float>(GetScreenHeight());
-        ImGui::SetNextWindowPos(ImVec2(x, 0.0f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.44f), cond);
-        ImGui::Begin("VibeHammer");
-        draw_game_section();
-        ImGui::End();
-        if (!has_view()) return;
+    // ---- fixed layout (D-028): the phase bar over the board, the sidebar on the right ----
 
-        ImGui::SetNextWindowPos(ImVec2(x, h * 0.44f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.32f), cond);
-        ImGui::Begin(mode_ == Mode::Play ? "Decision" : "Replay");
+    void draw_ui() {
+        const float w = static_cast<float>(GetScreenWidth());
+        const float h = static_cast<float>(GetScreenHeight());
+        constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                            ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                                            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus;
+        if (has_view()) {
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float bar = ImGui::GetFrameHeightWithSpacing() * 2.0f + style.WindowPadding.y * 2.0f;
+            if (bar != bar_height_) {
+                bar_height_ = bar;
+                fit_pending_ = true;
+            }
+            ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+            ImGui::SetNextWindowSize(ImVec2(w - panel_width(), bar_height_));
+            ImGui::Begin("##phasebar", nullptr, kFixed | ImGuiWindowFlags_NoScrollbar);
+            draw_phase_bar();
+            ImGui::End();
+        }
+        ImGui::SetNextWindowPos(ImVec2(w - panel_width(), 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(panel_width(), h));
+        ImGui::Begin("##sidebar", nullptr, kFixed);
+        draw_sidebar();
+        ImGui::End();
+    }
+
+    static ImVec4 to_imvec(Color c, float alpha = 1.0f) {
+        return ImVec4(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, alpha);
+    }
+
+    // A label on a coloured background that does nothing when clicked.
+    static void chip(const char* label, ImVec4 colour) {
+        ImGui::PushStyleColor(ImGuiCol_Button, colour);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, colour);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, colour);
+        ImGui::Button(label);
+        ImGui::PopStyleColor(3);
+    }
+
+    void draw_phase_bar() {
+        const core::GameState& s = state();
+        const PhaseTrack t = phase_track(s);
+        const float gap = ImGui::GetFontSize() * 1.5f;
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Battle round %d of %d", t.round, t.rounds);
+        if (t.result) {
+            ImGui::SameLine(0.0f, gap);
+            ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "Game over: %s", t.result->c_str());
+            return;
+        }
+        if (t.turn) {
+            ImGui::SameLine(0.0f, gap);
+            const std::string turn = side_name(*t.turn) + "'s turn: " + s.side(*t.turn).name;
+            chip(turn.c_str(), to_imvec(side_color(*t.turn)));
+        }
+        // The phase track: done phases dimmed, the current one highlighted in the turn side's colour.
+        ImGui::SameLine(0.0f, gap);
+        for (std::size_t i = 0; i < kTurnPhases.size(); ++i) {
+            if (i > 0) {
+                ImGui::SameLine();
+                ImGui::TextDisabled(">");
+                ImGui::SameLine();
+            }
+            const std::string name(core::phase_name(kTurnPhases[i]));
+            if (t.phase_index && i == *t.phase_index) {
+                chip(name.c_str(), to_imvec(side_color(t.turn.value_or(core::Side::A))));
+            } else if (t.phase_index && i < *t.phase_index) {
+                ImGui::TextDisabled("%s", name.c_str());
+            } else {
+                ImGui::TextUnformatted(name.c_str());
+            }
+        }
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Step:");
+        ImGui::SameLine();
+        ImGui::TextUnformatted(t.step.c_str());
+        if (t.waiting_for) {
+            ImGui::SameLine(0.0f, gap);
+            const std::string waiting = "Waiting for " + side_name(*t.waiting_for);
+            chip(waiting.c_str(), to_imvec(side_color(*t.waiting_for), 0.85f));
+        }
+        ImGui::SameLine(0.0f, gap);
+        ImGui::TextDisabled("CP: Side A %d, Side B %d", s.command_points[0], s.command_points[1]);
+    }
+
+    void draw_sidebar() {
+        draw_toolbar();
+        if (!has_view()) {
+            draw_files();
+            return;
+        }
+        const float frame = ImGui::GetFrameHeightWithSpacing();
+        ImGui::SeparatorText(mode_ == Mode::Play ? "Decision" : "Replay");
+        const float decision_h = std::max(frame * 4.0f, ImGui::GetContentRegionAvail().y * 0.42f);
+        ImGui::BeginChild("##decision", ImVec2(0.0f, decision_h));
         if (mode_ == Mode::Play) {
             draw_decision();
         } else {
             draw_replay_controls();
         }
-        ImGui::End();
-
-        ImGui::SetNextWindowPos(ImVec2(x, h * 0.76f), cond);
-        ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.24f), cond);
-        ImGui::Begin("Log");
+        ImGui::EndChild();
+        if (ImGui::CollapsingHeader("Game", ImGuiTreeNodeFlags_DefaultOpen)) draw_game_info();
+        ImGui::SeparatorText("Log");
+        const float files_h = files_open_ ? frame * 6.0f : frame;
+        const float log_h = std::max(frame * 4.0f, ImGui::GetContentRegionAvail().y - files_h);
+        ImGui::BeginChild("##log", ImVec2(0.0f, log_h));
         draw_logs();
-        ImGui::End();
+        ImGui::EndChild();
+        draw_files();
     }
 
-    void draw_game_section() {
-        if (ImGui::Button("New game (V1 scenario)")) new_game();
+    void draw_toolbar() {
+        if (ImGui::Button("New game")) new_game();
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(150.0f);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
         ImGui::InputScalar("seed", ImGuiDataType_U64, &seed_);
         const bool playing = mode_ == Mode::Play && session_.has_value();
         if (playing) {
-            ImGui::Text("This game's seed: %llu", static_cast<unsigned long long>(session_->seed()));
             ImGui::SameLine();
             ImGui::BeginDisabled(!session_->can_undo());
             if (ImGui::Button("Undo")) {
@@ -481,7 +587,55 @@ private:
                 scroll_log_ = true;
             }
             ImGui::EndDisabled();
+            ImGui::TextDisabled("This game's seed: %llu", static_cast<unsigned long long>(session_->seed()));
         }
+        if (!status_.empty()) ImGui::TextWrapped("%s", status_.c_str());
+    }
+
+    void draw_game_info() {
+        const core::GameState& s = state();
+        for (const core::Unit& u : s.units) {
+            ImGui::TextColored(to_imvec(side_color(u.side)), "%s", side_name(u.side).c_str());
+            ImGui::SameLine();
+            ImGui::Text("%s (unit %u): %zu/%d models%s", u.name.c_str(), u.id.v, u.models.size(), u.starting_strength,
+                        u.battle_shocked ? ", battle-shocked" : "");
+        }
+        ImGui::Spacing();
+        ImGui::TextDisabled("Rings, each shown only when it is relevant:");
+        overlay_toggle("Engagement range", RingKind::Engagement, &overlays_.engagement,
+                       "2\" around enemy models while you move a unit (03.04)");
+        overlay_toggle("Coherency", RingKind::Coherency, &overlays_.coherency,
+                       "2\" around each model of the unit you are moving (03.03)");
+        overlay_toggle("Weapon ranges", RingKind::WeaponRange, &overlays_.ranges,
+                       "the selected model's weapon ranges while choosing shots");
+        overlay_toggle("Charge distance", RingKind::ChargeDistance, &overlays_.charge,
+                       "the charge roll around a unit that rolled to charge (11.02)");
+        ImGui::Spacing();
+        if (ImGui::Button("Fit board")) fit_pending_ = true;
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+        int percent = static_cast<int>(std::lround(user_scale_ * 100.0f));
+        if (ImGui::SliderInt("UI scale", &percent, 75, 250, "%d%%")) user_scale_ = static_cast<float>(percent) / 100.0f;
+        ImGui::TextDisabled("click: select, left-drag: move, right-drag: pan, wheel: zoom");
+    }
+
+    static void overlay_toggle(const char* label, RingKind kind, bool* value, const char* meaning) {
+        ImGui::PushID(label);
+        const float size = ImGui::GetFrameHeight();
+        ImGui::ColorButton("##swatch", to_imvec(ring_color(kind)),
+                           ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(size, size));
+        ImGui::SameLine();
+        ImGui::Checkbox(label, value);
+        ImGui::Indent(size + ImGui::GetStyle().ItemSpacing.x);
+        ImGui::TextDisabled("%s", meaning);
+        ImGui::Unindent(size + ImGui::GetStyle().ItemSpacing.x);
+        ImGui::PopID();
+    }
+
+    void draw_files() {
+        files_open_ = ImGui::CollapsingHeader("Files: save, load, replays");
+        if (!files_open_) return;
+        const bool playing = mode_ == Mode::Play && session_.has_value();
         ImGui::InputText("##save", save_path_, sizeof(save_path_));
         ImGui::SameLine();
         ImGui::BeginDisabled(!playing);
@@ -511,34 +665,6 @@ private:
             }
             ImGui::EndCombo();
         }
-        if (!status_.empty()) ImGui::TextWrapped("%s", status_.c_str());
-        if (!has_view()) return;
-        ImGui::Separator();
-        const core::GameState& s = state();
-        const core::Stage stage = s.flow.stage;
-        ImGui::Text("Round %d/%d   %s", s.flow.battle_round, s.battle_rounds,
-                    stage != core::Stage::NotStarted && stage != core::Stage::GameOver
-                        ? ("Turn: " + side_name(core::turn_side(s))).c_str()
-                        : "");
-        ImGui::Text("%s phase, %s (%s)", std::string(core::phase_name(core::phase_of(stage))).c_str(),
-                    std::string(core::stage_name(stage)).c_str(), std::string(core::stage_rule(stage)).c_str());
-        ImGui::Text("CP: Side A %d, Side B %d", s.command_points[0], s.command_points[1]);
-        for (const core::Unit& u : s.units) {
-            ImGui::Text("%s: %s (unit %u), %zu/%d models%s", side_name(u.side).c_str(), u.name.c_str(), u.id.v,
-                        u.models.size(), u.starting_strength, u.battle_shocked ? ", battle-shocked" : "");
-        }
-        if (s.result) ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%s", s.result->reason.c_str());
-        ImGui::Separator();
-        ImGui::Checkbox("Coherency", &overlays_.coherency);
-        ImGui::SameLine();
-        ImGui::Checkbox("Engagement", &overlays_.engagement);
-        ImGui::SameLine();
-        ImGui::Checkbox("Ranges", &overlays_.ranges);
-        ImGui::SameLine();
-        ImGui::Checkbox("Charge", &overlays_.charge);
-        if (ImGui::Button("Fit board")) fit_pending_ = true;
-        ImGui::SameLine();
-        ImGui::TextDisabled("click: select, left-drag: move, right-drag: pan, wheel: zoom");
     }
 
     void draw_decision() {
@@ -665,6 +791,12 @@ private:
     std::vector<std::string> reasons_;  // the last rejection, rule-cited
     bool fit_pending_ = true;
     bool scroll_log_ = true;
+    bool files_open_ = false;
+    float bar_height_ = 0.0f;     // the phase bar's height, measured each frame
+    float auto_scale_ = 1.0f;     // the screen's scale (D-028)
+    float user_scale_ = 1.0f;     // the "UI scale" slider
+    float applied_scale_ = 0.0f;  // the scale the ImGui style was last built for
+    ImGuiStyle base_style_;
     char path_[512] = {};
     char save_path_[512] = {};
     char export_path_[512] = {};
@@ -691,7 +823,22 @@ int main(int argc, char** argv) {
     SetTargetFPS(60);
     rlImGuiSetup(true);
 
+    // D-028: open maximized and scale the UI to the screen: the larger of the monitor's DPI scale and its
+    // height relative to 1080 pixels (some high-DPI screens report a DPI scale of 1).
+    MaximizeWindow();
+    const int monitor = GetCurrentMonitor();
+    const float dpi = GetWindowScaleDPI().y;
+    const float by_height = static_cast<float>(GetMonitorHeight(monitor)) / 1080.0f;
+    // A crisp UI font where the system has one; ImGui 1.92 rasterises it at whatever size is used.
+    const fs::path ui_font = "C:/Windows/Fonts/segoeui.ttf";
+    std::error_code font_error;
+    if (fs::exists(ui_font, font_error)) {
+        ImGuiIO& io = ImGui::GetIO();
+        io.FontDefault = io.Fonts->AddFontFromFileTTF(ui_font.string().c_str(), kFontSize);
+    }
+
     App app(options.seed, options.scenario);
+    app.set_auto_scale(std::max({1.0f, dpi, by_height}));
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
     app.auto_steps(options.steps);
@@ -703,7 +850,7 @@ int main(int argc, char** argv) {
     while (!WindowShouldClose() && frames_left != 0) {
         BeginDrawing();
         rlImGuiBegin();
-        app.frame(options.screenshot.has_value());
+        app.frame();
         if (options.zoom && !zoom_applied) {
             app.set_zoom(*options.zoom);  // after the first fit
             zoom_applied = true;
