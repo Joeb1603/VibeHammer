@@ -3,8 +3,6 @@
 rules-summary.txt
 # Verbatim rules text extracted from the PDF. Regenerate with:
 #   python tools/extract_rules.py
-# Delete this line ONLY if the repo will stay private forever.
-docs/rules/
 
 # ---- Data tool cache ----
 data/.cache/
