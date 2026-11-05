@@ -411,13 +411,14 @@ std::optional<core::GameAction> DecisionPanel::draw_casualty_bar(const GameSessi
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
     const auto& order = casualties_->priority();
-    const std::string confirm = casualty_custom_ ? "Confirm order" : "Remove in this order";
+    const std::string confirm = casualty_custom_ ? "Use custom order" : "Use this order";
     if (!begin_bar(confirm)) return std::nullopt;
     headline(gs, session.pending()->side, core::describe(*session.pending()));
     bool back = false;
     if (!casualty_custom_) {
         // D-032: the default order, confirmed with one click, or "Custom order..." to change it.
-        std::string summary = "Models of the " + unit_name(gs, tmpl.target) + " are removed in this order (D-013): ";
+        std::string summary = "As the " + unit_name(gs, tmpl.target) +
+                              " lose models, they are taken off in this order (D-013): models ";
         constexpr std::size_t kShown = 10;
         for (std::size_t i = 0; i < order.size() && i < kShown; ++i) {
             summary += (i > 0 ? ", " : "") + std::to_string(order[i].v);
@@ -426,8 +427,8 @@ std::optional<core::GameAction> DecisionPanel::draw_casualty_bar(const GameSessi
         ImGui::TextWrapped("%s", summary.c_str());
         if (ImGui::Button("Custom order...")) casualty_custom_ = true;
     } else {
-        ImGui::TextWrapped("Most preferred first: move a model earlier or later, then confirm. Back restores the "
-                           "default order.");
+        ImGui::TextWrapped("The first model is taken off first. Move models earlier or later, then use the "
+                           "order. Back restores the default order.");
         const float cell = ImGui::GetFontSize() * 11.0f;
         const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
         if (ImGui::BeginTable("##casualty_grid", columns, ImGuiTableFlags_SizingStretchSame)) {

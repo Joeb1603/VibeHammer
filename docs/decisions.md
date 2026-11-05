@@ -605,7 +605,8 @@ logic).
   counts (04.02) when the model's weapon reaches more than one engaged unit. Back and a large green Fight
   sit on the right. Esc, Back and empty-board clicks behave as in D-031.
 - **Casualty order** (`OrderCasualties`, D-013) stays a sidebar-mode decision. The bar shows the default
-  order (unit order) and a large "Remove in this order" button, plus **Custom order...**. That opens a grid of
-  "n. model m" with earlier/later arrows, Back (restores the default order) and a large "Confirm order".
+  order (unit order: "As the <unit> lose models, they are taken off in this order: models 4, 5, ...") and a
+  large "Use this order" button, plus **Custom order...**. That opens a grid of "n. model m" with
+  earlier/later arrows, Back (restores the default order) and a large "Use custom order".
 - Attack batch, allocation order and coherency removal are plain button choices and stay as they were.
 
