@@ -224,3 +224,84 @@ TEST(R04_03_ResolveAttacks, InvalidSelectionIsProgrammerError) {
     EXPECT_THROW((void)select_weapon_target(gs, gs.units[0].models[0].id, 0, 0, UnitId{42}),
                  std::logic_error);
 }
+
+// ---- D-037: ability_effects / batch_context (read-only explanations for clients) ----
+
+TEST(R24_30_RapidFire, AbilityEffectsGiveTheExtraDiceOnlyWithinHalfRange) {
+    const GameState gs = load_v1_scenario();
+    const WeaponProfile& focused = marine_profile(gs, kBoltRifle, kFocused);  // [HEAVY] [RAPID FIRE 1]
+    const WeaponSelection in_half = sel(gs, 2, kBoltRifle, kFocused, gs.units[1].id);
+    const WeaponSelection outside = sel(gs, 0, kBoltRifle, kFocused, gs.units[1].id);
+    for (const WeaponSelection& s : {in_half, outside}) {
+        int extra = 0;
+        for (const AbilityEffect& e : ability_effects(focused, s, kShootingNoHeavy)) extra += e.extra_attack_dice;
+        EXPECT_EQ(focused.attacks.fixed_value() + extra, gather_attack_dice(focused, s, kShootingNoHeavy));
+    }
+    const auto effects = ability_effects(focused, in_half, kShootingNoHeavy);
+    ASSERT_EQ(effects.size(), focused.abilities.size());
+    bool found = false;
+    for (const AbilityEffect& e : effects) {
+        if (!std::holds_alternative<ability::RapidFire>(e.ability)) continue;
+        found = true;
+        EXPECT_TRUE(e.active);
+        EXPECT_EQ(e.extra_attack_dice, 1);
+    }
+    EXPECT_TRUE(found);
+    for (const AbilityEffect& e : ability_effects(focused, outside, kShootingNoHeavy)) {
+        if (std::holds_alternative<ability::RapidFire>(e.ability)) EXPECT_FALSE(e.active);
+    }
+}
+
+TEST(R24_16_Heavy, AbilityEffectsGivePlusOneToHitOnlyWhenTheConditionsApply) {
+    const GameState gs = load_v1_scenario();
+    const WeaponProfile& focused = marine_profile(gs, kBoltRifle, kFocused);
+    const WeaponSelection s = sel(gs, 2, kBoltRifle, kFocused, gs.units[1].id);
+    auto heavy = [&](const AttackContext& c) {
+        for (const AbilityEffect& e : ability_effects(focused, s, c)) {
+            if (std::holds_alternative<ability::Heavy>(e.ability)) return e;
+        }
+        return AbilityEffect{};
+    };
+    EXPECT_TRUE(heavy(kShootingHeavy).active);
+    EXPECT_EQ(heavy(kShootingHeavy).hit_modifier, make_attack_profile(focused, kShootingHeavy).hit_modifier);
+    EXPECT_FALSE(heavy(kShootingNoHeavy).active);
+    EXPECT_EQ(heavy(kShootingNoHeavy).hit_modifier, 0);
+}
+
+TEST(R24_16_Heavy, BatchContextRecoversWhetherTheBonusApplied) {
+    const GameState gs = load_v1_scenario();
+    const std::vector<WeaponSelection> sels{sel(gs, 2, kBoltRifle, kFocused, gs.units[1].id)};
+    for (const AttackContext& c : {kShootingHeavy, kShootingNoHeavy}) {
+        const auto batches = gather_attack_batches(gs, sels, c);
+        ASSERT_EQ(batches.size(), 1u);
+        EXPECT_EQ(batch_context(batches[0], sels[0], AttackType::Shooting), c);
+    }
+}
+
+TEST(R24_05_Blast, AbilityEffectsGiveXDicePerFiveModels) {
+    WeaponProfile frag;
+    frag.kind = WeaponKind::Ranged;
+    frag.attacks = DiceExpr::fixed(3);
+    frag.skill = 3;
+    frag.abilities = {ability::Blast{2}};
+    WeaponSelection s;
+    s.target_models_at_selection = 12;
+    const auto effects = ability_effects(frag, s, kShootingNoHeavy);
+    ASSERT_EQ(effects.size(), 1u);
+    EXPECT_TRUE(effects[0].active);
+    EXPECT_EQ(effects[0].extra_attack_dice, 4);
+    s.target_models_at_selection = 4;
+    EXPECT_FALSE(ability_effects(frag, s, kShootingNoHeavy)[0].active);
+}
+
+TEST(R24_37_Torrent, AbilityEffectsMarkTorrentActiveAndAssaultNot) {
+    WeaponProfile flamer;
+    flamer.kind = WeaponKind::Ranged;
+    flamer.attacks = DiceExpr::fixed(1);
+    flamer.abilities = {ability::Torrent{}, ability::Assault{}, ability::TwinLinked{}};
+    const auto effects = ability_effects(flamer, WeaponSelection{}, kShootingHeavy);
+    ASSERT_EQ(effects.size(), 3u);
+    EXPECT_TRUE(effects[0].active);
+    EXPECT_FALSE(effects[1].active);  // acts when the shooting type is chosen (10.05)
+    EXPECT_FALSE(effects[2].active);  // not implemented (D-026)
+}

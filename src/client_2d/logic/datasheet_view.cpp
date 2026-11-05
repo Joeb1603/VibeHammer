@@ -54,7 +54,10 @@ DatasheetWeaponRow weapon_row(const core::WeaponProfile& p) {
     r.armour_penetration = std::to_string(p.armour_penetration);
     r.damage = core::to_string(p.damage);
     std::vector<std::string> labels;
-    for (const core::WeaponAbility& a : p.abilities) labels.push_back(weapon_ability_label(a));
+    for (const core::WeaponAbility& a : p.abilities) {
+        labels.push_back(weapon_ability_label(a));
+        r.ability_help.push_back(weapon_ability_help(a));
+    }
     r.abilities = join(labels, " ");
     return r;
 }
@@ -190,6 +193,8 @@ DatasheetView datasheet_view(const core::Unit& unit) {
     }
     v.keywords = join(unit.keywords, ", ");
     v.faction_keywords = join(unit.faction_keywords, ", ");
+    for (const std::string& k : unit.keywords) v.keyword_help.push_back(keyword_help(k));
+    for (const std::string& k : unit.faction_keywords) v.faction_keyword_help.push_back(keyword_help(k, true));
     return v;
 }
 

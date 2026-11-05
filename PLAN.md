@@ -342,10 +342,24 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 > An option to stop clicking through steps where ending the step or passing is the only thing a side can do (D-036). A sidebar checkbox, off by default; when on, the client submits the lone skip (end shooting / charge / pile-ins / consolidations, pass fight, skip overrun pile-in) through the session, chaining through consecutive ones. Client only.
 
 **Acceptance**
-- A sidebar checkbox "Skip steps with nothing to do", off by default; with it off, nothing changes.
+- A sidebar checkbox "Skip steps with nothing to do" (on by default since M24); with it off, nothing changes.
 - With it on, a decision whose only legal action is a skip is submitted automatically, chaining through consecutive ones, and stops at the first real choice (logic test).
 - One Undo removes the player's last action and the steps skipped after it (logic test).
 - Skipped steps appear in the log, saves and exported replays as ordinary steps (logic test).
+
+---
+
+## M24: Explain weapon abilities and keywords ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Make it clear what weapon abilities and keywords mean and when they apply (D-037). Hover help, paraphrased from the core rules with rule numbers, for every weapon ability, keyword and shooting type. The weapon menu shows each choice's stats and which abilities apply to this volley (from core's read-only `ability_effects`). The hit roll's dice card says how many dice were gathered and which abilities changed them. Auto-skip (M23) is now on by default.
+
+**Acceptance**
+- The weapon menu shows each choice's stats and which of its abilities apply to this shot (green) or don't (grey), with hover help (logic test).
+- Hovering a weapon ability or keyword on a datasheet explains it in plain words with its rule number, and says whether this game uses it. Every ability and keyword in the data has plain ASCII help (logic test).
+- The hit roll's dice card lists the dice gathered and the abilities that applied, matching the engine's events (logic test).
+- `ability_effects` matches `gather_attack_dice` and `make_attack_profile` (core tests).
+- "Skip steps with nothing to do" is ticked by default. Replays are unchanged.
 
 ---
 

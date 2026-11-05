@@ -668,7 +668,8 @@ logic).
 
 ## D-036: Skip steps with nothing to do (M23)
 **Decided:** 2026-11-05 (agreed with the user). Client only; no engine, rules or replay change.
-- **Setting:** a sidebar checkbox "Skip steps with nothing to do", off by default.
+- **Setting:** a sidebar checkbox "Skip steps with nothing to do", on by default (it was off in M23; the
+  user asked for it on in M24).
 - **When:** the deciding side's `legal_actions` is exactly one action and it is a skip: `EndShootStep`,
   `EndChargeStep`, `EndPileIns`, `EndConsolidations`, `PassFight` or `SkipPileIn`. The engine already
   offers a unit only when it has a valid option (e.g. a `Shoot` template needs at least one valid shot), so
@@ -680,3 +681,23 @@ logic).
   names what was skipped.
 - **Undo:** the client remembers which history steps were skipped automatically; one Undo removes those that
   follow the player's last action and then that action, so it does not land on a skip-only decision.
+
+## D-037: Explaining weapon abilities and keywords (M24)
+**Decided:** 2026-11-05 (agreed with the user). Display only; no state, event or replay change.
+- **Help text** (`rules_help`): every weapon ability, keyword and shooting type has a short plain-English
+  summary paraphrased from `docs/rules` with its rule number, and says whether this game applies it.
+  Keywords only get what the core rules say about them: INFANTRY (terrain, 13; actions, 16), EXPLOSIVES /
+  GRENADES (the Explosives Stratagem, 15.05). Faction keywords say they're for army building (02.05). Any
+  other keyword (BATTLELINE, TACTICUS, GREAT DEVOURER, ...) says that no rule in this game uses it. IMPERIUM
+  appears in the PDF only as a flavour quote, so it gets the generic text too. Nothing is invented.
+- **What applies** comes from core's read-only `ability_effects` (24.30, 24.05, 24.16, 24.37) and
+  `batch_context` (for past batches: [HEAVY] applied iff the batch's hit modifier is more than the
+  selection's own). The client only words it (D-024). [ASSAULT] and [CLOSE-QUARTERS] act when the shooting
+  type is chosen, so they are shown as information, not as applying to the attacks.
+- **Where:**
+  - The weapon menu (after picking a target) shows each choice's stats and one line per ability: green
+    when it applies to this volley, grey when it doesn't. Hovering shows the abilities' help.
+  - Shooting-type menu entries have their 10.04-10.06 help.
+  - On a datasheet, each weapon ability and keyword can be hovered.
+  - A hit roll's dice card lists the dice gathered and the abilities that changed them.
+- Tooltips appear only on hover, so there is no setting to turn them off.

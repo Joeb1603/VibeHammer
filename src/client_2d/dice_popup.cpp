@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "board_view.hpp"
+#include "help_widgets.hpp"
 
 namespace wh40k::client {
 
@@ -159,6 +160,7 @@ void DicePopup::draw(Rectangle area, float ui_scale) {
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width - ImGui::GetStyle().WindowPadding.x * 2.0f);
     if (!card.purpose.empty()) ImGui::TextUnformatted(card.purpose.c_str());
     if (!card.need.empty()) ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", card.need.c_str());
+    draw_effect_lines(card.notes);  // D-037: what the weapon's abilities did
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
 

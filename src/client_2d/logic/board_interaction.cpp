@@ -5,6 +5,10 @@
 #include <variant>
 
 #include "action_text.hpp"
+#include "core/rules/attacks.hpp"
+#include "core/rules/fight.hpp"
+#include "core/rules/shooting.hpp"
+#include "core/state/queries.hpp"
 
 namespace wh40k::client {
 
@@ -18,6 +22,56 @@ const std::vector<core::UnitId>* targets_of(const core::GameAction& action) {
     if (const auto* x = std::get_if<a::StartPileIn>(&action)) return &x->targets;
     if (const auto* x = std::get_if<a::StartConsolidation>(&action)) return &x->targets;
     return nullptr;
+}
+
+const core::WeaponProfile* profile_at(const core::GameState& state, core::ModelId model, std::size_t weapon,
+                                      std::size_t profile) {
+    const core::Model* m = core::find_model(state, model);
+    if (m == nullptr || weapon >= m->weapons.size() || profile >= m->weapons[weapon].profiles.size()) return nullptr;
+    return &m->weapons[weapon].profiles[profile];
+}
+
+void add_help(const core::WeaponProfile& p, MenuEntry& entry) {
+    entry.detail = profile_stats(p);
+    for (const core::WeaponAbility& ab : p.abilities) entry.help.push_back(weapon_ability_help(ab));
+}
+
+// D-037: a whole-unit weapon choice: its stats, and what its abilities do to this volley (core's
+// ability_effects through effect_lines, for the selections the engine would make).
+void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& entry) {
+    const core::Unit* u = state.find_unit(shoot.unit);
+    if (u == nullptr || shoot.shots.empty()) return;
+    const core::ShotDeclaration& first = shoot.shots.front();
+    const core::WeaponProfile* p = profile_at(state, first.model, first.weapon_index, first.profile_index);
+    if (p == nullptr) return;
+    add_help(*p, entry);
+    const auto selections = core::make_weapon_selections(state, *u, shoot.type, shoot.shots);
+    entry.effects = effect_lines(*p, selections, core::shooting_context(state, *u));
+}
+
+void describe(const core::GameState& state, const a::Fight& fight, core::UnitId target, MenuEntry& entry) {
+    std::vector<core::MeleeDeclaration> at_target;
+    for (const core::MeleeDeclaration& d : fight.declarations) {
+        if (!d.targets.empty() && d.targets.front().unit == target) at_target.push_back(d);
+    }
+    if (at_target.empty()) return;
+    const core::MeleeDeclaration& first = at_target.front();
+    const core::WeaponProfile* p = profile_at(state, first.model, first.weapon_index, first.profile_index);
+    if (p == nullptr) return;
+    add_help(*p, entry);
+    std::vector<core::MeleeDeclaration> same;  // the declarations with this profile
+    for (const core::MeleeDeclaration& d : at_target) {
+        if (d.weapon_index == first.weapon_index && d.profile_index == first.profile_index) same.push_back(d);
+    }
+    const auto selections = core::make_melee_selections(state, same);
+    entry.effects = effect_lines(*p, selections, core::AttackContext{core::AttackType::Fighting, false});
+}
+
+// A menu entry for an action; a shooting type gets its help (D-037).
+MenuEntry action_entry(const core::GameState& state, const core::GameAction& action) {
+    MenuEntry entry{action_label(state, action), action};
+    if (const auto* s = std::get_if<a::Shoot>(&action)) entry.help.push_back(shooting_type_help(s->type));
+    return entry;
 }
 
 bool contains(const std::vector<core::UnitId>& ids, core::UnitId id) {
@@ -242,7 +296,7 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
         case Mode::CustomMelee:
             return {};
         case Mode::Melee:
-            return melee_menu(unit);
+            return melee_menu(state, unit);
         case Mode::PickActor:
             return pick_actor(state, unit);
         case Mode::Shoot: {
@@ -271,7 +325,9 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
                     label += " (" + profile + ")";
                 }
                 label += ": " + std::to_string(shoot.shots.size()) + (shoot.shots.size() == 1 ? " model" : " models");
-                result.menu.push_back(MenuEntry{label, shoot});
+                MenuEntry entry{label, shoot};
+                describe(state, shoot, entry);
+                result.menu.push_back(std::move(entry));
             }
             // D-031: per-model weapons and targets are chosen after the target, starting from the first weapon.
             if (!result.menu.empty()) {
@@ -310,7 +366,7 @@ ClickResult BoardInteraction::pick_actor(const core::GameState& state, core::Uni
     if (std::holds_alternative<a::Shoot>(actions.front())) {
         if (actions.size() == 1) return choose(state, actions.front());
         ClickResult result;  // several shooting types: pick one first
-        for (const core::GameAction& action : actions) result.menu.push_back({action_label(state, action), action});
+        for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
         return result;
     }
     if (targets_of(actions.front()) != nullptr) {
@@ -325,7 +381,7 @@ ClickResult BoardInteraction::pick_actor(const core::GameState& state, core::Uni
     }
     if (actions.size() == 1) return ClickResult{actions.front(), {}};
     ClickResult result;
-    for (const core::GameAction& action : actions) result.menu.push_back({action_label(state, action), action});
+    for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
     return result;
 }
 
@@ -347,7 +403,7 @@ ClickResult BoardInteraction::choose(const core::GameState& state, const core::G
     return ClickResult{action, {}};
 }
 
-ClickResult BoardInteraction::melee_menu(core::UnitId unit) const {
+ClickResult BoardInteraction::melee_menu(const core::GameState& state, core::UnitId unit) const {
     // D-032: one entry per melee weapon choice at the clicked target, then "Custom...". A model that can't
     // reach that target still fights with its first option (D-021), which the label counts separately.
     ClickResult result;
@@ -377,7 +433,9 @@ ClickResult BoardInteraction::melee_menu(core::UnitId unit) const {
         if (const std::size_t other = fight.declarations.size() - at; other > 0) {
             label += " (+" + std::to_string(other) + " at another target)";
         }
-        result.menu.push_back(MenuEntry{label, fight});
+        MenuEntry entry{label, fight};
+        describe(state, fight, unit, entry);
+        result.menu.push_back(std::move(entry));
     }
     if (!result.menu.empty()) {
         // The custom entry's action starts the editor: the first entry's declarations at the clicked target.

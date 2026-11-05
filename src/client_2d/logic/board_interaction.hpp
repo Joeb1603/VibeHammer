@@ -12,6 +12,7 @@
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "melee_plan.hpp"
+#include "rules_help.hpp"
 #include "shot_plan.hpp"
 
 namespace wh40k::client {
@@ -22,6 +23,11 @@ struct MenuEntry {
     // The target menu's "Custom..." entry (D-031): opens the per-model shot editor instead of submitting;
     // `action` is the Shoot it starts from (the first weapon choice at that target).
     bool custom = false;
+    // D-037: what the choice means. A weapon choice has its stats, what its abilities do to this volley and
+    // their help; a shooting type has its help.
+    std::string detail{};               // "24\"  A2  BS3+  S4  AP-1  D1"
+    std::vector<EffectLine> effects{};
+    std::vector<HelpEntry> help{};
 };
 
 // The panel's "End ... phase" button: the actions to submit, in order (D-029).
@@ -109,7 +115,7 @@ private:
     [[nodiscard]] std::vector<core::UnitId> target_options() const;
     ClickResult pick_actor(const core::GameState& state, core::UnitId unit);
     ClickResult start_targets(core::UnitId unit);
-    [[nodiscard]] ClickResult melee_menu(core::UnitId unit) const;
+    [[nodiscard]] ClickResult melee_menu(const core::GameState& state, core::UnitId unit) const;
 
     Mode mode_ = Mode::Inactive;
     Mode base_mode_ = Mode::Inactive;  // what cancel() returns to

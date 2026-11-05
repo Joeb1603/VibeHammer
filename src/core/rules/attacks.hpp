@@ -49,4 +49,26 @@ namespace wh40k::core {
                                                              std::span<const WeaponSelection> selections,
                                                              const AttackContext& context);
 
+// D-037: what each of a profile's abilities does to one selection, for clients to explain (read-only).
+struct AbilityEffect {
+    WeaponAbility ability;
+    // It changes these attacks: [RAPID FIRE] / [BLAST] add dice, [HEAVY] adds 1 to hit, [TORRENT] hits
+    // automatically. [ASSAULT] and [CLOSE-QUARTERS] act when the shooting type is chosen (10.05, 10.06),
+    // and unimplemented abilities never act, so they are never active here.
+    bool active = false;
+    int extra_attack_dice = 0;  // 24.30 [RAPID FIRE X] within half range; 24.05 [BLAST X] per five models
+    int hit_modifier = 0;       // 24.16 [HEAVY]: +1 when its conditions apply
+    friend bool operator==(const AbilityEffect&, const AbilityEffect&) = default;
+};
+
+// One entry per ability on `weapon`, in profile order. The extra dice and hit modifier are those
+// gather_attack_dice and make_attack_profile give for the same inputs.
+[[nodiscard]] std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const WeaponSelection& selection,
+                                                         const AttackContext& context);
+
+// The context a gathered batch was made with: [HEAVY] applied iff the batch's hit modifier is more than
+// the selection's own (make_attack_profile adds the +1 to the profile, gather_attack_batches the rest).
+[[nodiscard]] AttackContext batch_context(const AttackBatch& batch, const WeaponSelection& selection,
+                                          AttackType type);
+
 }  // namespace wh40k::core

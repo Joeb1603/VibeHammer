@@ -9,6 +9,7 @@
 
 #include "core/model/unit.hpp"
 #include "core/model/weapon.hpp"
+#include "rules_help.hpp"
 
 namespace wh40k::client {
 
@@ -24,6 +25,7 @@ struct DatasheetWeaponRow {
     std::string name;  // the profile name, e.g. "Bolt Rifle - Saturation"
     std::string range, attacks, skill, strength, armour_penetration, damage;
     std::string abilities;  // e.g. "[ASSAULT] [RAPID FIRE 1]"; empty when none
+    std::vector<HelpEntry> ability_help;  // D-037: one per ability, in the same order
     int carried_by = 0;     // models carrying the weapon
 };
 
@@ -43,6 +45,8 @@ struct DatasheetView {
     std::vector<DatasheetAbility> abilities;
     std::string keywords;          // comma-separated
     std::string faction_keywords;  // comma-separated
+    std::vector<HelpEntry> keyword_help;          // D-037: one per keyword
+    std::vector<HelpEntry> faction_keyword_help;
 };
 
 [[nodiscard]] DatasheetView datasheet_view(const core::Unit& unit);

@@ -42,6 +42,7 @@
 #include "dice_cards.hpp"
 #include "dice_popup.hpp"
 #include "event_text.hpp"
+#include "help_widgets.hpp"
 #include "measure.hpp"
 #include "move_plan.hpp"
 #include "overlays.hpp"
@@ -684,6 +685,7 @@ private:
             }
             ImGui::EndTable();
         }
+        ImGui::TextDisabled("Hover a weapon ability or keyword to see what it does.");
         weapon_table("Ranged weapons", "BS", v.ranged);
         weapon_table("Melee weapons", "WS", v.melee);
         ImGui::SeparatorText("Abilities (shown only: not applied in V1)");
@@ -693,9 +695,11 @@ private:
             ImGui::TextUnformatted(a.text.c_str());
             ImGui::Spacing();
         }
-        ImGui::SeparatorText("Keywords");
-        ImGui::TextUnformatted(v.keywords.c_str());
-        ImGui::TextDisabled("Faction: %s", v.faction_keywords.c_str());
+        ImGui::SeparatorText("Keywords (hover for what they mean)");
+        draw_help_tokens(v.keyword_help, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        ImGui::TextDisabled("Faction:");
+        ImGui::SameLine();
+        draw_help_tokens(v.faction_keyword_help, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
         ImGui::PopTextWrapPos();
     }
 
@@ -711,9 +715,18 @@ private:
         for (const DatasheetWeaponRow& r : rows) {
             ImGui::TableNextRow();
             for (const std::string* s : {&r.name, &r.range, &r.attacks, &r.skill, &r.strength, &r.armour_penetration,
-                                         &r.damage, &r.abilities}) {
+                                         &r.damage}) {
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(s->c_str());
+            }
+            // D-037: each ability is hoverable; abilities this game doesn't apply are orange.
+            ImGui::TableNextColumn();
+            for (std::size_t i = 0; i < r.ability_help.size(); ++i) {
+                if (i > 0) ImGui::SameLine();
+                const HelpEntry& h = r.ability_help[i];
+                ImGui::TextColored(h.in_this_game ? ImVec4(0.6f, 0.85f, 1.0f, 1.0f) : effect_colour(EffectKind::NotInGame),
+                                   "%s", h.title.c_str());
+                help_tooltip_for_last_item({h});
             }
             ImGui::TableNextColumn();
             ImGui::Text("%d", r.carried_by);
@@ -827,6 +840,33 @@ private:
 
     // ---- fixed layout (D-028): the phase bar over the board, the sidebar on the right ----
 
+    // D-037: one menu choice: its label, then a weapon's stats and what its abilities do to this volley
+    // (green: applies, grey: doesn't), with the abilities' help on hover. True if it was clicked.
+    static bool menu_entry(const MenuEntry& e) {
+        if (e.detail.empty() && e.effects.empty()) {
+            const bool clicked = ImGui::Selectable(e.label.c_str());
+            help_tooltip_for_last_item(e.help);
+            return clicked;
+        }
+        const float spacing = ImGui::GetTextLineHeightWithSpacing();
+        const std::size_t lines = 1 + (e.detail.empty() ? 0 : 1) + e.effects.size();
+        float width = ImGui::CalcTextSize(e.label.c_str()).x;
+        width = std::max(width, ImGui::CalcTextSize(e.detail.c_str()).x);
+        for (const EffectLine& l : e.effects) width = std::max(width, ImGui::CalcTextSize(("+ " + l.text).c_str()).x);
+        const ImVec2 start = ImGui::GetCursorPos();
+        const float height = spacing * static_cast<float>(lines) - ImGui::GetStyle().ItemSpacing.y;
+        const bool clicked = ImGui::Selectable("##entry", false, ImGuiSelectableFlags_None, ImVec2(width, height));
+        help_tooltip_for_last_item(e.help);
+        const ImVec2 end = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(start);
+        ImGui::TextUnformatted(e.label.c_str());
+        if (!e.detail.empty()) ImGui::TextDisabled("%s", e.detail.c_str());
+        draw_effect_lines(e.effects);
+        ImGui::SetCursorPos(end);
+        ImGui::Dummy(ImVec2(0.0f, 0.0f));
+        return clicked;
+    }
+
     // D-029: the menu a board click offers (move types, weapons, fight types).
     void draw_unit_menu() {
         if (open_menu_) {
@@ -842,7 +882,7 @@ private:
         for (std::size_t i = 0; i < menu_.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
             if (menu_[i].custom) ImGui::Separator();
-            if (ImGui::Selectable(menu_[i].label.c_str())) picked = menu_[i];
+            if (menu_entry(menu_[i])) picked = menu_[i];
             ImGui::PopID();
         }
         ImGui::EndPopup();
@@ -1310,7 +1350,7 @@ private:
     std::size_t log_before_dice_ = 0;   // the log entries shown while they show
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
-    bool auto_skip_ = false;            // D-036: the "Skip steps with nothing to do" setting
+    bool auto_skip_ = true;            // D-036: the "Skip steps with nothing to do" setting
     std::vector<std::size_t> auto_steps_;  // D-036: history indices of the steps skipped automatically
     bool fit_pending_ = true;
     bool scroll_log_ = true;

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/state/game_state.hpp"
+#include "rules_help.hpp"
 #include "session.hpp"
 
 namespace wh40k::client {
@@ -29,6 +30,9 @@ struct DiceCard {
     std::string rule;     // "05.01"
     core::Side roller = core::Side::A;  // the side making the roll
     std::vector<DieFace> dice;
+    // D-037: what the attacker's weapon abilities did to these attacks (hit cards only), e.g.
+    // "10 attack dice from 5 models", "Rapid Fire 1: +5 attacks (target within half range, 12\")".
+    std::vector<EffectLine> notes{};
 };
 
 // The cards for the roll events in log entries [from, log.size()), in order. Earlier entries give context

@@ -6,6 +6,7 @@ add_executable(wh40k_client_2d
     camera.cpp
     decision_panel.cpp
     dice_popup.cpp
+    help_widgets.cpp
     overlays.cpp)
 
 target_link_libraries(wh40k_client_2d PRIVATE wh40k_client_logic imgui_rlimgui raylib)

@@ -7,6 +7,8 @@
 
 #include "core/engine/events.hpp"
 #include "core/rules/attack_sequence.hpp"
+#include "core/rules/attacks.hpp"
+#include "core/state/queries.hpp"
 
 namespace wh40k::client {
 
@@ -58,6 +60,36 @@ const core::AttackBatch* current_batch(const AttackContext& c) {
     return c.batch && *c.batch < c.batches.size() ? &c.batches[*c.batch] : nullptr;
 }
 
+const core::WeaponProfile* selection_profile(const core::GameState& state, const core::WeaponSelection& s) {
+    const core::Model* m = core::find_model(state, s.attacker);
+    if (m == nullptr || s.weapon_index >= m->weapons.size()) return nullptr;
+    const core::Weapon& w = m->weapons[s.weapon_index];
+    return s.profile_index < w.profiles.size() ? &w.profiles[s.profile_index] : nullptr;
+}
+
+// D-037: how many dice the batch gathered and what the weapon's abilities did to them (core's
+// ability_effects for the context the batch was made with). Batches hold identical attacks (D-006), so
+// one profile speaks for them all; abilities that act elsewhere ([ASSAULT], [CLOSE-QUARTERS]) are left out.
+std::vector<EffectLine> attack_notes(const core::GameState& state, const AttackContext& c) {
+    const core::AttackBatch* batch = current_batch(c);
+    if (batch == nullptr || batch->selections.empty()) return {};
+    std::vector<core::WeaponSelection> sels;
+    for (const std::size_t i : batch->selections) {
+        if (i < c.selections.size()) sels.push_back(c.selections[i]);
+    }
+    if (sels.empty()) return {};
+    const core::WeaponProfile* p = selection_profile(state, sels.front());
+    if (p == nullptr) return {};  // the attacker has been destroyed since
+    std::vector<EffectLine> notes;
+    notes.push_back({std::to_string(batch->attack_dice) + " attack dice from " + plural(static_cast<int>(sels.size()),
+                     "model", "models"), EffectKind::Info});
+    const core::AttackType type = c.melee ? core::AttackType::Fighting : core::AttackType::Shooting;
+    for (EffectLine& line : effect_lines(*p, sels, core::batch_context(*batch, sels.front(), type))) {
+        if (line.kind != EffectKind::Info) notes.push_back(std::move(line));
+    }
+    return notes;
+}
+
 std::string attack_purpose(const core::GameState& state, const AttackContext& c) {
     const core::AttackBatch* batch = current_batch(c);
     if (!c.attacker || batch == nullptr) return "";
@@ -68,7 +100,7 @@ std::string attack_purpose(const core::GameState& state, const AttackContext& c)
 }
 
 DiceCard hit_card(const core::GameState& state, const AttackContext& c, const core::HitRolls& rolls) {
-    DiceCard card{"Hit rolls", attack_purpose(state, c), "", "", "05.01", core::Side::A, {}};
+    DiceCard card{"Hit rolls", attack_purpose(state, c), "", "", "05.01", core::Side::A, {}, attack_notes(state, c)};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
     if (const core::AttackBatch* batch = current_batch(c)) {
         if (batch->profile.skill) {

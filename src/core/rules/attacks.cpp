@@ -160,6 +160,34 @@ int gather_attack_dice(const WeaponProfile& weapon, const WeaponSelection& selec
     return dice;
 }
 
+std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const WeaponSelection& selection,
+                                           const AttackContext& context) {
+    std::vector<AbilityEffect> out;
+    const bool split = selection.declared_attacks.has_value();  // 04.02: exactly the declared attacks
+    for (const WeaponAbility& a : weapon.abilities) {
+        AbilityEffect e{a, false, 0, 0};
+        if (const auto* rf = std::get_if<ability::RapidFire>(&a)) {
+            if (!split && selection.target_within_half_range) e.extra_attack_dice = rf->x;  // 24.30
+        } else if (const auto* blast = std::get_if<ability::Blast>(&a)) {
+            if (!split) e.extra_attack_dice = blast->x * (selection.target_models_at_selection / 5);  // 24.05
+        } else if (std::holds_alternative<ability::Heavy>(a)) {
+            if (context.type == AttackType::Shooting && context.heavy_conditions_met) e.hit_modifier = 1;  // 24.16
+        } else if (std::holds_alternative<ability::Torrent>(a)) {
+            e.active = true;  // 24.37
+        }
+        e.active = e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0;
+        out.push_back(e);
+    }
+    return out;
+}
+
+AttackContext batch_context(const AttackBatch& batch, const WeaponSelection& selection, AttackType type) {
+    AttackContext context;
+    context.type = type;
+    context.heavy_conditions_met = type == AttackType::Shooting && batch.profile.hit_modifier > selection.hit_modifier;
+    return context;
+}
+
 std::vector<AttackBatch> gather_attack_batches(const GameState& state,
                                                std::span<const WeaponSelection> selections,
                                                const AttackContext& context) {

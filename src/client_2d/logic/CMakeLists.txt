@@ -15,6 +15,7 @@ add_library(wh40k_client_logic STATIC
     phase_track.cpp
     datasheet_view.cpp
     measure.cpp
+    rules_help.cpp
     session.cpp
     shot_plan.cpp
     timeline.cpp)

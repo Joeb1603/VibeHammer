@@ -1292,7 +1292,8 @@ TEST(M12_NoRulesInTheClient, OnlyTheSessionAndTimelineApplyActions) {
     const std::regex apply(R"(\bapply_action\s*\()");
     const std::regex rules_include(R"(#\s*include\s*"core/rules/)");
     // attack_sequence: the dice pop-ups (D-033) call its read-only 05.04 check_save_roll to colour save dice.
-    const std::regex allowed_logic_rules(R"(#\s*include\s*"core/rules/(shooting|fight)(_types)?\.hpp"|#\s*include\s*"core/rules/(move_types|attack_types|attack_sequence)\.hpp")");
+    // attacks: the menus and dice pop-ups call its read-only ability_effects / batch_context (D-037).
+    const std::regex allowed_logic_rules(R"(#\s*include\s*"core/rules/(shooting|fight)(_types)?\.hpp"|#\s*include\s*"core/rules/(move_types|attack_types|attack_sequence|attacks)\.hpp")");
     int files = 0;
     for (const auto& entry : fs::recursive_directory_iterator(client)) {
         const auto ext = entry.path().extension();
