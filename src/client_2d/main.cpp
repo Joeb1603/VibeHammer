@@ -51,6 +51,7 @@
 #include "phase_track.hpp"
 #include "session.hpp"
 #include "timeline.hpp"
+#include "undo_groups.hpp"
 
 namespace wh40k::client {
 namespace {
@@ -158,7 +159,7 @@ public:
             start_session(GameSession::new_game(core::load_scenario(scenario_path_, kRepoRoot), seed_));
             status_ = "New game: V1 scenario, seed " + std::to_string(seed_) +
                       ". Hotseat: each side acts when the panel names it.";
-            run_auto_actions_now();  // D-036
+            auto_actions_as_group();  // D-036
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the scenario: ") + e.what();
         }
@@ -178,7 +179,7 @@ public:
         dice_.clear();
         before_dice_.reset();
         dice_seen_ = session_->log().size();
-        auto_steps_.clear();  // D-036
+        undo_groups_.clear();  // D-039
         victory_pending_ = false;  // D-038: only a game that ends while it is played shows the pop-up
         end_warning_.reset();
     }
@@ -422,10 +423,53 @@ private:
     // Every game change goes through here (and so through validate_action). True if it was applied.
     // D-036 / D-038: with skipping or automatic damage allocation on, the decisions that follow are answered
     // too.
+    // D-039: one player input, with what follows automatically, is one Undo group.
     bool submit(const core::GameAction& action) {
+        undo_groups_.begin(session_->history().size());
         const bool ok = submit_one(action);
         if (ok) run_auto_actions_now();
+        undo_groups_.end(session_->history().size());
         return ok;
+    }
+
+    // D-039: several actions from one input (a whole-unit drag, an end-phase button that is several
+    // actions) as one Undo group. Every rejection's reasons are kept; `stop_at_rejection` stops at the first.
+    void submit_group(const std::vector<core::GameAction>& actions, bool stop_at_rejection) {
+        undo_groups_.begin(session_->history().size());
+        std::vector<std::string> all;
+        bool any = false;
+        for (const core::GameAction& a : actions) {
+            const bool ok = submit_one(a);
+            all.insert(all.end(), reasons_.begin(), reasons_.end());
+            any = any || ok;
+            if (!ok && stop_at_rejection) break;
+        }
+        if (any) run_auto_actions_now();
+        reasons_ = std::move(all);
+        undo_groups_.end(session_->history().size());
+    }
+
+    // The automatic actions on their own (a setting was just ticked, the game started): their own group.
+    void auto_actions_as_group() {
+        if (!session_) return;
+        undo_groups_.begin(session_->history().size());
+        run_auto_actions_now();
+        undo_groups_.end(session_->history().size());
+    }
+
+    // M13 / D-039: undo the last group (a whole drag, a button, with what followed automatically).
+    void undo_last() {
+        if (!session_) return;
+        undo_groups_.undo(*session_);
+        panel_.reset();  // the rebuilt state may have the same step count as the editors' old one
+        ++generation_;
+        reasons_.clear();
+        drag_.reset();
+        scroll_log_ = true;
+        dice_.clear();  // D-033: no pop-ups for the replayed rolls
+        before_dice_.reset();
+        dice_seen_ = session_->log().size();
+        victory_pending_ = false;
     }
 
     // D-036 / D-038: answer the decisions the settings cover, recording them for Undo.
@@ -433,12 +477,7 @@ private:
         if (mode_ != Mode::Play || !session_) return;
         const AutoSettings settings{auto_skip_, auto_allocate_};
         const std::vector<core::GameAction> done =
-            run_auto_actions(*session_, settings, [this](const core::GameAction& a) {
-                const std::size_t index = session_->history().size();
-                if (!submit_one(a)) return false;
-                auto_steps_.push_back(index);
-                return true;
-            });
+            run_auto_actions(*session_, settings, [this](const core::GameAction& a) { return submit_one(a); });
         std::string text;
         for (const core::GameAction& a : done) {
             if (!is_skip(a)) continue;  // allocation shows in the dice pop-ups and the log
@@ -589,13 +628,13 @@ private:
         drag_.reset();
         if (distance_px(d.grab_screen, mouse) < kDragThresholdPx * ui_scale()) return;  // a click, not a drag
         if (d.whole_unit) {
-            // The "Move unit" handle: one ProposeModelMove per model, each validated by the engine.
-            std::vector<std::string> all;
+            // The "Move unit" handle: one ProposeModelMove per model, each validated by the engine, all one
+            // Undo group (D-039).
+            std::vector<core::GameAction> moves;
             for (const auto& a : translate_unit(state(), d.unit, d.current.x - d.grab.x, d.current.y - d.grab.y)) {
-                submit(a);
-                all.insert(all.end(), reasons_.begin(), reasons_.end());
+                moves.push_back(a);
             }
-            reasons_ = all;
+            submit_group(moves, false);
             return;
         }
         submit(extend_path(state(), d.model, d.current));
@@ -1091,19 +1130,9 @@ private:
         if (playing) {
             ImGui::SameLine();
             ImGui::BeginDisabled(!session_->can_undo());
-            if (ImGui::Button("Undo")) {
-                // M13: rebuilt from the initial state without the last action. D-036: the steps skipped
-                // automatically after it go with it.
-                undo_with_auto_skips(*session_, auto_steps_);
-                panel_.reset();    // the rebuilt state may have the same step count as the editors' old one
-                ++generation_;
-                reasons_.clear();
-                drag_.reset();
-                scroll_log_ = true;
-                dice_.clear();  // D-033: no pop-ups for the replayed rolls
-                before_dice_.reset();
-                dice_seen_ = session_->log().size();
-            }
+            if (ImGui::Button("Undo")) undo_last();  // D-039: the last input, with what followed it
+            ImGui::SetItemTooltip("Undo your last action (a whole drag or button), and anything done "
+                                  "automatically after it.");
             ImGui::EndDisabled();
             ImGui::TextDisabled("This game's seed: %llu", static_cast<unsigned long long>(session_->seed()));
         }
@@ -1127,9 +1156,9 @@ private:
         overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
         ImGui::Spacing();
         if (ImGui::Checkbox("Show dice pop-ups", &show_dice_) && !show_dice_) dice_.clear();  // D-033
-        if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) run_auto_actions_now();
+        if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
-        if (ImGui::Checkbox("Allocate damage automatically", &auto_allocate_) && auto_allocate_) run_auto_actions_now();
+        if (ImGui::Checkbox("Allocate damage automatically", &auto_allocate_) && auto_allocate_) auto_actions_as_group();
         ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
                               "05.04) instead of asking.");
         ImGui::Checkbox("Warn before ending shooting with shots left", &warn_end_shooting_);
@@ -1212,7 +1241,13 @@ private:
     }
 
     void draw_decision() {
+        // D-039: "Undo last step" in a move, while the last input moved this unit's models.
+        panel_.set_undo_step_available(undo_groups_.last_group_is_move_step(*session_));
         const std::vector<core::GameAction> actions = panel_.draw(*session_, selected_model_, &board_);
+        if (panel_.take_undo_step_request()) {
+            undo_last();
+            return;
+        }
         // D-038: ending the Shooting phase while a unit can still shoot asks first.
         const bool ends_shooting = std::any_of(actions.begin(), actions.end(), [](const core::GameAction& a) {
             return std::holds_alternative<core::action::EndShootStep>(a);
@@ -1225,11 +1260,13 @@ private:
         submit_all(actions);
     }
 
-    // In order; stop at the first one rejected (the end-phase button can be several).
+    // In order; stop at the first one rejected (the end-phase button can be several). One Undo group.
     void submit_all(const std::vector<core::GameAction>& actions) {
-        for (const core::GameAction& a : actions) {
-            if (!submit(a)) break;
+        if (actions.size() == 1) {
+            submit(actions.front());
+            return;
         }
+        if (!actions.empty()) submit_group(actions, true);
     }
 
     // D-038: "<units> can still shoot. End the Shooting phase anyway?"
@@ -1464,7 +1501,7 @@ private:
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
     bool auto_skip_ = true;            // D-036: the "Skip steps with nothing to do" setting
-    std::vector<std::size_t> auto_steps_;  // D-036: history indices of the steps taken automatically
+    UndoGroups undo_groups_;            // D-039: the player's inputs, for Undo and "Undo last step"
     bool auto_allocate_ = true;         // D-038: the "Allocate damage automatically" setting
     bool warn_end_shooting_ = true;     // D-038: the "Warn before ending shooting with shots left" setting
     std::optional<std::vector<core::GameAction>> end_warning_;  // D-038: the end-phase actions waiting on it

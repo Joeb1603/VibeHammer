@@ -378,6 +378,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M26: Undo by input, and "Undo last step" in a move ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Undo works on the player's inputs (D-039): one drag of a model, one drag of the whole unit, or one button is one group, with whatever the client then did by itself (D-036 skips, D-038 allocation). While a unit is moving, "Undo last step" next to Commit / Reset undoes the last drag, as a group for a unit drag or one model for a model drag. Client only.
+
+**Acceptance**
+- "Undo last step" appears in a move once a model has been dragged, and not right after the unit is selected (logic test).
+- Two drags of one model: undo-last-step returns it to the end of its first drag (logic test).
+- A unit drag then a model drag: two undos restore both, the unit drag as one step (logic test).
+- The sidebar Undo removes the last whole input and what followed automatically (the M23 test, ported).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

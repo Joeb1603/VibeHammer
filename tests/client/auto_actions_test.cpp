@@ -9,6 +9,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/replay.hpp"
 #include "session.hpp"
+#include "undo_groups.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 
@@ -68,20 +69,18 @@ TEST(M23_AutoSkip, NothingIsSkippedWhenAUnitCanShoot) {
 
 TEST(M23_AutoSkip, UndoRemovesThePlayersActionAndTheSkipsAfterIt) {
     // The player ends shooting by hand; the steps after it with nothing to do are skipped.
+    // D-039: the player's action and the skips after it are one Undo group.
     GameSession s(nothing_to_shoot());
     const GameState start = s.state();
+    UndoGroups groups;
+    groups.begin(s.history().size());
     ASSERT_TRUE(s.submit(action::EndShootStep{}).ok());
-    std::vector<std::size_t> auto_steps;
-    run_auto_actions(s, AutoSettings{true, false}, [&](const GameAction& a) {
-        const std::size_t index = s.history().size();
-        if (!s.submit(a).ok()) return false;
-        auto_steps.push_back(index);
-        return true;
-    });
-    ASSERT_FALSE(auto_steps.empty());
-    EXPECT_EQ(auto_steps.front(), 1u);
-    EXPECT_TRUE(undo_with_auto_skips(s, auto_steps));
+    const auto skipped = run_auto_actions(s, AutoSettings{true, false});
+    groups.end(s.history().size());
+    ASSERT_FALSE(skipped.empty());
+    EXPECT_EQ(s.history().size(), 1u + skipped.size());
+    EXPECT_TRUE(groups.undo(s));
     EXPECT_EQ(s.state(), start);
-    EXPECT_TRUE(auto_steps.empty());
-    EXPECT_FALSE(undo_with_auto_skips(s, auto_steps));
+    EXPECT_TRUE(groups.starts().empty());
+    EXPECT_FALSE(groups.undo(s));
 }

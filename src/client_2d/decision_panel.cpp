@@ -257,6 +257,8 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
             if (row.button(action_label(gs, steps[i]))) chosen = steps[i];
             ImGui::PopID();
         }
+        // D-039: undo the last drag (one model, or the whole unit for a unit drag) of this move.
+        if (undo_step_available_ && row.button("Undo last step")) undo_step_requested_ = true;
     }
     // The main action when nothing is left to do on the board.
     if (end && primary_button(end->label, true)) end_actions = end->actions;

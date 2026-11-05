@@ -34,6 +34,13 @@ public:
     void reset() { synced_step_.reset(); }
     // Editing a custom casualty order (D-032): the action bar may grow over the board.
     [[nodiscard]] bool custom_editor() const noexcept { return casualty_custom_; }
+    // D-039: offer "Undo last step" next to Commit / Reset in the next draw; whether it was clicked (once).
+    void set_undo_step_available(bool available) noexcept { undo_step_available_ = available; }
+    [[nodiscard]] bool take_undo_step_request() noexcept {
+        const bool requested = undo_step_requested_;
+        undo_step_requested_ = false;
+        return requested;
+    }
 
 private:
     std::optional<core::GameAction> draw_shot_editor(const GameSession& session, const core::action::Shoot& tmpl,
@@ -59,6 +66,8 @@ private:
     std::optional<MeleePlan> melee_;
     std::optional<CasualtyPlan> casualties_;
     bool casualty_custom_ = false;  // "Custom order..." was picked for this casualty order
+    bool undo_step_available_ = false;  // D-039
+    bool undo_step_requested_ = false;
 };
 
 }  // namespace wh40k::client

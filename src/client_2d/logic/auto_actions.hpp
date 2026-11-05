@@ -44,9 +44,4 @@ std::vector<core::GameAction> run_auto_actions(GameSession& session, AutoSetting
 // at least one, D-016), in legal-action order, each once.
 [[nodiscard]] std::vector<core::UnitId> units_that_can_still_shoot(const std::vector<core::GameAction>& legal);
 
-// Undo with skipping on: `auto_steps` holds the history indices of the steps taken automatically
-// (ascending). Removes the trailing ones, then the player's action before them, so one Undo goes back to
-// before the player's last choice. False if there was nothing to undo.
-bool undo_with_auto_skips(GameSession& session, std::vector<std::size_t>& auto_steps);
-
 }  // namespace wh40k::client

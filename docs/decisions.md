@@ -681,6 +681,7 @@ logic).
   names what was skipped.
 - **Undo:** the client remembers which history steps were skipped automatically; one Undo removes those that
   follow the player's last action and then that action, so it does not land on a skip-only decision.
+  (Since M26 this is part of the Undo groups, D-039.)
 
 ## D-037: Explaining weapon abilities and keywords (M24)
 **Decided:** 2026-11-05 (agreed with the user). Display only; no state, event or replay change.
@@ -727,3 +728,17 @@ logic).
 - **Random seed:** each New game draws a seed with `std::random_device` in the client, unless "Fixed seed" is
   ticked (then the seed box is used). Core only ever sees the seed in `GameState`, so it stays
   deterministic. `--seed n` ticks "Fixed seed", so scripted screenshots are reproducible.
+
+## D-039: Undo by the player's inputs (M26)
+**Decided:** 2026-11-05 (agreed with the user). Client only; each undo is still `GameSession::undo` (M13).
+- **Groups:** `UndoGroups` marks the history size where each player input starts. An input is one model
+  drag, one whole-unit drag (a `ProposeModelMove` per model), one button or menu choice, or one end-phase
+  button that submits several actions. The actions the client takes by itself afterwards (D-036, D-038) join
+  that input's group. An input that added no step (everything rejected) is not a group. Steps from before
+  any group (e.g. after a load) undo one at a time.
+- **Undo** (sidebar) removes the last group. This replaces M23's per-step list of automatic steps.
+- **Undo last step:** while the decision is `MoveModels` and every step in the last group moves a model of
+  the moving unit, the action bar offers "Undo last step" next to Commit / Reset. It removes that group, so a
+  unit drag undoes as a group and a model drag as that one model. It is not offered right after the unit is
+  selected to move (that is a `StartMove` group); Reset abandons the whole move as before.
+

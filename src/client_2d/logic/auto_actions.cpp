@@ -60,13 +60,4 @@ std::vector<core::UnitId> units_that_can_still_shoot(const std::vector<core::Gam
     return out;
 }
 
-bool undo_with_auto_skips(GameSession& session, std::vector<std::size_t>& auto_steps) {
-    bool any = false;
-    while (!auto_steps.empty() && auto_steps.back() + 1 == session.history().size()) {
-        any = session.undo() || any;
-        auto_steps.pop_back();
-    }
-    return session.undo() || any;
-}
-
 }  // namespace wh40k::client

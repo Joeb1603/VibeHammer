@@ -17,6 +17,7 @@ add_library(wh40k_client_logic STATIC
     measure.cpp
     rules_help.cpp
     session.cpp
+    undo_groups.cpp
     shot_plan.cpp
     timeline.cpp)
 
