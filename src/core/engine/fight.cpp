@@ -336,14 +336,18 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
 }
 
 void apply_details(GameState& state, Side, const action::SelectToFight& a, DiceSource&, Events& events) {
-    const bool forced = std::holds_alternative<decision::ForcedFight>(state.pending->kind);
+    // 12.08: a unit is selected as a forced fight while it is on the forced list (the ForcedFight decision
+    // comes before SelectUnitToFight while the list is non-empty). Not read from state.pending: the engine
+    // clears it before apply_details runs.
+    auto& forced_list = state.flow.forced_fights;
+    const auto forced_it = std::find(forced_list.begin(), forced_list.end(), a.unit);
+    const bool forced = forced_it != forced_list.end();
     Unit& u = *state.find_unit(a.unit);
     u.phase_flags.selected_to_fight = true;  // 12.04: that unit is selected to fight
     u.phase_flags.eligible_to_fight_this_phase = true;
     if (a.type == FightType::Overrun) u.phase_flags.selected_for_overrun = true;  // 12.03 Eligible If
     if (forced) {
-        auto& list = state.flow.forced_fights;
-        list.erase(std::find(list.begin(), list.end(), a.unit));
+        forced_list.erase(forced_it);
     } else {
         state.flow.fight_sequence->last_pass.reset();
     }
