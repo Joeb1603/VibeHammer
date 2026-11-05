@@ -37,4 +37,18 @@ PhaseTrack phase_track(const core::GameState& state) {
     return t;
 }
 
+std::optional<GameOverText> game_over_text(const core::GameState& state) {
+    if (!state.result) return std::nullopt;
+    GameOverText t;
+    t.reason = state.result->reason;
+    t.winner = state.result->winner;
+    if (t.winner) {
+        t.title = std::string(*t.winner == core::Side::A ? "Side A" : "Side B") + " (" + state.side(*t.winner).name +
+                  ") wins!";
+    } else {
+        t.title = "Draw";
+    }
+    return t;
+}
+
 }  // namespace wh40k::client

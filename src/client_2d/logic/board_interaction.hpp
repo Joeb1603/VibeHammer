@@ -28,6 +28,8 @@ struct MenuEntry {
     std::string detail{};               // "24\"  A2  BS3+  S4  AP-1  D1"
     std::vector<EffectLine> effects{};
     std::vector<HelpEntry> help{};
+    // D-038: "Cancel" at the end of a move-type menu: picks nothing and drops the unit.
+    bool cancel = false;
 };
 
 // The panel's "End ... phase" button: the actions to submit, in order (D-029).

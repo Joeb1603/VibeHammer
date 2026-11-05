@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "auto_skip.hpp"
+#include "auto_actions.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/replay.hpp"
 #include "session.hpp"
@@ -47,7 +47,7 @@ TEST(M23_AutoSkip, NotWhenThereIsAChoiceOrTheOnlyActionIsNotASkip) {
 
 TEST(M23_AutoSkip, ChainsThroughStepsWithNothingToDoAndStopsAtARealChoice) {
     GameSession session(nothing_to_shoot());
-    const std::vector<GameAction> skipped = run_auto_skips(session);
+    const std::vector<GameAction> skipped = run_auto_actions(session, AutoSettings{true, false});
     ASSERT_GE(skipped.size(), 2u);
     EXPECT_EQ(skipped[0], GameAction{action::EndShootStep{}});
     EXPECT_EQ(skipped[1], GameAction{action::EndChargeStep{}});
@@ -62,7 +62,7 @@ TEST(M23_AutoSkip, ChainsThroughStepsWithNothingToDoAndStopsAtARealChoice) {
 
 TEST(M23_AutoSkip, NothingIsSkippedWhenAUnitCanShoot) {
     GameSession session(wh40k::test::shoot_step_state());
-    EXPECT_TRUE(run_auto_skips(session).empty());
+    EXPECT_TRUE(run_auto_actions(session, AutoSettings{true, false}).empty());
     EXPECT_TRUE(session.history().empty());
 }
 
@@ -72,7 +72,7 @@ TEST(M23_AutoSkip, UndoRemovesThePlayersActionAndTheSkipsAfterIt) {
     const GameState start = s.state();
     ASSERT_TRUE(s.submit(action::EndShootStep{}).ok());
     std::vector<std::size_t> auto_steps;
-    run_auto_skips(s, [&](const GameAction& a) {
+    run_auto_actions(s, AutoSettings{true, false}, [&](const GameAction& a) {
         const std::size_t index = s.history().size();
         if (!s.submit(a).ok()) return false;
         auto_steps.push_back(index);

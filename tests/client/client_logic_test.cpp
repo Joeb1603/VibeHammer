@@ -701,9 +701,11 @@ TEST(M16_BoardInteraction, AtTheStartOnlyTheIntercessorsAreClickableAndOfferThei
 
     const ClickResult r = board.click(session.state(), marines);
     EXPECT_FALSE(r.submit.has_value());
-    ASSERT_EQ(r.menu.size(), 2u);  // Normal and Advance, in legal order
+    ASSERT_EQ(r.menu.size(), 3u);  // Normal and Advance, in legal order, then Cancel (D-038)
     EXPECT_EQ(r.menu[0].label, "Normal: Intercessor Squad (1)");
     EXPECT_EQ(r.menu[1].label, "Advance: Intercessor Squad (1)");
+    EXPECT_EQ(r.menu[2].label, "Cancel");
+    EXPECT_TRUE(r.menu[2].cancel);
     const ClickResult chosen = board.choose(session.state(), r.menu[0].action);
     ASSERT_TRUE(chosen.submit.has_value());
     ASSERT_TRUE(session.submit(*chosen.submit).ok());

@@ -28,6 +28,14 @@ struct PhaseTrack {
 
 [[nodiscard]] PhaseTrack phase_track(const core::GameState& state);
 
+// D-038: the victory pop-up: "Side A (Space Marines) wins!" or "Draw", and the engine's rule-cited reason.
+struct GameOverText {
+    std::string title;
+    std::string reason;
+    std::optional<core::Side> winner;  // nullopt: a draw
+};
+[[nodiscard]] std::optional<GameOverText> game_over_text(const core::GameState& state);
+
 // "MoveUnits" -> "Move Units".
 [[nodiscard]] std::string spaced(std::string_view camel_case);
 

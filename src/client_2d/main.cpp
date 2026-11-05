@@ -23,11 +23,13 @@
 #include <exception>
 #include <filesystem>
 #include <optional>
+#include <random>
+#include <variant>
 #include <string>
 #include <vector>
 
 #include "action_text.hpp"
-#include "auto_skip.hpp"
+#include "auto_actions.hpp"
 #include "board_interaction.hpp"
 #include "board_view.hpp"
 #include "camera.hpp"
@@ -132,24 +134,31 @@ class App {
 public:
     App(std::optional<std::uint64_t> seed, std::optional<std::string> scenario)
         : scenario_path_(scenario ? fs::path(*scenario) : kScenario) {
-        try {
-            seed_ = seed ? *seed : core::load_scenario(scenario_path_, kRepoRoot).dice.seed;
-        } catch (const std::exception&) {
-            seed_ = 0;
-        }
+        // D-038: a random seed for each new game unless one is fixed (--seed fixes it).
+        fixed_seed_ = seed.has_value();
+        seed_ = seed.value_or(0);
         new_game();
         std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
         std::snprintf(save_path_, sizeof(save_path_), "%s", kSavePath.string().c_str());
         std::snprintf(export_path_, sizeof(export_path_), "%s", kExportPath.string().c_str());
     }
 
+    // D-038: a fresh seed, client side (core only ever sees the seed in GameState, so it stays
+    // deterministic). Small enough to read and type back in.
+    static std::uint64_t random_seed() {
+        std::random_device device;
+        return static_cast<std::uint64_t>(device() % 1000000000u);
+    }
+
     void new_game() {
         try {
-            // M13: the dice seed is chosen at game start (shown and editable in the panel).
+            // M13: the dice seed is chosen at game start (shown and editable in the panel). D-038: a new
+            // random one each game unless "Fixed seed" is ticked.
+            if (!fixed_seed_) seed_ = random_seed();
             start_session(GameSession::new_game(core::load_scenario(scenario_path_, kRepoRoot), seed_));
             status_ = "New game: V1 scenario, seed " + std::to_string(seed_) +
                       ". Hotseat: each side acts when the panel names it.";
-            run_auto_skips_now();  // D-036
+            run_auto_actions_now();  // D-036
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the scenario: ") + e.what();
         }
@@ -170,6 +179,8 @@ public:
         before_dice_.reset();
         dice_seen_ = session_->log().size();
         auto_steps_.clear();  // D-036
+        victory_pending_ = false;  // D-038: only a game that ends while it is played shows the pop-up
+        end_warning_.reset();
     }
 
     // --dice: keep (1) or also reveal (2) the pop-ups the --steps rolls made; otherwise drop them.
@@ -409,28 +420,31 @@ private:
     }
 
     // Every game change goes through here (and so through validate_action). True if it was applied.
-    // D-036: with "Skip steps with nothing to do" on, any lone skips that follow are submitted too.
+    // D-036 / D-038: with skipping or automatic damage allocation on, the decisions that follow are answered
+    // too.
     bool submit(const core::GameAction& action) {
         const bool ok = submit_one(action);
-        if (ok) run_auto_skips_now();
+        if (ok) run_auto_actions_now();
         return ok;
     }
 
-    // D-036: submit the decisions whose only legal action is a skip, recording them for Undo.
-    void run_auto_skips_now() {
-        if (!auto_skip_ || mode_ != Mode::Play || !session_) return;
-        const std::vector<core::GameAction> skipped = run_auto_skips(*session_, [this](const core::GameAction& a) {
-            const std::size_t index = session_->history().size();
-            if (!submit_one(a)) return false;
-            auto_steps_.push_back(index);
-            return true;
-        });
-        if (skipped.empty()) return;
-        std::string text = "Skipped (nothing to do):";
-        for (std::size_t i = 0; i < skipped.size(); ++i) {
-            text += (i == 0 ? " " : ", ") + action_label(session_->state(), skipped[i]);
+    // D-036 / D-038: answer the decisions the settings cover, recording them for Undo.
+    void run_auto_actions_now() {
+        if (mode_ != Mode::Play || !session_) return;
+        const AutoSettings settings{auto_skip_, auto_allocate_};
+        const std::vector<core::GameAction> done =
+            run_auto_actions(*session_, settings, [this](const core::GameAction& a) {
+                const std::size_t index = session_->history().size();
+                if (!submit_one(a)) return false;
+                auto_steps_.push_back(index);
+                return true;
+            });
+        std::string text;
+        for (const core::GameAction& a : done) {
+            if (!is_skip(a)) continue;  // allocation shows in the dice pop-ups and the log
+            text += (text.empty() ? "Skipped (nothing to do): " : ", ") + action_label(session_->state(), a);
         }
-        status_ = std::move(text);
+        if (!text.empty()) status_ = std::move(text);
     }
 
     bool submit_one(const core::GameAction& action) {
@@ -440,6 +454,7 @@ private:
         reasons_ = r.reasons;
         if (r.ok()) {
             scroll_log_ = true;
+            if (session_->state().result && !before.result) victory_pending_ = true;  // D-038
             // D-033: a pop-up for each roll the action made. While they show, the screen stays at the
             // moment of the roll (an earlier roll's moment if pop-ups were already showing).
             std::vector<DiceCard> cards =
@@ -981,6 +996,10 @@ private:
         if (has_view()) draw_datasheets();  // D-034
         // D-033: the dice pop-up, over everything else.
         if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale());
+        if (mode_ == Mode::Play) {
+            draw_end_warning();  // D-038
+            draw_victory();
+        }
     }
 
     static ImVec4 to_imvec(Color c, float alpha = 1.0f) {
@@ -1065,6 +1084,9 @@ private:
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
         ImGui::InputScalar("seed", ImGuiDataType_U64, &seed_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Fixed seed", &fixed_seed_);  // D-038
+        ImGui::SetItemTooltip("Off: each new game gets a random seed. On: new games use the seed in the box.");
         const bool playing = mode_ == Mode::Play && session_.has_value();
         if (playing) {
             ImGui::SameLine();
@@ -1105,14 +1127,23 @@ private:
         overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
         ImGui::Spacing();
         if (ImGui::Checkbox("Show dice pop-ups", &show_dice_) && !show_dice_) dice_.clear();  // D-033
-        if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) run_auto_skips_now();
+        if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) run_auto_actions_now();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
+        if (ImGui::Checkbox("Allocate damage automatically", &auto_allocate_) && auto_allocate_) run_auto_actions_now();
+        ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
+                              "05.04) instead of asking.");
+        ImGui::Checkbox("Warn before ending shooting with shots left", &warn_end_shooting_);
+        ImGui::SetItemTooltip("Ask before ending the Shooting phase while a unit still has a target it can shoot.");
         ImGui::Spacing();
         if (ImGui::Button("Fit board")) fit_pending_ = true;
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
-        int percent = static_cast<int>(std::lround(user_scale_ * 100.0f));
-        if (ImGui::SliderInt("UI scale", &percent, 75, 250, "%d%%")) user_scale_ = static_cast<float>(percent) / 100.0f;
+        // D-038: the scale changes only when the slider is let go. Changing it while dragging resized the
+        // slider under the mouse, so the value ran away.
+        if (!scale_slider_active_) scale_percent_ = static_cast<int>(std::lround(user_scale_ * 100.0f));
+        ImGui::SliderInt("UI scale", &scale_percent_, 75, 250, "%d%%");
+        scale_slider_active_ = ImGui::IsItemActive();
+        if (ImGui::IsItemDeactivatedAfterEdit()) user_scale_ = static_cast<float>(scale_percent_) / 100.0f;
         ImGui::TextDisabled("click a unit to act, left-drag: move, right-click: datasheet, right-drag: pan, wheel: zoom, Esc: cancel");
     }
 
@@ -1181,10 +1212,92 @@ private:
     }
 
     void draw_decision() {
-        // In order; stop at the first one rejected (the end-phase button can be several).
-        for (const core::GameAction& a : panel_.draw(*session_, selected_model_, &board_)) {
+        const std::vector<core::GameAction> actions = panel_.draw(*session_, selected_model_, &board_);
+        // D-038: ending the Shooting phase while a unit can still shoot asks first.
+        const bool ends_shooting = std::any_of(actions.begin(), actions.end(), [](const core::GameAction& a) {
+            return std::holds_alternative<core::action::EndShootStep>(a);
+        });
+        if (ends_shooting && warn_end_shooting_ && !units_that_can_still_shoot(session_->legal()).empty()) {
+            end_warning_ = actions;
+            open_end_warning_ = true;
+            return;
+        }
+        submit_all(actions);
+    }
+
+    // In order; stop at the first one rejected (the end-phase button can be several).
+    void submit_all(const std::vector<core::GameAction>& actions) {
+        for (const core::GameAction& a : actions) {
             if (!submit(a)) break;
         }
+    }
+
+    // D-038: "<units> can still shoot. End the Shooting phase anyway?"
+    void draw_end_warning() {
+        if (open_end_warning_) {
+            ImGui::OpenPopup("Units can still shoot");
+            open_end_warning_ = false;
+        }
+        const ImVec2 centre(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+        ImGui::SetNextWindowPos(centre, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (!ImGui::BeginPopupModal("Units can still shoot", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
+        std::string names;
+        if (session_) {
+            for (const core::UnitId id : units_that_can_still_shoot(session_->legal())) {
+                const core::Unit* u = session_->state().find_unit(id);
+                names += (names.empty() ? "" : ", ") + (u != nullptr ? u->name : "unit " + std::to_string(id.v));
+            }
+        }
+        ImGui::Text("%s can still shoot at a target.", names.empty() ? "A unit" : names.c_str());
+        ImGui::TextUnformatted("End the Shooting phase anyway?");
+        ImGui::Spacing();
+        bool close = false;
+        if (ImGui::Button("End phase")) {
+            const std::vector<core::GameAction> actions = end_warning_.value_or(std::vector<core::GameAction>{});
+            end_warning_.reset();
+            close = true;
+            if (session_) submit_all(actions);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Keep shooting") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            end_warning_.reset();
+            close = true;
+        }
+        ImGui::Checkbox("Warn me about this", &warn_end_shooting_);
+        if (close || !end_warning_) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    // D-038: the game ended while it was played: who won and why, once the last dice pop-up is closed.
+    void draw_victory() {
+        if (victory_pending_ && !dice_.active() && session_ && session_->state().result) {
+            ImGui::OpenPopup("##victory");
+            victory_pending_ = false;
+        }
+        const ImVec2 centre(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+        ImGui::SetNextWindowPos(centre, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (!ImGui::BeginPopupModal("##victory", nullptr,
+                                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar)) {
+            return;
+        }
+        const std::optional<GameOverText> text = session_ ? game_over_text(session_->state()) : std::nullopt;
+        if (text) {
+            const ImVec4 colour = text->winner ? to_imvec(side_color(*text->winner)) : ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+            ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 2.2f);
+            ImGui::TextColored(colour, "%s", text->title.c_str());
+            ImGui::PopFont();
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28.0f);
+            ImGui::TextDisabled("%s", text->reason.c_str());
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::Spacing();
+        bool new_one = false;
+        if (ImGui::Button("New game")) new_one = true;
+        ImGui::SameLine();
+        if (ImGui::Button("Close") || !text) ImGui::CloseCurrentPopup();
+        if (new_one) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+        if (new_one) new_game();
     }
 
     // D-030: the last rejection, rule-cited, in a red strip over the top of the board (so the board doesn't
@@ -1351,7 +1464,15 @@ private:
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
     bool auto_skip_ = true;            // D-036: the "Skip steps with nothing to do" setting
-    std::vector<std::size_t> auto_steps_;  // D-036: history indices of the steps skipped automatically
+    std::vector<std::size_t> auto_steps_;  // D-036: history indices of the steps taken automatically
+    bool auto_allocate_ = true;         // D-038: the "Allocate damage automatically" setting
+    bool warn_end_shooting_ = true;     // D-038: the "Warn before ending shooting with shots left" setting
+    std::optional<std::vector<core::GameAction>> end_warning_;  // D-038: the end-phase actions waiting on it
+    bool open_end_warning_ = false;
+    bool victory_pending_ = false;      // D-038: the game ended while played; show the pop-up
+    bool fixed_seed_ = false;           // D-038: "Fixed seed" (--seed sets it)
+    int scale_percent_ = 100;           // D-038: the UI scale slider's value while dragged
+    bool scale_slider_active_ = false;
     bool fit_pending_ = true;
     bool scroll_log_ = true;
     bool files_open_ = false;

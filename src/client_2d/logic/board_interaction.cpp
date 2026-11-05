@@ -379,6 +379,17 @@ ClickResult BoardInteraction::pick_actor(const core::GameState& state, core::Uni
             std::holds_alternative<a::StartPileIn>(actions.front()) ? "pile in towards" : "consolidate towards";
         return start_targets(unit);
     }
+    if (std::holds_alternative<a::StartMove>(actions.front())) {
+        // D-038: always a menu for a move, even with one move type (an engaged unit's Fall Back makes a
+        // Desperate Escape roll as soon as it is chosen), with Cancel at the end.
+        ClickResult result;
+        for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
+        // Its action is never submitted (choose() cancels first); ResetUnitMove can't answer this decision.
+        MenuEntry cancel_entry{"Cancel", a::ResetUnitMove{}};
+        cancel_entry.cancel = true;
+        result.menu.push_back(std::move(cancel_entry));
+        return result;
+    }
     if (actions.size() == 1) return ClickResult{actions.front(), {}};
     ClickResult result;
     for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
@@ -448,6 +459,10 @@ ClickResult BoardInteraction::melee_menu(const core::GameState& state, core::Uni
 }
 
 ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEntry& entry) {
+    if (entry.cancel) {
+        cancel();
+        return {};
+    }
     if (const auto* f = std::get_if<a::Fight>(&entry.action);
         entry.custom && f != nullptr && !f->declarations.empty() && mode_ == Mode::Melee && melee_) {
         // D-032: a copy of the fighter's plan starting from the entry's weapon at its target.

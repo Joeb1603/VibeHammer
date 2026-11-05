@@ -363,6 +363,21 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M25: Quality-of-life fixes ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Small fixes the user asked for (D-038): the UI scale slider applies on release; clicking a unit to move always opens its move-type menu with Cancel (an engaged unit no longer starts a Fall Back on the click); a warning before ending the Shooting phase while a unit still has a shot; automatic damage allocation (default allocation and casualty order); a victory pop-up; a random seed for each new game unless "Fixed seed" is ticked. Client only.
+
+**Acceptance**
+- The UI scale changes only when the slider is released.
+- A move click opens a menu ending in Cancel, also for an engaged unit's Fall Back; Cancel picks nothing (logic test).
+- Ending the Shooting phase while a unit still has a valid shot asks first, unless "Warn before ending shooting with shots left" is off (on by default). The query lists the right units (logic test).
+- With "Allocate damage automatically" on (default), an attack resolves without the defender's allocation or casualty decisions, and the history replays (logic test).
+- When the game ends while it is played, a pop-up names the winner (or a draw) and the reason (logic test for the text), with New game and Close.
+- New game uses a random seed unless "Fixed seed" is ticked; `--seed` ticks it.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

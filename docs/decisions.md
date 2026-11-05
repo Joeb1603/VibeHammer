@@ -702,3 +702,28 @@ logic).
   - On a datasheet, each weapon ability and keyword can be hovered.
   - A hit roll's dice card lists the dice gathered and the abilities that changed them.
 - Tooltips appear only on hover, so there is no setting to turn them off.
+
+## D-038: Quality-of-life fixes (M25)
+**Decided:** 2026-11-05 (agreed with the user). Client only; no engine, state or replay change.
+- **UI scale slider:** the value applies on release (`IsItemDeactivatedAfterEdit`). Applying it while
+  dragging rescaled the slider under the mouse, so the value ran away.
+- **Move-type menu:** clicking a unit to move always opens its menu, even with one move type, and the menu
+  ends with **Cancel**, which picks nothing and drops the unit. Before, an engaged unit's only option, Fall
+  Back, was chosen by the click itself, which can make a Desperate Escape roll (09.07). Other menus are
+  unchanged.
+- **Warn before ending shooting** (setting, on by default): if the end-phase actions include
+  `EndShootStep` while a `Shoot` template is still legal, a modal lists the units and asks to end the
+  phase or keep shooting. The engine only offers a template for a unit with at least one valid shot
+  (D-016), so "can still shoot" means a real target. A lone skip (D-036) never warns, because then no unit
+  can shoot.
+- **Allocate damage automatically** (setting, on by default): the defender's `DeclareAllocationOrder`
+  takes the first legal order, and `OrderCasualties` takes `CasualtyPlan`'s default order. These are the
+  defaults the panel offers. They go through `GameSession::submit` like the D-036 skips (`run_auto_actions`)
+  and count with them for Undo. The attacker's choice of batch (04.03) is not damage allocation and is
+  still asked.
+- **Victory pop-up:** when a submitted action ends the game, a modal (after the last dice pop-up) names the
+  winner and army ("Side A (Space Marines) wins!") or "Draw", with the engine's reason, and offers New game
+  and Close. It isn't shown for loads, replays or undo.
+- **Random seed:** each New game draws a seed with `std::random_device` in the client, unless "Fixed seed" is
+  ticked (then the seed box is used). Core only ever sees the seed in `GameState`, so it stays
+  deterministic. `--seed n` ticks "Fixed seed", so scripted screenshots are reproducible.

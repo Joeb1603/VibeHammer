@@ -1,0 +1,72 @@
+#include "auto_actions.hpp"
+
+#include <algorithm>
+#include <variant>
+
+#include "casualty_plan.hpp"
+
+namespace wh40k::client {
+
+bool is_skip(const core::GameAction& action) {
+    using namespace core::action;
+    return std::holds_alternative<EndShootStep>(action) || std::holds_alternative<EndChargeStep>(action) ||
+           std::holds_alternative<EndPileIns>(action) || std::holds_alternative<EndConsolidations>(action) ||
+           std::holds_alternative<PassFight>(action) || std::holds_alternative<SkipPileIn>(action);
+}
+
+std::optional<core::GameAction> lone_skip(const std::vector<core::GameAction>& legal) {
+    if (legal.size() != 1 || !is_skip(legal.front())) return std::nullopt;
+    return legal.front();
+}
+
+std::optional<core::GameAction> next_auto_action(const core::GameState& state,
+                                                 const std::vector<core::GameAction>& legal,
+                                                 AutoSettings settings) {
+    if (settings.skip_empty_steps) {
+        if (auto skip = lone_skip(legal)) return skip;
+    }
+    if (settings.auto_allocate && state.pending) {
+        if (std::holds_alternative<core::decision::DeclareAllocationOrder>(state.pending->kind) && !legal.empty()) {
+            return legal.front();  // 05.03: the first legal order, as the panel offers first
+        }
+        if (const auto* d = std::get_if<core::decision::OrderCasualties>(&state.pending->kind)) {
+            return CasualtyPlan(state, d->target).action();  // 05.04: the default casualty order
+        }
+    }
+    return std::nullopt;
+}
+
+std::vector<core::GameAction> run_auto_actions(GameSession& session, AutoSettings settings,
+                                               const std::function<bool(const core::GameAction&)>& submit,
+                                               std::size_t limit) {
+    std::vector<core::GameAction> done;
+    while (done.size() < limit && session.pending()) {
+        const std::optional<core::GameAction> next = next_auto_action(session.state(), session.legal(), settings);
+        if (!next) break;
+        const bool ok = submit ? submit(*next) : session.submit(*next).ok();
+        if (!ok) break;
+        done.push_back(*next);
+    }
+    return done;
+}
+
+std::vector<core::UnitId> units_that_can_still_shoot(const std::vector<core::GameAction>& legal) {
+    std::vector<core::UnitId> out;
+    for (const core::GameAction& a : legal) {
+        const auto* s = std::get_if<core::action::Shoot>(&a);
+        if (s == nullptr || std::find(out.begin(), out.end(), s->unit) != out.end()) continue;
+        out.push_back(s->unit);
+    }
+    return out;
+}
+
+bool undo_with_auto_skips(GameSession& session, std::vector<std::size_t>& auto_steps) {
+    bool any = false;
+    while (!auto_steps.empty() && auto_steps.back() + 1 == session.history().size()) {
+        any = session.undo() || any;
+        auto_steps.pop_back();
+    }
+    return session.undo() || any;
+}
+
+}  // namespace wh40k::client
