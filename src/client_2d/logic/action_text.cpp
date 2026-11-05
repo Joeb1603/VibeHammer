@@ -32,6 +32,11 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
             if constexpr (std::is_same_v<T, a::StartMove>) {
                 std::string s = std::string(core::move_type_name(x.move_type)) + ": " + unit_name(state, x.unit);
                 if (x.fall_back_mode) s += " (" + std::string(core::fall_back_mode_name(*x.fall_back_mode)) + ")";
+                // D-045 / D-005: an Advance roll made earlier this phase is kept, not rolled again.
+                const core::Unit* u = state.find_unit(x.unit);
+                if (x.move_type == core::MoveType::Advance && u != nullptr && u->phase_flags.advance_roll) {
+                    s += " (advance roll kept: +" + std::to_string(*u->phase_flags.advance_roll) + "\")";
+                }
                 return s;
             } else if constexpr (std::is_same_v<T, a::ProposeModelMove>) {
                 return "Move model " + std::to_string(x.model.v);

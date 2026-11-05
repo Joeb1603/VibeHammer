@@ -766,6 +766,7 @@ logic).
   "Movement range" ring toggle.
 - **Extended by D-041 (M28):** the area follows each step, covers pile-ins and consolidations, and is shown
   for whole-unit drags too.
+- **Extended by D-046 (M30):** charge moves are shaded too.
 
 ## D-041: The movement area follows each step, covers pile-ins and whole-unit drags (M28)
 **Decided:** 2026-11-05 (agreed with the user). Read-only core query and client only; movement validation
@@ -828,4 +829,33 @@ is unchanged.
 - For a whole-unit drag, each model's shadows are shifted with its area. A spot reachable only by a path
   that bends round the enemy needs two drags; the area shows the next straight line, as the client always
   adds one line per drag.
+
+## D-045: Cancel on every click menu; a kept advance roll is not shown as a new roll (M30)
+**Decided:** 2026-11-05 (agreed with the user). Client only.
+- **Cancel** ends every board click menu: move types (D-038), shooting types, a target's weapons
+  (after Custom...), melee weapons, fight types.
+  - On a target's weapon menu it only closes the menu, so the same shooter or fighter goes on picking a
+    target; the action bar's Cancel or Esc drops the shooter.
+  - On a unit's menu it drops the unit.
+- **Declaring a charge** asks first (Declare charge / Cancel), as Fall Back does: the click would otherwise
+  make the 2D6 charge roll at once (11.02).
+- **A kept Advance roll** (D-005: once made it stands for the phase): the engine's `AdvanceRolled` with
+  `reused` makes no dice pop-up, since nothing was rolled. The Advance menu entry says "(advance roll kept:
+  +N")" once the unit has rolled this phase. The log line still names it as kept.
+
+## D-046: The shaded area for charge moves (M30)
+**Decided:** 2026-11-05 (agreed with the user). Read-only core query; validation unchanged.
+- `move_reach` now covers a charge move (11.04):
+  - **Distance:** up to the charge roll, from where the model is now (D-041).
+  - **Closer:** it must end closer to one or more charge targets (While Moving, as
+    `ends_closer_to_a_charge_target`): one `required_any` group with, for each target, a circle round each
+    of its models.
+  - **Non-targets:** it must not end within 2" of a model of an enemy unit that isn't a charge target
+    (After Moving: "cannot be engaged with … enemy units that are not charge targets", which holds only if
+    no model is): `forbidden` engagement circles.
+  - **Paths:** not through enemy models (D-044).
+- **Not shaded:**
+  - "engaged with all of the charge targets" (unit-wide; checked when the move ends);
+  - "within 1" / engaged if it can" (TODO(if-possible), left to the player).
+- The charge-distance ring is still drawn.
 

@@ -35,7 +35,9 @@ namespace wh40k::core {
 //   enemy models (09.07 Desperate Escape).
 // Ending inside the area does not make the path legal (enemy bases can't be crossed), the unit coherent
 // (03.03) or meet unit-wide conditions (e.g. 12.03 "your unit must be engaged"); the engine still checks
-// them. nullopt if the model isn't moving, or for a charge move (it has its charge ring).
+// them. D-046: a charge move (11.04) is shaded too: up to the charge roll, closer to one or more charge
+// targets (`required_any`), and not within engagement range of an enemy unit that isn't a target
+// (`forbidden`). nullopt if the model isn't moving.
 struct ReachCircle {
     Position centre;
     float radius_mm = 0.0f;   // for the moving model's centre: base radii (+ a distance) added

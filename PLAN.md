@@ -431,6 +431,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M30: Cancel on every click menu, kept advance roll, charge-move area ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Every click menu now ends with Cancel (D-045): shooting types, a target's weapons, melee weapons, fight types, moves. On a target's weapon menu it only closes the menu; elsewhere it drops the unit. Declaring a charge asks first, because it makes the charge roll. A kept Advance roll (D-005) gets no new dice pop-up and is named in the menu, so a Reset no longer looks like a re-roll. Charge moves get the shaded area (D-046).
+
+**Acceptance**
+- Weapon, melee and other click menus end with Cancel; Cancel on a weapon menu keeps picking a target (logic tests).
+- Clicking a unit in the Charge phase gives Declare charge / Cancel; Cancel declares nothing (logic test).
+- Advance, Reset, Advance again: no second dice card, the roll and Move are the same, and the menu says the roll is kept (logic test).
+- A charge move's area: the charge roll, closer to a charge target (matches the engine over a grid), not within 2" of a non-target unit (core tests); every shaded spot is accepted by the engine (logic test).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

@@ -48,6 +48,15 @@ namespace {
 
 const std::vector<GameEvent>& last_events(const GameSession& s) { return s.log().back().events; }
 
+// The "Custom..." entry of a target's weapon menu (D-031, D-032): just before Cancel (D-045).
+const MenuEntry& custom_of(const std::vector<MenuEntry>& menu) {
+    for (const MenuEntry& e : menu) {
+        if (e.custom) return e;
+    }
+    ADD_FAILURE() << "no Custom... entry";
+    return menu.front();
+}
+
 }  // namespace
 
 // ==== M12 acceptance: a unit-wide default plus a single-model override (D-001) ====
@@ -744,12 +753,14 @@ TEST(M16_BoardInteraction, ShootingIsAClickOnTheShooterThenTheTargetThenAWeapon)
     EXPECT_TRUE(board.clickable(gants));
 
     const ClickResult r = board.click(gs, gants);
-    ASSERT_EQ(r.menu.size(), 4u);  // the weapon choices, then "Custom..." (D-031)
+    ASSERT_EQ(r.menu.size(), 5u);  // the weapon choices, then "Custom..." (D-031), then Cancel (D-045)
     EXPECT_EQ(r.menu[0].label, "Bolt Rifle - Focused Fire: 5 models");
     EXPECT_EQ(r.menu[1].label, "Bolt Rifle - Saturation: 5 models");
     EXPECT_EQ(r.menu[2].label, "Bolt pistol: 5 models");
     EXPECT_EQ(r.menu[3].label, "Custom...");
     EXPECT_TRUE(r.menu[3].custom);
+    EXPECT_EQ(r.menu[4].label, "Cancel");
+    EXPECT_TRUE(r.menu[4].cancel);
     EXPECT_FALSE(r.menu[0].custom);
     const ClickResult fire = board.choose(gs, r.menu[1].action);
     ASSERT_TRUE(fire.submit.has_value());
@@ -767,9 +778,9 @@ TEST(M18_CustomShot, CustomEntryOpensTheEditorWithTheFirstWeaponAtTheTarget) {
     (void)board.click(gs, marines);
     const ClickResult r = board.click(gs, gants);
     ASSERT_FALSE(r.menu.empty());
-    ASSERT_TRUE(r.menu.back().custom);
+    ASSERT_TRUE(custom_of(r.menu).custom);
 
-    const ClickResult opened = board.choose(gs, r.menu.back());
+    const ClickResult opened = board.choose(gs, custom_of(r.menu));
     EXPECT_FALSE(opened.submit.has_value());
     EXPECT_TRUE(opened.menu.empty());
     EXPECT_TRUE(board.custom_shot());
@@ -798,7 +809,7 @@ TEST(M18_CustomShot, MixedProfilesAreAcceptedByTheEngine) {
     BoardInteraction board(gs, session.legal());
     (void)board.click(gs, marines);
     const ClickResult r = board.click(gs, gants);
-    (void)board.choose(gs, r.menu.back());
+    (void)board.choose(gs, custom_of(r.menu));
     ShotPlan* plan = board.shot_plan();
     ASSERT_NE(plan, nullptr);
 
@@ -830,7 +841,7 @@ TEST(M18_CustomShot, CancelReturnsToPickingATarget) {
     BoardInteraction board(gs, legal_actions(gs, Side::A));
     (void)board.click(gs, marines);
     const ClickResult r = board.click(gs, gants);
-    (void)board.choose(gs, r.menu.back());
+    (void)board.choose(gs, custom_of(r.menu));
     board.shot_plan()->override_model(gs.units[0].models[0].id, std::nullopt);
 
     board.cancel();  // Esc or Back
@@ -875,8 +886,9 @@ TEST(M19_CustomMelee, ATargetClickOffersTheMeleeWeaponsThenCustom) {
     const ClickResult r = board.click(gs, gants);
     EXPECT_FALSE(r.submit.has_value());
     ASSERT_GE(r.menu.size(), 2u);
-    EXPECT_EQ(r.menu.back().label, "Custom...");
-    EXPECT_TRUE(r.menu.back().custom);
+    EXPECT_EQ(r.menu[r.menu.size() - 2].label, "Custom...");  // then Cancel (D-045)
+    EXPECT_TRUE(r.menu[r.menu.size() - 2].custom);
+    EXPECT_TRUE(r.menu.back().cancel);
     EXPECT_FALSE(r.menu.front().custom);
     EXPECT_NE(r.menu.front().label.find(": 5 models"), std::string::npos) << r.menu.front().label;
     const ClickResult fight = board.choose(gs, r.menu.front());
@@ -892,7 +904,7 @@ TEST(M19_CustomMelee, CustomOpensTheEditorAndItsFightIsAccepted) {
     BoardInteraction board(gs, session.legal());
     const ClickResult r = board.click(gs, gants);
     ASSERT_FALSE(r.menu.empty());
-    const ClickResult opened = board.choose(gs, r.menu.back());
+    const ClickResult opened = board.choose(gs, custom_of(r.menu));
     EXPECT_FALSE(opened.submit.has_value());
     EXPECT_TRUE(board.custom_editor());
     EXPECT_TRUE(board.custom_melee());
@@ -929,7 +941,7 @@ TEST(M19_CustomMelee, CancelReturnsToPickingATarget) {
     const UnitId gants = gs.units[1].id;
     BoardInteraction board(gs, session.legal());
     const ClickResult r = board.click(gs, gants);
-    (void)board.choose(gs, r.menu.back());
+    (void)board.choose(gs, custom_of(r.menu));
     ASSERT_TRUE(board.custom_melee());
 
     board.cancel();  // Esc or Back
@@ -1076,7 +1088,12 @@ TEST(M16_BoardInteraction, AChargeIsAClickOnTheUnitThenOnItsTarget) {
     const UnitId gants = gs.units[1].id;
     BoardInteraction declare(gs, legal_actions(gs, Side::A));
     EXPECT_EQ(declare.hint(gs), "Click a unit to declare a charge with.");
-    const ClickResult d = declare.click(gs, marines);
+    // D-045: the charge roll is made when the charge is declared, so the click asks first.
+    const ClickResult menu = declare.click(gs, marines);
+    EXPECT_FALSE(menu.submit.has_value());
+    ASSERT_EQ(menu.menu.size(), 2u);
+    EXPECT_TRUE(menu.menu[1].cancel);
+    const ClickResult d = declare.choose(gs, menu.menu[0]);
     ASSERT_TRUE(d.submit.has_value());
     EXPECT_EQ(*d.submit, GameAction{action::DeclareCharge{marines}});
     ScriptedDice dice{6, 6};

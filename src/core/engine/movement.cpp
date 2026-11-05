@@ -402,7 +402,7 @@ std::optional<float> max_move_distance_mm(const GameState& state, ModelId model)
 }
 
 std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
-    if (!state.flow.move || state.flow.move->type == MoveType::Charge) return std::nullopt;
+    if (!state.flow.move) return std::nullopt;
     const MoveInProgress& mv = *state.flow.move;
     const Unit* u = state.find_unit(mv.unit);
     const Model* m = u == nullptr ? nullptr : find_model(*u, model);
@@ -433,13 +433,35 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
                 // 03.01: its base cannot be moved through enemy models (check_model_path's limit).
                 reach.blocking.push_back(ReachCircle{o.position, touching - EPS_MM, false, o.id});
             }
-            if (other.side != u->side && reach.must_end_unengaged) {
+            // D-046: 11.04 After Moving: the unit cannot be engaged with enemy units that are not charge
+            // targets, so no model may end within their engagement range.
+            const bool non_target = mv.type == MoveType::Charge && other.side != u->side &&
+                                    std::find(mv.targets.begin(), mv.targets.end(), other.id) == mv.targets.end();
+            if (other.side != u->side && (reach.must_end_unengaged || non_target)) {
                 // 03.04: within 2" is engaged; ending more than 2" away (EPS policy) is unengaged.
                 reach.forbidden.push_back(ReachCircle{o.position, touching + kEngagementRangeMm + EPS_MM, true, o.id});
             } else {
                 reach.forbidden.push_back(ReachCircle{o.position, touching, false, o.id});  // 03.01: not on it
             }
         }
+    }
+    if (mv.type == MoveType::Charge) {
+        // D-046: 11.04 While Moving: end closer to one or more charge targets, each measured from the
+        // start (as ends_closer_to_a_charge_target). TODO(if-possible): "within 1" / engaged if it can"
+        // is left to the player, and "engaged with all charge targets" is checked when the move ends.
+        std::vector<ReachCircle> closer;
+        for (const UnitId id : mv.targets) {
+            const Unit* t = state.find_unit(id);
+            if (t == nullptr || is_destroyed(*t)) continue;
+            const std::optional<float> before = model_distance_to_unit(*m, *start, *t);
+            if (!before) continue;
+            for (const Model& tm : t->models) {
+                const float radius = r + base_radius(tm.base) + *before - EPS_MM;
+                if (radius > 0.0f) closer.push_back(ReachCircle{tm.position, radius, false, tm.id});
+            }
+        }
+        reach.required_any.push_back(std::move(closer));
+        return reach;
     }
     const bool pile_in = mv.type == MoveType::PileIn;
     const bool consolidation = mv.type == MoveType::Consolidation;

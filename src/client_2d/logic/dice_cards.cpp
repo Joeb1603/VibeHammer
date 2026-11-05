@@ -231,7 +231,8 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                     } else if constexpr (std::is_same_v<T, ev::SaveRollsMade>) {
                         if (show) cards.push_back(save_card(state, c, e.target, e.rolls));
                     } else if constexpr (std::is_same_v<T, ev::AdvanceRolled>) {
-                        if (!show) return;
+                        // D-045: a kept roll (D-005) was not rolled again, so there is nothing to roll.
+                        if (!show || e.reused) return;
                         DiceCard card{"Advance roll", unit_name(state, e.unit) + " advancing",
                                       "Add the roll to the unit's Move this phase", "", "09.06",
                                       side_of(state, e.unit, core::Side::A), {DieFace{e.roll, true, false, true}}};

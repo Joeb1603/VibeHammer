@@ -1032,7 +1032,7 @@ private:
         std::optional<MenuEntry> picked;
         for (std::size_t i = 0; i < menu_.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
-            if (menu_[i].custom) ImGui::Separator();
+            if (menu_[i].custom || menu_[i].cancel) ImGui::Separator();
             if (menu_entry(menu_[i])) picked = menu_[i];
             ImGui::PopID();
         }

@@ -67,6 +67,15 @@ void describe(const core::GameState& state, const a::Fight& fight, core::UnitId 
     entry.effects = effect_lines(*p, selections, core::AttackContext{core::AttackType::Fighting, false});
 }
 
+// D-038 / D-045: every click menu ends with Cancel. Its action is never submitted (choose() handles the
+// entry first); ResetUnitMove answers none of the decisions a click menu is for.
+void add_cancel(std::vector<MenuEntry>& menu) {
+    if (menu.empty()) return;
+    MenuEntry cancel_entry{"Cancel", a::ResetUnitMove{}};
+    cancel_entry.cancel = true;
+    menu.push_back(std::move(cancel_entry));
+}
+
 // A menu entry for an action; a shooting type gets its help (D-037).
 MenuEntry action_entry(const core::GameState& state, const core::GameAction& action) {
     MenuEntry entry{action_label(state, action), action};
@@ -365,6 +374,7 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
             if (!result.menu.empty()) {
                 result.menu.push_back(MenuEntry{"Custom...", result.menu.front().action, true});
             }
+            add_cancel(result.menu);
             return result;
         }
         case Mode::Targets: {
@@ -399,6 +409,7 @@ ClickResult BoardInteraction::pick_actor(const core::GameState& state, core::Uni
         if (actions.size() == 1) return choose(state, actions.front());
         ClickResult result;  // several shooting types: pick one first
         for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
+        add_cancel(result.menu);
         return result;
     }
     if (targets_of(actions.front()) != nullptr) {
@@ -416,15 +427,15 @@ ClickResult BoardInteraction::pick_actor(const core::GameState& state, core::Uni
         // Desperate Escape roll as soon as it is chosen), with Cancel at the end.
         ClickResult result;
         for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
-        // Its action is never submitted (choose() cancels first); ResetUnitMove can't answer this decision.
-        MenuEntry cancel_entry{"Cancel", a::ResetUnitMove{}};
-        cancel_entry.cancel = true;
-        result.menu.push_back(std::move(cancel_entry));
+        add_cancel(result.menu);
         return result;
     }
-    if (actions.size() == 1) return ClickResult{actions.front(), {}};
+    // D-045: declaring a charge makes the charge roll at once (11.02), so it is asked, as a move is.
+    const bool rolls = std::holds_alternative<a::DeclareCharge>(actions.front());
+    if (actions.size() == 1 && !rolls) return ClickResult{actions.front(), {}};
     ClickResult result;
     for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
+    add_cancel(result.menu);
     return result;
 }
 
@@ -487,12 +498,15 @@ ClickResult BoardInteraction::melee_menu(const core::GameState& state, core::Uni
                       [&](const core::MeleeDeclaration& d) { return d.targets.front().unit != unit; });
         result.menu.push_back(MenuEntry{"Custom...", seed, true});
     }
+    add_cancel(result.menu);
     return result;
 }
 
 ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEntry& entry) {
     if (entry.cancel) {
-        cancel();
+        // D-045: on a target's weapon menu, Cancel only closes it (still picking a target for the same
+        // shooter or fighter); on a unit's menu it drops the unit.
+        if (mode_ == Mode::PickActor) cancel();
         return {};
     }
     if (const auto* f = std::get_if<a::Fight>(&entry.action);

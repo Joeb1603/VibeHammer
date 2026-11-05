@@ -11,6 +11,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/rules/charge.hpp"
 #include "core/rules/fight.hpp"
 #include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
@@ -495,21 +496,87 @@ TEST(D040_MoveReach, EndingJustOutsideAnEngagementCircleIsUnengagedAndJustInside
     }
 }
 
-TEST(D040_MoveReach, NoneForAChargeMove) {
-    // As wh40k::test::after_successful_charge, stopped once the charge move has started.
+namespace {
+
+bool inside_any(const std::vector<ReachCircle>& group, const Position& p) {
+    return std::any_of(group.begin(), group.end(), [&](const ReachCircle& c) {
+        return std::hypot(p.x - c.centre.x, p.y - c.centre.y) < c.radius_mm;
+    });
+}
+
+// Distance from `p` to the nearest edge of any circle in the group (to skip points on a boundary).
+float edge_gap(const std::vector<ReachCircle>& group, const Position& p) {
+    float best = 1e9f;
+    for (const ReachCircle& c : group) {
+        best = std::min(best, std::fabs(std::hypot(p.x - c.centre.x, p.y - c.centre.y) - c.radius_mm));
+    }
+    return best;
+}
+
+
+// Side A's charge move: the Termagants 9.9" away, a charge roll of 10 (4, 6) and the Termagants the only
+// charge target (as wh40k::test::after_successful_charge, stopped once the charge move has started). With
+// `bystanders`, a copy of the Termagants 4" behind them that is not a charge target.
+GameState charge_move_state(bool bystanders) {
     GameState gs = movement_state();
     while (!(gs.flow.stage == Stage::Charge && turn_side(gs) == Side::A)) {
         apply_action(gs, decider(gs), legal_actions(gs, decider(gs)).front());
     }
     const float gap = mm_to_inches(*unit_distance(gs.units[kMarines], gs.units[kGants]));
     for (auto& g : gs.units[kGants].models) g.position.y -= in(gap - 9.9f);
+    if (bystanders) {
+        wh40k::test::add_unit_copy(gs, kGants);
+        for (auto& g : gs.units.back().models) g.position.y += in(4);
+    }
     ScriptedDice dice{4, 6};
     apply_action(gs, Side::A, action::DeclareCharge{gs.units[kMarines].id}, dice);
     apply_action(gs, Side::A, action::StartChargeMove{gs.units[kMarines].id, {gs.units[kGants].id}});
-    ASSERT_TRUE(gs.flow.move.has_value());
+    return gs;
+}
+
+}  // namespace
+
+TEST(D046_MoveReach, AChargeMoveIsShadedUpToTheChargeRoll) {
+    const GameState gs = charge_move_state(false);
     ASSERT_EQ(gs.flow.move->type, MoveType::Charge);
-    EXPECT_TRUE(max_move_distance_mm(gs, gs.units[kMarines].models[0].id).has_value());
-    EXPECT_FALSE(move_reach(gs, gs.units[kMarines].models[0].id).has_value());  // the charge ring instead
+    const Model& m = gs.units[kMarines].models[0];
+    const auto reach = move_reach(gs, m.id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_FLOAT_EQ(reach->max_mm, in(10));  // 11.04: the charge roll
+    EXPECT_FLOAT_EQ(reach->remaining_mm, in(10));
+    EXPECT_FALSE(reach->must_end_unengaged);  // a charge ends engaged
+    EXPECT_FALSE(reach->blocking.empty());    // 03.01: not through enemy models
+    for (const ReachCircle& c : reach->forbidden) EXPECT_FALSE(c.engagement);  // the only enemy is a target
+    ASSERT_EQ(reach->required_any.size(), 1u);
+    // "Closer to one or more charge targets" matches the engine's check over a grid round the model.
+    const auto& closer = reach->required_any[0];
+    const std::vector<UnitId> targets = gs.flow.move->targets;
+    int checked = 0;
+    for (float dx = -4.0f; dx <= 4.0f; dx += 0.25f) {
+        for (float dy = -4.0f; dy <= 4.0f; dy += 0.25f) {
+            const Position p = shifted(m.position, dx, dy);
+            if (edge_gap(closer, p) <= 0.05f) continue;
+            EXPECT_EQ(inside_any(closer, p), ends_closer_to_a_charge_target(gs, m, m.position, p, targets))
+                << dx << ", " << dy;
+            ++checked;
+        }
+    }
+    EXPECT_GT(checked, 500);
+}
+
+TEST(D046_MoveReach, AChargeMayNotEndNearAnEnemyUnitThatIsNotATarget) {
+    const GameState gs = charge_move_state(true);
+    const Unit& bystanders = gs.units.back();
+    const auto reach = move_reach(gs, gs.units[kMarines].models[0].id);
+    ASSERT_TRUE(reach.has_value());
+    std::size_t engagement = 0;
+    for (const ReachCircle& c : reach->forbidden) {
+        const bool bystander = std::any_of(bystanders.models.begin(), bystanders.models.end(),
+                                           [&](const Model& b) { return b.id == c.model; });
+        EXPECT_EQ(c.engagement, bystander);  // 11.04 After Moving: not engaged with non-targets
+        engagement += c.engagement ? 1 : 0;
+    }
+    EXPECT_EQ(engagement, bystanders.models.size());
 }
 
 // ---- D-041: the area follows each step; pile-in shading ----
@@ -547,21 +614,6 @@ GameState pile_in_state(bool centre_in_base_contact) {
     apply_action(gs, Side::A, action::EndChargeStep{});
     apply_action(gs, Side::A, action::StartPileIn{gs.units[kMarines].id, {gs.units[kGants].id}});
     return gs;
-}
-
-bool inside_any(const std::vector<ReachCircle>& group, const Position& p) {
-    return std::any_of(group.begin(), group.end(), [&](const ReachCircle& c) {
-        return std::hypot(p.x - c.centre.x, p.y - c.centre.y) < c.radius_mm;
-    });
-}
-
-// Distance from `p` to the nearest edge of any circle in the group (to skip points on a boundary).
-float edge_gap(const std::vector<ReachCircle>& group, const Position& p) {
-    float best = 1e9f;
-    for (const ReachCircle& c : group) {
-        best = std::min(best, std::fabs(std::hypot(p.x - c.centre.x, p.y - c.centre.y) - c.radius_mm));
-    }
-    return best;
 }
 
 }  // namespace
