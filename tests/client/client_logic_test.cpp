@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "action_text.hpp"
+#include "board_interaction.hpp"
 #include "casualty_plan.hpp"
 #include "core/engine/movement.hpp"
 #include "core/state/queries.hpp"
@@ -661,6 +662,270 @@ TEST(M15_RingText, EveryRingHasANameAndAnExplanation) {
     }
     EXPECT_NE(ring_meaning(RingKind::Engagement).find("03.04"), std::string_view::npos);
     EXPECT_NE(ring_meaning(RingKind::Coherency).find("03.03"), std::string_view::npos);
+}
+
+// ==== M16: click-on-the-board interaction (D-029) ====
+
+namespace {
+
+template <typename T>
+bool has_action(const std::vector<GameAction>& actions) {
+    return std::any_of(actions.begin(), actions.end(), [](const GameAction& a) { return std::holds_alternative<T>(a); });
+}
+
+}  // namespace
+
+TEST(M16_BoardInteraction, AtTheStartOnlyTheIntercessorsAreClickableAndOfferTheirMoveTypes) {
+    GameSession session(wh40k::test::load_v1_scenario());
+    BoardInteraction board(session.state(), session.legal());
+    const UnitId marines = session.state().units[0].id;
+    const UnitId gants = session.state().units[1].id;
+    ASSERT_TRUE(board.active());
+    EXPECT_TRUE(board.clickable(marines));
+    EXPECT_FALSE(board.clickable(gants));  // drawn grey
+    EXPECT_EQ(board.hint(session.state()), "Click a unit to move.");
+    EXPECT_TRUE(board.step_buttons().empty());  // every MoveUnits option belongs to a unit
+    EXPECT_FALSE(board.click(session.state(), gants).submit.has_value());
+
+    const ClickResult r = board.click(session.state(), marines);
+    EXPECT_FALSE(r.submit.has_value());
+    ASSERT_EQ(r.menu.size(), 3u);  // the StartMove legal actions, in order
+    for (std::size_t i = 0; i < 3; ++i) EXPECT_EQ(r.menu[i].action, session.legal()[i]);
+    EXPECT_EQ(r.menu[1].label, "Normal: Intercessor Squad (1)");
+    const ClickResult chosen = board.choose(session.state(), r.menu[1].action);
+    ASSERT_TRUE(chosen.submit.has_value());
+    ASSERT_TRUE(session.submit(*chosen.submit).ok());
+    EXPECT_TRUE(std::holds_alternative<decision::MoveModels>(session.pending()->kind));
+
+    const BoardInteraction moving(session.state(), session.legal());
+    EXPECT_TRUE(moving.clickable(marines));
+    EXPECT_FALSE(moving.clickable(gants));
+    const auto steps = moving.step_buttons();
+    EXPECT_EQ(steps, (std::vector<GameAction>{action::CommitUnitMove{}, action::ResetUnitMove{}}));
+}
+
+TEST(M16_BoardInteraction, ShootingIsAClickOnTheShooterThenTheTargetThenAWeapon) {
+    GameSession session(wh40k::test::shoot_step_state());
+    const GameState& gs = session.state();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, session.legal());
+    EXPECT_FALSE(board.clickable(gants));  // no shooter yet
+    EXPECT_EQ(board.step_buttons(), (std::vector<GameAction>{action::EndShootStep{}}));
+
+    EXPECT_TRUE(board.click(gs, marines).menu.empty());  // one shooting type: the shooter is picked at once
+    EXPECT_EQ(board.actor(), marines);
+    ASSERT_NE(board.shot_plan(), nullptr);
+    EXPECT_TRUE(board.clickable(gants));
+
+    const ClickResult r = board.click(gs, gants);
+    ASSERT_EQ(r.menu.size(), 3u);
+    EXPECT_EQ(r.menu[0].label, "Bolt Rifle - Focused Fire: 5 models");
+    EXPECT_EQ(r.menu[1].label, "Bolt Rifle - Saturation: 5 models");
+    EXPECT_EQ(r.menu[2].label, "Bolt pistol: 5 models");
+    const ClickResult fire = board.choose(gs, r.menu[1].action);
+    ASSERT_TRUE(fire.submit.has_value());
+    EXPECT_TRUE(session.check(*fire.submit).ok());
+    ASSERT_TRUE(session.submit(*fire.submit).ok());
+    EXPECT_FALSE(events_of<event::AttackBatchesGathered>(last_events(session)).empty());
+}
+
+TEST(M16_BoardInteraction, ClickingTheShooterAgainPicksAnotherUnit) {
+    const GameState gs = wh40k::test::shoot_step_state();
+    const auto legal = legal_actions(gs, Side::A);
+    BoardInteraction board(gs, legal);
+    (void)board.click(gs, gs.units[0].id);
+    ASSERT_TRUE(board.actor().has_value());
+    (void)board.click(gs, gs.units[0].id);
+    EXPECT_FALSE(board.actor().has_value());
+    EXPECT_FALSE(board.clickable(gs.units[1].id));
+    (void)board.click(gs, gs.units[0].id);
+    board.cancel();  // Esc or a click on empty board
+    EXPECT_FALSE(board.actor().has_value());
+}
+
+TEST(M16_BoardInteraction, AChargeIsAClickOnTheUnitThenOnItsTarget) {
+    GameState gs = wh40k::test::load_v1_scenario();
+    start_game(gs);
+    while (!(gs.flow.stage == Stage::Charge && turn_side(gs) == Side::A)) {
+        apply_action(gs, wh40k::test::decider(gs), legal_actions(gs, wh40k::test::decider(gs)).front());
+    }
+    for (auto& m : gs.units[1].models) m.position.y -= in(3);
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction declare(gs, legal_actions(gs, Side::A));
+    EXPECT_EQ(declare.hint(gs), "Click a unit to declare a charge with.");
+    const ClickResult d = declare.click(gs, marines);
+    ASSERT_TRUE(d.submit.has_value());
+    EXPECT_EQ(*d.submit, GameAction{action::DeclareCharge{marines}});
+    ScriptedDice dice{6, 6};
+    apply_action(gs, Side::A, *d.submit, dice);
+
+    BoardInteraction targets(gs, legal_actions(gs, Side::A));
+    EXPECT_EQ(targets.actor(), marines);  // given by the decision
+    EXPECT_FALSE(targets.clickable(marines));
+    EXPECT_TRUE(targets.clickable(gants));
+    EXPECT_EQ(targets.step_buttons(), (std::vector<GameAction>{action::SkipChargeMove{marines}}));
+    const ClickResult c = targets.click(gs, gants);
+    ASSERT_TRUE(c.submit.has_value());  // the only option: submitted at once
+    EXPECT_EQ(*c.submit, (GameAction{action::StartChargeMove{marines, {gants}}}));
+}
+
+TEST(M16_BoardInteraction, AnEngagedUnitPilesInAndFightsWithOneClick) {
+    GameSession session(wh40k::test::after_successful_charge());
+    ASSERT_TRUE(session.submit(action::EndChargeStep{}).ok());
+    const UnitId marines = session.state().units[0].id;
+    BoardInteraction pile(session.state(), session.legal());
+    EXPECT_EQ(pile.hint(session.state()), "Click a unit to pile in with.");
+    EXPECT_EQ(pile.step_buttons(), (std::vector<GameAction>{action::EndPileIns{}}));
+    const ClickResult p = pile.click(session.state(), marines);
+    ASSERT_TRUE(p.submit.has_value());  // engaged: its pile-in targets are fixed (12.03)
+    EXPECT_TRUE(std::holds_alternative<action::StartPileIn>(*p.submit));
+    EXPECT_TRUE(session.check(*p.submit).ok());
+
+    while (session.state().flow.stage == Stage::PileIn) ASSERT_TRUE(session.submit(action::EndPileIns{}).ok());
+    BoardInteraction fight(session.state(), session.legal());
+    EXPECT_EQ(fight.hint(session.state()), "Click a unit to fight with.");
+    const ClickResult f = fight.click(session.state(), marines);
+    ASSERT_TRUE(f.submit.has_value());  // only a Normal fight is possible: no menu
+    EXPECT_EQ(*f.submit, (GameAction{action::SelectToFight{marines, FightType::Normal}}));
+}
+
+TEST(M16_BoardInteraction, OtherDecisionsStayInTheSidebarAndNothingIsGrey) {
+    GameSession session(wh40k::test::after_successful_charge());
+    ASSERT_TRUE(session.submit(action::EndChargeStep{}).ok());
+    while (session.state().flow.stage == Stage::PileIn) ASSERT_TRUE(session.submit(action::EndPileIns{}).ok());
+    const UnitId marines = session.state().units[0].id;
+    ASSERT_TRUE(session.submit(action::SelectToFight{marines, FightType::Normal}).ok());
+    ASSERT_TRUE(std::holds_alternative<decision::DeclareMeleeAttacks>(session.pending()->kind));
+    const BoardInteraction board(session.state(), session.legal());
+    EXPECT_FALSE(board.active());
+    EXPECT_FALSE(board.clickable(marines));
+    EXPECT_FALSE(BoardInteraction().active());  // replay mode
+}
+
+// M16 acceptance (logic-level proxy): full games played with board clicks, menus, step buttons, drags and
+// the melee/casualty editors only; no unit button from the sidebar.
+namespace {
+
+GameAction choose_on_board(const GameSession& s, int& move_tries) {
+    const GameState& gs = s.state();
+    BoardInteraction board(gs, s.legal());
+    const auto& kind = s.pending()->kind;
+    auto step = [&](auto pred) -> std::optional<GameAction> {
+        for (const GameAction& a : board.step_buttons()) {
+            if (pred(a)) return a;
+        }
+        return std::nullopt;
+    };
+    auto friendly_clickable = [&]() -> std::optional<UnitId> {
+        for (const Unit& u : gs.units) {
+            if (u.side == s.pending()->side && board.clickable(u.id)) return u.id;
+        }
+        return std::nullopt;
+    };
+    auto enemy_clickable = [&]() -> std::optional<UnitId> {
+        for (const Unit& u : gs.units) {
+            if (u.side != s.pending()->side && board.clickable(u.id)) return u.id;
+        }
+        return std::nullopt;
+    };
+    if (std::holds_alternative<decision::MoveModels>(kind)) {
+        const Unit& u = *gs.find_unit(gs.flow.move->unit);
+        if (gs.flow.move->paths.size() < u.models.size()) {
+            const Unit* e = enemy_of(gs, u);
+            float dist = in(2);
+            if (gs.flow.move->type == MoveType::Charge) dist = std::max(0.0f, *unit_distance(u, *e) - in(1));
+            const auto [dx, dy] = direction(u, *e);
+            for (const auto& a : translate_unit(gs, u.id, dx * dist, dy * dist)) {
+                if (std::none_of(gs.flow.move->paths.begin(), gs.flow.move->paths.end(),
+                                 [&](const ModelPath& p) { return p.model == a.model; })) {
+                    return a;
+                }
+            }
+        }
+        ++move_tries;
+        return *step([](const GameAction& a) { return std::holds_alternative<action::CommitUnitMove>(a); });
+    }
+    if (board.active()) {
+        if (std::holds_alternative<decision::MoveUnits>(kind)) {
+            const UnitId unit = *friendly_clickable();
+            const ClickResult r = board.click(gs, unit);
+            const Unit& u = *gs.find_unit(unit);
+            const Unit* e = enemy_of(gs, u);
+            const bool far = e != nullptr && mm_to_inches(*unit_distance(u, *e)) > 8.0f;
+            for (const MenuEntry& m : r.menu) {
+                const auto* sm = std::get_if<action::StartMove>(&m.action);
+                if (move_tries == 0 && far && sm != nullptr && sm->move_type == MoveType::Normal) return m.action;
+            }
+            return r.menu.front().action;  // Remain Stationary
+        }
+        if (std::holds_alternative<decision::Shoot>(kind)) {
+            if (const auto shooter = friendly_clickable()) {
+                (void)board.click(gs, *shooter);
+                if (const auto target = enemy_clickable()) {
+                    const ClickResult r = board.click(gs, *target);
+                    if (!r.menu.empty()) return *board.choose(gs, r.menu.front().action).submit;
+                }
+            }
+            return *step([](const GameAction& a) { return std::holds_alternative<action::EndShootStep>(a); });
+        }
+        if (std::holds_alternative<decision::SelectChargeTargets>(kind) && move_tries > 0) {
+            return *step([](const GameAction& a) { return std::holds_alternative<action::SkipChargeMove>(a); });
+        }
+        if (std::holds_alternative<decision::PileIn>(kind) || std::holds_alternative<decision::Consolidate>(kind)) {
+            return board.step_buttons().front();  // End pile-ins / consolidations
+        }
+        // Charge, charge targets, fights, overrun pile-ins: click the unit, then a target if needed.
+        if (const auto unit = friendly_clickable()) {
+            const ClickResult r = board.click(gs, *unit);
+            if (r.submit) return *r.submit;
+            if (!r.menu.empty()) return r.menu.front().action;
+        }
+        if (const auto target = enemy_clickable()) {
+            const ClickResult r = board.click(gs, *target);
+            if (r.submit) return *r.submit;
+            if (const auto c = board.confirm()) return *c;
+        }
+        return board.step_buttons().front();
+    }
+    // The sidebar's decisions: the editors and the remaining buttons.
+    const DecisionView view = make_decision_view(s.legal());
+    for (const auto& t : view.templates) {
+        if (const auto* f = std::get_if<action::Fight>(&t)) return MeleePlan(gs, f->unit).expand();
+        if (const auto* c = std::get_if<action::OrderCasualties>(&t)) return CasualtyPlan(gs, c->target).action();
+    }
+    return view.buttons.front();
+}
+
+}  // namespace
+
+TEST(M16_FullGame, AGameCanBePlayedToGameOverByClickingOnTheBoard) {
+    std::map<std::string, int> kinds;
+    for (std::uint64_t seed = 1; seed <= 8; ++seed) {
+        GameState initial = wh40k::test::load_v1_scenario();
+        initial.dice.seed = seed;
+        GameSession session(initial);
+        int move_tries = 0;
+        Stage last_stage = session.state().flow.stage;
+        for (int step = 0; step < 3000 && session.pending(); ++step) {
+            if (session.state().flow.stage != last_stage &&
+                !std::holds_alternative<decision::MoveModels>(session.pending()->kind) &&
+                !std::holds_alternative<decision::SelectChargeTargets>(session.pending()->kind)) {
+                move_tries = 0;
+                last_stage = session.state().flow.stage;
+            }
+            const GameAction a = choose_on_board(session, move_tries);
+            const auto r = session.submit(a);
+            ASSERT_TRUE(r.ok()) << "seed " << seed << ": " << action_name(a) << ": " << r.reasons.at(0);
+        }
+        ASSERT_TRUE(session.state().result.has_value()) << "seed " << seed << " did not finish";
+        for (const auto& step : session.history()) ++kinds[std::string(action_name(step.action))];
+    }
+    for (const char* k : {"StartMove", "ProposeModelMove", "CommitUnitMove", "Shoot", "DeclareCharge",
+                          "StartChargeMove", "SelectToFight", "Fight", "OrderCasualties"}) {
+        EXPECT_GT(kinds[k], 0) << k;
+    }
 }
 
 // ==== M12 acceptance: no rules logic in the client (structural) ====

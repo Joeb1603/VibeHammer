@@ -238,6 +238,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 - The panels cannot be moved or resized; the UI scale slider resizes text and widgets.
 - Models at full wounds carry no number; damaged models show pips.
 - Overlapping rings of one kind draw as one border; a dragged model's rings follow the cursor, with a line from where it started; hovering a ring explains it.
+
+---
+
+## M16: Click-on-the-board interaction
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Pick units on the board instead of with sidebar buttons (D-029): click the unit to move and choose its move type from a menu; click the shooter, then the target, then a weapon; click to declare a charge and then its target; click to pile in, consolidate or fight. Units that can't be clicked now are drawn slightly grey. The sidebar keeps the step-level buttons (End shooting, Pass, Commit move, ...) and a hint. Client only: every choice is one of `legal_actions`.
+
+**Acceptance**
+- At the start only the Intercessors are clickable (the Termagants are grey); clicking them offers Remain stationary, Normal and Advance.
+- Clicking the shooter then the target offers each weapon choice that can reach it; picking one fires, and the engine accepts it.
+- A full game can be played to GameOver with board clicks, menus, step buttons, drags and the melee/casualty editors only (logic-level test).
+
 ---
 
 ## Later (post-V1, rough order)

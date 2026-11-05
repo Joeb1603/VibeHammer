@@ -78,13 +78,15 @@ void DecisionPanel::sync(const GameSession& session) {
 }
 
 std::optional<core::GameAction> DecisionPanel::draw(const GameSession& session,
-                                                    std::optional<core::ModelId> selected_model) {
+                                                    std::optional<core::ModelId> selected_model,
+                                                    BoardInteraction* board) {
     const core::GameState& gs = session.state();
     if (!session.pending()) {
         ImGui::TextWrapped("%s", gs.result ? gs.result->reason.c_str() : "Nothing to decide.");
         return std::nullopt;
     }
     sync(session);
+    if (board != nullptr && board->active()) return draw_board_mode(session, *board, selected_model);
     ImGui::TextColored(kHighlight, "%s", core::describe(*session.pending()).c_str());
     std::optional<core::GameAction> chosen;
     const DecisionView& view = view_;
@@ -128,6 +130,43 @@ std::optional<core::GameAction> DecisionPanel::draw(const GameSession& session,
     return chosen;
 }
 
+std::optional<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& session, BoardInteraction& board,
+                                                               std::optional<core::ModelId> selected_model) {
+    const core::GameState& gs = session.state();
+    std::optional<core::GameAction> chosen;
+    ImGui::TextColored(kHighlight, "%s", core::describe(*session.pending()).c_str());
+    ImGui::TextWrapped("%s", board.hint(gs).c_str());
+    if (const auto confirm = board.confirm()) {
+        if (ImGui::Button(action_label(gs, *confirm).c_str())) chosen = *confirm;
+    }
+    const std::vector<core::GameAction> steps = board.step_buttons();
+    for (std::size_t i = 0; i < steps.size(); ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::Button(action_label(gs, steps[i]).c_str())) chosen = steps[i];
+        ImGui::PopID();
+    }
+    // The selected shooter's per-model choices (D-001): the weapon picked on the target fires these.
+    if (ShotPlan* plan = board.shot_plan()) {
+        const core::action::Shoot tmpl{plan->unit(), plan->type(), {}};
+        if (auto a = draw_shot_plan(gs, *plan, action_label(gs, tmpl), selected_model)) chosen = a;
+    }
+    bool path_hint = false;
+    for (const core::GameAction& t : view_.templates) {
+        if (editor_kind(t) == EditorKind::Path) path_hint = true;
+    }
+    if (path_hint) {
+        // D-024: core's read-only query says what committing would do now.
+        const std::vector<std::string> problems = core::move_end_problems(gs);
+        if (problems.empty()) {
+            ImGui::TextDisabled("The move can end here.");
+        } else {
+            ImGui::TextColored(kWarning, "Committing now would undo the move:");
+            for (const std::string& p : problems) ImGui::BulletText("%s", p.c_str());
+        }
+    }
+    return chosen;
+}
+
 std::optional<core::GameAction> DecisionPanel::draw_shot_editor(const GameSession& session,
                                                                 const core::action::Shoot& tmpl,
                                                                 std::optional<core::ModelId> selected_model) {
@@ -135,11 +174,16 @@ std::optional<core::GameAction> DecisionPanel::draw_shot_editor(const GameSessio
     auto it = std::find_if(shots_.begin(), shots_.end(),
                            [&](const ShotPlan& p) { return p.unit() == tmpl.unit && p.type() == tmpl.type; });
     if (it == shots_.end()) return std::nullopt;
-    ShotPlan& plan = *it;
+    return draw_shot_plan(gs, *it, action_label(gs, tmpl), selected_model);
+}
+
+std::optional<core::GameAction> DecisionPanel::draw_shot_plan(const core::GameState& gs, ShotPlan& plan,
+                                                              const std::string& title,
+                                                              std::optional<core::ModelId> selected_model) {
     std::optional<core::GameAction> chosen;
-    ImGui::PushID(static_cast<int>(tmpl.unit.v * 10 + static_cast<unsigned>(tmpl.type)));
+    ImGui::PushID(static_cast<int>(plan.unit().v * 10 + static_cast<unsigned>(plan.type())));
     ImGui::Separator();
-    if (ImGui::CollapsingHeader(action_label(gs, tmpl).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         // D-001: one profile and target for the whole unit by default.
         const std::string current = plan.unit_default() ? shot_choice_text(gs, plan, *plan.unit_default()) : "-";
         if (ImGui::BeginCombo("Whole unit", current.c_str())) {
@@ -150,7 +194,7 @@ std::optional<core::GameAction> DecisionPanel::draw_shot_editor(const GameSessio
             }
             ImGui::EndCombo();
         }
-        const core::Unit& u = *gs.find_unit(tmpl.unit);
+        const core::Unit& u = *gs.find_unit(plan.unit());
         for (const core::Model& m : u.models) {
             ImGui::PushID(static_cast<int>(m.id.v));
             const bool selected = selected_model == m.id;

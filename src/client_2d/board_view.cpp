@@ -33,13 +33,22 @@ void draw_grid(const core::Battlefield& field, const BoardCamera& cam) {
     }
 }
 
-void draw_model(const core::Unit& unit, const core::Model& model, const BoardCamera& cam) {
+const Color kGrey{110, 112, 118, 255};
+
+Color mix(Color a, Color b, float t) {
+    auto channel = [t](unsigned char x, unsigned char y) {
+        return static_cast<unsigned char>(static_cast<float>(x) + (static_cast<float>(y) - static_cast<float>(x)) * t);
+    };
+    return Color{channel(a.r, b.r), channel(a.g, b.g), channel(a.b, b.b), channel(a.a, b.a)};
+}
+
+void draw_model(const core::Unit& unit, const core::Model& model, const BoardCamera& cam, bool dimmed) {
     // Bases are round in V1; base.diameter_mm is the true size, drawn to scale.
     const Vector2 c = cam.to_screen(model.position);
     const float r = cam.to_px(model.base.diameter_mm * 0.5f);
-    const Color fill = side_color(unit.side);
+    const Color fill = dimmed ? mix(side_color(unit.side), kGrey, 0.55f) : side_color(unit.side);
     DrawCircleV(c, r, fill);
-    DrawCircleLinesV(c, r, RAYWHITE);
+    DrawCircleLinesV(c, r, dimmed ? Color{170, 170, 175, 255} : RAYWHITE);
 
     // D-028: a damaged model shows one pip per wound, filled for the wounds it has left. Models at full
     // wounds show nothing (the tooltip gives the numbers).
@@ -66,7 +75,8 @@ Color side_color(core::Side side) {
     return side == core::Side::A ? Color{52, 110, 200, 255} : Color{190, 60, 60, 255};
 }
 
-void draw_board(const core::GameState& state, const BoardCamera& cam) {
+void draw_board(const core::GameState& state, const BoardCamera& cam,
+                const std::function<bool(core::UnitId)>& dimmed) {
     const core::Rect board{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm};
     DrawRectangleRec(cam.to_screen(board), kBoardFill);
     for (const core::Side side : {core::Side::A, core::Side::B}) {
@@ -77,8 +87,9 @@ void draw_board(const core::GameState& state, const BoardCamera& cam) {
     DrawRectangleLinesEx(cam.to_screen(board), 2.0f, kEdge);
 
     for (const core::Unit& unit : state.units) {
+        const bool grey = dimmed && dimmed(unit.id);
         for (const core::Model& model : unit.models) {
-            draw_model(unit, model, cam);
+            draw_model(unit, model, cam, grey);
         }
     }
 }

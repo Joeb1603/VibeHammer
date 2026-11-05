@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "board_interaction.hpp"
 #include "board_view.hpp"
 #include "camera.hpp"
 #include "core/data/scenario_loader.hpp"
@@ -254,11 +255,13 @@ public:
             camera_.fit(state().battlefield.width_mm, state().battlefield.depth_mm, board_area());
             fit_pending_ = false;
         }
+        sync_board();
         const ImGuiIO& io = ImGui::GetIO();
         if (!io.WantCaptureMouse) handle_mouse();
         if (!io.WantCaptureKeyboard) handle_keys();
 
-        draw_board(state(), camera_);
+        // D-029: units that can't be clicked now are drawn slightly grey.
+        draw_board(state(), camera_, [this](core::UnitId id) { return board_.active() && !board_.clickable(id); });
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
         // Rings stop at the battlefield edge (no model can be beyond it).
         const Rectangle field = camera_.to_screen(core::Rect{0.0f, 0.0f, state().battlefield.width_mm,
@@ -319,6 +322,26 @@ private:
         return Vector2{a.x + a.width * 0.5f, a.y + a.height * 0.5f};
     }
 
+    // D-029: the board's click state for the current decision, rebuilt whenever the decision changes.
+    void sync_board() {
+        const std::size_t step = mode_ == Mode::Play ? session_->history().size() : 0;
+        const BoardKey key{generation_, mode_, step};
+        if (board_key_ == key) return;
+        board_key_ = key;
+        menu_.clear();
+        board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(state(), session_->legal())
+                                                             : BoardInteraction();
+    }
+
+    // What a board click or a menu choice led to: submit it, or offer its menu at the cursor.
+    void apply(const ClickResult& r) {
+        if (r.submit) submit(*r.submit);
+        if (!r.menu.empty()) {
+            menu_ = r.menu;
+            open_menu_ = true;
+        }
+    }
+
     // Every game change goes through here (and so through validate_action).
     void submit(const core::GameAction& action) {
         const core::ValidationResult r = session_->submit(action);
@@ -370,6 +393,7 @@ private:
         }
         if (!hovered) {
             selected_model_.reset();
+            board_.cancel();  // a click on empty board drops the board selection
             return;
         }
         const core::UnitId unit = hovered->unit->id;
@@ -382,7 +406,9 @@ private:
         if (moving && *moving == unit) {
             selected_model_ = hovered->model->id;
             drag_ = Drag{false, hovered->model->id, unit, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
+            return;
         }
+        if (board_.active()) apply(board_.click(state(), unit));  // D-029
     }
 
     void release(Vector2 mouse) {
@@ -403,6 +429,7 @@ private:
     }
 
     void handle_keys() {
+        if (mode_ == Mode::Play && IsKeyPressed(KEY_ESCAPE)) board_.cancel();
         if (mode_ != Mode::Replay) return;
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) go_to(frame_ + 1);
         if ((IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) && frame_ > 0) go_to(frame_ - 1);
@@ -451,6 +478,17 @@ private:
 
     void draw_selection_and_moves() {
         const core::GameState& gs = state();
+        auto outline = [&](core::UnitId id, Color colour) {
+            if (const core::Unit* u = gs.find_unit(id)) {
+                for (const core::Model& m : u->models) {
+                    const float r = camera_.to_px(m.base.diameter_mm * 0.5f) + 3.0f * ui_scale();
+                    DrawRing(camera_.to_screen(m.position), r - ui_scale(), r + 1.5f * ui_scale(), 0.0f, 360.0f, 48,
+                             colour);
+                }
+            }
+        };
+        if (board_.actor() && !moving_unit()) outline(*board_.actor(), YELLOW);
+        for (const core::UnitId id : board_.chosen_targets()) outline(id, Color{255, 90, 90, 255});
         // Selection.
         if (selected_unit_) {
             if (const core::Unit* u = gs.find_unit(*selected_unit_)) {
@@ -514,9 +552,30 @@ private:
 
     // ---- fixed layout (D-028): the phase bar over the board, the sidebar on the right ----
 
+    // D-029: the menu a board click offers (move types, weapons, fight types).
+    void draw_unit_menu() {
+        if (open_menu_) {
+            ImGui::OpenPopup("##unit_menu");
+            open_menu_ = false;
+        }
+        if (!ImGui::BeginPopup("##unit_menu")) return;
+        std::optional<core::GameAction> picked;
+        for (std::size_t i = 0; i < menu_.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (ImGui::Selectable(menu_[i].label.c_str())) picked = menu_[i].action;
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+        if (picked) {
+            menu_.clear();
+            apply(board_.choose(state(), *picked));
+        }
+    }
+
     void draw_ui() {
         const float w = static_cast<float>(GetScreenWidth());
         const float h = static_cast<float>(GetScreenHeight());
+        if (has_view()) draw_unit_menu();
         constexpr ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
                                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBringToFrontOnFocus;
@@ -669,7 +728,7 @@ private:
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
         int percent = static_cast<int>(std::lround(user_scale_ * 100.0f));
         if (ImGui::SliderInt("UI scale", &percent, 75, 250, "%d%%")) user_scale_ = static_cast<float>(percent) / 100.0f;
-        ImGui::TextDisabled("click: select, left-drag: move, right-drag: pan, wheel: zoom");
+        ImGui::TextDisabled("click a unit to act, left-drag: move, right-drag: pan, wheel: zoom, Esc: cancel");
     }
 
     static void overlay_toggle(RingKind kind, bool* value) {
@@ -734,7 +793,7 @@ private:
             if (ImGui::SmallButton("Dismiss")) reasons_.clear();
             ImGui::Separator();
         }
-        if (const auto chosen = panel_.draw(*session_, selected_model_)) submit(*chosen);
+        if (const auto chosen = panel_.draw(*session_, selected_model_, &board_)) submit(*chosen);
     }
 
     void draw_replay_controls() {
@@ -841,6 +900,16 @@ private:
     BoardCamera camera_;
     OverlayToggles overlays_;
     DecisionPanel panel_;
+    struct BoardKey {
+        std::uint64_t generation = 0;
+        Mode mode = Mode::Play;
+        std::size_t step = 0;
+        friend bool operator==(const BoardKey&, const BoardKey&) = default;
+    };
+    BoardInteraction board_;            // D-029: clicks on the board for the current decision
+    std::optional<BoardKey> board_key_;  // the decision board_ was built for
+    std::vector<MenuEntry> menu_;        // the open click menu's entries
+    bool open_menu_ = false;
     std::optional<core::UnitId> selected_unit_;
     std::optional<core::ModelId> selected_model_;
     std::optional<Drag> drag_;
@@ -878,6 +947,7 @@ int main(int argc, char** argv) {
     const std::string title = "VibeHammer " + std::string(wh40k::core::engine_version());
     InitWindow(kWindowWidth, kWindowHeight, title.c_str());
     SetTargetFPS(60);
+    SetExitKey(KEY_NULL);  // Esc cancels a board selection (D-029), it doesn't quit
     rlImGuiSetup(true);
 
     // D-028: open maximized and scale the UI to the screen: the larger of the monitor's DPI scale and its

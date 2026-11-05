@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 
 #include <raylib.h>
@@ -11,8 +12,10 @@ namespace wh40k::client {
 
 [[nodiscard]] Color side_color(core::Side side);
 
-// Draws the battlefield (grid, deployment zones) and every model. Read-only.
-void draw_board(const core::GameState& state, const BoardCamera& camera);
+// Draws the battlefield (grid, deployment zones) and every model. Read-only. Units for which `dimmed`
+// returns true are drawn slightly grey: they can't be clicked now (D-029).
+void draw_board(const core::GameState& state, const BoardCamera& camera,
+                const std::function<bool(core::UnitId)>& dimmed = {});
 
 // The model whose base is under `screen` (for tooltips), if any.
 struct HoveredModel {

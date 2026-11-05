@@ -515,3 +515,29 @@ of the charge for that reason.
   means; the sidebar legend uses the same text (`ring_name`, `ring_meaning`). Engagement range stays
   around the enemy only: it is the zone a moving model must not end in.
 
+## D-029: Click-on-the-board interaction (M16)
+**Decided:** 2026-11-05 (agreed with the user). Client only; it amends D-024's "one button per legal action":
+the board offers exactly the legal actions, grouped by the unit they are for (`BoardInteraction`, client
+logic).
+- **Picking a unit.** For Move Units, Shoot, Charge, Pile In, Consolidate, Select Unit to Fight and the
+  forced fights of 12.08, the deciding side clicks one of its units. If that unit has one legal action it
+  is submitted; if it has several (Remain stationary / Normal / Advance / Fall back, or Normal / Overrun
+  fight) a menu at the cursor offers them.
+- **Shooting.** Clicking a shooter selects it; its eligible targets become clickable. Clicking a target
+  offers each weapon choice (weapon profile) that can reach it, with the number of models that would fire;
+  picking one fires the unit-wide choice (D-001), keeping any per-model overrides made in the sidebar.
+  Clicking the shooter again, Esc or a click on empty board drops the selection.
+- **Targets.** For charge targets, pile-ins and consolidations, clicking enemy units toggles them; when the
+  chosen set equals one legal option's targets and no bigger option contains it, it is submitted at once,
+  otherwise a confirm button appears in the sidebar. An engaged unit, whose targets are fixed, starts its
+  pile-in or consolidation as soon as it is clicked.
+- **Grey.** While the board handles a decision, every unit that can't be clicked is drawn slightly grey
+  (55% towards grey). During a model-by-model move, only the moving unit is not grey. The unit picked
+  first has a yellow outline and chosen targets a red one.
+- **Sidebar.** Unit buttons are not listed while the board handles the decision; the sidebar shows the
+  decision, a hint, the step-level buttons (End shooting, End charges, Pass, Commit / Reset move, Make no
+  charge move, ...), a confirm button for a chosen target set, and the selected shooter's per-model
+  editor. Other decisions (melee declarations, allocation order, casualties, attack batches, coherency)
+  stay in the sidebar as before, with nothing grey.
+- Esc cancels a board selection; it no longer closes the window.
+
