@@ -575,3 +575,19 @@ logic).
 - **Replay mode** puts the replay controls (step buttons, frame slider, step label, source) in the bar.
 - **Sidebar** keeps the toolbar, Game, Log (now taller) and Files.
 
+## D-031: Custom shots after picking the target (M18)
+**Decided:** 2026-11-05 (agreed with the user). Client only; amends D-029 "Shooting" and D-030.
+- Weapons are only chosen once a target has been clicked. With a shooter picked, the bar shows the prompt,
+  the hint and End Shooting phase, and no weapon controls.
+- The target menu lists each weapon choice that can reach the target (the whole unit fires it at once), then
+  a separator and **"Custom..."**.
+- "Custom..." opens the custom-shot editor in the action bar: "Custom shot: <shooter> at <target>", one combo
+  per model in a grid across the bar, each offering "Doesn't fire" and every weapon profile and target that
+  model can use (so fire can be split, D-001). Every model starts on the first weapon choice at the clicked
+  target. On the right, Back and a large green Shoot button; the End-phase button is hidden.
+- While editing nothing is grey, there is no target line, and a click on empty board doesn't drop the edit.
+  Esc or Back returns to picking a target for the same shooter, with the edit discarded. A rejected Shoot
+  keeps the editor open with the reasons shown.
+- For units with many models the bar can grow to 45% of the window height, overlaying the top of the board.
+  The board doesn't refit.
+

@@ -24,8 +24,8 @@ class DecisionPanel {
 public:
     // Draws inside the current ImGui window. `selected_model`: the model selected on the board, whose row
     // is highlighted (its override is what the player edits, D-001). When `board` handles the decision
-    // (D-029), units are picked on the board: the panel shows the hint, the step buttons and the selected
-    // shooter's editor instead of a button per unit.
+    // (D-029), units are picked on the board: the panel shows the hint, the step buttons and, after
+    // "Custom..." on a target, the custom-shot editor (D-031) instead of a button per unit.
     // Returns the actions the player chose, to submit in order (the end-phase button can be several).
     std::vector<core::GameAction> draw(const GameSession& session, std::optional<core::ModelId> selected_model,
                                        BoardInteraction* board = nullptr);
@@ -38,6 +38,7 @@ private:
                                                      std::optional<core::ModelId> selected_model);
     std::optional<core::GameAction> draw_shot_plan(const core::GameState& gs, ShotPlan& plan, const std::string& title,
                                                    std::optional<core::ModelId> selected_model);
+    void draw_shot_grid(const core::GameState& gs, ShotPlan& plan, std::optional<core::ModelId> selected_model);
     std::vector<core::GameAction> draw_board_mode(const GameSession& session, BoardInteraction& board,
                                                   std::optional<core::ModelId> selected_model);
     std::optional<core::GameAction> draw_sidebar_mode(const GameSession& session,

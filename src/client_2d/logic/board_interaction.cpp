@@ -145,6 +145,7 @@ bool BoardInteraction::clickable(core::UnitId unit) const {
         case Mode::Targets:
             return (unit == actor_ && !actor_fixed_) || contains(target_options(), unit);
         case Mode::Moving:
+        case Mode::CustomShot:
             return unit == actor_;
     }
     return false;
@@ -160,6 +161,7 @@ bool BoardInteraction::waiting_for_click() const {
             return true;
         case Mode::Inactive:
         case Mode::Moving:
+        case Mode::CustomShot:
             return false;
     }
     return false;
@@ -173,6 +175,11 @@ bool BoardInteraction::greyed(core::UnitId unit) const {
 std::string BoardInteraction::prompt(const core::GameState& state) const {
     if (mode_ == Mode::Shoot && actor_) return "Pick a target for the " + unit_name(state, *actor_);
     if (mode_ == Mode::Targets) return "Pick the enemy units to " + target_verb_;
+    if (mode_ == Mode::CustomShot && actor_) {
+        std::string text = "Custom shot: " + unit_name(state, *actor_);
+        if (custom_target_) text += " at " + unit_name(state, *custom_target_);
+        return text;
+    }
     return "";
 }
 
@@ -187,9 +194,11 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
             const std::string name = unit_name(state, *actor_);
             const auto choices = shot_->choices();
             if (choices.empty()) return name + " has no target in range. Click it again to pick another unit.";
-            return "Click a target for the " + name + ", then pick a weapon. Click the " + name +
-                   " again to pick another unit.";
+            return "Click a target for the " + name + ", then pick a weapon (or Custom... to choose per model). "
+                   "Click the " + name + " again to pick another unit.";
         }
+        case Mode::CustomShot:
+            return "Choose each model's weapon and target, then Shoot. Esc or Back returns to picking a target.";
         case Mode::Targets: {
             std::string text = "Click the enemy units to " + target_verb_ + ".";
             if (!targets_.empty()) {
@@ -210,6 +219,7 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
     switch (mode_) {
         case Mode::Inactive:
         case Mode::Moving:
+        case Mode::CustomShot:
             return {};
         case Mode::PickActor:
             return pick_actor(state, unit);
@@ -240,6 +250,10 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
                 }
                 label += ": " + std::to_string(shoot.shots.size()) + (shoot.shots.size() == 1 ? " model" : " models");
                 result.menu.push_back(MenuEntry{label, shoot});
+            }
+            // D-031: per-model weapons and targets are chosen after the target, starting from the first weapon.
+            if (!result.menu.empty()) {
+                result.menu.push_back(MenuEntry{"Custom...", result.menu.front().action, true});
             }
             return result;
         }
@@ -311,15 +325,42 @@ ClickResult BoardInteraction::choose(const core::GameState& state, const core::G
     return ClickResult{action, {}};
 }
 
+ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEntry& entry) {
+    const auto* s = std::get_if<a::Shoot>(&entry.action);
+    if (!entry.custom || s == nullptr || s->shots.empty() || mode_ != Mode::Shoot || !shot_) {
+        return choose(state, entry.action);
+    }
+    // D-031: a copy of the shooter's plan whose unit-wide choice is the entry's weapon at its target; the
+    // panel edits each model's choice on it. shot_ stays as it was, for going back.
+    const core::ShotDeclaration& first = s->shots.front();
+    ShotPlan plan = *shot_;
+    for (const ShotOption& o : plan.options()) {
+        if (o.declaration == first) {
+            plan.set_default(ShotChoice{o.weapon, o.declaration.profile_index, o.declaration.target});
+            break;
+        }
+    }
+    custom_ = std::move(plan);
+    custom_target_ = first.target;
+    mode_ = Mode::CustomShot;
+    return {};
+}
+
 void BoardInteraction::cancel() {
     targets_.clear();
+    custom_.reset();
+    custom_target_.reset();
+    if (mode_ == Mode::CustomShot) {
+        mode_ = Mode::Shoot;  // back to picking a target for the same shooter, with nothing customised
+        return;
+    }
     shot_.reset();
     if (!actor_fixed_) actor_.reset();
     mode_ = base_mode_;
 }
 
 std::optional<EndPhase> BoardInteraction::end_phase() const {
-    if (end_label_.empty()) return std::nullopt;
+    if (end_label_.empty() || mode_ == Mode::CustomShot) return std::nullopt;
     EndPhase end{end_label_, {}};
     for (const core::GameAction& action : legal_) {
         if (is_end_action(action)) end.actions.push_back(action);
@@ -330,6 +371,7 @@ std::optional<EndPhase> BoardInteraction::end_phase() const {
 
 std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
+    if (mode_ == Mode::CustomShot) return out;  // the panel's Back and Shoot only (D-031)
     for (const core::GameAction& action : legal_) {
         if (core::is_template(action) || board_unit(action)) continue;
         if (!end_label_.empty() && is_end_action(action)) continue;  // the end-phase button covers it

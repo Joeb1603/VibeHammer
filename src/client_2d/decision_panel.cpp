@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <string>
 #include <variant>
 
@@ -25,15 +26,6 @@ std::string unit_name(const core::GameState& gs, core::UnitId id) {
 
 std::string shot_text(const core::GameState& gs, const ShotOption& o) {
     return o.profile + " -> " + unit_name(gs, o.declaration.target);
-}
-
-std::string shot_choice_text(const core::GameState& gs, const ShotPlan& plan, const ShotChoice& c) {
-    for (const ShotOption& o : plan.options()) {
-        if (o.weapon == c.weapon && o.declaration.profile_index == c.profile_index && o.declaration.target == c.target) {
-            return shot_text(gs, o);
-        }
-    }
-    return c.weapon;
 }
 
 std::string declaration_text(const core::GameState& gs, const ShotPlan& plan, const core::ShotDeclaration& d) {
@@ -234,10 +226,9 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     const std::string prompt = board.prompt(gs);
     headline(gs, session.pending()->side, prompt.empty() ? core::describe(*session.pending()) : prompt);
     ImGui::TextWrapped("%s", board.hint(gs).c_str());
-    // The selected shooter's choices (D-001): the weapon picked on the target fires these.
-    if (ShotPlan* plan = board.shot_plan()) {
-        if (auto a = draw_shot_plan(gs, *plan, std::string(), selected_model)) chosen = a;
-    }
+    // D-031: weapons are only chosen after the target; "Custom..." on the target edits them per model here.
+    ShotPlan* custom = board.custom_shot() ? board.shot_plan() : nullptr;
+    if (custom != nullptr) draw_shot_grid(gs, *custom, selected_model);
     for (const core::GameAction& t : view_.templates) {
         if (editor_kind(t) == EditorKind::Path) {
             move_status(gs);
@@ -246,8 +237,10 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     }
 
     ImGui::TableNextColumn();
+    bool back = false;
     {
         ButtonRow row;
+        if (custom != nullptr && row.button("Back")) back = true;
         if (const auto confirm = board.confirm()) {
             if (row.button(action_label(gs, *confirm))) chosen = *confirm;
         }
@@ -260,7 +253,9 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     }
     // The main action when nothing is left to do on the board.
     if (end && primary_button(end->label, true)) end_actions = end->actions;
+    if (custom != nullptr && primary_button("Shoot", true)) chosen = custom->expand();
     ImGui::EndTable();
+    if (back) board.cancel();  // after drawing: `custom` belongs to the board's edit
     if (!end_actions.empty()) return end_actions;
     if (chosen) return {*chosen};
     return {};
@@ -279,67 +274,50 @@ std::optional<core::GameAction> DecisionPanel::draw_shot_editor(const GameSessio
 std::optional<core::GameAction> DecisionPanel::draw_shot_plan(const core::GameState& gs, ShotPlan& plan,
                                                               const std::string& title,
                                                               std::optional<core::ModelId> selected_model) {
+    // The non-board fallback: the same grid as the custom-shot editor, then Shoot.
     std::optional<core::GameAction> chosen;
-    ImGui::PushID(static_cast<int>(plan.unit().v * 10 + static_cast<unsigned>(plan.type())));
-    const float combo_w = ImGui::GetFontSize() * 18.0f;
-    const core::Unit& u = *gs.find_unit(plan.unit());
-    // One model's own choice (D-001), marked "(unit)" while it follows the unit's.
-    auto model_combo = [&](const core::Model& m) {
-        ImGui::PushID(static_cast<int>(m.id.v));
-        const bool selected = selected_model == m.id;
-        const auto d = plan.declaration_for(m.id);
-        const std::string now = d ? declaration_text(gs, plan, *d) : "doesn't fire";
-        const std::string label = "Model " + std::to_string(m.id.v) + (selected ? " *" : "");
-        if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
-        ImGui::SetNextItemWidth(combo_w);
-        if (ImGui::BeginCombo(label.c_str(), (now + (plan.is_overridden(m.id) ? "" : " (unit)")).c_str())) {
-            if (ImGui::Selectable("Use the unit's choice", !plan.is_overridden(m.id))) plan.clear_override(m.id);
-            if (ImGui::Selectable("Doesn't fire")) plan.override_model(m.id, std::nullopt);
-            for (const ShotOption& o : plan.options_for(m.id)) {
-                if (ImGui::Selectable(shot_text(gs, o).c_str(), d && *d == o.declaration)) {
-                    plan.override_model(m.id, o.declaration);
-                }
-            }
-            ImGui::EndCombo();
-        }
-        if (selected) ImGui::PopStyleColor();
-        ImGui::PopID();
-    };
-
     if (!title.empty()) ImGui::TextUnformatted(title.c_str());
-    // D-001: one profile and target for the whole unit by default.
-    const std::string current = plan.unit_default() ? shot_choice_text(gs, plan, *plan.unit_default()) : "-";
-    ImGui::SetNextItemWidth(combo_w);
-    if (ImGui::BeginCombo("Whole unit", current.c_str())) {
-        for (const ShotChoice& c : plan.choices()) {
-            if (ImGui::Selectable(shot_choice_text(gs, plan, c).c_str(), plan.unit_default() == c)) {
-                plan.set_default(c);
-            }
-        }
-        ImGui::EndCombo();
-    }
-    // D-030: every model's choice is in a popup; the model selected on the board gets its own combo here.
-    std::size_t changed = 0;
-    for (const core::Model& m : u.models) changed += plan.is_overridden(m.id) ? 1 : 0;
-    ImGui::SameLine();
-    const std::string per_model =
-        "Per-model weapons..." + (changed > 0 ? " (" + std::to_string(changed) + " changed)" : std::string());
-    if (ImGui::Button(per_model.c_str())) ImGui::OpenPopup("##shot_models");
-    ImGui::SameLine();
+    draw_shot_grid(gs, plan, selected_model);
+    ImGui::PushID(static_cast<int>(plan.unit().v * 10 + static_cast<unsigned>(plan.type())));
     if (ImGui::Button("Shoot")) chosen = plan.expand();
-    for (const core::Model& m : u.models) {
-        if (selected_model == m.id) {
-            ImGui::SameLine();
-            model_combo(m);
-        }
-    }
-    if (ImGui::BeginPopup("##shot_models")) {
-        ImGui::TextDisabled("Each model's weapon and target (D-001)");
-        for (const core::Model& m : u.models) model_combo(m);
-        ImGui::EndPopup();
-    }
     ImGui::PopID();
     return chosen;
+}
+
+void DecisionPanel::draw_shot_grid(const core::GameState& gs, ShotPlan& plan,
+                                   std::optional<core::ModelId> selected_model) {
+    // D-031: one combo per model, in as many columns as fit across the bar. Each offers "Doesn't fire" and
+    // every weapon and target that model can use (D-001); the model selected on the board is highlighted.
+    ImGui::PushID(static_cast<int>(plan.unit().v * 10 + static_cast<unsigned>(plan.type())));
+    const float cell = ImGui::GetFontSize() * 22.0f;
+    const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
+    if (ImGui::BeginTable("##shot_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
+        for (const core::Model& m : gs.find_unit(plan.unit())->models) {
+            ImGui::TableNextColumn();
+            ImGui::PushID(static_cast<int>(m.id.v));
+            const bool selected = selected_model == m.id;
+            const auto d = plan.declaration_for(m.id);
+            const std::string now = d ? declaration_text(gs, plan, *d) : "doesn't fire";
+            if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Model %u%s", m.id.v, selected ? " *" : "");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::BeginCombo("##choice", now.c_str())) {
+                if (ImGui::Selectable("Doesn't fire", !d)) plan.override_model(m.id, std::nullopt);
+                for (const ShotOption& o : plan.options_for(m.id)) {
+                    if (ImGui::Selectable(shot_text(gs, o).c_str(), d && *d == o.declaration)) {
+                        plan.override_model(m.id, o.declaration);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (selected) ImGui::PopStyleColor();
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::PopID();
 }
 
 std::optional<core::GameAction> DecisionPanel::draw_melee_editor(const GameSession& session,

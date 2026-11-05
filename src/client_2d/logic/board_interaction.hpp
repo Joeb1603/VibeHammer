@@ -18,6 +18,9 @@ namespace wh40k::client {
 struct MenuEntry {
     std::string label;
     core::GameAction action;
+    // The target menu's "Custom..." entry (D-031): opens the per-model shot editor instead of submitting;
+    // `action` is the Shoot it starts from (the first weapon choice at that target).
+    bool custom = false;
 };
 
 // The panel's "End ... phase" button: the actions to submit, in order (D-029).
@@ -57,8 +60,14 @@ public:
     ClickResult click(const core::GameState& state, core::UnitId unit);
     // A menu entry was picked (a Shoot template selects that shooter; anything else is submitted).
     ClickResult choose(const core::GameState& state, const core::GameAction& action);
-    // Esc or a click on empty board: forget the selection (a fixed actor stays).
+    // The same for a whole entry: "Custom..." opens the custom-shot editor (D-031).
+    ClickResult choose(const core::GameState& state, const MenuEntry& entry);
+    // Esc or a click on empty board: forget the selection (a fixed actor stays). In the custom-shot editor:
+    // back to picking a target for the same shooter.
     void cancel();
+    // Editing a custom shot (D-031): each model's weapon and target are set in the panel, on shot_plan().
+    // A click on empty board doesn't cancel it.
+    [[nodiscard]] bool custom_shot() const noexcept { return mode_ == Mode::CustomShot; }
 
     // Ending the phase (or step): every remaining unit remains stationary, End Shooting phase, Pass, ...
     [[nodiscard]] std::optional<EndPhase> end_phase() const;
@@ -66,14 +75,18 @@ public:
     [[nodiscard]] std::vector<core::GameAction> step_buttons() const;
     // In target selection: the option whose targets are exactly the chosen ones, if any.
     [[nodiscard]] std::optional<core::GameAction> confirm() const;
-    // While choosing a target to shoot: the shooter's plan (the sidebar edits per-model overrides on it).
-    [[nodiscard]] ShotPlan* shot_plan() { return shot_ ? &*shot_ : nullptr; }
+    // While shooting: the shooter's plan (in the custom-shot editor the panel edits per-model choices on it).
+    [[nodiscard]] ShotPlan* shot_plan() {
+        if (mode_ == Mode::CustomShot) return custom_ ? &*custom_ : nullptr;
+        return shot_ ? &*shot_ : nullptr;
+    }
 
 private:
     enum class Mode {
         Inactive,   // the sidebar handles the decision
         PickActor,  // click a friendly unit; its actions are submitted or offered as a menu
         Shoot,      // the shooter is picked: click a target, then a weapon from the menu
+        CustomShot, // "Custom..." was picked on a target: each model's choice is edited in the panel (D-031)
         Targets,    // the actor is picked: click enemy units to choose targets (charge, pile-in, consolidate)
         Moving,     // MoveModels: the moving unit is dragged on the board
     };
@@ -90,6 +103,8 @@ private:
     bool actor_fixed_ = false;  // given by the decision (charge targets, overrun pile-in)
     std::vector<core::UnitId> targets_;
     std::optional<ShotPlan> shot_;
+    std::optional<ShotPlan> custom_;             // CustomShot: the plan being edited (a copy of shot_)
+    std::optional<core::UnitId> custom_target_;  // CustomShot: the target "Custom..." was picked on
     std::string verb_;         // picking a unit: "move", "shoot with", ... (for the hint)
     std::string target_verb_;  // picking targets: "charge", "pile in towards", ...
     std::string end_label_;    // the end-phase button, if this decision has one

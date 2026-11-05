@@ -739,15 +739,103 @@ TEST(M16_BoardInteraction, ShootingIsAClickOnTheShooterThenTheTargetThenAWeapon)
     EXPECT_TRUE(board.clickable(gants));
 
     const ClickResult r = board.click(gs, gants);
-    ASSERT_EQ(r.menu.size(), 3u);
+    ASSERT_EQ(r.menu.size(), 4u);  // the weapon choices, then "Custom..." (D-031)
     EXPECT_EQ(r.menu[0].label, "Bolt Rifle - Focused Fire: 5 models");
     EXPECT_EQ(r.menu[1].label, "Bolt Rifle - Saturation: 5 models");
     EXPECT_EQ(r.menu[2].label, "Bolt pistol: 5 models");
+    EXPECT_EQ(r.menu[3].label, "Custom...");
+    EXPECT_TRUE(r.menu[3].custom);
+    EXPECT_FALSE(r.menu[0].custom);
     const ClickResult fire = board.choose(gs, r.menu[1].action);
     ASSERT_TRUE(fire.submit.has_value());
     EXPECT_TRUE(session.check(*fire.submit).ok());
     ASSERT_TRUE(session.submit(*fire.submit).ok());
     EXPECT_FALSE(events_of<event::AttackBatchesGathered>(last_events(session)).empty());
+}
+
+// D-031: "Custom..." on the target menu opens the per-model editor, starting from the first weapon there.
+TEST(M18_CustomShot, CustomEntryOpensTheEditorWithTheFirstWeaponAtTheTarget) {
+    const GameState gs = wh40k::test::shoot_step_state();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, legal_actions(gs, Side::A));
+    (void)board.click(gs, marines);
+    const ClickResult r = board.click(gs, gants);
+    ASSERT_FALSE(r.menu.empty());
+    ASSERT_TRUE(r.menu.back().custom);
+
+    const ClickResult opened = board.choose(gs, r.menu.back());
+    EXPECT_FALSE(opened.submit.has_value());
+    EXPECT_TRUE(opened.menu.empty());
+    EXPECT_TRUE(board.custom_shot());
+    EXPECT_FALSE(board.picking_target());  // no target line
+    EXPECT_FALSE(board.waiting_for_click());  // nothing grey
+    EXPECT_FALSE(board.greyed(gants));
+    EXPECT_FALSE(board.end_phase().has_value());  // only Back and Shoot
+    EXPECT_TRUE(board.step_buttons().empty());
+    EXPECT_EQ(board.prompt(gs), "Custom shot: Intercessor Squad at Termagants");
+    EXPECT_FALSE(board.click(gs, gants).submit.has_value());
+    EXPECT_TRUE(board.click(gs, gants).menu.empty());
+
+    ShotPlan* plan = board.shot_plan();
+    ASSERT_NE(plan, nullptr);
+    // Every model starts on the first weapon entry (Focused Fire) at the clicked target.
+    EXPECT_EQ(plan->expand(), std::get<action::Shoot>(r.menu.front().action));
+    for (const auto& d : plan->expand().shots) EXPECT_EQ(d.target, gants);
+}
+
+// The M12 acceptance, now through the custom editor: a mixed declaration is accepted by the engine.
+TEST(M18_CustomShot, MixedProfilesAreAcceptedByTheEngine) {
+    GameSession session(wh40k::test::shoot_step_state());
+    const GameState& gs = session.state();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, session.legal());
+    (void)board.click(gs, marines);
+    const ClickResult r = board.click(gs, gants);
+    (void)board.choose(gs, r.menu.back());
+    ShotPlan* plan = board.shot_plan();
+    ASSERT_NE(plan, nullptr);
+
+    const ModelId first = gs.units[0].models[0].id;
+    const ModelId second = gs.units[0].models[1].id;
+    const auto first_d = plan->declaration_for(first);
+    ASSERT_TRUE(first_d.has_value());
+    std::optional<ShotDeclaration> other;
+    for (const ShotOption& o : plan->options_for(first)) {
+        if (o.declaration.weapon_index == first_d->weapon_index &&
+            o.declaration.profile_index != first_d->profile_index) {
+            other = o.declaration;  // the other Bolt Rifle profile
+        }
+    }
+    ASSERT_TRUE(other.has_value());
+    plan->override_model(first, *other);
+    plan->override_model(second, std::nullopt);  // doesn't fire
+
+    const action::Shoot shoot = plan->expand();
+    EXPECT_EQ(shoot.shots.size(), gs.units[0].models.size() - 1);
+    ASSERT_TRUE(session.submit(shoot).ok());
+    EXPECT_FALSE(events_of<event::AttackBatchesGathered>(last_events(session)).empty());
+}
+
+TEST(M18_CustomShot, CancelReturnsToPickingATarget) {
+    const GameState gs = wh40k::test::shoot_step_state();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, legal_actions(gs, Side::A));
+    (void)board.click(gs, marines);
+    const ClickResult r = board.click(gs, gants);
+    (void)board.choose(gs, r.menu.back());
+    board.shot_plan()->override_model(gs.units[0].models[0].id, std::nullopt);
+
+    board.cancel();  // Esc or Back
+    EXPECT_FALSE(board.custom_shot());
+    EXPECT_TRUE(board.picking_target());
+    EXPECT_EQ(board.actor(), marines);
+    // Nothing customised is kept: the target menu fires every model again.
+    const ClickResult again = board.click(gs, gants);
+    ASSERT_EQ(again.menu.size(), r.menu.size());
+    EXPECT_EQ(again.menu.front().action, r.menu.front().action);
 }
 
 TEST(M16_BoardInteraction, ClickingTheShooterAgainPicksAnotherUnit) {

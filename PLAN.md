@@ -270,6 +270,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M18: Custom shots after picking the target ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Weapon settings come after the target (D-031): click the shooter, click the target, then pick a weapon for the whole unit or "Custom..." to set each model's weapon and target in the action bar, then Shoot. Client only.
+
+**Acceptance**
+- With a shooter picked and no target yet, the bar has no weapon controls.
+- The target menu lists the weapon choices, then "Custom..."; a weapon fires the whole unit at once.
+- "Custom..." opens per-model weapon/target choices in the bar; Shoot submits a mixed declaration the engine accepts; Back/Esc returns to picking a target; a click on empty board doesn't drop the edit.
+- The board doesn't refit when the custom editor opens.
+
+---
+
 ## Later (post-V1, rough order)
 0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.

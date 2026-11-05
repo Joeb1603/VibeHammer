@@ -412,7 +412,8 @@ private:
         }
         if (!hovered) {
             selected_model_.reset();
-            board_.cancel();  // a click on empty board drops the board selection
+            // A click on empty board drops the board selection, but not a custom shot being edited (D-031).
+            if (!board_.custom_shot()) board_.cancel();
             return;
         }
         const core::UnitId unit = hovered->unit->id;
@@ -602,10 +603,11 @@ private:
             menu_anchor_.reset();
             return;
         }
-        std::optional<core::GameAction> picked;
+        std::optional<MenuEntry> picked;
         for (std::size_t i = 0; i < menu_.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
-            if (ImGui::Selectable(menu_[i].label.c_str())) picked = menu_[i].action;
+            if (menu_[i].custom) ImGui::Separator();
+            if (ImGui::Selectable(menu_[i].label.c_str())) picked = menu_[i];
             ImGui::PopID();
         }
         ImGui::EndPopup();
@@ -645,7 +647,17 @@ private:
                 fit_pending_ = true;
             }
             ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_));
-            ImGui::SetNextWindowSize(ImVec2(w - panel_width(), action_height_));
+            const bool grows = mode_ == Mode::Play && board_.custom_shot();
+            ImGuiWindowFlags action_flags = kFixed;
+            if (grows) {
+                // D-031: the custom-shot editor may need more rows; the bar then overlays the board's top
+                // instead of resizing it, so the board doesn't refit.
+                ImGui::SetNextWindowSizeConstraints(ImVec2(w - panel_width(), action_height_),
+                                                    ImVec2(w - panel_width(), h * 0.45f));
+                action_flags |= ImGuiWindowFlags_AlwaysAutoResize;
+            } else {
+                ImGui::SetNextWindowSize(ImVec2(w - panel_width(), action_height_));
+            }
             // D-030: outlined and tinted in the colour of the side that must act now (01.03), so it is
             // obvious whose input the game is waiting for.
             ImVec4 bg(0.13f, 0.14f, 0.17f, 1.0f);
@@ -659,7 +671,7 @@ private:
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ui_scale());
             }
             ImGui::PushStyleColor(ImGuiCol_WindowBg, bg);
-            ImGui::Begin("##actionbar", nullptr, kFixed);
+            ImGui::Begin("##actionbar", nullptr, action_flags);
             ImGui::PopStyleColor();
             if (deciding) {
                 ImGui::PopStyleVar();
@@ -670,6 +682,7 @@ private:
             } else {
                 draw_replay_controls();
             }
+            action_drawn_height_ = ImGui::GetWindowHeight();
             ImGui::End();
             if (!reasons_.empty()) draw_reasons(w - panel_width());
         }
@@ -865,7 +878,7 @@ private:
     // D-030: the last rejection, rule-cited, in a red strip over the top of the board (so the board doesn't
     // move when it appears).
     void draw_reasons(float width) {
-        ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_ + action_height_));
+        ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_ + std::max(action_height_, action_drawn_height_)));
         ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, ImGui::GetIO().DisplaySize.y * 0.4f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.32f, 0.08f, 0.08f, 0.94f));
         ImGui::Begin("##reasons", nullptr,
@@ -1016,6 +1029,7 @@ private:
     bool files_open_ = false;
     float bar_height_ = 0.0f;     // the phase bar's height, measured each frame
     float action_height_ = 0.0f;  // the action bar's height under it (D-030)
+    float action_drawn_height_ = 0.0f;  // its height as drawn this frame (taller in the custom-shot editor)
     float auto_scale_ = 1.0f;     // the screen's scale (D-028)
     float user_scale_ = 1.0f;     // the "UI scale" slider
     float applied_scale_ = 0.0f;  // the scale the ImGui style was last built for
