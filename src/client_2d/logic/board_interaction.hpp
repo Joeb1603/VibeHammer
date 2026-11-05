@@ -145,6 +145,11 @@ private:
     std::string end_label_;    // the end-phase button, if this decision has one
 };
 
+// D-043: whether the clicked unit's selection rings stay: only while it is the board's actor, the unit
+// moving, or the unit whose click menu is open.
+[[nodiscard]] bool keep_selection(std::optional<core::UnitId> selected, std::optional<core::UnitId> actor,
+                                  std::optional<core::UnitId> moving, std::optional<core::UnitId> menu_unit);
+
 // The unit an action is for, if it is one the board picks by clicking that unit. Remain stationary is
 // not: it comes from the end-phase button.
 [[nodiscard]] std::optional<core::UnitId> board_unit(const core::GameAction& action);

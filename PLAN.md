@@ -419,6 +419,18 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M29: Selection that follows the board; blocked paths shaded ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Two fixes from playing M28. The clicked unit's selection rings now follow one rule (D-043): they stay only on the board's actor, the moving unit, or the unit whose menu is open, so dismissing a menu by clicking away, Reset move, clicking an enemy or friendly unit that does nothing, or clicking empty board leaves no rings. The shaded area also leaves out spots the next straight line could only reach through an enemy model's base (D-044, 03.01), for single models and whole-unit drags.
+
+**Acceptance**
+- No selection rings are left by any way of dropping a unit; they stay while it acts, moves or has its menu open (logic tests on the rule).
+- Every shaded spot (pile-in after a charge, Normal move near the enemy) is accepted by the engine as the next straight line, and spots behind enemy models are left out and refused (logic tests over a grid).
+- `move_reach` lists the blocking enemy bases, none for a Desperate Escape (core test).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

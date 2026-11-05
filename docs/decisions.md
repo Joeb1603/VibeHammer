@@ -792,6 +792,8 @@ is unchanged.
 - **Cancel:** a move menu's Cancel, the new Cancel button while picking a shooting target, and Esc also
   clear the clicked unit and model, so the board looks as it did before the click (the selection rings
   were left on a unit that was no longer acting).
+  (Superseded by D-043's single rule, M29.)
+- **Extended by D-044 (M29):** spots behind enemy models are left out.
 
 ## D-042: Removing a model for coherency by clicking it (M28)
 **Decided:** 2026-11-05 (agreed with the user). Client only.
@@ -800,4 +802,30 @@ is unchanged.
   **Confirm: Remove model N** submits `RemoveModelForCoherency`. There is no longer a button per model.
 - The engine asks again while the unit is still out of coherency, so several models are removed one at a
   time, each clicked and confirmed.
+
+## D-043: The selection follows the board (M29)
+**Decided:** 2026-11-05 (agreed with the user). Client only.
+- The clicked unit's selection rings stay only while that unit is the board's actor (the picked shooter,
+  charger or fighter, the unit removing a model), the unit moving, or the unit whose click menu is open
+  (`keep_selection`). Otherwise the selection is cleared.
+- The rule is applied after the events that can change it, not every frame (so `--select` still works for
+  screenshots):
+  - every board press (a click on a unit that starts nothing, enemy or friendly, leaves no rings);
+  - the click menu closing, whether by a pick, a click outside it or Esc;
+  - each new decision or undo (Reset move, Commit, any submit or automatic action);
+  - an empty-board click, Esc and the Cancel buttons.
+- It replaces M28's clearing on the explicit Cancels only, which missed the other ways a unit is dropped.
+
+## D-044: The shaded area leaves out spots behind enemy models (M29)
+**Decided:** 2026-11-05 (agreed with the user). Read-only core field and client only.
+- 03.01: a model's base cannot be moved through enemy models. The engine checks each straight line
+  (`check_model_path`: the line passes "less than" base radii − EPS from an enemy's centre). `move_reach`
+  now lists those enemy bases as `blocking`. The list is empty for a Desperate Escape (09.07 While Moving:
+  it may move through enemy models).
+- The client leaves out each blocking base's shadow from where the model is now: the disc, and the wedge
+  between the tangents beyond the tangent chord. Every straight line to a point there crosses the chord,
+  which lies inside the disc. Per row that is one interval.
+- For a whole-unit drag, each model's shadows are shifted with its area. A spot reachable only by a path
+  that bends round the enemy needs two drags; the area shows the next straight line, as the client always
+  adds one line per drag.
 

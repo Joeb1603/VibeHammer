@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -63,6 +64,77 @@ void intersect_union(std::vector<Interval>& parts, std::vector<Interval> others)
     parts = std::move(out);
 }
 
+// The part of line `y` in shadow `s`: the disc's chord, and (when `from` is outside the disc) the wedge
+// between the tangents from `from`, beyond the chord through the tangent points: a straight line from
+// `from` to a point there crosses that chord, which is inside the disc. A point in the wedge before that
+// chord and outside the disc is reached before the line meets the disc.
+std::vector<Interval> shadow_on_row(const Shadow& s, float y) {
+    std::vector<Interval> out;
+    if (const auto ch = chord(s.disc, y)) out.push_back(*ch);
+    const float ux0 = s.disc.centre.x - s.from.x;
+    const float uy0 = s.disc.centre.y - s.from.y;
+    const float d = std::hypot(ux0, uy0);
+    const float r = s.disc.radius_mm;
+    if (!(r > 0.0f)) return out;
+    if (d <= r) {  // starting inside the disc: every line from here touches it
+        out.push_back(Interval{-std::numeric_limits<float>::max(), std::numeric_limits<float>::max()});
+        return out;
+    }
+    const float ux = ux0 / d;
+    const float uy = uy0 / d;
+    const float sin_a = r / d;
+    const float cos_a = std::sqrt(1.0f - sin_a * sin_a);
+    // Tangent directions: u turned by +a and -a.
+    const float t1x = ux * cos_a - uy * sin_a, t1y = ux * sin_a + uy * cos_a;
+    const float t2x = ux * cos_a + uy * sin_a, t2y = -ux * sin_a + uy * cos_a;
+    const float chord_at = (d * d - r * r) / d;  // distance along u from `from` to the tangent chord
+    // Each condition is a*x + b*y + c >= 0 at (x, y), with v = p - from.
+    struct HalfPlane {
+        float a, b, c;
+    };
+    const float fx = s.from.x, fy = s.from.y;
+    const HalfPlane planes[] = {
+        // u's side of t1: cross(t1, v) <= 0  ->  -t1x*vy + t1y*vx >= 0
+        {t1y, -t1x, -t1y * fx + t1x * fy},
+        // u's side of t2: cross(t2, v) >= 0  ->  t2x*vy - t2y*vx >= 0
+        {-t2y, t2x, t2y * fx - t2x * fy},
+        // beyond the chord: dot(v, u) >= chord_at
+        {ux, uy, -ux * fx - uy * fy - chord_at},
+    };
+    float lo = -std::numeric_limits<float>::max();
+    float hi = std::numeric_limits<float>::max();
+    for (const HalfPlane& h : planes) {
+        const float rest = h.b * y + h.c;  // a*x + rest >= 0
+        if (std::fabs(h.a) < 1e-9f) {
+            if (rest < 0.0f) return out;  // no x on this row
+            continue;
+        }
+        const float x = -rest / h.a;
+        if (h.a > 0.0f) {
+            lo = std::max(lo, x);
+        } else {
+            hi = std::min(hi, x);
+        }
+    }
+    if (lo < hi) out.push_back(Interval{lo, hi});
+    return out;
+}
+
+float point_segment_distance(const core::Position& p, const core::Position& a, const core::Position& b) {
+    const float dx = b.x - a.x, dy = b.y - a.y;
+    const float len2 = dx * dx + dy * dy;
+    float t = len2 > 0.0f ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2 : 0.0f;
+    t = std::clamp(t, 0.0f, 1.0f);
+    return std::hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+Shadow shifted(Shadow s, float dx, float dy) {
+    s.from.x += dx;
+    s.from.y += dy;
+    s.disc = shifted(s.disc, dx, dy);
+    return s;
+}
+
 core::Rect intersect(const core::Rect& a, const core::Rect& b) {
     return core::Rect{std::max(a.min_x, b.min_x), std::max(a.min_y, b.min_y), std::min(a.max_x, b.max_x),
                       std::min(a.max_y, b.max_y)};
@@ -76,6 +148,7 @@ ReachRegion model_region(const core::MoveReach& reach) {
     region.inside_all.push_back(core::ReachCircle{reach.from, reach.remaining_mm, false, {}});
     region.inside_any = reach.required_any;
     region.outside_all = reach.forbidden;
+    for (const core::ReachCircle& c : reach.blocking) region.outside_shadows.push_back(Shadow{reach.from, c});  // D-044
     region.empty = reach.immobile || !(reach.remaining_mm > 0.0f);
     return region;
 }
@@ -108,6 +181,7 @@ ReachRegion unit_region(const core::GameState& state, core::UnitId unit, const c
             for (const core::Model& o : u->models) own_unit = own_unit || o.id == c.model;
             if (!own_unit) region.outside_all.push_back(shifted(c, dx, dy));
         }
+        for (const Shadow& s : own.outside_shadows) region.outside_shadows.push_back(shifted(s, dx, dy));
     }
     region.empty = first;
     return region;
@@ -145,6 +219,10 @@ std::vector<ReachSpan> reach_spans(const ReachRegion& region, float y_step_mm) {
             if (parts.empty()) break;
             if (const auto ch = chord(c, y)) subtract(parts, ch->first, ch->second);
         }
+        for (const Shadow& s : region.outside_shadows) {
+            if (parts.empty()) break;
+            for (const Interval& i : shadow_on_row(s, y)) subtract(parts, i.first, i.second);
+        }
         for (const Interval& p : parts) {
             if (p.first < p.second) out.push_back(ReachSpan{y, p.first, p.second});
         }
@@ -163,7 +241,10 @@ bool in_region(const ReachRegion& region, const core::Position& p) {
     for (const auto& group : region.inside_any) {
         if (!std::any_of(group.begin(), group.end(), inside)) return false;
     }
-    return std::none_of(region.outside_all.begin(), region.outside_all.end(), inside);
+    if (std::any_of(region.outside_all.begin(), region.outside_all.end(), inside)) return false;
+    return std::none_of(region.outside_shadows.begin(), region.outside_shadows.end(), [&](const Shadow& s) {
+        return point_segment_distance(s.disc.centre, s.from, p) < s.disc.radius_mm;
+    });
 }
 
 }  // namespace wh40k::client

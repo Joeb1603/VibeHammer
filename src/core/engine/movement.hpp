@@ -30,6 +30,9 @@ namespace wh40k::core {
 //   12.08 Ongoing / Engaging), closer to the closest target (D-022: any unit tied for closest counts) and
 //   still engaged with each enemy unit the model started engaged with.
 // - `immobile`: it can't be moved (12.03 / 12.08 Ongoing: in base contact with an enemy model).
+// - D-044: the next straight line can't pass through a `blocking` circle (03.01: its base cannot be moved
+//   through enemy models; as check_model_path, base radii less EPS). None when the move may pass through
+//   enemy models (09.07 Desperate Escape).
 // Ending inside the area does not make the path legal (enemy bases can't be crossed), the unit coherent
 // (03.03) or meet unit-wide conditions (e.g. 12.03 "your unit must be engaged"); the engine still checks
 // them. nullopt if the model isn't moving, or for a charge move (it has its charge ring).
@@ -48,6 +51,7 @@ struct MoveReach {
     Rect centre_bounds;  // the battlefield shrunk by the model's base radius
     std::vector<ReachCircle> forbidden;
     std::vector<std::vector<ReachCircle>> required_any;
+    std::vector<ReachCircle> blocking;
     bool must_end_unengaged = false;
     bool immobile = false;
     friend bool operator==(const MoveReach&, const MoveReach&) = default;

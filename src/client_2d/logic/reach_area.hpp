@@ -11,13 +11,21 @@
 
 namespace wh40k::client {
 
+// D-044: the points p whose straight line from `from` passes within `disc.radius_mm` of `disc.centre`
+// (the disc, and its shadow from `from`).
+struct Shadow {
+    core::Position from;
+    core::ReachCircle disc;
+};
+
 // A point is in the region when it is inside `bounds`, inside every `inside_all` circle, inside at least
-// one circle of every `inside_any` group, and outside every `outside_all` circle.
+// one circle of every `inside_any` group, outside every `outside_all` circle and in no `outside_shadows`.
 struct ReachRegion {
     core::Rect bounds;
     std::vector<core::ReachCircle> inside_all;
     std::vector<std::vector<core::ReachCircle>> inside_any;
     std::vector<core::ReachCircle> outside_all;
+    std::vector<Shadow> outside_shadows;
     bool empty = false;  // nothing can be dropped anywhere (e.g. the model can't be moved)
 };
 

@@ -407,11 +407,15 @@ private:
         const std::size_t step = mode_ == Mode::Play ? session_->history().size() : 0;
         const BoardKey key{generation_, mode_, step};
         if (board_key_ == key) return;
+        const bool first = !board_key_.has_value() && !board_built_;
         board_key_ = key;
+        board_built_ = true;
         menu_.clear();
+        menu_unit_.reset();
         // The session's own state, so the board always matches its legal actions (even while dice show).
         board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(session_->state(), session_->legal())
                                                              : BoardInteraction();
+        if (!first) tidy_selection();  // D-043: a new decision (Reset move, Commit, any submit, undo)
     }
 
     // What a board click or a menu choice led to: submit it, or offer its menu at the cursor.
@@ -621,8 +625,22 @@ private:
 
     // A click on empty board drops the board selection, but not a custom shot or fight being edited (D-031, D-032).
     void empty_click() {
-        selected_model_.reset();
-        if (!board_.custom_editor()) board_.cancel();
+        if (board_.custom_editor()) {
+            selected_model_.reset();
+            return;
+        }
+        board_.cancel();
+        clear_selection();  // D-043
+    }
+
+    // D-043: the selection rings stay only on the unit the board is working with (its actor, the moving
+    // unit, or the unit whose menu is open). Called after the events that can change that, not every
+    // frame, so --select still shows a selection before any input.
+    void tidy_selection() {
+        if (mode_ != Mode::Play) return;
+        if (!keep_selection(selected_unit_, board_.actor(), moving_unit(), menu_.empty() ? std::nullopt : menu_unit_)) {
+            clear_selection();
+        }
     }
 
     // D-035: true once a measuring press has moved past the drag threshold.
@@ -670,9 +688,15 @@ private:
         }
         if (board_.picking_model()) {
             apply(board_.click_model(state(), unit, hovered->model->id));  // D-042
+            tidy_selection();
             return;
         }
-        if (board_.active()) apply(board_.click(state(), unit));  // D-029
+        if (board_.active()) {
+            const ClickResult r = board_.click(state(), unit);  // D-029
+            if (!r.menu.empty()) menu_unit_ = unit;
+            apply(r);
+        }
+        tidy_selection();  // D-043: a click that started nothing leaves no rings
     }
 
     void release(Vector2 mouse) {
@@ -997,8 +1021,12 @@ private:
             open_menu_ = false;
         }
         if (!ImGui::BeginPopup("##unit_menu")) {
-            menu_.clear();  // closed by a click off it (ImGui took that click, so the selection stays)
-            menu_anchor_.reset();
+            if (!menu_.empty()) {
+                menu_.clear();  // closed by a click off it, or Esc
+                menu_anchor_.reset();
+                menu_unit_.reset();
+                tidy_selection();  // D-043
+            }
             return;
         }
         std::optional<MenuEntry> picked;
@@ -1013,7 +1041,9 @@ private:
             menu_.clear();
             menu_anchor_.reset();
             if (picked->cancel) clear_selection();  // D-041: as before the click
+            menu_unit_.reset();
             apply(board_.choose(state(), *picked));
+            tidy_selection();  // D-043
         }
     }
 
@@ -1552,6 +1582,8 @@ private:
     std::optional<BoardKey> board_key_;  // the decision board_ was built for
     std::vector<MenuEntry> menu_;        // the open click menu's entries
     bool open_menu_ = false;
+    std::optional<core::UnitId> menu_unit_;  // D-043: the unit whose click opened the menu
+    bool board_built_ = false;               // D-043: the first board (keeps a --select selection)
     std::optional<core::Position> menu_anchor_;  // where the open menu's click was (the target line ends there)
     Vector2 rest_mouse_{0.0f, 0.0f};             // ring tooltips wait for the cursor to rest
     double rest_since_ = 0.0;

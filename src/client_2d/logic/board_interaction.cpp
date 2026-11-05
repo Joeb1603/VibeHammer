@@ -302,6 +302,12 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
     return "";
 }
 
+bool keep_selection(std::optional<core::UnitId> selected, std::optional<core::UnitId> actor,
+                    std::optional<core::UnitId> moving, std::optional<core::UnitId> menu_unit) {
+    if (!selected) return false;
+    return selected == actor || selected == moving || selected == menu_unit;
+}
+
 ClickResult BoardInteraction::click_model(const core::GameState& state, core::UnitId unit, core::ModelId model) {
     if (mode_ != Mode::RemoveModel) return click(state, unit);
     if (!clickable(unit)) return {};

@@ -129,9 +129,10 @@ std::string_view ring_meaning(RingKind kind) {
                    "left: not on another model, off the board or, for a Normal, Advance or Fall Back move, "
                    "within 2\" of an enemy; for a pile-in or consolidation, closer to the closest target and "
                    "still engaged with any unit it started engaged with. While the whole unit is dragged, it "
-                   "is where the mouse can be let go. Paths may pass through engagement range, not through "
-                   "enemy models; coherency and unit-wide conditions are checked when the move ends "
-                   "(D-040, D-041)";
+                   "is where the mouse can be let go. Spots the next straight line can only reach by passing "
+                   "through an enemy model are left out (paths may pass through engagement range, not "
+                   "enemy models); coherency and unit-wide conditions are checked when the move ends "
+                   "(D-040, D-041, D-044)";
         case RingKind::Engagement:
             return "2\" around the enemy models: a model inside it is engaged, and a Normal or Advance move "
                    "can't end there (03.04)";

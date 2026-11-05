@@ -423,10 +423,16 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
     // 09.05 / 09.06 / 09.07 After Moving: the unit must be unengaged.
     reach.must_end_unengaged =
         mv.type == MoveType::Normal || mv.type == MoveType::Advance || mv.type == MoveType::FallBack;
+    // 09.07 While Moving: a Desperate Escape may move through enemy models.
+    const bool through_enemies = mv.mode == FallBackMode::DesperateEscape;
     for (const Unit& other : state.units) {
         for (const Model& o : other.models) {
             if (o.id == m->id) continue;
             const float touching = r + base_radius(o.base);
+            if (other.side != u->side && !through_enemies) {
+                // 03.01: its base cannot be moved through enemy models (check_model_path's limit).
+                reach.blocking.push_back(ReachCircle{o.position, touching - EPS_MM, false, o.id});
+            }
             if (other.side != u->side && reach.must_end_unengaged) {
                 // 03.04: within 2" is engaged; ending more than 2" away (EPS policy) is unengaged.
                 reach.forbidden.push_back(ReachCircle{o.position, touching + kEngagementRangeMm + EPS_MM, true, o.id});

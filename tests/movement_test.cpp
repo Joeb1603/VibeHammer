@@ -608,3 +608,29 @@ TEST(D041_MoveReach, AModelInBaseContactWithAnEnemyCantPileIn) {
     ASSERT_TRUE(other.has_value());
     EXPECT_FALSE(other->immobile);
 }
+
+// ---- D-044: enemy bases the next straight line can't pass through ----
+
+TEST(D044_MoveReach, EnemyBasesBlockTheNextLineExceptForADesperateEscape) {
+    GameState gs = movement_state();
+    gs.units[kMarines].models.resize(1);  // as R09_07: coherency out of the way
+    engage_first_marine(gs);
+    gs.pending = compute_decision(gs);
+    const Model& marine = gs.units[kMarines].models[0];
+    const ModelId id = marine.id;
+
+    apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::OrderedRetreat));
+    const auto retreat = move_reach(gs, id);
+    ASSERT_TRUE(retreat.has_value());
+    ASSERT_EQ(retreat->blocking.size(), gs.units[kGants].models.size());
+    for (const ReachCircle& c : retreat->blocking) {
+        EXPECT_FLOAT_EQ(c.radius_mm, base_radius(marine.base) + base_radius(gs.units[kGants].models[0].base) - EPS_MM);
+    }
+    apply_action(gs, Side::A, action::ResetUnitMove{});
+
+    ScriptedDice dice{6};  // the hazard roll: passed
+    apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::DesperateEscape), dice);
+    const auto escape = move_reach(gs, id);
+    ASSERT_TRUE(escape.has_value());
+    EXPECT_TRUE(escape->blocking.empty());  // 09.07 While Moving: it may move through enemy models
+}

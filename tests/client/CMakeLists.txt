@@ -5,6 +5,7 @@ add_executable(wh40k_client_tests
     undo_groups_test.cpp
     reach_area_test.cpp
     m28_test.cpp
+    m29_test.cpp
     rules_help_test.cpp
     client_logic_test.cpp)
 
