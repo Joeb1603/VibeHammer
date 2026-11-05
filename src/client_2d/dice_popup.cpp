@@ -38,7 +38,7 @@ void draw_die(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, Look loo
     ImU32 fill = rgba(235, 235, 235);
     ImU32 pip = rgba(30, 30, 30);
     ImU32 edge = rgba(20, 20, 20);
-    float edge_w = 1.5f;
+    const float edge_w = 1.5f;
     int face = die.value;
     if (look == Look::FaceDown) {
         fill = rgba(70, 74, 84);
@@ -49,10 +49,7 @@ void draw_die(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, Look loo
         fill = die.pass ? rgba(60, 160, 85) : rgba(95, 95, 100);
         pip = die.pass ? rgba(255, 255, 255) : rgba(200, 200, 200);
     }
-    if (look == Look::Shown && die.critical) {
-        edge = rgba(255, 200, 40);
-        edge_w = size * 0.09f;
-    }
+    // Criticals aren't highlighted yet (PLAN.md Later: a gold border; DieFace::critical carries it).
     dl->AddRectFilled(p, q, fill, round);
     dl->AddRect(p, q, edge, round, 0, edge_w);
     if (look == Look::FaceDown) {
@@ -115,7 +112,7 @@ void DicePopup::next() {
     if (queue_.empty()) shown_ = 0;
 }
 
-void DicePopup::draw(Rectangle area, float ui_scale, bool* show) {
+void DicePopup::draw(Rectangle area, float ui_scale) {
     if (queue_.empty()) return;
     const DiceCard& card = queue_.front();
     const double now = ImGui::GetTime();
@@ -197,21 +194,8 @@ void DicePopup::draw(Rectangle area, float ui_scale, bool* show) {
         if ((big_button("Roll", true) || enter_or_space()) && !rolling_since_) rolling_since_ = now;
         ImGui::EndDisabled();
     }
-    ImGui::Spacing();
-    bool skip = false;
-    if (queue_.size() > 1) {
-        const std::string label = "Skip rolls (" + std::to_string(queue_.size()) + " left)";
-        skip = ImGui::SmallButton(label.c_str());
-        ImGui::SameLine();
-    }
-    if (ImGui::Checkbox("Show dice pop-ups", show) && !*show) skip = true;
     ImGui::End();
-
-    if (skip) {
-        clear();
-    } else if (advance) {
-        next();
-    }
+    if (advance) next();
 }
 
 }  // namespace wh40k::client

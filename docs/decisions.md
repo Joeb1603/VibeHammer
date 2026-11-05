@@ -626,11 +626,15 @@ logic).
   Hazard dice fail on 1-2, and battle-shock dice share the roll's pass/fail.
 - **Pop-up:** centred over the board and outlined in the roller's colour. The dice are face-down until the
   big green Roll (or Enter/Space), then tumble for about 0.45 s (faces cycled by time, display only). After
-  that, passes are green, fails grey and criticals have a gold border, with the result and Continue (Done
-  on the last card). "Skip rolls" drops the queue, and "Show dice pop-ups" (also in the sidebar's Game
-  section) turns them off.
-- While a card is open the board takes no clicks or drags (zoom and pan still work) and the action bar is
-  disabled.
+  that, passes are green and fails grey, with the result and Continue (Done on the last card). The pop-up
+  has nothing else: no skip, no setting. "Show dice pop-ups" in the sidebar's Game section turns them off.
+  Criticals are not highlighted yet (PLAN.md Later).
+- **The screen stays at the roll:** while cards show, the board, rings, phase bar and log show the game as it
+  was just before the action that made the rolls (no casualties removed, no results in the log yet). The
+  action bar shows who is rolling and what for ("Side A rolls: Space Marines", "Hit rolls (05.01)"), outlined
+  in the roller's colour, so it always matches the pop-up. When the last card closes, everything moves on to
+  the current state and the next decision. The board takes no clicks or drags meanwhile (zoom and pan still
+  work).
 - No cards for replays, loads, undo or new games (the log size at that point is taken as already seen), or
   for `--steps` runs unless `--dice 1` (keep) or `--dice 2` (keep and reveal the first card).
 

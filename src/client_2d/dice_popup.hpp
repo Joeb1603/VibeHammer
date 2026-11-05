@@ -21,9 +21,11 @@ public:
     // Show the current card's faces at once (the --dice 2 screenshot flag).
     void reveal() { revealed_ = true; }
 
-    // Draws the current card centred in `area` (screen pixels). `show`: the "Show dice pop-ups" setting;
-    // unticking it here also clears the queue.
-    void draw(Rectangle area, float ui_scale, bool* show);
+    // The card being shown, if any (the action bar follows its roller while dice show, D-033).
+    [[nodiscard]] const DiceCard* current() const noexcept { return queue_.empty() ? nullptr : &queue_.front(); }
+
+    // Draws the current card centred in `area` (screen pixels): Roll, then the result and Continue.
+    void draw(Rectangle area, float ui_scale);
 
 private:
     void next();

@@ -154,6 +154,7 @@ public:
         scroll_log_ = true;
         // D-033: no pop-ups for rolls made before this session started (a load, or the game start).
         dice_.clear();
+        before_dice_.reset();
         dice_seen_ = session_->log().size();
     }
 
@@ -258,6 +259,10 @@ public:
 
     void frame() {
         apply_scale();
+        if (!dice_.active() && before_dice_) {
+            before_dice_.reset();  // D-033: the last pop-up closed: show the game as it is now
+            scroll_log_ = true;
+        }
         ClearBackground(Color{24, 26, 30, 255});
         if (!has_view()) {
             // No game and no replay (e.g. the scenario could not be loaded): show why, and the panel can
@@ -302,9 +307,12 @@ private:
     // Something to show: a live game in Play mode, a loaded replay in Replay mode.
     bool has_view() const { return mode_ == Mode::Play ? session_.has_value() : timeline_.size() > 0; }
 
-    // Precondition: has_view().
+    // What is drawn. Precondition: has_view(). D-033: while dice pop-ups show, the moment the dice were
+    // rolled (the state before that action), so the board and bars don't run ahead of the roll.
     const core::GameState& state() const {
-        return mode_ == Mode::Play ? session_->state() : timeline_.frame(frame_).state;
+        if (mode_ != Mode::Play) return timeline_.frame(frame_).state;
+        if (before_dice_ && dice_.active()) return *before_dice_;
+        return session_->state();
     }
 
     Rectangle board_area() const {
@@ -354,7 +362,8 @@ private:
         if (board_key_ == key) return;
         board_key_ = key;
         menu_.clear();
-        board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(state(), session_->legal())
+        // The session's own state, so the board always matches its legal actions (even while dice show).
+        board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(session_->state(), session_->legal())
                                                              : BoardInteraction();
     }
 
@@ -370,12 +379,21 @@ private:
 
     // Every game change goes through here (and so through validate_action). True if it was applied.
     bool submit(const core::GameAction& action) {
+        core::GameState before = session_->state();
+        const std::size_t log_before = session_->log().size();
         const core::ValidationResult r = session_->submit(action);
         reasons_ = r.reasons;
         if (r.ok()) {
             scroll_log_ = true;
-            // D-033: a pop-up for each roll the action made.
-            if (show_dice_) dice_.push(dice_cards(session_->state(), session_->log(), dice_seen_));
+            // D-033: a pop-up for each roll the action made. While they show, the screen stays at the
+            // moment of the roll (an earlier roll's moment if pop-ups were already showing).
+            std::vector<DiceCard> cards =
+                show_dice_ ? dice_cards(session_->state(), session_->log(), dice_seen_) : std::vector<DiceCard>{};
+            if (!cards.empty() && !dice_.active()) {
+                before_dice_ = std::move(before);
+                log_before_dice_ = log_before;
+            }
+            dice_.push(std::move(cards));
             dice_seen_ = session_->log().size();
         }
         return r.ok();
@@ -682,10 +700,18 @@ private:
             // D-030: outlined and tinted in the colour of the side that must act now (01.03), so it is
             // obvious whose input the game is waiting for.
             ImVec4 bg(0.13f, 0.14f, 0.17f, 1.0f);
-            const core::PendingDecision* pending = state().pending ? &*state().pending : nullptr;
-            const bool deciding = mode_ == Mode::Play && pending != nullptr;
+            // While dice show, the side rolling them (so the bar matches the pop-up, D-033).
+            std::optional<core::Side> acting;
+            if (mode_ == Mode::Play) {
+                if (const DiceCard* card = dice_.current()) {
+                    acting = card->roller;
+                } else if (state().pending) {
+                    acting = state().pending->side;
+                }
+            }
+            const bool deciding = acting.has_value();
             if (deciding) {
-                const ImVec4 c = to_imvec(side_color(pending->side));
+                const ImVec4 c = to_imvec(side_color(*acting));
                 constexpr float kTint = 0.22f;
                 bg = ImVec4(bg.x + (c.x - bg.x) * kTint, bg.y + (c.y - bg.y) * kTint, bg.z + (c.z - bg.z) * kTint, 1.0f);
                 ImGui::PushStyleColor(ImGuiCol_Border, c);
@@ -699,9 +725,11 @@ private:
                 ImGui::PopStyleColor();
             }
             if (mode_ == Mode::Play) {
-                ImGui::BeginDisabled(dice_.active());  // D-033: the decision waits for the dice pop-ups
-                draw_decision();
-                ImGui::EndDisabled();
+                if (const DiceCard* card = dice_.current()) {
+                    draw_rolling(*card);  // D-033: the next decision waits for the dice pop-ups
+                } else {
+                    draw_decision();
+                }
             } else {
                 draw_replay_controls();
             }
@@ -715,7 +743,7 @@ private:
         draw_sidebar();
         ImGui::End();
         // D-033: the dice pop-up, over everything else.
-        if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale(), &show_dice_);
+        if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale());
     }
 
     static ImVec4 to_imvec(Color c, float alpha = 1.0f) {
@@ -812,6 +840,7 @@ private:
                 drag_.reset();
                 scroll_log_ = true;
                 dice_.clear();  // D-033: no pop-ups for the replayed rolls
+                before_dice_.reset();
                 dice_seen_ = session_->log().size();
             }
             ImGui::EndDisabled();
@@ -897,6 +926,19 @@ private:
         }
     }
 
+    // D-033: the action bar while a dice pop-up is open: who is rolling and what for, matching the pop-up.
+    void draw_rolling(const DiceCard& card) {
+        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
+        const std::string tag = side_name(card.roller) + " rolls: " + state().side(card.roller).name;
+        chip(tag.c_str(), to_imvec(side_color(card.roller)));
+        ImGui::SameLine(0.0f, ImGui::GetFontSize() * 0.6f);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s (%s)", card.title.c_str(), card.rule.c_str());
+        ImGui::PopFont();
+        const std::string hint = (card.purpose.empty() ? std::string() : card.purpose + ". ") + "Roll the dice in the pop-up.";
+        ImGui::TextWrapped("%s", hint.c_str());
+    }
+
     void draw_decision() {
         // In order; stop at the first one rejected (the end-phase button can be several).
         for (const core::GameAction& a : panel_.draw(*session_, selected_model_, &board_)) {
@@ -959,7 +1001,9 @@ private:
     };
 
     void refresh_log_cache() {
-        const std::size_t count = mode_ == Mode::Play ? session_->log().size() : frame_ + 1;
+        // D-033: while dice show, the log stops before the roll's action, so it doesn't give the results away.
+        std::size_t count = frame_ + 1;
+        if (mode_ == Mode::Play) count = before_dice_ && dice_.active() ? log_before_dice_ : session_->log().size();
         const LogKey key{generation_, mode_, count};
         if (log_key_ == key) return;
         log_key_ = key;
@@ -969,7 +1013,7 @@ private:
             for (const auto& e : events) log_lines_.push_back(LogLine{format_event(e), false, is_roll_event(e)});
         };
         if (mode_ == Mode::Play) {
-            for (std::size_t i = 0; i < session_->log().size(); ++i) {
+            for (std::size_t i = 0; i < count; ++i) {
                 add_entry(session_->log()[i].label, false, session_->log()[i].events);
             }
         } else {
@@ -1054,6 +1098,8 @@ private:
     std::optional<Drag> drag_;
     std::vector<std::string> reasons_;  // the last rejection, rule-cited
     DicePopup dice_;                    // D-033: the rolls waiting to be shown
+    std::optional<core::GameState> before_dice_;  // the state drawn while they show (before the roll's action)
+    std::size_t log_before_dice_ = 0;   // the log entries shown while they show
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
     bool fit_pending_ = true;
