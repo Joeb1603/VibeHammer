@@ -46,7 +46,7 @@ void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& en
     if (p == nullptr) return;
     add_help(*p, entry);
     const auto selections = core::make_weapon_selections(state, *u, shoot.type, shoot.shots);
-    entry.effects = effect_lines(*p, selections, core::shooting_context(state, *u));
+    entry.effects = effect_lines(*p, selections, core::shooting_context(state, *u), shoot.type);
 }
 
 void describe(const core::GameState& state, const a::Fight& fight, core::UnitId target, MenuEntry& entry) {

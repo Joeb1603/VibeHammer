@@ -171,3 +171,24 @@ TEST(M24_RulesHelp, ProfileStatsReadLikeTheDatasheet) {
     p.range_mm.reset();
     EXPECT_EQ(profile_stats(p), "Melee  A2  WS3+  S4  AP-1  D1");
 }
+
+TEST(M24_WeaponMenu, AssaultAndCloseQuartersApplyWhenTheyAreWhatLetsTheUnitShoot) {
+    WeaponProfile p;
+    p.kind = WeaponKind::Ranged;
+    p.range_mm = 24 * MM_PER_INCH;
+    p.attacks = DiceExpr::fixed(2);
+    p.skill = 3;
+    p.abilities = {ability::Assault{}, ability::CloseQuarters{}};
+    const std::vector<WeaponSelection> sels{WeaponSelection{}};
+    const AttackContext ctx{AttackType::Shooting, false};
+    const auto normal = effect_lines(p, sels, ctx, ShootingType::Normal);
+    ASSERT_EQ(normal.size(), 2u);
+    EXPECT_EQ(normal[0].kind, EffectKind::Info);
+    EXPECT_EQ(normal[1].kind, EffectKind::Info);
+    const auto assault = effect_lines(p, sels, ctx, ShootingType::Assault);
+    EXPECT_EQ(assault[0].kind, EffectKind::Active) << assault[0].text;
+    EXPECT_EQ(assault[1].kind, EffectKind::Info);
+    const auto cq = effect_lines(p, sels, ctx, ShootingType::CloseQuarters);
+    EXPECT_EQ(cq[0].kind, EffectKind::Info);
+    EXPECT_EQ(cq[1].kind, EffectKind::Active) << cq[1].text;
+}

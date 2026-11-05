@@ -12,7 +12,7 @@
 
 namespace wh40k::client {
 
-// Active: green, inactive: grey, info: white, not in this game: orange.
+// Active: green, inactive: red, info: white, not in this game: orange.
 [[nodiscard]] ImVec4 effect_colour(EffectKind kind);
 
 // One line per effect, in its colour.

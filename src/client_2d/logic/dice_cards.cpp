@@ -38,6 +38,7 @@ struct AttackContext {
     std::vector<core::AttackBatch> batches;
     std::vector<core::WeaponSelection> selections;  // the attacker's last ShootingStarted / MeleeAttacksDeclared
     bool melee = false;
+    core::ShootingType shooting_type = core::ShootingType::Normal;  // the last ShootingStarted's
     std::optional<std::size_t> batch;  // the batch being resolved
     std::vector<core::AllocationGroup> groups;  // the current target's groups, in allocation order
 };
@@ -84,7 +85,9 @@ std::vector<EffectLine> attack_notes(const core::GameState& state, const AttackC
     notes.push_back({std::to_string(batch->attack_dice) + " attack dice from " + plural(static_cast<int>(sels.size()),
                      "model", "models"), EffectKind::Info});
     const core::AttackType type = c.melee ? core::AttackType::Fighting : core::AttackType::Shooting;
-    for (EffectLine& line : effect_lines(*p, sels, core::batch_context(*batch, sels.front(), type))) {
+    const std::optional<core::ShootingType> shooting =
+        c.melee ? std::nullopt : std::optional<core::ShootingType>(c.shooting_type);
+    for (EffectLine& line : effect_lines(*p, sels, core::batch_context(*batch, sels.front(), type), shooting)) {
         if (line.kind != EffectKind::Info) notes.push_back(std::move(line));
     }
     return notes;
@@ -204,6 +207,7 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                     if constexpr (std::is_same_v<T, ev::ShootingStarted>) {
                         c.selections = e.selections;
                         c.melee = false;
+                        c.shooting_type = e.type;
                     } else if constexpr (std::is_same_v<T, ev::MeleeAttacksDeclared>) {
                         c.selections = e.selections;
                         c.melee = true;

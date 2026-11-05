@@ -5,6 +5,7 @@
 // rule number); what applies comes from core's read-only ability_effects (D-024). Plain ASCII only (the
 // font has no other glyphs, D-034).
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -32,7 +33,7 @@ struct HelpEntry {
 // What one of a weapon's abilities does to a volley.
 enum class EffectKind {
     Active,     // it changes these attacks (extra attacks, +1 to hit, hits automatically)
-    Inactive,   // it could, but its condition isn't met here
+    Inactive,   // it could, but its condition isn't met here (shown red)
     Info,       // it acts elsewhere (e.g. [ASSAULT] lets the unit shoot after Advancing)
     NotInGame,  // the engine doesn't implement it yet
 };
@@ -43,10 +44,13 @@ struct EffectLine {
     friend bool operator==(const EffectLine&, const EffectLine&) = default;
 };
 
-// One line per ability on `weapon`, summed over `selections` (every selection uses `weapon`).
+// One line per ability on `weapon`, summed over `selections` (every selection uses `weapon`). With the
+// shooting type, [ASSAULT] / [CLOSE-QUARTERS] are Active when they are what lets the unit shoot that way
+// (10.05 / 10.06), and Info otherwise.
 [[nodiscard]] std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
                                                    std::span<const core::WeaponSelection> selections,
-                                                   const core::AttackContext& context);
+                                                   const core::AttackContext& context,
+                                                   std::optional<core::ShootingType> type = std::nullopt);
 
 // "24\"  A2  BS3+  S4  AP-1  D1" (WS for melee).
 [[nodiscard]] std::string profile_stats(const core::WeaponProfile& weapon);

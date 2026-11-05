@@ -5,7 +5,7 @@ namespace wh40k::client {
 ImVec4 effect_colour(EffectKind kind) {
     switch (kind) {
         case EffectKind::Active: return ImVec4(0.45f, 0.9f, 0.45f, 1.0f);
-        case EffectKind::Inactive: return ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
+        case EffectKind::Inactive: return ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
         case EffectKind::Info: return ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
         case EffectKind::NotInGame: return ImVec4(1.0f, 0.6f, 0.3f, 1.0f);
     }
@@ -14,7 +14,8 @@ ImVec4 effect_colour(EffectKind kind) {
 
 void draw_effect_lines(const std::vector<EffectLine>& lines) {
     for (const EffectLine& l : lines) {
-        ImGui::TextColored(effect_colour(l.kind), "%s %s", l.kind == EffectKind::Active ? "+" : "-", l.text.c_str());
+        ImGui::TextColored(effect_colour(l.kind), "%s %s", l.kind == EffectKind::Active ? "+" : l.kind == EffectKind::Inactive ? "x" : "-",
+                           l.text.c_str());
     }
 }
 

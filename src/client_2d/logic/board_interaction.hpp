@@ -23,7 +23,7 @@ struct MenuEntry {
     // The target menu's "Custom..." entry (D-031): opens the per-model shot editor instead of submitting;
     // `action` is the Shoot it starts from (the first weapon choice at that target).
     bool custom = false;
-    // D-037: what the choice means. A weapon choice has its stats, what its abilities do to this volley and
+    // D-037 / M24: what the choice means. A weapon choice has its stats, what its abilities do to this volley and
     // their help; a shooting type has its help.
     std::string detail{};               // "24\"  A2  BS3+  S4  AP-1  D1"
     std::vector<EffectLine> effects{};

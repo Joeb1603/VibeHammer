@@ -355,7 +355,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 > Make it clear what weapon abilities and keywords mean and when they apply (D-037). Hover help, paraphrased from the core rules with rule numbers, for every weapon ability, keyword and shooting type. The weapon menu shows each choice's stats and which abilities apply to this volley (from core's read-only `ability_effects`). The hit roll's dice card says how many dice were gathered and which abilities changed them. Auto-skip (M23) is now on by default.
 
 **Acceptance**
-- The weapon menu shows each choice's stats and which of its abilities apply to this shot (green) or don't (grey), with hover help (logic test).
+- The weapon menu shows each choice's stats and which of its abilities apply to this shot (green) or don't (red), with hover help (logic test).
 - Hovering a weapon ability or keyword on a datasheet explains it in plain words with its rule number, and says whether this game uses it. Every ability and keyword in the data has plain ASCII help (logic test).
 - The hit roll's dice card lists the dice gathered and the abilities that applied, matching the engine's events (logic test).
 - `ability_effects` matches `gather_attack_dice` and `make_attack_profile` (core tests).

@@ -144,7 +144,7 @@ HelpEntry shooting_type_help(core::ShootingType type) {
 
 std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
                                      std::span<const core::WeaponSelection> selections,
-                                     const core::AttackContext& context) {
+                                     const core::AttackContext& context, std::optional<core::ShootingType> type) {
     std::vector<EffectLine> out;
     std::vector<std::vector<core::AbilityEffect>> per;
     for (const core::WeaponSelection& s : selections) per.push_back(core::ability_effects(weapon, s, context));
@@ -199,11 +199,21 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
             line.text = "Torrent: hits automatically";
             line.kind = EffectKind::Active;
         } else if (std::holds_alternative<ab::Assault>(a)) {
-            line.text = "Assault: can fire after Advancing";
-            line.kind = EffectKind::Info;
+            if (type == core::ShootingType::Assault) {
+                line.text = "Assault: firing after Advancing (Assault shooting)";
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = "Assault: can fire after Advancing";
+                line.kind = EffectKind::Info;
+            }
         } else if (std::holds_alternative<ab::CloseQuarters>(a)) {
-            line.text = "Close-quarters: can fire while engaged";
-            line.kind = EffectKind::Info;
+            if (type == core::ShootingType::CloseQuarters) {
+                line.text = "Close-quarters: firing while engaged (Close-quarters shooting)";
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = "Close-quarters: can fire while engaged";
+                line.kind = EffectKind::Info;
+            }
         } else {
             line.text = weapon_ability_label(a) + ": not in this game yet";
             line.kind = EffectKind::NotInGame;

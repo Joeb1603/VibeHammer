@@ -693,10 +693,11 @@ logic).
 - **What applies** comes from core's read-only `ability_effects` (24.30, 24.05, 24.16, 24.37) and
   `batch_context` (for past batches: [HEAVY] applied iff the batch's hit modifier is more than the
   selection's own). The client only words it (D-024). [ASSAULT] and [CLOSE-QUARTERS] act when the shooting
-  type is chosen, so they are shown as information, not as applying to the attacks.
+  type is chosen: they show as applying (green) when the unit is using Assault / Close-quarters shooting,
+  and as information otherwise.
 - **Where:**
   - The weapon menu (after picking a target) shows each choice's stats and one line per ability: green
-    when it applies to this volley, grey when it doesn't. Hovering shows the abilities' help.
+    when it applies to this volley, red when it doesn't. Hovering shows the abilities' help.
   - Shooting-type menu entries have their 10.04-10.06 help.
   - On a datasheet, each weapon ability and keyword can be hovered.
   - A hit roll's dice card lists the dice gathered and the abilities that changed them.
