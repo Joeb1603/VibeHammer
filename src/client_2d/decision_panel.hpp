@@ -25,8 +25,9 @@ public:
     // is highlighted (its override is what the player edits, D-001). When `board` handles the decision
     // (D-029), units are picked on the board: the panel shows the hint, the step buttons and the selected
     // shooter's editor instead of a button per unit.
-    std::optional<core::GameAction> draw(const GameSession& session, std::optional<core::ModelId> selected_model,
-                                         BoardInteraction* board = nullptr);
+    // Returns the actions the player chose, to submit in order (the end-phase button can be several).
+    std::vector<core::GameAction> draw(const GameSession& session, std::optional<core::ModelId> selected_model,
+                                       BoardInteraction* board = nullptr);
     // Forget the editors: call when the session is replaced (new game, load) or rebuilt (undo), so the next
     // draw builds them for the new state even if its step count is the same.
     void reset() { synced_step_.reset(); }
@@ -36,8 +37,10 @@ private:
                                                      std::optional<core::ModelId> selected_model);
     std::optional<core::GameAction> draw_shot_plan(const core::GameState& gs, ShotPlan& plan, const std::string& title,
                                                    std::optional<core::ModelId> selected_model);
-    std::optional<core::GameAction> draw_board_mode(const GameSession& session, BoardInteraction& board,
-                                                    std::optional<core::ModelId> selected_model);
+    std::vector<core::GameAction> draw_board_mode(const GameSession& session, BoardInteraction& board,
+                                                  std::optional<core::ModelId> selected_model);
+    std::optional<core::GameAction> draw_sidebar_mode(const GameSession& session,
+                                                      std::optional<core::ModelId> selected_model);
     std::optional<core::GameAction> draw_melee_editor(const GameSession& session, const core::action::Fight& tmpl,
                                                       std::optional<core::ModelId> selected_model);
     std::optional<core::GameAction> draw_casualty_editor(const GameSession& session,

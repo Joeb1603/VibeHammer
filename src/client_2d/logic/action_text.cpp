@@ -42,7 +42,7 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
             } else if constexpr (std::is_same_v<T, a::Shoot>) {
                 return std::string(core::shooting_type_name(x.type)) + " shooting: " + unit_name(state, x.unit);
             } else if constexpr (std::is_same_v<T, a::EndShootStep>) {
-                return "End shooting";
+                return "End Shooting phase";
             } else if constexpr (std::is_same_v<T, a::DeclareCharge>) {
                 return "Declare charge: " + unit_name(state, x.unit);
             } else if constexpr (std::is_same_v<T, a::StartChargeMove>) {
@@ -50,7 +50,7 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
             } else if constexpr (std::is_same_v<T, a::SkipChargeMove>) {
                 return "Make no charge move";
             } else if constexpr (std::is_same_v<T, a::EndChargeStep>) {
-                return "End charges";
+                return "End Charge phase";
             } else if constexpr (std::is_same_v<T, a::StartPileIn>) {
                 return "Pile in: " + unit_name(state, x.unit) + " towards " + units(state, x.targets);
             } else if constexpr (std::is_same_v<T, a::SkipPileIn>) {

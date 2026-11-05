@@ -261,7 +261,8 @@ public:
         if (!io.WantCaptureKeyboard) handle_keys();
 
         // D-029: units that can't be clicked now are drawn slightly grey.
-        draw_board(state(), camera_, [this](core::UnitId id) { return board_.active() && !board_.clickable(id); });
+        draw_board(state(), camera_,
+                   [this](core::UnitId id) { return board_.waiting_for_click() && !board_.clickable(id); });
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
         // Rings stop at the battlefield edge (no model can be beyond it).
         const Rectangle field = camera_.to_screen(core::Rect{0.0f, 0.0f, state().battlefield.width_mm,
@@ -342,11 +343,12 @@ private:
         }
     }
 
-    // Every game change goes through here (and so through validate_action).
-    void submit(const core::GameAction& action) {
+    // Every game change goes through here (and so through validate_action). True if it was applied.
+    bool submit(const core::GameAction& action) {
         const core::ValidationResult r = session_->submit(action);
         reasons_ = r.reasons;
         if (r.ok()) scroll_log_ = true;
+        return r.ok();
     }
 
     // The unit being moved model by model, if it is this player's MoveModels decision.
@@ -488,6 +490,22 @@ private:
             }
         };
         if (board_.actor() && !moving_unit()) outline(*board_.actor(), YELLOW);
+        // D-029: while picking a target, a line from the acting unit to the cursor.
+        if (board_.picking_target() && board_.actor()) {
+            if (const core::Unit* u = gs.find_unit(*board_.actor()); u != nullptr && !u->models.empty()) {
+                float x = 0, y = 0;
+                for (const core::Model& m : u->models) {
+                    x += m.position.x;
+                    y += m.position.y;
+                }
+                const float n = static_cast<float>(u->models.size());
+                const Vector2 mouse = GetMousePosition();
+                const float s = ui_scale();
+                DrawLineEx(camera_.to_screen(x / n, y / n), mouse, 2.5f * s, Color{255, 220, 80, 200});
+                DrawText("Pick a target", static_cast<int>(mouse.x + 16.0f * s), static_cast<int>(mouse.y + 8.0f * s),
+                         static_cast<int>(kRulerText * s), Color{255, 220, 80, 230});
+            }
+        }
         for (const core::UnitId id : board_.chosen_targets()) outline(id, Color{255, 90, 90, 255});
         // Selection.
         if (selected_unit_) {
@@ -793,7 +811,10 @@ private:
             if (ImGui::SmallButton("Dismiss")) reasons_.clear();
             ImGui::Separator();
         }
-        if (const auto chosen = panel_.draw(*session_, selected_model_, &board_)) submit(*chosen);
+        // In order; stop at the first one rejected (the end-phase button can be several).
+        for (const core::GameAction& a : panel_.draw(*session_, selected_model_, &board_)) {
+            if (!submit(a)) break;
+        }
     }
 
     void draw_replay_controls() {

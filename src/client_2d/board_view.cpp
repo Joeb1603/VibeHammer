@@ -33,7 +33,7 @@ void draw_grid(const core::Battlefield& field, const BoardCamera& cam) {
     }
 }
 
-const Color kGrey{110, 112, 118, 255};
+const Color kGrey{55, 55, 60, 255};
 
 Color mix(Color a, Color b, float t) {
     auto channel = [t](unsigned char x, unsigned char y) {
@@ -46,9 +46,9 @@ void draw_model(const core::Unit& unit, const core::Model& model, const BoardCam
     // Bases are round in V1; base.diameter_mm is the true size, drawn to scale.
     const Vector2 c = cam.to_screen(model.position);
     const float r = cam.to_px(model.base.diameter_mm * 0.5f);
-    const Color fill = dimmed ? mix(side_color(unit.side), kGrey, 0.55f) : side_color(unit.side);
+    const Color fill = dimmed ? mix(side_color(unit.side), kGrey, 0.8f) : side_color(unit.side);
     DrawCircleV(c, r, fill);
-    DrawCircleLinesV(c, r, dimmed ? Color{170, 170, 175, 255} : RAYWHITE);
+    DrawCircleLinesV(c, r, dimmed ? Color{95, 95, 100, 255} : RAYWHITE);
 
     // D-028: a damaged model shows one pip per wound, filled for the wounds it has left. Models at full
     // wounds show nothing (the tooltip gives the numbers).

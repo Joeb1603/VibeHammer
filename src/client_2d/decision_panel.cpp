@@ -77,16 +77,23 @@ void DecisionPanel::sync(const GameSession& session) {
     }
 }
 
-std::optional<core::GameAction> DecisionPanel::draw(const GameSession& session,
-                                                    std::optional<core::ModelId> selected_model,
-                                                    BoardInteraction* board) {
+std::vector<core::GameAction> DecisionPanel::draw(const GameSession& session,
+                                                  std::optional<core::ModelId> selected_model,
+                                                  BoardInteraction* board) {
     const core::GameState& gs = session.state();
     if (!session.pending()) {
         ImGui::TextWrapped("%s", gs.result ? gs.result->reason.c_str() : "Nothing to decide.");
-        return std::nullopt;
+        return {};
     }
     sync(session);
     if (board != nullptr && board->active()) return draw_board_mode(session, *board, selected_model);
+    if (auto a = draw_sidebar_mode(session, selected_model)) return {*a};
+    return {};
+}
+
+std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSession& session,
+                                                                 std::optional<core::ModelId> selected_model) {
+    const core::GameState& gs = session.state();
     ImGui::TextColored(kHighlight, "%s", core::describe(*session.pending()).c_str());
     std::optional<core::GameAction> chosen;
     const DecisionView& view = view_;
@@ -130,12 +137,24 @@ std::optional<core::GameAction> DecisionPanel::draw(const GameSession& session,
     return chosen;
 }
 
-std::optional<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& session, BoardInteraction& board,
-                                                               std::optional<core::ModelId> selected_model) {
+std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& session, BoardInteraction& board,
+                                                             std::optional<core::ModelId> selected_model) {
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
-    ImGui::TextColored(kHighlight, "%s", core::describe(*session.pending()).c_str());
+    std::vector<core::GameAction> end_actions;
+    // D-029: while picking a target the headline says so; otherwise it is the decision.
+    const std::string prompt = board.prompt(gs);
+    ImGui::TextColored(kHighlight, "%s", prompt.empty() ? core::describe(*session.pending()).c_str() : prompt.c_str());
     ImGui::TextWrapped("%s", board.hint(gs).c_str());
+    if (const auto end = board.end_phase()) {
+        // The main action when nothing is left to do on the board.
+        const ImVec4 green{0.20f, 0.55f, 0.30f, 1.0f};
+        ImGui::PushStyleColor(ImGuiCol_Button, green);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.65f, 0.36f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.48f, 0.26f, 1.0f));
+        if (ImGui::Button(end->label.c_str())) end_actions = end->actions;
+        ImGui::PopStyleColor(3);
+    }
     if (const auto confirm = board.confirm()) {
         if (ImGui::Button(action_label(gs, *confirm).c_str())) chosen = *confirm;
     }
@@ -164,7 +183,9 @@ std::optional<core::GameAction> DecisionPanel::draw_board_mode(const GameSession
             for (const std::string& p : problems) ImGui::BulletText("%s", p.c_str());
         }
     }
-    return chosen;
+    if (!end_actions.empty()) return end_actions;
+    if (chosen) return {*chosen};
+    return {};
 }
 
 std::optional<core::GameAction> DecisionPanel::draw_shot_editor(const GameSession& session,

@@ -684,15 +684,22 @@ TEST(M16_BoardInteraction, AtTheStartOnlyTheIntercessorsAreClickableAndOfferThei
     EXPECT_TRUE(board.clickable(marines));
     EXPECT_FALSE(board.clickable(gants));  // drawn grey
     EXPECT_EQ(board.hint(session.state()), "Click a unit to move.");
-    EXPECT_TRUE(board.step_buttons().empty());  // every MoveUnits option belongs to a unit
+    EXPECT_TRUE(board.waiting_for_click());
+    EXPECT_TRUE(board.step_buttons().empty());
+    // Remain stationary is the end-phase button, not a menu entry.
+    const auto end = board.end_phase();
+    ASSERT_TRUE(end.has_value());
+    EXPECT_EQ(end->label, "End Movement phase (the rest remain stationary)");
+    EXPECT_EQ(end->actions,
+              (std::vector<GameAction>{action::StartMove{marines, MoveType::RemainStationary, std::nullopt}}));
     EXPECT_FALSE(board.click(session.state(), gants).submit.has_value());
 
     const ClickResult r = board.click(session.state(), marines);
     EXPECT_FALSE(r.submit.has_value());
-    ASSERT_EQ(r.menu.size(), 3u);  // the StartMove legal actions, in order
-    for (std::size_t i = 0; i < 3; ++i) EXPECT_EQ(r.menu[i].action, session.legal()[i]);
-    EXPECT_EQ(r.menu[1].label, "Normal: Intercessor Squad (1)");
-    const ClickResult chosen = board.choose(session.state(), r.menu[1].action);
+    ASSERT_EQ(r.menu.size(), 2u);  // Normal and Advance, in legal order
+    EXPECT_EQ(r.menu[0].label, "Normal: Intercessor Squad (1)");
+    EXPECT_EQ(r.menu[1].label, "Advance: Intercessor Squad (1)");
+    const ClickResult chosen = board.choose(session.state(), r.menu[0].action);
     ASSERT_TRUE(chosen.submit.has_value());
     ASSERT_TRUE(session.submit(*chosen.submit).ok());
     EXPECT_TRUE(std::holds_alternative<decision::MoveModels>(session.pending()->kind));
@@ -700,6 +707,8 @@ TEST(M16_BoardInteraction, AtTheStartOnlyTheIntercessorsAreClickableAndOfferThei
     const BoardInteraction moving(session.state(), session.legal());
     EXPECT_TRUE(moving.clickable(marines));
     EXPECT_FALSE(moving.clickable(gants));
+    EXPECT_FALSE(moving.waiting_for_click());  // dragging, not clicking: nothing is grey
+    EXPECT_FALSE(moving.end_phase().has_value());
     const auto steps = moving.step_buttons();
     EXPECT_EQ(steps, (std::vector<GameAction>{action::CommitUnitMove{}, action::ResetUnitMove{}}));
 }
@@ -711,10 +720,17 @@ TEST(M16_BoardInteraction, ShootingIsAClickOnTheShooterThenTheTargetThenAWeapon)
     const UnitId gants = gs.units[1].id;
     BoardInteraction board(gs, session.legal());
     EXPECT_FALSE(board.clickable(gants));  // no shooter yet
-    EXPECT_EQ(board.step_buttons(), (std::vector<GameAction>{action::EndShootStep{}}));
+    EXPECT_TRUE(board.step_buttons().empty());
+    EXPECT_EQ(board.end_phase()->label, "End Shooting phase");
+    EXPECT_EQ(board.end_phase()->actions, (std::vector<GameAction>{action::EndShootStep{}}));
+    EXPECT_TRUE(board.prompt(gs).empty());
+    EXPECT_FALSE(board.picking_target());
 
     EXPECT_TRUE(board.click(gs, marines).menu.empty());  // one shooting type: the shooter is picked at once
     EXPECT_EQ(board.actor(), marines);
+    EXPECT_EQ(board.prompt(gs), "Pick a target for the Intercessor Squad");
+    EXPECT_TRUE(board.picking_target());
+    EXPECT_TRUE(board.waiting_for_click());
     ASSERT_NE(board.shot_plan(), nullptr);
     EXPECT_TRUE(board.clickable(gants));
 
@@ -763,6 +779,8 @@ TEST(M16_BoardInteraction, AChargeIsAClickOnTheUnitThenOnItsTarget) {
 
     BoardInteraction targets(gs, legal_actions(gs, Side::A));
     EXPECT_EQ(targets.actor(), marines);  // given by the decision
+    EXPECT_TRUE(targets.picking_target());
+    EXPECT_EQ(targets.prompt(gs), "Pick the enemy units to charge");
     EXPECT_FALSE(targets.clickable(marines));
     EXPECT_TRUE(targets.clickable(gants));
     EXPECT_EQ(targets.step_buttons(), (std::vector<GameAction>{action::SkipChargeMove{marines}}));
@@ -777,7 +795,8 @@ TEST(M16_BoardInteraction, AnEngagedUnitPilesInAndFightsWithOneClick) {
     const UnitId marines = session.state().units[0].id;
     BoardInteraction pile(session.state(), session.legal());
     EXPECT_EQ(pile.hint(session.state()), "Click a unit to pile in with.");
-    EXPECT_EQ(pile.step_buttons(), (std::vector<GameAction>{action::EndPileIns{}}));
+    EXPECT_TRUE(pile.step_buttons().empty());
+    EXPECT_EQ(pile.end_phase()->actions, (std::vector<GameAction>{action::EndPileIns{}}));
     const ClickResult p = pile.click(session.state(), marines);
     ASSERT_TRUE(p.submit.has_value());  // engaged: its pile-in targets are fixed (12.03)
     EXPECT_TRUE(std::holds_alternative<action::StartPileIn>(*p.submit));
@@ -789,6 +808,21 @@ TEST(M16_BoardInteraction, AnEngagedUnitPilesInAndFightsWithOneClick) {
     const ClickResult f = fight.click(session.state(), marines);
     ASSERT_TRUE(f.submit.has_value());  // only a Normal fight is possible: no menu
     EXPECT_EQ(*f.submit, (GameAction{action::SelectToFight{marines, FightType::Normal}}));
+}
+
+TEST(M16_BoardInteraction, WithNoUnitLeftToActOnlyTheEndPhaseButtonIsOffered) {
+    GameState gs = wh40k::test::shoot_step_state();
+    for (auto& m : gs.units[1].models) m.position.y += in(30);  // far out of range (off the board is fine here)
+    const auto legal = legal_actions(gs, Side::A);
+    ASSERT_EQ(legal, (std::vector<GameAction>{action::EndShootStep{}}));  // no unit can shoot
+    const BoardInteraction board(gs, legal);
+    EXPECT_TRUE(board.active());
+    EXPECT_FALSE(board.waiting_for_click());  // nothing is grey
+    EXPECT_FALSE(board.clickable(gs.units[0].id));
+    EXPECT_EQ(board.hint(gs), "No units left to shoot with.");
+    EXPECT_TRUE(board.step_buttons().empty());
+    ASSERT_TRUE(board.end_phase().has_value());
+    EXPECT_EQ(board.end_phase()->actions, legal);
 }
 
 TEST(M16_BoardInteraction, OtherDecisionsStayInTheSidebarAndNothingIsGrey) {
@@ -858,7 +892,7 @@ GameAction choose_on_board(const GameSession& s, int& move_tries) {
                 const auto* sm = std::get_if<action::StartMove>(&m.action);
                 if (move_tries == 0 && far && sm != nullptr && sm->move_type == MoveType::Normal) return m.action;
             }
-            return r.menu.front().action;  // Remain Stationary
+            return board.end_phase()->actions.front();  // Remain Stationary
         }
         if (std::holds_alternative<decision::Shoot>(kind)) {
             if (const auto shooter = friendly_clickable()) {
@@ -868,13 +902,13 @@ GameAction choose_on_board(const GameSession& s, int& move_tries) {
                     if (!r.menu.empty()) return *board.choose(gs, r.menu.front().action).submit;
                 }
             }
-            return *step([](const GameAction& a) { return std::holds_alternative<action::EndShootStep>(a); });
+            return board.end_phase()->actions.front();  // End Shooting phase
         }
         if (std::holds_alternative<decision::SelectChargeTargets>(kind) && move_tries > 0) {
             return *step([](const GameAction& a) { return std::holds_alternative<action::SkipChargeMove>(a); });
         }
         if (std::holds_alternative<decision::PileIn>(kind) || std::holds_alternative<decision::Consolidate>(kind)) {
-            return board.step_buttons().front();  // End pile-ins / consolidations
+            return board.end_phase()->actions.front();  // End pile-ins / consolidations
         }
         // Charge, charge targets, fights, overrun pile-ins: click the unit, then a target if needed.
         if (const auto unit = friendly_clickable()) {
@@ -887,6 +921,7 @@ GameAction choose_on_board(const GameSession& s, int& move_tries) {
             if (r.submit) return *r.submit;
             if (const auto c = board.confirm()) return *c;
         }
+        if (const auto end = board.end_phase()) return end->actions.front();
         return board.step_buttons().front();
     }
     // The sidebar's decisions: the editors and the remaining buttons.

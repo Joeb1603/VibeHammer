@@ -247,7 +247,9 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 > Pick units on the board instead of with sidebar buttons (D-029): click the unit to move and choose its move type from a menu; click the shooter, then the target, then a weapon; click to declare a charge and then its target; click to pile in, consolidate or fight. Units that can't be clicked now are drawn slightly grey. The sidebar keeps the step-level buttons (End shooting, Pass, Commit move, ...) and a hint. Client only: every choice is one of `legal_actions`.
 
 **Acceptance**
-- At the start only the Intercessors are clickable (the Termagants are grey); clicking them offers Remain stationary, Normal and Advance.
+- At the start only the Intercessors are clickable (the Termagants are dark grey); clicking them offers Normal and Advance. Remain stationary is the "End Movement phase" button, which keeps every remaining unit stationary.
+- Grey appears only while the board waits for a click; with no unit left to act, the panel shows only the end-phase button.
+- After picking a shooter, the panel asks for a target and a line follows the cursor from the shooter.
 - Clicking the shooter then the target offers each weapon choice that can reach it; picking one fires, and the engine accepts it.
 - A full game can be played to GameOver with board clicks, menus, step buttons, drags and the melee/casualty editors only (logic-level test).
 

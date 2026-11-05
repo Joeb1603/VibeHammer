@@ -29,6 +29,14 @@ bool same_set(const std::vector<core::UnitId>& x, const std::vector<core::UnitId
     return x.size() == y.size() && std::all_of(x.begin(), x.end(), [&](core::UnitId id) { return contains(y, id); });
 }
 
+// The actions the end-phase button submits.
+bool is_end_action(const core::GameAction& action) {
+    if (const auto* m = std::get_if<a::StartMove>(&action)) return m->move_type == core::MoveType::RemainStationary;
+    return std::holds_alternative<a::EndShootStep>(action) || std::holds_alternative<a::EndChargeStep>(action) ||
+           std::holds_alternative<a::EndPileIns>(action) || std::holds_alternative<a::EndConsolidations>(action) ||
+           std::holds_alternative<a::PassFight>(action);
+}
+
 std::string unit_name(const core::GameState& state, core::UnitId id) {
     const core::Unit* u = state.find_unit(id);
     return u != nullptr ? u->name : "unit " + std::to_string(id.v);
@@ -40,7 +48,10 @@ std::optional<core::UnitId> board_unit(const core::GameAction& action) {
     return std::visit(
         [](const auto& x) -> std::optional<core::UnitId> {
             using T = std::decay_t<decltype(x)>;
-            if constexpr (std::is_same_v<T, a::StartMove> || std::is_same_v<T, a::Shoot> ||
+            if constexpr (std::is_same_v<T, a::StartMove>) {
+                if (x.move_type == core::MoveType::RemainStationary) return std::nullopt;
+                return x.unit;
+            } else if constexpr (std::is_same_v<T, a::Shoot> ||
                           std::is_same_v<T, a::DeclareCharge> || std::is_same_v<T, a::StartChargeMove> ||
                           std::is_same_v<T, a::StartPileIn> || std::is_same_v<T, a::StartConsolidation> ||
                           std::is_same_v<T, a::SelectToFight>) {
@@ -60,21 +71,27 @@ BoardInteraction::BoardInteraction(const core::GameState& state, std::vector<cor
     if (std::holds_alternative<d::MoveUnits>(kind)) {
         mode_ = Mode::PickActor;
         verb_ = "move";
+        end_label_ = "End Movement phase (the rest remain stationary)";
     } else if (std::holds_alternative<d::Shoot>(kind)) {
         mode_ = Mode::PickActor;
         verb_ = "shoot with";
+        end_label_ = "End Shooting phase";
     } else if (std::holds_alternative<d::Charge>(kind)) {
         mode_ = Mode::PickActor;
         verb_ = "declare a charge with";
+        end_label_ = "End Charge phase";
     } else if (std::holds_alternative<d::SelectUnitToFight>(kind) || std::holds_alternative<d::ForcedFight>(kind)) {
         mode_ = Mode::PickActor;
         verb_ = "fight with";
+        end_label_ = "Pass";
     } else if (std::holds_alternative<d::PileIn>(kind)) {
         mode_ = Mode::PickActor;
         verb_ = "pile in with";
+        end_label_ = "End pile-in moves";
     } else if (std::holds_alternative<d::Consolidate>(kind)) {
         mode_ = Mode::PickActor;
         verb_ = "consolidate with";
+        end_label_ = "End consolidation moves";
     } else if (const auto* c = std::get_if<d::SelectChargeTargets>(&kind)) {
         mode_ = Mode::Targets;
         actor_ = c->unit;
@@ -133,11 +150,33 @@ bool BoardInteraction::clickable(core::UnitId unit) const {
     return false;
 }
 
+bool BoardInteraction::waiting_for_click() const {
+    switch (mode_) {
+        case Mode::PickActor:
+            return std::any_of(legal_.begin(), legal_.end(),
+                               [](const core::GameAction& action) { return board_unit(action).has_value(); });
+        case Mode::Shoot:
+        case Mode::Targets:
+            return true;
+        case Mode::Inactive:
+        case Mode::Moving:
+            return false;
+    }
+    return false;
+}
+
+std::string BoardInteraction::prompt(const core::GameState& state) const {
+    if (mode_ == Mode::Shoot && actor_) return "Pick a target for the " + unit_name(state, *actor_);
+    if (mode_ == Mode::Targets) return "Pick the enemy units to " + target_verb_;
+    return "";
+}
+
 std::string BoardInteraction::hint(const core::GameState& state) const {
     switch (mode_) {
         case Mode::Inactive:
             return "";
         case Mode::PickActor:
+            if (!waiting_for_click()) return "No units left to " + verb_ + ".";
             return "Click a unit to " + verb_ + ".";
         case Mode::Shoot: {
             const std::string name = unit_name(state, *actor_);
@@ -274,10 +313,22 @@ void BoardInteraction::cancel() {
     mode_ = base_mode_;
 }
 
+std::optional<EndPhase> BoardInteraction::end_phase() const {
+    if (end_label_.empty()) return std::nullopt;
+    EndPhase end{end_label_, {}};
+    for (const core::GameAction& action : legal_) {
+        if (is_end_action(action)) end.actions.push_back(action);
+    }
+    if (end.actions.empty()) return std::nullopt;
+    return end;
+}
+
 std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
     for (const core::GameAction& action : legal_) {
-        if (!core::is_template(action) && !board_unit(action)) out.push_back(action);
+        if (core::is_template(action) || board_unit(action)) continue;
+        if (!end_label_.empty() && is_end_action(action)) continue;  // the end-phase button covers it
+        out.push_back(action);
     }
     return out;
 }

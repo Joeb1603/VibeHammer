@@ -521,19 +521,27 @@ the board offers exactly the legal actions, grouped by the unit they are for (`B
 logic).
 - **Picking a unit.** For Move Units, Shoot, Charge, Pile In, Consolidate, Select Unit to Fight and the
   forced fights of 12.08, the deciding side clicks one of its units. If that unit has one legal action it
-  is submitted; if it has several (Remain stationary / Normal / Advance / Fall back, or Normal / Overrun
-  fight) a menu at the cursor offers them.
+  is submitted; if it has several (Normal / Advance / Fall back, or Normal / Overrun fight) a menu at the
+  cursor offers them. Remain stationary is not in the menu.
+- **End phase.** A green button ends what is left of the phase: "End Movement phase (the rest remain
+  stationary)" submits Remain stationary for every unit not yet selected to move; "End Shooting phase",
+  "End Charge phase", "End pile-in moves", "End consolidation moves" and "Pass" submit the step's end
+  action. When no unit is left to click, the hint says so ("No units left to shoot with.") and this button
+  is all the panel offers.
 - **Shooting.** Clicking a shooter selects it; its eligible targets become clickable. Clicking a target
   offers each weapon choice (weapon profile) that can reach it, with the number of models that would fire;
   picking one fires the unit-wide choice (D-001), keeping any per-model overrides made in the sidebar.
-  Clicking the shooter again, Esc or a click on empty board drops the selection.
+  Clicking the shooter again, Esc or a click on empty board drops the selection. While a target is being
+  picked (shooting, charge targets, pile-in and consolidation targets) the panel's headline says so ("Pick
+  a target for the Intercessor Squad") and a line runs from the acting unit to the cursor.
 - **Targets.** For charge targets, pile-ins and consolidations, clicking enemy units toggles them; when the
   chosen set equals one legal option's targets and no bigger option contains it, it is submitted at once,
   otherwise a confirm button appears in the sidebar. An engaged unit, whose targets are fixed, starts its
   pile-in or consolidation as soon as it is clicked.
-- **Grey.** While the board handles a decision, every unit that can't be clicked is drawn slightly grey
-  (55% towards grey). During a model-by-model move, only the moving unit is not grey. The unit picked
-  first has a yellow outline and chosen targets a red one.
+- **Grey.** Only while the board is waiting for a click (a unit to pick, or a target), every unit that
+  can't be clicked is drawn dark grey (80% towards {55, 55, 60}). Nothing is grey while models are being
+  dragged, in the sidebar's decisions, or when only the end-phase button is left. The unit picked first
+  has a yellow outline and chosen targets a red one.
 - **Sidebar.** Unit buttons are not listed while the board handles the decision; the sidebar shows the
   decision, a hint, the step-level buttons (End shooting, End charges, Pass, Commit / Reset move, Make no
   charge move, ...), a confirm button for a chosen target set, and the selected shooter's per-model
