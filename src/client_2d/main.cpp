@@ -14,6 +14,7 @@
 #include <rlImGui.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -292,8 +293,9 @@ private:
     }
 
     Rectangle board_area() const {
-        return Rectangle{0.0f, bar_height_, static_cast<float>(GetScreenWidth()) - panel_width(),
-                         static_cast<float>(GetScreenHeight()) - bar_height_};
+        const float top = bar_height_ + action_height_;
+        return Rectangle{0.0f, top, static_cast<float>(GetScreenWidth()) - panel_width(),
+                         static_cast<float>(GetScreenHeight()) - top};
     }
 
     // D-028: while dragging, the dragged models' rings are drawn at their preview positions.
@@ -633,6 +635,27 @@ private:
             ImGui::Begin("##phasebar", nullptr, kFixed | ImGuiWindowFlags_NoScrollbar);
             draw_phase_bar();
             ImGui::End();
+
+            // D-030: the action bar under the phase bar. A fixed height (long content goes in popups and
+            // tooltips) so the board never refits while a decision is made.
+            const float action = ImGui::GetFrameHeightWithSpacing() * 3.0f + ImGui::GetFontSize() * 0.5f +
+                                 style.WindowPadding.y * 2.0f;
+            if (action != action_height_) {
+                action_height_ = action;
+                fit_pending_ = true;
+            }
+            ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_));
+            ImGui::SetNextWindowSize(ImVec2(w - panel_width(), action_height_));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.14f, 0.17f, 1.0f));
+            ImGui::Begin("##actionbar", nullptr, kFixed);
+            ImGui::PopStyleColor();
+            if (mode_ == Mode::Play) {
+                draw_decision();
+            } else {
+                draw_replay_controls();
+            }
+            ImGui::End();
+            if (!reasons_.empty()) draw_reasons(w - panel_width());
         }
         ImGui::SetNextWindowPos(ImVec2(w - panel_width(), 0.0f));
         ImGui::SetNextWindowSize(ImVec2(panel_width(), h));
@@ -707,15 +730,7 @@ private:
             return;
         }
         const float frame = ImGui::GetFrameHeightWithSpacing();
-        ImGui::SeparatorText(mode_ == Mode::Play ? "Decision" : "Replay");
-        const float decision_h = std::max(frame * 4.0f, ImGui::GetContentRegionAvail().y * 0.42f);
-        ImGui::BeginChild("##decision", ImVec2(0.0f, decision_h));
-        if (mode_ == Mode::Play) {
-            draw_decision();
-        } else {
-            draw_replay_controls();
-        }
-        ImGui::EndChild();
+        // D-030: the decision (or the replay controls) is in the action bar over the board.
         if (ImGui::CollapsingHeader("Game", ImGuiTreeNodeFlags_DefaultOpen)) draw_game_info();
         ImGui::SeparatorText("Log");
         const float files_h = files_open_ ? frame * 6.0f : frame;
@@ -825,25 +840,33 @@ private:
     }
 
     void draw_decision() {
-        if (!reasons_.empty()) {
-            ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Not allowed:");
-            for (const std::string& r : reasons_) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.55f, 0.55f, 1));
-                ImGui::BulletText("%s", r.c_str());
-                ImGui::PopStyleColor();
-            }
-            if (ImGui::SmallButton("Dismiss")) reasons_.clear();
-            ImGui::Separator();
-        }
         // In order; stop at the first one rejected (the end-phase button can be several).
         for (const core::GameAction& a : panel_.draw(*session_, selected_model_, &board_)) {
             if (!submit(a)) break;
         }
     }
 
+    // D-030: the last rejection, rule-cited, in a red strip over the top of the board (so the board doesn't
+    // move when it appears).
+    void draw_reasons(float width) {
+        ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_ + action_height_));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, ImGui::GetIO().DisplaySize.y * 0.4f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.32f, 0.08f, 0.08f, 0.94f));
+        ImGui::Begin("##reasons", nullptr,
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar |
+                         ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::PopStyleColor();
+        ImGui::TextColored(ImVec4(1, 0.6f, 0.6f, 1), "Not allowed:");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Dismiss")) reasons_.clear();
+        ImGui::PushTextWrapPos(width - ImGui::GetStyle().WindowPadding.x);
+        for (const std::string& r : reasons_) ImGui::BulletText("%s", r.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::End();
+    }
+
     void draw_replay_controls() {
-        ImGui::TextWrapped("%s", timeline_.source().c_str());
-        if (!timeline_.error().empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", timeline_.error().c_str());
         const std::size_t last = timeline_.size() - 1;
         if (ImGui::Button("|<")) go_to(0);
         ImGui::SameLine();
@@ -854,10 +877,20 @@ private:
         if (ImGui::Button(">|")) go_to(last);
         ImGui::SameLine();
         ImGui::Text("%zu / %zu", frame_, last);
+        ImGui::SameLine();
         int slider = static_cast<int>(frame_);
+        ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::SliderInt("##frame", &slider, 0, static_cast<int>(last))) go_to(static_cast<std::size_t>(slider));
-        ImGui::TextUnformatted(timeline_.frame(frame_).label.c_str());
-        if (state().pending) ImGui::TextWrapped("Waiting for: %s", core::describe(*state().pending).c_str());
+        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", timeline_.frame(frame_).label.c_str());
+        ImGui::PopFont();
+        std::string info = timeline_.source();
+        if (state().pending) info += "  |  Waiting for: " + core::describe(*state().pending);
+        ImGui::TextDisabled("%s", info.c_str());
+        if (!timeline_.error().empty()) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", timeline_.error().c_str());
+        }
     }
 
     // The log as display lines, rebuilt only when the log changes (not formatted every frame).
@@ -966,6 +999,7 @@ private:
     bool scroll_log_ = true;
     bool files_open_ = false;
     float bar_height_ = 0.0f;     // the phase bar's height, measured each frame
+    float action_height_ = 0.0f;  // the action bar's height under it (D-030)
     float auto_scale_ = 1.0f;     // the screen's scale (D-028)
     float user_scale_ = 1.0f;     // the "UI scale" slider
     float applied_scale_ = 0.0f;  // the scale the ImGui style was last built for

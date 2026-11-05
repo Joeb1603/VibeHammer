@@ -57,6 +57,77 @@ std::string melee_text(const core::GameState& gs, const core::MeleeDeclaration& 
     return weapon + " -> " + targets;
 }
 
+// Buttons laid out left to right, wrapping onto a new line when the next one would not fit (D-030).
+class ButtonRow {
+public:
+    ButtonRow() : max_x_(ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x) {}
+    bool button(const std::string& label) {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float w = ImGui::CalcTextSize(label.c_str()).x + style.FramePadding.x * 2.0f;
+        if (!first_ && ImGui::GetItemRectMax().x + style.ItemSpacing.x + w <= max_x_) ImGui::SameLine();
+        first_ = false;
+        return ImGui::Button(label.c_str());
+    }
+
+private:
+    float max_x_;
+    bool first_ = true;
+};
+
+// The decision's headline, a little larger than the body text.
+void headline(const std::string& text) {
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
+    ImGui::TextColored(kHighlight, "%s", text.c_str());
+    ImGui::PopFont();
+}
+
+// The bar's main action: full column width and taller than the other buttons. Green for ending a phase.
+bool primary_button(const std::string& label, bool green) {
+    if (green) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.30f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.65f, 0.36f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.48f, 0.26f, 1.0f));
+    }
+    const bool pressed =
+        ImGui::Button(label.c_str(), ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight() * 1.4f));
+    if (green) ImGui::PopStyleColor(3);
+    return pressed;
+}
+
+// D-030: the bar's two columns, the decision on the left and its buttons on the right. The right column is
+// wide enough for `widest` (the primary button's label), within a third to a half of the bar.
+bool begin_bar(const std::string& widest) {
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float label = ImGui::CalcTextSize(widest.c_str()).x + ImGui::GetStyle().FramePadding.x * 6.0f;
+    const float right = std::clamp(label, avail * 0.3f, avail * 0.5f);
+    if (!ImGui::BeginTable("##bar", 2, ImGuiTableFlags_BordersInnerV)) return false;
+    ImGui::TableSetupColumn("decision", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("buttons", ImGuiTableColumnFlags_WidthFixed, right);
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    return true;
+}
+
+// During a move: whether committing now would keep it, on one line (the full list in a tooltip).
+void move_status(const core::GameState& gs) {
+    // D-024: core's read-only query says what committing would do now.
+    const std::vector<std::string> problems = core::move_end_problems(gs);
+    if (problems.empty()) {
+        ImGui::TextDisabled("The move can end here.");
+        return;
+    }
+    std::string line = "Committing now would undo the move: " + problems.front();
+    if (problems.size() > 1) line += " (+" + std::to_string(problems.size() - 1) + " more)";
+    ImGui::TextColored(kWarning, "%s", line.c_str());
+    if (ImGui::IsItemHovered() && problems.size() > 1) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+        for (const std::string& p : problems) ImGui::BulletText("%s", p.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 }  // namespace
 
 void DecisionPanel::sync(const GameSession& session) {
@@ -94,16 +165,13 @@ std::vector<core::GameAction> DecisionPanel::draw(const GameSession& session,
 std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSession& session,
                                                                  std::optional<core::ModelId> selected_model) {
     const core::GameState& gs = session.state();
-    ImGui::TextColored(kHighlight, "%s", core::describe(*session.pending()).c_str());
     std::optional<core::GameAction> chosen;
     const DecisionView& view = view_;
+    // D-030: a lone button with no editor is the bar's main action, drawn large on the right.
+    const bool lone = view.buttons.size() == 1 && view.templates.empty();
+    if (!begin_bar(lone ? action_label(gs, view.buttons.front()) : std::string())) return std::nullopt;
 
-    for (std::size_t i = 0; i < view.buttons.size(); ++i) {
-        ImGui::PushID(static_cast<int>(i));
-        if (ImGui::Button(action_label(gs, view.buttons[i]).c_str())) chosen = view.buttons[i];
-        ImGui::PopID();
-    }
-
+    headline(core::describe(*session.pending()));
     bool path_hint = false;
     for (const core::GameAction& t : view.templates) {
         switch (*editor_kind(t)) {
@@ -122,18 +190,23 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
         }
     }
     if (path_hint) {
-        ImGui::Separator();
         ImGui::TextWrapped("Drag a model to add a straight line to its path, or drag the diamond to move the "
                            "whole unit. Then commit or reset the move.");
-        // D-024: core's read-only query says what committing would do now.
-        const std::vector<std::string> problems = core::move_end_problems(gs);
-        if (problems.empty()) {
-            ImGui::TextDisabled("The move can end here.");
-        } else {
-            ImGui::TextColored(kWarning, "Committing now would undo the move:");
-            for (const std::string& p : problems) ImGui::BulletText("%s", p.c_str());
+        move_status(gs);
+    }
+
+    ImGui::TableNextColumn();
+    if (lone) {
+        if (primary_button(action_label(gs, view.buttons.front()), false)) chosen = view.buttons.front();
+    } else {
+        ButtonRow row;
+        for (std::size_t i = 0; i < view.buttons.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (row.button(action_label(gs, view.buttons[i]))) chosen = view.buttons[i];
+            ImGui::PopID();
         }
     }
+    ImGui::EndTable();
     return chosen;
 }
 
@@ -142,47 +215,40 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
     std::vector<core::GameAction> end_actions;
+    const auto end = board.end_phase();
+    if (!begin_bar(end ? end->label : std::string())) return {};
+
     // D-029: while picking a target the headline says so; otherwise it is the decision.
     const std::string prompt = board.prompt(gs);
-    ImGui::TextColored(kHighlight, "%s", prompt.empty() ? core::describe(*session.pending()).c_str() : prompt.c_str());
+    headline(prompt.empty() ? core::describe(*session.pending()) : prompt);
     ImGui::TextWrapped("%s", board.hint(gs).c_str());
-    if (const auto end = board.end_phase()) {
-        // The main action when nothing is left to do on the board.
-        const ImVec4 green{0.20f, 0.55f, 0.30f, 1.0f};
-        ImGui::PushStyleColor(ImGuiCol_Button, green);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.65f, 0.36f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.48f, 0.26f, 1.0f));
-        if (ImGui::Button(end->label.c_str())) end_actions = end->actions;
-        ImGui::PopStyleColor(3);
-    }
-    if (const auto confirm = board.confirm()) {
-        if (ImGui::Button(action_label(gs, *confirm).c_str())) chosen = *confirm;
-    }
-    const std::vector<core::GameAction> steps = board.step_buttons();
-    for (std::size_t i = 0; i < steps.size(); ++i) {
-        ImGui::PushID(static_cast<int>(i));
-        if (ImGui::Button(action_label(gs, steps[i]).c_str())) chosen = steps[i];
-        ImGui::PopID();
-    }
-    // The selected shooter's per-model choices (D-001): the weapon picked on the target fires these.
+    // The selected shooter's choices (D-001): the weapon picked on the target fires these.
     if (ShotPlan* plan = board.shot_plan()) {
-        const core::action::Shoot tmpl{plan->unit(), plan->type(), {}};
-        if (auto a = draw_shot_plan(gs, *plan, action_label(gs, tmpl), selected_model)) chosen = a;
+        if (auto a = draw_shot_plan(gs, *plan, std::string(), selected_model)) chosen = a;
     }
-    bool path_hint = false;
     for (const core::GameAction& t : view_.templates) {
-        if (editor_kind(t) == EditorKind::Path) path_hint = true;
-    }
-    if (path_hint) {
-        // D-024: core's read-only query says what committing would do now.
-        const std::vector<std::string> problems = core::move_end_problems(gs);
-        if (problems.empty()) {
-            ImGui::TextDisabled("The move can end here.");
-        } else {
-            ImGui::TextColored(kWarning, "Committing now would undo the move:");
-            for (const std::string& p : problems) ImGui::BulletText("%s", p.c_str());
+        if (editor_kind(t) == EditorKind::Path) {
+            move_status(gs);
+            break;
         }
     }
+
+    ImGui::TableNextColumn();
+    {
+        ButtonRow row;
+        if (const auto confirm = board.confirm()) {
+            if (row.button(action_label(gs, *confirm))) chosen = *confirm;
+        }
+        const std::vector<core::GameAction> steps = board.step_buttons();
+        for (std::size_t i = 0; i < steps.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (row.button(action_label(gs, steps[i]))) chosen = steps[i];
+            ImGui::PopID();
+        }
+    }
+    // The main action when nothing is left to do on the board.
+    if (end && primary_button(end->label, true)) end_actions = end->actions;
+    ImGui::EndTable();
     if (!end_actions.empty()) return end_actions;
     if (chosen) return {*chosen};
     return {};
@@ -203,40 +269,62 @@ std::optional<core::GameAction> DecisionPanel::draw_shot_plan(const core::GameSt
                                                               std::optional<core::ModelId> selected_model) {
     std::optional<core::GameAction> chosen;
     ImGui::PushID(static_cast<int>(plan.unit().v * 10 + static_cast<unsigned>(plan.type())));
-    ImGui::Separator();
-    if (ImGui::CollapsingHeader(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-        // D-001: one profile and target for the whole unit by default.
-        const std::string current = plan.unit_default() ? shot_choice_text(gs, plan, *plan.unit_default()) : "-";
-        if (ImGui::BeginCombo("Whole unit", current.c_str())) {
-            for (const ShotChoice& c : plan.choices()) {
-                if (ImGui::Selectable(shot_choice_text(gs, plan, c).c_str(), plan.unit_default() == c)) {
-                    plan.set_default(c);
+    const float combo_w = ImGui::GetFontSize() * 18.0f;
+    const core::Unit& u = *gs.find_unit(plan.unit());
+    // One model's own choice (D-001), marked "(unit)" while it follows the unit's.
+    auto model_combo = [&](const core::Model& m) {
+        ImGui::PushID(static_cast<int>(m.id.v));
+        const bool selected = selected_model == m.id;
+        const auto d = plan.declaration_for(m.id);
+        const std::string now = d ? declaration_text(gs, plan, *d) : "doesn't fire";
+        const std::string label = "Model " + std::to_string(m.id.v) + (selected ? " *" : "");
+        if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
+        ImGui::SetNextItemWidth(combo_w);
+        if (ImGui::BeginCombo(label.c_str(), (now + (plan.is_overridden(m.id) ? "" : " (unit)")).c_str())) {
+            if (ImGui::Selectable("Use the unit's choice", !plan.is_overridden(m.id))) plan.clear_override(m.id);
+            if (ImGui::Selectable("Doesn't fire")) plan.override_model(m.id, std::nullopt);
+            for (const ShotOption& o : plan.options_for(m.id)) {
+                if (ImGui::Selectable(shot_text(gs, o).c_str(), d && *d == o.declaration)) {
+                    plan.override_model(m.id, o.declaration);
                 }
             }
             ImGui::EndCombo();
         }
-        const core::Unit& u = *gs.find_unit(plan.unit());
-        for (const core::Model& m : u.models) {
-            ImGui::PushID(static_cast<int>(m.id.v));
-            const bool selected = selected_model == m.id;
-            const auto d = plan.declaration_for(m.id);
-            const std::string now = d ? declaration_text(gs, plan, *d) : "doesn't fire";
-            const std::string label = "Model " + std::to_string(m.id.v) + (selected ? " *" : "");
-            if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
-            if (ImGui::BeginCombo(label.c_str(), (now + (plan.is_overridden(m.id) ? "" : " (unit)")).c_str())) {
-                if (ImGui::Selectable("Use the unit's choice", !plan.is_overridden(m.id))) plan.clear_override(m.id);
-                if (ImGui::Selectable("Doesn't fire")) plan.override_model(m.id, std::nullopt);
-                for (const ShotOption& o : plan.options_for(m.id)) {
-                    if (ImGui::Selectable(shot_text(gs, o).c_str(), d && *d == o.declaration)) {
-                        plan.override_model(m.id, o.declaration);
-                    }
-                }
-                ImGui::EndCombo();
+        if (selected) ImGui::PopStyleColor();
+        ImGui::PopID();
+    };
+
+    if (!title.empty()) ImGui::TextUnformatted(title.c_str());
+    // D-001: one profile and target for the whole unit by default.
+    const std::string current = plan.unit_default() ? shot_choice_text(gs, plan, *plan.unit_default()) : "-";
+    ImGui::SetNextItemWidth(combo_w);
+    if (ImGui::BeginCombo("Whole unit", current.c_str())) {
+        for (const ShotChoice& c : plan.choices()) {
+            if (ImGui::Selectable(shot_choice_text(gs, plan, c).c_str(), plan.unit_default() == c)) {
+                plan.set_default(c);
             }
-            if (selected) ImGui::PopStyleColor();
-            ImGui::PopID();
         }
-        if (ImGui::Button("Shoot")) chosen = plan.expand();
+        ImGui::EndCombo();
+    }
+    // D-030: every model's choice is in a popup; the model selected on the board gets its own combo here.
+    std::size_t changed = 0;
+    for (const core::Model& m : u.models) changed += plan.is_overridden(m.id) ? 1 : 0;
+    ImGui::SameLine();
+    const std::string per_model =
+        "Per-model weapons..." + (changed > 0 ? " (" + std::to_string(changed) + " changed)" : std::string());
+    if (ImGui::Button(per_model.c_str())) ImGui::OpenPopup("##shot_models");
+    ImGui::SameLine();
+    if (ImGui::Button("Shoot")) chosen = plan.expand();
+    for (const core::Model& m : u.models) {
+        if (selected_model == m.id) {
+            ImGui::SameLine();
+            model_combo(m);
+        }
+    }
+    if (ImGui::BeginPopup("##shot_models")) {
+        ImGui::TextDisabled("Each model's weapon and target (D-001)");
+        for (const core::Model& m : u.models) model_combo(m);
+        ImGui::EndPopup();
     }
     ImGui::PopID();
     return chosen;
@@ -249,11 +337,14 @@ std::optional<core::GameAction> DecisionPanel::draw_melee_editor(const GameSessi
     const core::GameState& gs = session.state();
     MeleePlan& plan = *melee_;
     std::optional<core::GameAction> chosen;
-    ImGui::Separator();
+    const float combo_w = ImGui::GetFontSize() * 18.0f;
+    ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(("Melee weapons: " + unit_name(gs, tmpl.unit)).c_str());
+    ImGui::SameLine();
     if (plan.unit_default()) {
         const MeleeChoice& def = *plan.unit_default();
         const std::string current = def.weapon + " -> " + unit_name(gs, def.target);
+        ImGui::SetNextItemWidth(combo_w);
         if (ImGui::BeginCombo("Whole unit", current.c_str())) {
             for (const MeleeChoice& c : plan.choices()) {
                 if (ImGui::Selectable((c.weapon + " -> " + unit_name(gs, c.target)).c_str(), def == c)) {
@@ -262,7 +353,18 @@ std::optional<core::GameAction> DecisionPanel::draw_melee_editor(const GameSessi
             }
             ImGui::EndCombo();
         }
+        ImGui::SameLine();
     }
+    // D-030: the per-model choices and attack splits are in a popup.
+    std::size_t overridden = 0;
+    for (const core::Model& m : gs.find_unit(tmpl.unit)->models) overridden += plan.is_overridden(m.id) ? 1 : 0;
+    const std::string per_model = "Per-model / split attacks..." +
+                                  (overridden > 0 ? " (" + std::to_string(overridden) + " changed)" : std::string());
+    if (ImGui::Button(per_model.c_str())) ImGui::OpenPopup("##melee_models");
+    ImGui::SameLine();
+    if (ImGui::Button("Fight")) chosen = plan.expand();
+    if (!ImGui::BeginPopup("##melee_models")) return chosen;
+    ImGui::TextDisabled("Each model's melee weapon and targets (D-021)");
     for (const core::Model& m : gs.find_unit(tmpl.unit)->models) {
         const auto d = plan.declaration_for(m.id);
         if (!d) continue;  // no enemy unit engaged with this model
@@ -270,6 +372,7 @@ std::optional<core::GameAction> DecisionPanel::draw_melee_editor(const GameSessi
         const bool selected = selected_model == m.id;
         if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
         const std::string label = "Model " + std::to_string(m.id.v) + (selected ? " *" : "");
+        ImGui::SetNextItemWidth(combo_w);
         if (ImGui::BeginCombo(label.c_str(), melee_text(gs, *d, plan).c_str())) {
             if (ImGui::Selectable("Use the unit's choice", !plan.is_overridden(m.id))) plan.clear_override(m.id);
             for (const MeleeOption& o : plan.options_for(m.id)) {
@@ -302,7 +405,7 @@ std::optional<core::GameAction> DecisionPanel::draw_melee_editor(const GameSessi
         }
         ImGui::PopID();
     }
-    if (ImGui::Button("Fight")) chosen = plan.expand();
+    ImGui::EndPopup();
     return chosen;
 }
 
@@ -311,19 +414,33 @@ std::optional<core::GameAction> DecisionPanel::draw_casualty_editor(const GameSe
     if (!casualties_ || casualties_->target() != tmpl.target) return std::nullopt;
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
-    ImGui::Separator();
-    ImGui::TextWrapped("Casualty order for %s, most preferred first (D-013):", unit_name(gs, tmpl.target).c_str());
     const auto& order = casualties_->priority();
-    for (std::size_t i = 0; i < order.size(); ++i) {
-        ImGui::PushID(static_cast<int>(i));
-        if (ImGui::ArrowButton("up", ImGuiDir_Up)) casualties_->move_up(i);
-        ImGui::SameLine();
-        if (ImGui::ArrowButton("down", ImGuiDir_Down)) casualties_->move_down(i);
-        ImGui::SameLine();
-        ImGui::Text("%zu. model %u", i + 1, order[i].v);
-        ImGui::PopID();
+    // D-030: the order on one line; reordering is in a popup.
+    std::string summary = "Casualty order for " + unit_name(gs, tmpl.target) + " (D-013): models ";
+    constexpr std::size_t kShown = 8;
+    for (std::size_t i = 0; i < order.size() && i < kShown; ++i) {
+        summary += (i > 0 ? ", " : "") + std::to_string(order[i].v);
     }
+    if (order.size() > kShown) summary += ", ...";
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(summary.c_str());
+    ImGui::SameLine();
+    if (ImGui::Button("Edit order...")) ImGui::OpenPopup("##casualty_order");
+    ImGui::SameLine();
     if (ImGui::Button("Confirm casualty order")) chosen = casualties_->action();
+    if (ImGui::BeginPopup("##casualty_order")) {
+        ImGui::TextDisabled("Most preferred first");
+        for (std::size_t i = 0; i < order.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (ImGui::ArrowButton("up", ImGuiDir_Up)) casualties_->move_up(i);
+            ImGui::SameLine();
+            if (ImGui::ArrowButton("down", ImGuiDir_Down)) casualties_->move_down(i);
+            ImGui::SameLine();
+            ImGui::Text("%zu. model %u", i + 1, order[i].v);
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
     return chosen;
 }
 

@@ -556,3 +556,19 @@ logic).
 - **Ring tooltips** (D-028) appear only after the cursor has rested for 0.6 s, and never while picking a
   target or with a menu open, so they don't cover the target prompt.
 
+## D-030: Action bar under the phase bar (M17)
+**Decided:** 2026-11-05 (agreed with the user). Client layout only; amends D-028's sidebar and D-029's "Sidebar".
+- **Action bar.** The decision moves from the sidebar into a bar across the board's width, directly under the
+  phase bar, three rows high (scaled with the UI). The left column has the headline (larger, in yellow), the
+  hint and the decision's editor or move status. The right column has the step buttons (Commit / Reset move,
+  Confirm, Make no charge move, ...) and, under them, the End-phase button at full column width and taller
+  than the rest. A decision with one button and no editor shows that button the same way (not green).
+- **Fixed height.** Whatever could be long goes into a popup or a tooltip, so the board never refits while a
+  decision is made: each model's shooting choice (D-001) is behind "Per-model weapons..." (the model selected on
+  the board also gets its own combo inline), the melee per-model choices and attack splits behind
+  "Per-model / split attacks...", the casualty order (D-013) behind "Edit order..." with a one-line summary,
+  and the full list of move problems in the move-status line's tooltip.
+- **Rejections** show in a red strip over the top of the board, under the bar, until dismissed.
+- **Replay mode** puts the replay controls (step buttons, frame slider, step label, source) in the bar.
+- **Sidebar** keeps the toolbar, Game, Log (now taller) and Files.
+

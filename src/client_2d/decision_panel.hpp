@@ -3,7 +3,8 @@
 // The ImGui decision panel, generated from the pending decision and legal_actions (no phase-specific
 // buttons): one button per fully specified action, and an editor per template (shooting, melee,
 // casualties; moves are made on the board). Returns the action the player chose; the caller submits it
-// through GameSession, which validates it first.
+// through GameSession, which validates it first. It is laid out for the wide, short action bar under the
+// phase bar (D-030): the decision on the left, its buttons on the right, per-model editors in popups.
 
 #include <optional>
 #include <string>

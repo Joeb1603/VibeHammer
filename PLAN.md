@@ -255,6 +255,21 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M17: Action bar under the phase bar ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Move the decision controls out of the sidebar into a fixed-height action bar across the board, right under the phase bar (D-030): the headline, hint and editors on the left; the step buttons and a large End-phase (or lone) button on the right. Per-model shooting and melee choices and the casualty order open in popups, so the bar never grows; rejections appear in a red strip over the top of the board. Replay controls move into the bar too. Client only: no engine or client-logic changes.
+
+**Acceptance**
+- The decision controls are in a bar under the phase bar across the board width; the sidebar has no Decision section.
+- The End-phase button is the largest button in the bar; step buttons sit next to it.
+- Selecting a shooter shows the whole-unit choice inline; per-model overrides open in a popup and still produce a mixed-profile `Shoot` the engine accepts.
+- Melee and casualty editors work from the bar (popups for per-model/split attacks and for reordering).
+- The board does not refit when the decision changes or a rejection appears.
+- Replay controls are in the bar in replay mode.
+
+---
+
 ## Later (post-V1, rough order)
 0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
