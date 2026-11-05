@@ -323,6 +323,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M22: Measuring ruler
+**Effort:** `low` · **Plan mode:** yes (agreed 2026-11-05)
+
+> A free tape measure (D-035): a left-press on nothing clickable, held and dragged, draws a line from the press point to the cursor with its length in inches; releasing removes it. Client only.
+
+**Acceptance**
+- Left-press-and-drag on empty board shows a line from the press point to the cursor with its length in inches; releasing removes it.
+- Pressing on a model or the move handle behaves as before (select / drag a model).
+- A short click on empty board still drops the selection as before; a measuring drag does not.
+- The label text is correct (logic test).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

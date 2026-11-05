@@ -40,6 +40,7 @@
 #include "dice_cards.hpp"
 #include "dice_popup.hpp"
 #include "event_text.hpp"
+#include "measure.hpp"
 #include "move_plan.hpp"
 #include "overlays.hpp"
 #include "phase_track.hpp"
@@ -115,6 +116,12 @@ struct Drag {
     core::UnitId unit;
     core::Position grab;     // world position where the drag started
     core::Position current;  // world position of the cursor now
+    Vector2 grab_screen{0, 0};
+};
+
+// D-035: the measuring ruler, from a left-press on nothing clickable.
+struct Measure {
+    core::Position start;  // world position of the press
     Vector2 grab_screen{0, 0};
 };
 
@@ -279,6 +286,8 @@ public:
             fit_pending_ = false;
         }
         sync_board();
+        // D-035: a ruler whose release happened over a window (and so was not seen) ends here.
+        if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) measure_.reset();
         const ImGuiIO& io = ImGui::GetIO();
         if (!io.WantCaptureMouse) handle_mouse();
         if (!io.WantCaptureKeyboard) handle_keys();
@@ -302,6 +311,7 @@ public:
         draw_overlays(camera_, outline_arcs(ring_circles_), ui_scale());
         EndScissorMode();
         draw_selection_and_moves();
+        draw_measure();
         draw_ui();
     }
 
@@ -443,7 +453,7 @@ private:
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) camera_.pan(GetMouseDelta());
 
         const auto hovered = model_at(state(), camera_, mouse);
-        if (hovered && !drag_) draw_tooltip(*hovered);
+        if (hovered && !drag_ && !measuring()) draw_tooltip(*hovered);
         // D-034: a right-click (not a right-drag, which pans) on a model opens its unit's datasheet.
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
             right_press_ = RightPress{mouse, hovered ? std::optional(hovered->unit->id) : std::nullopt};
@@ -458,14 +468,49 @@ private:
             rest_since_ = GetTime();
         }
         const bool rested = GetTime() - rest_since_ >= 0.6;
-        if (!hovered && !drag_ && rested && !board_.picking_target() && menu_.empty()) {
+        if (!hovered && !drag_ && !measuring() && rested && !board_.picking_target() && menu_.empty()) {
             draw_ring_tooltip(camera_.to_world(mouse));
         }
 
-        if (waiting_for_dice()) return;  // D-033: the board waits while a dice pop-up is open (zoom and pan still work)
+        // D-035: the measuring ruler ends on release; a short press is an ordinary click on empty board.
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && measure_) {
+            const Measure m = *measure_;
+            measure_.reset();
+            if (distance_px(m.grab_screen, mouse) < kDragThresholdPx * ui_scale() && !waiting_for_dice()) empty_click();
+        }
+
+        if (waiting_for_dice()) {  // D-033: the board waits while a dice pop-up is open (zoom, pan, measuring still work)
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !hovered) measure_ = Measure{camera_.to_world(mouse), mouse};
+            return;
+        }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
         if (drag_) drag_->current = camera_.to_world(mouse);
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && drag_) release(mouse);
+    }
+
+    // A click on empty board drops the board selection, but not a custom shot or fight being edited (D-031, D-032).
+    void empty_click() {
+        selected_model_.reset();
+        if (!board_.custom_editor()) board_.cancel();
+    }
+
+    // D-035: true once a measuring press has moved past the drag threshold.
+    bool measuring() const {
+        return measure_ && distance_px(measure_->grab_screen, GetMousePosition()) >= kDragThresholdPx * ui_scale();
+    }
+
+    void draw_measure() {
+        if (!measuring()) return;
+        const float s = ui_scale();
+        const Vector2 from = camera_.to_screen(measure_->start);
+        const Vector2 to = GetMousePosition();
+        const Color colour{120, 230, 255, 230};
+        DrawLineEx(from, to, 2.5f * s, colour);
+        DrawCircleV(from, 4.0f * s, colour);
+        DrawCircleV(to, 4.0f * s, colour);
+        const std::string text = measure_label(measure_->start, camera_.to_world(to));
+        DrawText(text.c_str(), static_cast<int>(to.x + 14.0f * s), static_cast<int>(to.y - 22.0f * s),
+                 static_cast<int>(kRulerText * s), colour);
     }
 
     void press(Vector2 mouse, const std::optional<HoveredModel>& hovered) {
@@ -475,9 +520,9 @@ private:
             return;
         }
         if (!hovered) {
-            selected_model_.reset();
-            // A click on empty board drops the board selection, but not a custom shot or fight being edited (D-031, D-032).
-            if (!board_.custom_editor()) board_.cancel();
+            // D-035: a press on nothing clickable starts the measuring ruler; on release it is a click
+            // (empty_click) unless the cursor moved past the drag threshold.
+            measure_ = Measure{camera_.to_world(mouse), mouse};
             return;
         }
         const core::UnitId unit = hovered->unit->id;
@@ -1220,6 +1265,7 @@ private:
     std::optional<core::UnitId> selected_unit_;
     std::optional<core::ModelId> selected_model_;
     std::optional<Drag> drag_;
+    std::optional<Measure> measure_;  // D-035
     struct RightPress {
         Vector2 screen;
         std::optional<core::UnitId> unit;  // the unit under the cursor when the right button went down

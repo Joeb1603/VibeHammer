@@ -23,6 +23,7 @@
 #include "decision_view.hpp"
 #include "dice_cards.hpp"
 #include "event_text.hpp"
+#include "measure.hpp"
 #include "melee_plan.hpp"
 #include "move_plan.hpp"
 #include "overlay_plan.hpp"
@@ -1549,4 +1550,16 @@ TEST(M21_Datasheet, WeaponAbilityLabels) {
     EXPECT_EQ(weapon_ability_label(ability::CloseQuarters{}), "[CLOSE-QUARTERS]");
     EXPECT_EQ(weapon_ability_label(ability::TwinLinked{}), "[TWIN-LINKED]");
     EXPECT_EQ(weapon_ability_label(ability::Unknown{"Lethal Hits"}), "[LETHAL HITS]");
+}
+
+// ---- M22: the measuring ruler (D-035) ----
+
+TEST(M22_Measure, SamePointIsZero) {
+    EXPECT_EQ(measure_label(wh40k::test::at(5, 5), wh40k::test::at(5, 5)), "0.00\"");
+}
+
+TEST(M22_Measure, StraightLineDistanceInInches) {
+    EXPECT_NEAR(measure_mm(wh40k::test::at(1, 1), wh40k::test::at(4, 5)), in(5.0f), 0.001f);
+    EXPECT_EQ(measure_label(wh40k::test::at(1, 1), wh40k::test::at(4, 5)), "5.00\"");
+    EXPECT_EQ(measure_label(wh40k::test::at(0, 0), wh40k::test::at(0, 12.346f)), "12.35\"");
 }

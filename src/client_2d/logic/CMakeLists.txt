@@ -13,6 +13,7 @@ add_library(wh40k_client_logic STATIC
     overlay_plan.cpp
     phase_track.cpp
     datasheet_view.cpp
+    measure.cpp
     session.cpp
     shot_plan.cpp
     timeline.cpp)

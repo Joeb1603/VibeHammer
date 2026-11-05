@@ -654,3 +654,14 @@ logic).
   and the BSData markup `**` and `^^` removed; the default font has no glyphs for them. Abilities are marked
   "not applied in V1" (CLAUDE.md: unit-specific abilities are out of scope).
 
+## D-035: Free measuring ruler (M22)
+**Decided:** 2026-11-05 (agreed with the user). Client only; display, no engine change.
+- **Start:** a left-press on nothing clickable (no model under the cursor, not the "Move unit" handle, not
+  an ImGui window). It works in play and replay, while picking a target, and while a dice pop-up is open
+  (it changes nothing).
+- **Measure:** a straight line from the world point of the press to the cursor, labelled with its length in
+  inches (two decimals). Point to point, not base edge to base edge: it is a free tape measure; base-to-base
+  ranges are already shown by the rings (D-028).
+- **Release:** the ruler disappears. If the cursor moved less than the drag threshold, the press was a click
+  on empty board and does what it did before (drops the selection, cancels a board pick unless a custom
+  editor is open); a measuring drag leaves the selection alone. A release over a window ends the ruler too.
