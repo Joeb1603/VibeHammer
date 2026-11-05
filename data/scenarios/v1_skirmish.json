@@ -14,7 +14,7 @@
             { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
             { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
           ],
-          "formation": { "ranks": 1, "gap_in": 1, "centre_x_in": 12, "anchor": "zone_front" }
+          "formation": { "ranks": 1, "gap_in": 0, "centre_x_in": 12, "anchor": "zone_front" }
         }
       ]
     },
@@ -27,7 +27,7 @@
           "models": [
             { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
           ],
-          "formation": { "ranks": 2, "gap_in": 1, "centre_x_in": 12, "anchor": "zone_front" }
+          "formation": { "ranks": 2, "gap_in": 0, "centre_x_in": 12, "anchor": "zone_front" }
         }
       ]
     }

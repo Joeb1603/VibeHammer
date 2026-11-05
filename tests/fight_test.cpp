@@ -339,7 +339,8 @@ TEST(R12_03_PileInMove, ModelsInBaseContactCannotBeMovedAndMovedModelsMustEndClo
     act(gs, action::StartPileIn{id_of(gs, kMarines), {id_of(gs, kGants)}});
 
     const Position c = centre.position;
-    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{centre.id, {Position{c.x + in(0.5f), c.y, 0}}}).at(0),
+    // (Not sideways: its neighbours' bases touch it since M14, and D-027 rejects ending on one.)
+    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{centre.id, {Position{c.x, c.y - in(0.5f), 0}}}).at(0),
               "12.03: model 3 is in base contact with an enemy model and cannot be moved");
     const Model& west = gs.units[kMarines].models[0];
     const Position w = west.position;

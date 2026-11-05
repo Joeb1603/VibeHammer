@@ -395,4 +395,50 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(g11.result.has_value());
     full.expect = replay_expectation(g11);
     save_if_clean(full, kReplayDir / "m11_full_game.json");
+
+    // M14: the close formation (D-008) and per-proposal overlap (D-027). Stops at Side B's first
+    // Shooting decision, so later shooting changes don't touch it.
+    Replay close;
+    close.description =
+        "M14: both units start in base contact (D-008). Side A moves its Intercessors 2\" east, the east-most "
+        "model first so no proposal ends on a model yet to move (D-027), and the move is committed. Side A "
+        "skips shooting and charges. Side B's two front-rank Termagants on the west swap places in three "
+        "proposals: the first steps 1.5\" south, the second takes its place, then the first is proposed again "
+        "into the second's place (a new proposal replaces its path). The move is committed. Stops at Side B's "
+        "first Shooting decision.";
+    close.initial.scenario = "data/scenarios/v1_skirmish.json";
+    close.initial.seed = 14;
+    GameState g14 = replay_initial_state(close, repo_root());
+    start_game(g14);
+    auto m_act = [&](const GameAction& a) {
+        const Side side = decider(g14);
+        const auto v = validate_action(g14, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        close.steps.push_back(ReplayStep{side, a});
+        apply_action(g14, side, a);
+    };
+    auto start_of = [&](ModelId id) { return *move_start_position(g14, id); };
+    m_act(action::StartMove{g14.units[0].id, MoveType::Normal, std::nullopt});
+    for (auto it = g14.units[0].models.rbegin(); it != g14.units[0].models.rend(); ++it) {  // east-most first
+        const Position s = start_of(it->id);
+        m_act(action::ProposeModelMove{it->id, {Position{s.x + wh40k::test::in(2), s.y, 0}}});
+    }
+    m_act(action::CommitUnitMove{});
+    m_act(action::EndShootStep{});
+    m_act(action::EndChargeStep{});
+    while (!(g14.pending && std::holds_alternative<decision::MoveUnits>(g14.pending->kind))) {
+        m_act(legal_actions(g14, decider(g14)).front());  // Side A's empty Fight phase, Side B's Command phase
+    }
+    m_act(action::StartMove{g14.units[1].id, MoveType::Normal, std::nullopt});
+    const ModelId gant_a = g14.units[1].models[0].id;
+    const ModelId gant_b = g14.units[1].models[1].id;
+    const Position p1 = start_of(gant_a);
+    const Position p2 = start_of(gant_b);
+    m_act(action::ProposeModelMove{gant_a, {Position{p1.x, p1.y - wh40k::test::in(1.5f), 0}}});
+    m_act(action::ProposeModelMove{gant_b, {p1}});
+    m_act(action::ProposeModelMove{gant_a, {p2}});
+    m_act(action::CommitUnitMove{});
+    ASSERT_EQ(*g14.pending, (PendingDecision{Side::B, decision::Shoot{}}));
+    close.expect = replay_expectation(g14);
+    save_if_clean(close, kReplayDir / "m14_close_formation.json");
 }

@@ -30,9 +30,17 @@ std::vector<core::action::ProposeModelMove> translate_unit(const core::GameState
     std::vector<core::action::ProposeModelMove> out;
     const core::Unit* u = state.find_unit(unit);
     if (u == nullptr) return out;
-    for (const core::Model& m : u->models) {
-        const core::Position to{m.position.x + dx_mm, m.position.y + dy_mm, m.position.z};
-        out.push_back(extend_path(state, m.id, to));
+    // D-027: a proposal may not end on a model at its current position, so the models furthest along the
+    // move go first; for a rigid translation none of them then ends on a model still to move. Ties keep
+    // unit order (stable sort), so the order is deterministic.
+    std::vector<const core::Model*> order;
+    for (const core::Model& m : u->models) order.push_back(&m);
+    const auto ahead = [&](const core::Model* m) { return m->position.x * dx_mm + m->position.y * dy_mm; };
+    std::stable_sort(order.begin(), order.end(),
+                     [&](const core::Model* a, const core::Model* b) { return ahead(a) > ahead(b); });
+    for (const core::Model* m : order) {
+        const core::Position to{m->position.x + dx_mm, m->position.y + dy_mm, m->position.z};
+        out.push_back(extend_path(state, m->id, to));
     }
     return out;
 }

@@ -93,17 +93,18 @@ The scenario defines a `formation` for each unit, which the loader turns into mo
   both along a rank and between ranks.
 - `anchor: "zone_front"`: the front rank's bases touch the front line of the deployment zone (the line
   furthest from the owning side's battlefield edge); further ranks are behind it.
-- V1 values: Intercessors 1 rank of 5; Termagants 2 ranks of 5; gap 1"; centred at x = 12".
+- V1 values: Intercessors 1 rank of 5; Termagants 2 ranks of 5; gap 0" (bases in contact along and
+  between ranks, M14; it was 1" until 2026-11-05); centred at x = 12".
   The two front lines are exactly 12" apart, so a unit is within 12" of the enemy (charge-eligible,
-  11.02) from turn 1. Both formations satisfy 03.03 (a Termagant line of 10 would not: it is about 20"
-  wide and breaks the 9" clause).
+  11.02) from turn 1. Both formations satisfy 03.03. (At 1" gaps a Termagant line of 10 would not: it
+  is about 20" wide and breaks the 9" clause. In base contact it is 8.98" end to end, so it would.)
 - The loader must check the result is in coherency (03.03) and wholly within the deployment zone, and
   fail with an exception (corrupt data) if not.
-- Accepted consequence (2026-11-02): at these positions only the centre Intercessor is within 12" (half
-  Bolt Rifle range) of the Termagants; the other four are 0.01-0.07 mm further, so on turn 1 they don't
-  get [RAPID FIRE] (24.30). This is intentional: it exercises per-model range checks. Two of them miss
-  by only 0.008 mm, just beyond `EPS_MM` (0.01 mm), so changing `EPS_MM` would change this; see
-  `R24_30_RapidFire.HalfRangeIsMeasuredToTheClosestTargetModel`.
+- Accepted consequence (2026-11-02, re-measured 2026-11-05 for gap 0): at these positions only the
+  centre Intercessor is within 12" (half Bolt Rifle range) of the Termagants. The two beside it are
+  0.018 mm further and the two at the ends 0.073 mm further, all beyond `EPS_MM` (0.01 mm), so on turn 1
+  they don't get [RAPID FIRE] (24.30). This is intentional: it exercises per-model range checks. A
+  larger `EPS_MM` would change it; see `R24_30_RapidFire.HalfRangeIsMeasuredToTheClosestTargetModel`.
 
 ## D-009: Within / Wholly Within (01.04 "See also", app-only rule)
 **Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**)
@@ -458,3 +459,19 @@ of the charge for that reason.
   `GameSession::submit` reports such an exception as a failure instead of letting it crash the client.
 - When either ability is implemented, remove it from `unimplemented_ability_problem`
   (`rules/attacks.cpp`) and update this entry.
+
+## D-027: A proposed model move may not end on another model (03.01, M14)
+**Decided:** 2026-11-05 (agreed with the user)
+- 03.01 lets a model move through friendly models, and checks "no models in that unit are on another
+  model" only under Ending a Move, once the whole unit has moved. Before this decision the engine did
+  the same: a model could be dropped on a squad-mate, and the whole move was undone at the commit.
+- Now each `ProposeModelMove` is also rejected if its path ends on any other model at its current
+  position: a friendly model, a model of the moving unit (already-moved models at their proposed
+  positions) or an enemy model. The reason is `"03.01: model X cannot end its move on model Y"`. Moving
+  through friendly models and ending in base contact are still allowed.
+- This is stricter than 03.01. Accepted consequence: two models can't swap places in one step. The
+  player moves one aside first; proposing a model again replaces its whole path (measured from its
+  start), so the swap still works in three proposals (`D027_ProposalOverlap` test).
+- The commit still checks 03.01 Ending a Move for the whole unit (`move_end_problems`).
+- The client's "Move unit" handle proposes the models furthest along the move first, so translating a
+  unit whose bases touch never ends a model on one that has yet to move.

@@ -134,7 +134,8 @@ TEST(D008_Formation, IntercessorsOneLineOfFiveOnZoneFront) {
         if (i > 0) {
             const float gap = base_distance(u.models[i - 1].position, u.models[i - 1].base,
                                             u.models[i].position, u.models[i].base);
-            EXPECT_NEAR(gap, in(1), 1e-3f);
+            EXPECT_NEAR(gap, 0.0f, 1e-3f);  // base to base (M14)
+            EXPECT_TRUE(in_base_contact(gap));
             EXPECT_GT(u.models[i].position.x, u.models[i - 1].position.x);  // left to right
         }
     }
@@ -149,15 +150,15 @@ TEST(D008_Formation, TermagantsTwoRanksOfFiveOnZoneFront) {
     for (std::size_t i = 0; i < 5; ++i) {
         // Front rank's near edges on y = 18".
         EXPECT_NEAR(u.models[i].position.y - r, in(18), 1e-3f);
-        // Rear rank directly behind, 1" edge to edge.
+        // Rear rank directly behind, in base contact (M14).
         const Model& rear = u.models[i + 5];
         EXPECT_NEAR(rear.position.x, u.models[i].position.x, 1e-3f);
         EXPECT_NEAR(base_distance(u.models[i].position, u.models[i].base, rear.position, rear.base),
-                    in(1), 1e-3f);
+                    0.0f, 1e-3f);
         if (i > 0) {
             EXPECT_NEAR(base_distance(u.models[i - 1].position, u.models[i - 1].base,
                                       u.models[i].position, u.models[i].base),
-                        in(1), 1e-3f);
+                        0.0f, 1e-3f);
         }
     }
     EXPECT_NEAR((u.models[0].position.x + u.models[4].position.x) * 0.5f, in(12), 1e-3f);
@@ -189,7 +190,9 @@ TEST(D008_Formation, BothUnitsCoherentAndWhollyWithinZones) {
 
 TEST(D008_Formation, TenTermagantsInOneRankBreakCoherency) {
     nlohmann::json s = v1_scenario_json();
+    // At 1" gaps a line of ten is about 20" wide (in base contact it would be 8.98" end to end, inside 9").
     s["sides"]["B"]["units"][0]["formation"]["ranks"] = 1;
+    s["sides"]["B"]["units"][0]["formation"]["gap_in"] = 1;
     try {
         (void)build(s);
         FAIL() << "expected DataError";
@@ -204,6 +207,7 @@ TEST(D008_Formation, FormationOutsideZoneIsRejected) {
     // Three ranks of Intercessors (2,2,1) at 1" gaps need 3*32 mm + 2" = 5.78"; fine.
     // Four ranks of Termagants (3,3,3,1) need 4*28.5 mm + 3" = 7.49" > 6" zone depth.
     s["sides"]["B"]["units"][0]["formation"]["ranks"] = 4;
+    s["sides"]["B"]["units"][0]["formation"]["gap_in"] = 1;
     try {
         (void)build(s);
         FAIL() << "expected DataError";

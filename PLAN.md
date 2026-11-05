@@ -213,6 +213,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M14: Close formation and no-overlap model moves
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Start both squads in base contact (D-008: `gap_in` 0 in `v1_skirmish.json`) and reject a single model's proposed move that would end on another model (03.01 Ending a Move, checked per proposal: D-027). The "Move unit" handle orders its proposals so a touching unit can still be translated in any direction. Regenerate the replays for the new start positions.
+
+**Acceptance**
+- The scenario loads with neighbouring bases in contact along and between ranks, no bases overlapping, in coherency (03.03) and wholly within the deployment zones.
+- A `ProposeModelMove` ending on a friendly or enemy model is rejected with a 03.01 reason; moving through friendly models and ending in base contact are still allowed.
+- The "Move unit" handle moves a touching unit forwards, backwards and sideways without a rejected proposal.
+- Every replay regenerates byte-identically, including a new `m14_close_formation.json`.
+
+---
+
 ## Later (post-V1, rough order)
 0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.

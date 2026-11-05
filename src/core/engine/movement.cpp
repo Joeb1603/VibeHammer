@@ -275,10 +275,13 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
         r.reasons.push_back(std::string(move_type_rule(mv.type)) + ": " + model_label(a.model) + " would move " +
                             format_inches(length) + " but the maximum distance is " + format_inches(max));
     }
-    // 03.01: enemy models and battlefield edges (models of the moving unit are checked at commit).
+    // 03.01: enemy models and battlefield edges. D-027: the path may pass through friendly models but not
+    // end on any model at its current position (including models of this unit already moved); the
+    // commit still checks 03.01 Ending a Move for the whole unit.
     const std::vector<PlacedModel> enemies = enemy_models(state, u.side);
-    const PathContext context{Rect{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm}, {}, enemies,
-                              mv.mode == FallBackMode::DesperateEscape};  // 09.07 While Moving
+    const std::vector<PlacedModel> friends = friendly_models(state, u.side);
+    const PathContext context{Rect{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm}, friends,
+                              enemies, mv.mode == FallBackMode::DesperateEscape};  // 09.07 While Moving
     for (const PathViolation& v : check_model_path(a.model, m->base, points, context)) {
         r.reasons.push_back(v.reason);
     }

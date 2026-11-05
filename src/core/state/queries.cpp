@@ -46,15 +46,27 @@ const Model* find_model(const GameState& state, ModelId id) {
     return u == nullptr ? nullptr : find_model(*u, id);
 }
 
-std::vector<PlacedModel> enemy_models(const GameState& state, Side side) {
+namespace {
+
+std::vector<PlacedModel> models_where(const GameState& state, bool (*keep)(Side, Side), Side side) {
     std::vector<PlacedModel> out;
     for (const Unit& u : state.units) {
-        if (u.side != side) {
+        if (keep(u.side, side)) {
             const auto models = placed_models(u);
             out.insert(out.end(), models.begin(), models.end());
         }
     }
     return out;
+}
+
+}  // namespace
+
+std::vector<PlacedModel> enemy_models(const GameState& state, Side side) {
+    return models_where(state, [](Side u, Side s) { return u != s; }, side);
+}
+
+std::vector<PlacedModel> friendly_models(const GameState& state, Side side) {
+    return models_where(state, [](Side u, Side s) { return u == s; }, side);
 }
 
 CoherencyResult unit_coherency(const Unit& unit) {

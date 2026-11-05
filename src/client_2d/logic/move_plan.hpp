@@ -20,7 +20,8 @@ namespace wh40k::client {
                                                          core::Position to);
 
 // The "Move unit" handle: every model of `unit` moves by (dx, dy) from where it is now, appended to its
-// path. One action per model, in unit order.
+// path. One action per model, furthest along the move first (D-027), so submitting them in order never
+// ends a model on one that has yet to move.
 [[nodiscard]] std::vector<core::action::ProposeModelMove> translate_unit(const core::GameState& state,
                                                                          core::UnitId unit, float dx_mm,
                                                                          float dy_mm);

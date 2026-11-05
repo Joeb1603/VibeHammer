@@ -9,6 +9,7 @@
 #include "core/dice/dice.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "core/geometry/distance.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 
@@ -118,9 +119,9 @@ TEST(R03_01_EndingAMove, IncoherentEndRevertsEveryModel) {
     GameState gs = movement_state();
     const auto before = gs.units[kMarines].models;
     apply_action(gs, Side::A, start(gs, MoveType::Normal));
-    apply_action(gs, Side::A, move_by(gs, 0, -3, 0));  // 4" from its neighbour
-    apply_action(gs, Side::A, move_by(gs, 4, 0, 1));   // a valid move on its own
-    // Model 1 is now more than 2" from every other model, and about 9.5" from model 5 (both clauses).
+    apply_action(gs, Side::A, move_by(gs, 0, -5.5f, 0));  // 5.5" from its neighbour (bases touched, M14)
+    apply_action(gs, Side::A, move_by(gs, 4, 0, 1));      // a valid move on its own
+    // Model 1 is now more than 2" from every other model, and about 9.3" from model 5 (both clauses).
     EXPECT_EQ(move_end_problems(gs),
               (std::vector<std::string>{"03.03: model 1 is more than 2\" from every other model in unit 1",
                                         "03.03: model 1 is more than 9\" from another model in unit 1",
@@ -131,15 +132,63 @@ TEST(R03_01_EndingAMove, IncoherentEndRevertsEveryModel) {
 
 TEST(R03_01_EndingAMove, EndingOnAFriendlyModelReverts) {
     GameState gs = movement_state();
+    const auto before = gs.units[kMarines].models;
     apply_action(gs, Side::A, start(gs, MoveType::Normal));
-    // Through the next Intercessor (allowed) and ending on it (not allowed).
-    const Model& second = gs.units[kMarines].models[1];
-    const action::ProposeModelMove onto{gs.units[kMarines].models[0].id, {second.position}};
-    EXPECT_TRUE(validate_action(gs, Side::A, onto).ok());
-    apply_action(gs, Side::A, onto);
+    // D-027 rejects such a proposal, so put model 1 on model 2 directly: the commit still checks 03.01
+    // Ending a Move for the whole unit.
+    gs.units[kMarines].models[0].position = gs.units[kMarines].models[1].position;
     const auto problems = move_end_problems(gs);
     ASSERT_FALSE(problems.empty());
     EXPECT_EQ(problems[0], "03.01: unit 1's model 1 is on model 2");
+    const auto events = apply_action(gs, Side::A, action::CommitUnitMove{});
+    ASSERT_EQ(events_of<event::UnitMoveReverted>(events).size(), 1u);
+    EXPECT_EQ(gs.units[kMarines].models, before);
+}
+
+TEST(R03_01_MovingAModel, AProposalEndingOnAFriendlyModelIsRejected) {
+    GameState gs = movement_state();
+    apply_action(gs, Side::A, start(gs, MoveType::Normal));
+    // D-027: ending on the next Intercessor is rejected when proposed, not only at the commit.
+    const Model& second = gs.units[kMarines].models[1];
+    const auto r = validate_action(gs, Side::A, action::ProposeModelMove{gs.units[kMarines].models[0].id,
+                                                                         {second.position}});
+    ASSERT_FALSE(r.ok());
+    EXPECT_EQ(r.reasons, (std::vector<std::string>{"03.01: model 1 cannot end its move on model 2"}));
+}
+
+TEST(R03_01_MovingAModel, AModelMayMoveThroughFriendlyModelsAndEndInBaseContact) {
+    GameState gs = movement_state();
+    apply_action(gs, Side::A, start(gs, MoveType::Normal));
+    // The bases touch in a line (M14). Model 3 steps 2" north, then model 1 moves straight east through
+    // model 2 into model 3's old place, in base contact with model 2.
+    apply_action(gs, Side::A, move_by(gs, 2, 0, 2));
+    const Model& m1 = gs.units[kMarines].models[0];
+    const Position s = *move_start_position(gs, m1.id);
+    const Position east_of_2{s.x + 64.0f, s.y, 0.0f};  // in base contact with model 2, where model 3 was
+    // A straight line through model 2 (03.01: friendly models can be moved through).
+    const action::ProposeModelMove through{m1.id, {east_of_2}};
+    EXPECT_TRUE(validate_action(gs, Side::A, through).ok());
+    apply_action(gs, Side::A, through);
+    EXPECT_TRUE(in_base_contact(base_distance(gs.units[kMarines].models[0].position, m1.base,
+                                              gs.units[kMarines].models[1].position,
+                                              gs.units[kMarines].models[1].base)));
+    EXPECT_TRUE(move_end_problems(gs).empty());
+}
+
+TEST(D027_ProposalOverlap, ModelsCanSwapPlacesInStepsBecauseAProposalReplacesThePath) {
+    GameState gs = movement_state();
+    apply_action(gs, Side::A, start(gs, MoveType::Normal));
+    const Position p1 = gs.units[kMarines].models[0].position;
+    const Position p2 = gs.units[kMarines].models[1].position;
+    const ModelId m1 = gs.units[kMarines].models[0].id;
+    const ModelId m2 = gs.units[kMarines].models[1].id;
+    EXPECT_FALSE(validate_action(gs, Side::A, action::ProposeModelMove{m1, {p2}}).ok());  // model 2 is there
+    apply_action(gs, Side::A, action::ProposeModelMove{m1, {shifted(p1, 0, 2)}});        // step aside
+    apply_action(gs, Side::A, action::ProposeModelMove{m2, {p1}});
+    apply_action(gs, Side::A, action::ProposeModelMove{m1, {p2}});  // replaces model 1's path
+    EXPECT_EQ(gs.units[kMarines].models[0].position, p2);
+    EXPECT_EQ(gs.units[kMarines].models[1].position, p1);
+    ASSERT_EQ(events_of<event::UnitMoveCommitted>(apply_action(gs, Side::A, action::CommitUnitMove{})).size(), 1u);
 }
 
 TEST(R03_01_MovingAModel, PathsAreCheckedAgainstEnemyModelsAndTheEdge) {
@@ -286,7 +335,7 @@ TEST(R09_07_FallBackMove, DesperateEscapeMayMoveThroughEnemiesOrderedRetreatMayN
     gs.pending = compute_decision(gs);
     const ModelId marine = gs.units[kMarines].models[0].id;
     const Position s = gs.units[kMarines].models[0].position;
-    const action::ProposeModelMove through_enemy{marine, {Position{40.0f, s.y, 0.0f}}};  // 5.9" west, through it
+    const action::ProposeModelMove through_enemy{marine, {Position{s.x - in(5.9f), s.y, 0.0f}}};  // through it
 
     apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::OrderedRetreat));
     const auto blocked = validate_action(gs, Side::A, through_enemy);

@@ -16,6 +16,7 @@
 
 #include "action_text.hpp"
 #include "casualty_plan.hpp"
+#include "core/engine/movement.hpp"
 #include "core/state/queries.hpp"
 #include "decision_view.hpp"
 #include "event_text.hpp"
@@ -142,6 +143,41 @@ TEST(M12_MovePlan, TheMoveUnitHandleTranslatesEveryModelAndTheEngineAcceptsIt) {
     EXPECT_FALSE(r->over);
     ASSERT_TRUE(session.submit(action::CommitUnitMove{}).ok());
     EXPECT_TRUE(events_of<event::UnitMoveCommitted>(last_events(session)).size() == 1u);
+}
+
+TEST(M14_TranslateUnit, ATouchingUnitMovesInEveryDirectionWithoutARejectedProposal) {
+    // The bases touch along and between ranks (D-008, M14). Each proposal may not end on a model at its
+    // current position (D-027), so the handle must order the models furthest along the move first.
+    GameSession session(wh40k::test::load_v1_scenario());
+    // Side B's first Move Units step: Side A passes its turn.
+    while (!(session.pending() && std::holds_alternative<decision::MoveUnits>(session.pending()->kind) &&
+             session.pending()->side == Side::B)) {
+        ASSERT_TRUE(session.submit(make_decision_view(session.legal()).buttons.front()).ok());
+    }
+    const UnitId gants = session.state().units[1].id;  // two ranks of five
+    for (const auto& [dx, dy] : {std::pair{in(1.5f), 0.0f}, std::pair{-in(1.5f), 0.0f}, std::pair{0.0f, in(1.5f)},
+                                 std::pair{0.0f, -in(1.5f)}, std::pair{in(1), in(1)}}) {
+        ASSERT_TRUE(session.submit(action::StartMove{gants, MoveType::Normal, std::nullopt}).ok());
+        for (const auto& a : translate_unit(session.state(), gants, dx, dy)) {
+            const auto r = session.submit(a);
+            ASSERT_TRUE(r.ok()) << "(" << dx << ", " << dy << "): " << r.reasons.at(0);
+        }
+        EXPECT_TRUE(move_end_problems(session.state()).empty());
+        ASSERT_TRUE(session.submit(action::ResetUnitMove{}).ok());  // back to the formation for the next one
+    }
+}
+
+TEST(M14_TranslateUnit, ModelsFurthestAlongTheMoveComeFirst) {
+    GameSession session(wh40k::test::load_v1_scenario());
+    const Unit& marines = session.state().units[0];  // one rank, model 1 furthest west
+    ASSERT_TRUE(session.submit(action::StartMove{marines.id, MoveType::Normal, std::nullopt}).ok());
+    const auto east = translate_unit(session.state(), marines.id, in(1), 0.0f);
+    const auto west = translate_unit(session.state(), marines.id, -in(1), 0.0f);
+    const auto north = translate_unit(session.state(), marines.id, 0.0f, in(1));
+    ASSERT_EQ(east.size(), 5u);
+    EXPECT_EQ(east.front().model, marines.models[4].id);
+    EXPECT_EQ(west.front().model, marines.models[0].id);
+    for (std::size_t i = 0; i < 5; ++i) EXPECT_EQ(north[i].model, marines.models[i].id);  // a tie: unit order
 }
 
 TEST(M12_MovePlan, DragsAccumulateSegmentsAndTheRulerFlagsTooFar) {

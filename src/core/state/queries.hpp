@@ -22,6 +22,9 @@ namespace wh40k::core {
 // Every model of `side`'s opponent, in unit then model order.
 [[nodiscard]] std::vector<PlacedModel> enemy_models(const GameState& state, Side side);
 
+// Every model of `side` itself, in unit then model order (03.01: models a move may pass through).
+[[nodiscard]] std::vector<PlacedModel> friendly_models(const GameState& state, Side side);
+
 // 03.03: is the unit in coherency? (Offending models in the result.)
 [[nodiscard]] CoherencyResult unit_coherency(const Unit& unit);
 
