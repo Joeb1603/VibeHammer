@@ -51,12 +51,12 @@ std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core
             if (toggles.engagement) {
                 for (const core::Unit& u : state.units) {
                     if (u.side == mover->side) continue;
-                    for (const core::Model& m : u.models) out.push_back({m.id, RingKind::Engagement, core::kEngagementRangeMm});
+                    for (const core::Model& m : u.models) out.push_back({m.id, RingKind::Engagement, core::kEngagementRangeMm, std::nullopt});
                 }
             }
             if (toggles.coherency) {
                 // Only the 2" clause: a 9" ring around every model is clutter (D-028).
-                for (const core::Model& m : mover->models) out.push_back({m.id, RingKind::Coherency, core::kCoherencyNearMm});
+                for (const core::Model& m : mover->models) out.push_back({m.id, RingKind::Coherency, core::kCoherencyNearMm, std::nullopt});
             }
         }
     }
@@ -73,7 +73,7 @@ std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core
                     }
                 }
             }
-            for (const float r : ranges) out.push_back({m->id, RingKind::WeaponRange, r});
+            for (const float r : ranges) out.push_back({m->id, RingKind::WeaponRange, r, std::nullopt});
         }
     }
 
