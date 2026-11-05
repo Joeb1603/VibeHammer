@@ -3,6 +3,7 @@ add_executable(wh40k_client_tests
     auto_actions_test.cpp
     qol_test.cpp
     undo_groups_test.cpp
+    reach_area_test.cpp
     rules_help_test.cpp
     client_logic_test.cpp)
 

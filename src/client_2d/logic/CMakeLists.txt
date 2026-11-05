@@ -13,6 +13,7 @@ add_library(wh40k_client_logic STATIC
     ring_outline.cpp
     overlay_plan.cpp
     phase_track.cpp
+    reach_area.cpp
     datasheet_view.cpp
     measure.cpp
     rules_help.cpp

@@ -391,6 +391,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M27: Per-model reach area ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-05)
+
+> While a unit moves, the model being dragged (or the selected model of the moving unit) gets a faint blue shaded area of where it can end its move (D-040): its move circle, inside the battlefield, minus other models' bases and, for Normal, Advance and Fall Back moves, the enemies' engagement range. The area comes from a new core read-only query, `move_reach`. Movement rules are unchanged: as the rules say, a path may pass through engagement range as long as the move ends unengaged (the user chose the official rule over a house rule).
+
+**Acceptance**
+- `move_reach` gives the start, the move's maximum distance, the board limits for the centre and the forbidden circles (core tests); none when not moving or for a charge move.
+- Ending just outside an engagement circle is unengaged, and just inside is not (core test).
+- `reach_spans` covers the circle inside the board minus the forbidden circles (logic test); a point at the edge of the area is accepted by the engine and ends unengaged, and a point past it ends engaged (logic test).
+- The shaded area is drawn for the dragged or selected model only, under the rings; the movement ring's tooltip explains it.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

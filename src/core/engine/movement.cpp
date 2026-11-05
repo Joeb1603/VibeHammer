@@ -11,6 +11,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/geometry/engagement.hpp"
 #include "core/geometry/path.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
@@ -397,6 +398,37 @@ std::optional<float> max_move_distance_mm(const GameState& state, ModelId model)
         max += inches_to_mm(static_cast<float>(*u->phase_flags.advance_roll));  // 09.06: advance roll + M
     }
     return max;
+}
+
+std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
+    if (!state.flow.move || state.flow.move->type == MoveType::Charge) return std::nullopt;
+    const MoveInProgress& mv = *state.flow.move;
+    const Unit* u = state.find_unit(mv.unit);
+    const Model* m = u == nullptr ? nullptr : find_model(*u, model);
+    const std::optional<float> max = max_move_distance_mm(state, model);
+    const std::optional<Position> start = move_start_position(state, model);
+    if (m == nullptr || !max || !start) return std::nullopt;
+    MoveReach reach;
+    reach.start = *start;
+    reach.max_mm = *max;
+    const float r = base_radius(m->base);
+    reach.centre_bounds = Rect{r, r, state.battlefield.width_mm - r, state.battlefield.depth_mm - r};
+    // 09.05 / 09.06 / 09.07 After Moving: the unit must be unengaged.
+    reach.must_end_unengaged =
+        mv.type == MoveType::Normal || mv.type == MoveType::Advance || mv.type == MoveType::FallBack;
+    for (const Unit& other : state.units) {
+        for (const Model& o : other.models) {
+            if (o.id == m->id) continue;
+            const float touching = r + base_radius(o.base);
+            if (other.side != u->side && reach.must_end_unengaged) {
+                // 03.04: within 2" is engaged; ending more than 2" away (EPS policy) is unengaged.
+                reach.forbidden.push_back(ReachCircle{o.position, touching + kEngagementRangeMm + EPS_MM, true});
+            } else {
+                reach.forbidden.push_back(ReachCircle{o.position, touching, false});  // 03.01: not on it
+            }
+        }
+    }
+    return reach;
 }
 
 std::optional<Position> move_start_position(const GameState& state, ModelId model) {

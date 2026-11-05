@@ -35,6 +35,7 @@
 #include "camera.hpp"
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/engine.hpp"
+#include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/geometry/units.hpp"
 #include "core/version.hpp"
@@ -49,6 +50,7 @@
 #include "move_plan.hpp"
 #include "overlays.hpp"
 #include "phase_track.hpp"
+#include "reach_area.hpp"
 #include "session.hpp"
 #include "timeline.hpp"
 #include "undo_groups.hpp"
@@ -325,6 +327,7 @@ public:
                                                              state().battlefield.depth_mm});
         BeginScissorMode(static_cast<int>(field.x), static_cast<int>(field.y), static_cast<int>(field.width),
                          static_cast<int>(field.height));
+        draw_reach();  // D-040: under the rings
         draw_overlays(camera_, outline_arcs(ring_circles_), ui_scale());
         EndScissorMode();
         draw_selection_and_moves();
@@ -506,6 +509,39 @@ private:
             dice_seen_ = session_->log().size();
         }
         return r.ok();
+    }
+
+    // D-040: the model whose reach area is shaded: the one being dragged, else the selected model of the
+    // moving unit. None for a whole-unit drag (every model would need its own area).
+    std::optional<core::ModelId> reach_model() const {
+        if (!overlays_.move_range) return std::nullopt;
+        const auto unit = moving_unit();
+        if (!unit) return std::nullopt;
+        if (drag_) return drag_->whole_unit ? std::nullopt : std::optional<core::ModelId>(drag_->model);
+        const core::Unit* u = state().find_unit(*unit);
+        if (u == nullptr || !selected_model_) return std::nullopt;
+        for (const core::Model& m : u->models) {
+            if (m.id == *selected_model_) return m.id;
+        }
+        return std::nullopt;
+    }
+
+    // D-040: a faint fill where that model can end its move (core's move_reach), one screen row per span.
+    void draw_reach() {
+        const auto model = reach_model();
+        if (!model) return;
+        const std::optional<core::MoveReach> reach = core::move_reach(state(), *model);
+        if (!reach) return;
+        const float px = camera_.px_per_mm();
+        if (!(px > 0.0f)) return;
+        const float step_mm = 1.0f / px;  // one screen pixel
+        Color fill = ring_color(RingKind::MoveRange);
+        fill.a = 46;
+        for (const ReachSpan& s : reach_spans(*reach, step_mm)) {
+            const Vector2 a = camera_.to_screen(s.x0, s.y);
+            const Vector2 b = camera_.to_screen(s.x1, s.y);
+            DrawRectangleRec(Rectangle{std::min(a.x, b.x), std::min(a.y, b.y), std::fabs(b.x - a.x), 1.0f}, fill);
+        }
     }
 
     // The unit being moved model by model, if it is this player's MoveModels decision.

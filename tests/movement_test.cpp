@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 
@@ -427,4 +429,84 @@ TEST(D007_GameEnd, HazardsDestroyingTheLastModelEndTheGame) {
     EXPECT_EQ(gs.flow.stage, Stage::GameOver);
     ASSERT_TRUE(gs.result.has_value());
     EXPECT_EQ(gs.result->winner, Side::B);
+}
+
+// ---- D-040: move_reach, where a moving model can end (read-only, for the client's shaded area) ----
+
+TEST(D040_MoveReach, IsTheMoveCircleInsideTheBoardWithBasesAndEngagementRangeForbidden) {
+    GameState gs = movement_state();
+    EXPECT_FALSE(move_reach(gs, gs.units[kMarines].models[0].id).has_value());  // not moving yet
+    apply_action(gs, Side::A, start(gs, MoveType::Normal));
+    const Model& m = gs.units[kMarines].models[0];
+    const auto reach = move_reach(gs, m.id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_EQ(reach->start, m.position);
+    EXPECT_EQ(reach->max_mm, *max_move_distance_mm(gs, m.id));
+    EXPECT_TRUE(reach->must_end_unengaged);
+    const float r = base_radius(m.base);
+    EXPECT_FLOAT_EQ(reach->centre_bounds.min_x, r);
+    EXPECT_FLOAT_EQ(reach->centre_bounds.max_y, gs.battlefield.depth_mm - r);
+    // Every other model: 4 Intercessors (their bases) and 10 Termagants (their engagement range).
+    ASSERT_EQ(reach->forbidden.size(), 14u);
+    for (const ReachCircle& c : reach->forbidden) {
+        if (c.engagement) {
+            EXPECT_FLOAT_EQ(c.radius_mm, r + base_radius(gs.units[kGants].models[0].base) + in(2) + EPS_MM);
+        } else {
+            EXPECT_FLOAT_EQ(c.radius_mm, 2.0f * r);
+        }
+    }
+    EXPECT_EQ(std::count_if(reach->forbidden.begin(), reach->forbidden.end(),
+                            [](const ReachCircle& c) { return c.engagement; }),
+              10);
+}
+
+TEST(D040_MoveReach, EndingJustOutsideAnEngagementCircleIsUnengagedAndJustInsideIsNot) {
+    GameState gs = movement_state();
+    engage_first_marine(gs);  // a Termagant 1" west of the first Intercessor
+    // Move the Termagant 3" further west so the Intercessor starts unengaged and can step towards it.
+    for (Model& g : gs.units[kGants].models) g.position.x -= in(3);
+    apply_action(gs, Side::A, start(gs, MoveType::Normal));
+    const Model& m = gs.units[kMarines].models[0];
+    const auto reach = move_reach(gs, m.id);
+    ASSERT_TRUE(reach.has_value());
+    const auto nearest = std::min_element(reach->forbidden.begin(), reach->forbidden.end(),
+                                          [&](const ReachCircle& a, const ReachCircle& b) {
+                                              if (a.engagement != b.engagement) return a.engagement;
+                                              return std::hypot(a.centre.x - m.position.x, a.centre.y - m.position.y) <
+                                                     std::hypot(b.centre.x - m.position.x, b.centre.y - m.position.y);
+                                          });
+    ASSERT_TRUE(nearest->engagement);
+    // Straight towards that Termagant: just outside its circle is unengaged, just inside is engaged.
+    const float dx = nearest->centre.x - m.position.x;
+    const float dy = nearest->centre.y - m.position.y;
+    const float d = std::hypot(dx, dy);
+    for (const float margin : {0.05f, -0.05f}) {
+        GameState g = gs;
+        const float t = (d - nearest->radius_mm - margin) / d;
+        const Position to{m.position.x + dx * t, m.position.y + dy * t, 0.0f};
+        ASSERT_TRUE(validate_action(g, Side::A, action::ProposeModelMove{m.id, {to}}).ok());
+        apply_action(g, Side::A, action::ProposeModelMove{m.id, {to}});
+        const auto problems = move_end_problems(g);
+        const bool engaged_problem = std::any_of(problems.begin(), problems.end(), [](const std::string& p) {
+            return p.find("engaged") != std::string::npos;
+        });
+        EXPECT_EQ(engaged_problem, margin < 0.0f) << "margin " << margin;
+    }
+}
+
+TEST(D040_MoveReach, NoneForAChargeMove) {
+    // As wh40k::test::after_successful_charge, stopped once the charge move has started.
+    GameState gs = movement_state();
+    while (!(gs.flow.stage == Stage::Charge && turn_side(gs) == Side::A)) {
+        apply_action(gs, decider(gs), legal_actions(gs, decider(gs)).front());
+    }
+    const float gap = mm_to_inches(*unit_distance(gs.units[kMarines], gs.units[kGants]));
+    for (auto& g : gs.units[kGants].models) g.position.y -= in(gap - 9.9f);
+    ScriptedDice dice{4, 6};
+    apply_action(gs, Side::A, action::DeclareCharge{gs.units[kMarines].id}, dice);
+    apply_action(gs, Side::A, action::StartChargeMove{gs.units[kMarines].id, {gs.units[kGants].id}});
+    ASSERT_TRUE(gs.flow.move.has_value());
+    ASSERT_EQ(gs.flow.move->type, MoveType::Charge);
+    EXPECT_TRUE(max_move_distance_mm(gs, gs.units[kMarines].models[0].id).has_value());
+    EXPECT_FALSE(move_reach(gs, gs.units[kMarines].models[0].id).has_value());  // the charge ring instead
 }
