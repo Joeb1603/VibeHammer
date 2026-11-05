@@ -15,6 +15,7 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::events_of;
 using wh40k::test::add_unit_copy;
 using wh40k::test::decider;
 using wh40k::test::is_rule_cited;
@@ -34,15 +35,6 @@ constexpr std::size_t kSaturation = 1;
 constexpr std::size_t kFleshborer = 0;
 const AttackContext kShooting{AttackType::Shooting, true};
 
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
-
 std::vector<WeaponSelection> saturation_volley(const GameState& gs) {
     std::vector<WeaponSelection> sel;
     for (std::size_t i = 0; i < 5; ++i) {
@@ -60,7 +52,7 @@ void shrink(GameState& gs, std::size_t index, std::size_t n) {
 
 // ==== D-013: one casualty decision per batch, owned by the opposing player ====
 
-TEST(M5_AttackFlow, SaturationVolleyAsksTheOpposingPlayerOnceForCasualties) {
+TEST(D013_CasualtyOrder, SaturationVolleyAsksTheOpposingPlayerOnceForCasualties) {
     GameState gs = shoot_step_state();
     const UnitId gants = gs.units[kGants].id;
     ScriptedDice dice{1, 2, 3, 4, 5, 6, 3, 3, 2, 1, 6, 5, 4, 2, 3,  // hits: 10
@@ -95,7 +87,7 @@ TEST(M5_AttackFlow, SaturationVolleyAsksTheOpposingPlayerOnceForCasualties) {
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::A, decision::Shoot{}}));
 }
 
-TEST(M5_AttackFlow, ForcedCasualtiesNeedNoDecision) {
+TEST(D013_CasualtyOrder, ForcedCasualtiesNeedNoDecision) {
     GameState gs = shoot_step_state(Side::B);
     gs.units[kMarines].models[1].wounds_remaining = 1;
     const ModelId wounded = gs.units[kMarines].models[1].id;
@@ -107,7 +99,7 @@ TEST(M5_AttackFlow, ForcedCasualtiesNeedNoDecision) {
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::B, decision::Shoot{}}));  // no prompt was needed
 }
 
-TEST(M5_AttackFlow, CasualtyOrderValidationCitesTheRule) {
+TEST(D013_CasualtyOrder, CasualtyOrderValidationCitesTheRule) {
     GameState gs = shoot_step_state();
     const UnitId gants = gs.units[kGants].id;
     ScriptedDice dice{3, 3, 3, 3, 3, 3, 1, 1, 1};
@@ -138,7 +130,7 @@ TEST(M5_AttackFlow, CasualtyOrderValidationCitesTheRule) {
 
 // ==== 05.03 Allocation order decision ====
 
-TEST(M5_AttackFlow, TwoAllocationGroupsGiveTheOpposingPlayerAnOrderDecision) {
+TEST(R05_03_AllocationOrder, TwoAllocationGroupsGiveTheOpposingPlayerAnOrderDecision) {
     GameState gs = shoot_step_state();
     Unit& gants = gs.units[kGants];
     for (std::size_t i = 0; i < 5; ++i) {
@@ -171,7 +163,7 @@ TEST(M5_AttackFlow, TwoAllocationGroupsGiveTheOpposingPlayerAnOrderDecision) {
 
 // ==== 04.03 batch order decision ====
 
-TEST(M5_AttackFlow, AttackerChoosesBatchOrderAndFinishesATargetFirst) {
+TEST(R04_03_ResolveAttacks, AttackerChoosesBatchOrderAndFinishesATargetFirst) {
     GameState gs = shoot_step_state();
     const UnitId gants = gs.units[kGants].id;
     const UnitId gants2 = add_unit_copy(gs, kGants);
@@ -285,7 +277,7 @@ TEST(Determinism_Engine, SaveAndLoadMidDecisionContinuesIdentically) {
 
 // ==== begin_attacks preconditions (programmer errors) ====
 
-TEST(M5_AttackFlow, BeginAttacksPreconditions) {
+TEST(AttackFlow_BeginAttacks, Preconditions) {
     GameState gs = load_v1_scenario();
     start_game(gs);  // Move Units step
     ScriptedDice dice{1};

@@ -60,12 +60,13 @@ std::string melee_text(const core::GameState& gs, const core::MeleeDeclaration& 
 }  // namespace
 
 void DecisionPanel::sync(const GameSession& session) {
-    if (session.history().size() == synced_step_) return;
+    if (synced_step_ == session.history().size()) return;
     synced_step_ = session.history().size();
+    view_ = make_decision_view(session.legal());
     shots_.clear();
     melee_.reset();
     casualties_.reset();
-    for (const core::GameAction& t : make_decision_view(session.legal()).templates) {
+    for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
             shots_.emplace_back(session.state(), s->unit, s->type);
         } else if (const auto* f = std::get_if<core::action::Fight>(&t)) {
@@ -86,7 +87,7 @@ std::optional<core::GameAction> DecisionPanel::draw(const GameSession& session,
     sync(session);
     ImGui::TextColored(kHighlight, "%s", core::describe(*session.pending()).c_str());
     std::optional<core::GameAction> chosen;
-    const DecisionView view = make_decision_view(session.legal());
+    const DecisionView& view = view_;
 
     for (std::size_t i = 0; i < view.buttons.size(); ++i) {
         ImGui::PushID(static_cast<int>(i));

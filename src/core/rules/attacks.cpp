@@ -92,6 +92,17 @@ WeaponSelection select_weapon_target(const GameState& state, ModelId attacker, s
     return sel;
 }
 
+std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon) {
+    if (weapon.has<ability::TwinLinked>()) {
+        return "24.38: '" + weapon.name + "' has [TWIN-LINKED], which V1 does not implement yet (it needs Re-rolls, "
+                                          "D-011; D-026)";
+    }
+    if (weapon.has<ability::DevastatingWounds>()) {
+        return "24.10: '" + weapon.name + "' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)";
+    }
+    return std::nullopt;
+}
+
 AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context) {
     AttackProfile p;
     p.torrent = weapon.has<ability::Torrent>();

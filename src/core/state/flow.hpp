@@ -75,8 +75,8 @@ struct BatchInProgress {
     std::size_t batch = 0;                // index into AttackFlow::batches
     int wounds = 0;                       // 05.02 result (> 0)
     std::vector<AllocationGroup> groups;  // 05.03 Create Groups, in unit order
-    std::vector<std::size_t> order;       // 05.03 Allocation Order (indices into groups); empty until declared
-    std::vector<int> save_rolls;          // 05.03 Make Save Rolls; empty until made
+    std::optional<std::vector<std::size_t>> order;  // 05.03 Allocation Order (indices into groups), once declared
+    std::optional<std::vector<int>> save_rolls;     // 05.03 Make Save Rolls (unmodified), once made
     friend bool operator==(const BatchInProgress&, const BatchInProgress&) = default;
 };
 

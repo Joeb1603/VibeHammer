@@ -25,6 +25,7 @@ namespace {
 struct PlayStats {
     int actions = 0;
     int template_fills = 0;
+    int path_fills = 0;  // ProposeModelMove templates only (D-004)
     int rejected_fills = 0;
 };
 
@@ -60,6 +61,7 @@ PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions) {
                 const auto second = validate_action(gs, side, filled);
                 EXPECT_EQ(first, second);  // deterministic
                 ++stats.template_fills;
+                if (std::holds_alternative<action::ProposeModelMove>(a)) ++stats.path_fills;
                 if (corrupt) {
                     check_rejection(first);
                     ++stats.rejected_fills;
@@ -90,7 +92,7 @@ TEST(D004_LegalActions, RandomPlayFromTheScenarioStart) {
         TestRng rng(seed);
         const PlayStats stats = play_and_check(gs, rng, 200);
         EXPECT_TRUE(gs.flow.stage == Stage::GameOver || stats.actions == 200) << "seed " << seed;
-        moves_proposed += stats.template_fills;
+        moves_proposed += stats.path_fills;
     }
     EXPECT_GT(moves_proposed, 0);  // path templates (D-004) were filled and checked
 }
@@ -101,7 +103,7 @@ TEST(D004_LegalActions, RandomPlayFromTheScenarioStartMovesModels) {
     start_game(gs);
     TestRng rng(99);
     const PlayStats stats = play_and_check(gs, rng, 200);
-    EXPECT_GT(stats.template_fills, 0);
+    EXPECT_GT(stats.path_fills, 0);  // the move path templates, not just any template
 }
 
 TEST(D004_LegalActions, RandomPlayThroughAttackFlows) {

@@ -40,11 +40,11 @@ std::vector<ShotChoice> ShotPlan::choices() const {
 }
 
 void ShotPlan::override_model(core::ModelId model, std::optional<core::ShotDeclaration> choice) {
-    overrides_[model.v] = choice;
+    overrides_[model] = choice;
 }
 
 std::optional<core::ShotDeclaration> ShotPlan::declaration_for(core::ModelId model) const {
-    if (const auto it = overrides_.find(model.v); it != overrides_.end()) return it->second;
+    if (const auto it = overrides_.find(model); it != overrides_.end()) return it->second;
     if (!default_) return std::nullopt;
     for (const ShotOption& o : options_) {
         if (o.declaration.model == model && o.weapon == default_->weapon &&

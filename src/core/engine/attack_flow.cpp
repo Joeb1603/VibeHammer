@@ -97,7 +97,7 @@ bool casualty_choice_needed(const GameState& state, const AttackFlow& f) {
         asked = true;
         return options.front();
     };
-    (void)inflict_damage(copy, order_groups(b.groups, b.order), b.save_rolls, batch.profile, probe);
+    (void)inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, probe);
     return asked;
 }
 
@@ -119,14 +119,14 @@ void start_batch(GameState& state, DiceSource& dice, std::size_t index, Events& 
         return;
     }
     // 05.03 Create Groups now; the order and the save rolls follow.
-    f.current = BatchInProgress{index, wounds.wounds(), create_allocation_groups(target), {}, {}};
+    f.current = BatchInProgress{index, wounds.wounds(), create_allocation_groups(target), std::nullopt, std::nullopt};
 }
 
 void declare_order(GameState& state, std::vector<std::size_t> order, Events& events) {
     AttackFlow& f = flow_of(state);
     BatchInProgress& b = *f.current;
     b.order = std::move(order);
-    events.push_back(event::AllocationOrderDeclared{f.batches[b.batch].target, order_groups(b.groups, b.order)});
+    events.push_back(event::AllocationOrderDeclared{f.batches[b.batch].target, order_groups(b.groups, *b.order)});
 }
 
 // 05.04 with the casualty priority (D-013), then the batch is done.
@@ -145,7 +145,7 @@ void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, 
         throw std::logic_error("05.04: the casualty order has no legal model");
     };
     const InflictDamageResult result =
-        inflict_damage(target, order_groups(b.groups, b.order), b.save_rolls, batch.profile, by_priority);
+        inflict_damage(target, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, by_priority);
     events.push_back(event::SavesResolved{target.id, result});
     for (const SaveStep& step : result.steps) {
         if (step.damage && step.damage->destroyed) {
@@ -182,13 +182,13 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
         const BatchInProgress& b = *f.current;
         const AttackBatch& batch = f.batches[b.batch];
         const Unit& target = unit_ref(state, batch.target);
-        if (b.order.empty()) {
+        if (!b.order) {
             if (legal_allocation_orders(target, b.groups).size() > 1) {
                 return PendingDecision{target.side, decision::DeclareAllocationOrder{batch.target}};  // 05.03
             }
             return std::nullopt;
         }
-        if (b.save_rolls.empty()) {
+        if (!b.save_rolls) {
             return std::nullopt;
         }
         if (casualty_choice_needed(state, f)) {
@@ -210,14 +210,14 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
     if (f.current) {
         BatchInProgress& b = *f.current;
         const AttackBatch& batch = f.batches[b.batch];
-        if (b.order.empty()) {
+        if (!b.order) {
             // Only one legal allocation order: declared without asking.
             declare_order(state, legal_allocation_orders(unit_ref(state, batch.target), b.groups).front(), events);
             return;
         }
-        if (b.save_rolls.empty()) {
+        if (!b.save_rolls) {
             b.save_rolls = make_save_rolls(dice, b.wounds);  // 05.03 Make Save Rolls
-            events.push_back(event::SaveRollsMade{batch.target, b.save_rolls});
+            events.push_back(event::SaveRollsMade{batch.target, *b.save_rolls});
             return;
         }
         // No Select Model step has a real choice (D-013): any priority gives the same result.

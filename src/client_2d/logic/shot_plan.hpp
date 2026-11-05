@@ -46,8 +46,8 @@ public:
 
     // A single model's own choice (nullopt: it does not fire), replacing the unit default for it.
     void override_model(core::ModelId model, std::optional<core::ShotDeclaration> choice);
-    void clear_override(core::ModelId model) { overrides_.erase(model.v); }
-    [[nodiscard]] bool is_overridden(core::ModelId model) const { return overrides_.count(model.v) > 0; }
+    void clear_override(core::ModelId model) { overrides_.erase(model); }
+    [[nodiscard]] bool is_overridden(core::ModelId model) const { return overrides_.count(model) > 0; }
 
     // Every model in unit order: its override, else the default if it is one of its options, else nothing.
     [[nodiscard]] core::action::Shoot expand() const;
@@ -60,7 +60,7 @@ private:
     std::vector<core::ModelId> models_;
     std::vector<ShotOption> options_;
     std::optional<ShotChoice> default_;
-    std::map<std::uint32_t, std::optional<core::ShotDeclaration>> overrides_;
+    std::map<core::ModelId, std::optional<core::ShotDeclaration>> overrides_;
 };
 
 }  // namespace wh40k::client

@@ -18,6 +18,11 @@
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
+using wh40k::test::events_of;
+using wh40k::test::starts_with;
+using wh40k::test::contains;
+using wh40k::test::rejection;
+using wh40k::test::expect_valid;
 using wh40k::test::add_unit_copy;
 using wh40k::test::decider;
 using wh40k::test::in;
@@ -29,35 +34,6 @@ constexpr std::size_t kMarines = 0;
 constexpr std::size_t kGants = 1;
 constexpr float kMarineRadius = 16.0f;
 constexpr float kGantRadius = 14.25f;
-
-template <typename E>
-std::vector<E> events_of(const std::vector<GameEvent>& events) {
-    std::vector<E> out;
-    for (const auto& e : events) {
-        if (const auto* x = std::get_if<E>(&e)) out.push_back(*x);
-    }
-    return out;
-}
-
-bool starts_with(const std::string& s, const std::string& prefix) { return s.rfind(prefix, 0) == 0; }
-
-bool contains(const std::vector<std::string>& v, const std::string& s) {
-    return std::find(v.begin(), v.end(), s) != v.end();
-}
-
-std::vector<std::string> rejection(const GameState& gs, Side side, const GameAction& a) {
-    const auto r = validate_action(gs, side, a);
-    EXPECT_FALSE(r.ok()) << action_name(a) << " was accepted";
-    for (const auto& reason : r.reasons) {
-        EXPECT_TRUE(is_rule_cited(reason)) << reason;
-    }
-    return r.reasons;
-}
-
-void expect_valid(const GameState& gs, Side side, const GameAction& a) {
-    const auto r = validate_action(gs, side, a);
-    EXPECT_TRUE(r.ok()) << (r.ok() ? "" : r.reasons.front());
-}
 
 // The V1 scenario at Side A's first Charge step. Nothing has moved: the front ranks are exactly 12"
 // apart (D-008), so the Intercessors can declare a charge.

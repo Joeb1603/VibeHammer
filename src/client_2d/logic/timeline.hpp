@@ -22,8 +22,6 @@ struct Frame {
 // (start_game / validate_action / apply_action) on the timeline's own copies.
 class Timeline {
 public:
-    // A single frame: `initial`, started if it has not been.
-    static Timeline from_state(core::GameState initial, std::string source);
     // Every step of a replay. Stops at the first invalid step and records why in error().
     static Timeline from_replay(const core::Replay& replay, const std::filesystem::path& repo_root,
                                 std::string source);

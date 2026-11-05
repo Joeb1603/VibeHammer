@@ -4,8 +4,10 @@
 //
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
 //                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
+//                        [--scenario <file>]
 //   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
 //   --seed n: the dice seed for the first new game (M13; the panel can change it for later games).
+//   --scenario file: the scenario for new games (default data/scenarios/v1_skirmish.json).
 
 #include <imgui.h>
 #include <raylib.h>
@@ -61,13 +63,16 @@ struct Options {
     std::optional<unsigned> select_unit;
     std::optional<unsigned> select_model;
     std::optional<std::uint64_t> seed;
+    std::optional<std::string> scenario;
 };
 
+// Throws std::invalid_argument naming the flag when a value can't be parsed.
 Options parse_args(int argc, char** argv) {
     Options o;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         const std::string value = argv[i + 1];
+        try {
         if (key == "--replay") o.replay = value;
         else if (key == "--frame") o.frame = static_cast<std::size_t>(std::stoul(value));
         else if (key == "--zoom") o.zoom = std::stof(value);
@@ -76,6 +81,10 @@ Options parse_args(int argc, char** argv) {
         else if (key == "--select") o.select_unit = static_cast<unsigned>(std::stoul(value));
         else if (key == "--select-model") o.select_model = static_cast<unsigned>(std::stoul(value));
         else if (key == "--seed") o.seed = std::stoull(value);
+        else if (key == "--scenario") o.scenario = value;
+        } catch (const std::exception&) {
+            throw std::invalid_argument("invalid value for " + key + ": '" + value + "'");
+        }
     }
     return o;
 }
@@ -98,9 +107,10 @@ struct Drag {
 
 class App {
 public:
-    explicit App(std::optional<std::uint64_t> seed) {
+    App(std::optional<std::uint64_t> seed, std::optional<std::string> scenario)
+        : scenario_path_(scenario ? fs::path(*scenario) : kScenario) {
         try {
-            seed_ = seed ? *seed : core::load_scenario(kScenario, kRepoRoot).dice.seed;
+            seed_ = seed ? *seed : core::load_scenario(scenario_path_, kRepoRoot).dice.seed;
         } catch (const std::exception&) {
             seed_ = 0;
         }
@@ -113,7 +123,7 @@ public:
     void new_game() {
         try {
             // M13: the dice seed is chosen at game start (shown and editable in the panel).
-            start_session(GameSession::new_game(core::load_scenario(kScenario, kRepoRoot), seed_));
+            start_session(GameSession::new_game(core::load_scenario(scenario_path_, kRepoRoot), seed_));
             status_ = "New game: V1 scenario, seed " + std::to_string(seed_) +
                       ". Hotseat: each side acts when the panel names it.";
         } catch (const std::exception& e) {
@@ -124,6 +134,8 @@ public:
     void start_session(GameSession session) {
         session_.emplace(std::move(session));
         mode_ = Mode::Play;
+        panel_.reset();  // the editors belong to the old session
+        ++generation_;
         reasons_.clear();
         drag_.reset();
         fit_pending_ = true;
@@ -131,6 +143,7 @@ public:
     }
 
     void save_game() {
+        if (!session_) return;
         try {
             session_->save(save_path_);
             status_ = std::string("Saved to ") + save_path_;
@@ -149,6 +162,7 @@ public:
     }
 
     void export_replay() {
+        if (!session_) return;
         try {
             const fs::path path = export_path_;
             if (path.has_parent_path()) fs::create_directories(path.parent_path());
@@ -168,6 +182,7 @@ public:
         try {
             const core::Replay replay = core::load_replay(path);
             timeline_ = Timeline::from_replay(replay, kRepoRoot, "Replay: " + path.filename().string());
+            ++generation_;
             frame_ = 0;
             mode_ = Mode::Replay;
             status_ = replay.description;
@@ -188,7 +203,7 @@ public:
 
     // --steps: click the first decision button (never a template) `n` times.
     void auto_steps(int n) {
-        for (int i = 0; i < n && mode_ == Mode::Play && session_->pending(); ++i) {
+        for (int i = 0; i < n && mode_ == Mode::Play && session_ && session_->pending(); ++i) {
             const DecisionView view = make_decision_view(session_->legal());
             if (view.buttons.empty()) break;
             submit(view.buttons.front());
@@ -203,6 +218,14 @@ public:
     void set_zoom(float px_per_mm) { camera_.set_zoom(px_per_mm, board_centre()); }
 
     void frame(bool layout_fixed) {
+        ClearBackground(Color{24, 26, 30, 255});
+        if (!has_view()) {
+            // No game and no replay (e.g. the scenario could not be loaded): show why, and the panel can
+            // still load a save or a replay.
+            DrawText(status_.c_str(), 20, 20, 18, RAYWHITE);
+            draw_ui(layout_fixed);
+            return;
+        }
         if (fit_pending_ || IsWindowResized()) {
             camera_.fit(state().battlefield.width_mm, state().battlefield.depth_mm, board_area());
             fit_pending_ = false;
@@ -211,7 +234,6 @@ public:
         if (!io.WantCaptureMouse) handle_mouse();
         if (!io.WantCaptureKeyboard) handle_keys();
 
-        ClearBackground(Color{24, 26, 30, 255});
         draw_board(state(), camera_);
         draw_overlays(state(), camera_, overlays_, selected_unit_, selected_model_, friendly_side());
         draw_selection_and_moves();
@@ -219,6 +241,10 @@ public:
     }
 
 private:
+    // Something to show: a live game in Play mode, a loaded replay in Replay mode.
+    bool has_view() const { return mode_ == Mode::Play ? session_.has_value() : timeline_.size() > 0; }
+
+    // Precondition: has_view().
     const core::GameState& state() const {
         return mode_ == Mode::Play ? session_->state() : timeline_.frame(frame_).state;
     }
@@ -417,6 +443,7 @@ private:
         ImGui::Begin("VibeHammer");
         draw_game_section();
         ImGui::End();
+        if (!has_view()) return;
 
         ImGui::SetNextWindowPos(ImVec2(x, h * 0.44f), cond);
         ImGui::SetNextWindowSize(ImVec2(kPanelWidth, h * 0.32f), cond);
@@ -440,12 +467,15 @@ private:
         ImGui::SameLine();
         ImGui::SetNextItemWidth(150.0f);
         ImGui::InputScalar("seed", ImGuiDataType_U64, &seed_);
-        if (mode_ == Mode::Play) {
+        const bool playing = mode_ == Mode::Play && session_.has_value();
+        if (playing) {
             ImGui::Text("This game's seed: %llu", static_cast<unsigned long long>(session_->seed()));
             ImGui::SameLine();
             ImGui::BeginDisabled(!session_->can_undo());
             if (ImGui::Button("Undo")) {
                 session_->undo();  // M13: rebuilt from the initial state without the last action
+                panel_.reset();    // the rebuilt state may have the same step count as the editors' old one
+                ++generation_;
                 reasons_.clear();
                 drag_.reset();
                 scroll_log_ = true;
@@ -454,14 +484,14 @@ private:
         }
         ImGui::InputText("##save", save_path_, sizeof(save_path_));
         ImGui::SameLine();
-        ImGui::BeginDisabled(mode_ != Mode::Play);
+        ImGui::BeginDisabled(!playing);
         if (ImGui::Button("Save")) save_game();
         ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Load")) load_game();
         ImGui::InputText("##export", export_path_, sizeof(export_path_));
         ImGui::SameLine();
-        ImGui::BeginDisabled(mode_ != Mode::Play);
+        ImGui::BeginDisabled(!playing);
         if (ImGui::Button("Export replay")) export_replay();
         ImGui::EndDisabled();
         ImGui::InputText("##path", path_, sizeof(path_));
@@ -482,6 +512,7 @@ private:
             ImGui::EndCombo();
         }
         if (!status_.empty()) ImGui::TextWrapped("%s", status_.c_str());
+        if (!has_view()) return;
         ImGui::Separator();
         const core::GameState& s = state();
         const core::Stage stage = s.flow.stage;
@@ -543,25 +574,57 @@ private:
         if (state().pending) ImGui::TextWrapped("Waiting for: %s", core::describe(*state().pending).c_str());
     }
 
-    void draw_log_lines(bool dice_only) {
-        auto line = [&](const core::GameEvent& e) {
-            if (!dice_only || is_roll_event(e)) ImGui::TextUnformatted(format_event(e).c_str());
+    // The log as display lines, rebuilt only when the log changes (not formatted every frame).
+    struct LogLine {
+        std::string text;
+        bool label = false;  // a step header (drawn dimmed)
+        bool roll = false;   // shown on the Dice tab
+    };
+
+    void refresh_log_cache() {
+        const std::size_t count = mode_ == Mode::Play ? session_->log().size() : frame_ + 1;
+        const LogKey key{generation_, mode_, count};
+        if (log_key_ == key) return;
+        log_key_ = key;
+        log_lines_.clear();
+        auto add_entry = [&](const std::string& label, bool first, const std::vector<core::GameEvent>& events) {
+            if (!first) log_lines_.push_back(LogLine{"-- " + label, true, false});
+            for (const auto& e : events) log_lines_.push_back(LogLine{format_event(e), false, is_roll_event(e)});
         };
         if (mode_ == Mode::Play) {
-            for (const LogEntry& entry : session_->log()) {
-                if (!dice_only) ImGui::TextDisabled("-- %s", entry.label.c_str());
-                for (const auto& e : entry.events) line(e);
+            for (std::size_t i = 0; i < session_->log().size(); ++i) {
+                add_entry(session_->log()[i].label, false, session_->log()[i].events);
             }
         } else {
             for (std::size_t f = 0; f <= frame_; ++f) {
-                const Frame& fr = timeline_.frame(f);
-                if (!dice_only && f > 0) ImGui::TextDisabled("-- %s", fr.label.c_str());
-                for (const auto& e : fr.events) line(e);
+                add_entry(timeline_.frame(f).label, f == 0, timeline_.frame(f).events);
+            }
+        }
+        dice_lines_.clear();
+        for (std::size_t i = 0; i < log_lines_.size(); ++i) {
+            if (log_lines_[i].roll) dice_lines_.push_back(i);
+        }
+    }
+
+    void draw_log_lines(bool dice_only) {
+        const int n = static_cast<int>(dice_only ? dice_lines_.size() : log_lines_.size());
+        ImGuiListClipper clipper;  // only the visible lines are drawn
+        clipper.Begin(n);
+        while (clipper.Step()) {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const LogLine& line = log_lines_[dice_only ? dice_lines_[static_cast<std::size_t>(i)]
+                                                           : static_cast<std::size_t>(i)];
+                if (line.label) {
+                    ImGui::TextDisabled("%s", line.text.c_str());
+                } else {
+                    ImGui::TextUnformatted(line.text.c_str());
+                }
             }
         }
     }
 
     void draw_logs() {
+        refresh_log_cache();
         if (ImGui::BeginTabBar("logs")) {
             for (const bool dice : {false, true}) {
                 if (ImGui::BeginTabItem(dice ? "Dice" : "Events")) {
@@ -577,7 +640,19 @@ private:
         scroll_log_ = false;
     }
 
+    struct LogKey {
+        std::uint64_t generation = 0;
+        Mode mode = Mode::Play;
+        std::size_t count = 0;
+        friend bool operator==(const LogKey&, const LogKey&) = default;
+    };
+
     Mode mode_ = Mode::Play;
+    fs::path scenario_path_;
+    std::uint64_t generation_ = 0;  // bumped whenever the session or replay is replaced or rebuilt
+    std::optional<LogKey> log_key_;
+    std::vector<LogLine> log_lines_;
+    std::vector<std::size_t> dice_lines_;
     std::optional<GameSession> session_;
     Timeline timeline_;
     std::size_t frame_ = 0;
@@ -602,7 +677,13 @@ private:
 
 int main(int argc, char** argv) {
     using namespace wh40k::client;
-    const Options options = parse_args(argc, argv);
+    Options options;
+    try {
+        options = parse_args(argc, argv);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "wh40k_client_2d: %s\n", e.what());
+        return 2;
+    }
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
     const std::string title = "VibeHammer " + std::string(wh40k::core::engine_version());
@@ -610,7 +691,7 @@ int main(int argc, char** argv) {
     SetTargetFPS(60);
     rlImGuiSetup(true);
 
-    App app(options.seed);
+    App app(options.seed, options.scenario);
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
     app.auto_steps(options.steps);

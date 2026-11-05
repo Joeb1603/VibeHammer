@@ -14,12 +14,6 @@ namespace {
 
 std::string unit_label(UnitId id) { return "unit " + std::to_string(id.v); }
 
-// 01.04 / D-009: edge-to-edge distance from one model (at `pos`) to the closest model of `target`.
-std::optional<float> distance_to_unit(const Model& model, const Position& pos, const Unit& target) {
-    const PlacedModel from{model.id, pos, model.base};
-    const auto targets = placed_models(target);
-    return closest_distance(std::span<const PlacedModel>(&from, 1), targets);
-}
 
 bool contains(std::span<const UnitId> ids, UnitId id) { return std::find(ids.begin(), ids.end(), id) != ids.end(); }
 
@@ -75,8 +69,8 @@ bool ends_closer_to_a_charge_target(const GameState& state, const Model& model, 
         if (target == nullptr || is_destroyed(*target)) {
             continue;
         }
-        const auto before = distance_to_unit(model, start, *target);
-        const auto after = distance_to_unit(model, end, *target);
+        const auto before = model_distance_to_unit(model, start, *target);
+        const auto after = model_distance_to_unit(model, end, *target);
         if (before && after && more_than(*before, *after)) {
             return true;
         }

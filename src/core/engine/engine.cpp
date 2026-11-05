@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 #include "core/engine/internal.hpp"
@@ -74,14 +75,46 @@ std::vector<GameEvent> start_game_impl(GameState& state, DiceSource& dice) {
     return events;
 }
 
-}  // namespace
-
-std::vector<GameEvent> start_game(GameState& state) {
-    SeededDice dice(state.dice);
-    return start_game_impl(state, dice);
+// 04 ... 12: the work of an action, on `state` in place. Precondition: validated.
+std::vector<GameEvent> apply_in_place(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
+    Events events;
+    state.pending.reset();
+    std::visit([&](const auto& a) { detail::apply_details(state, side, a, dice, events); }, action);
+    detail::advance(state, dice, events);
+    return events;
 }
 
-std::vector<GameEvent> start_game(GameState& state, DiceSource& dice) { return start_game_impl(state, dice); }
+void require_valid(const GameState& state, Side side, const GameAction& action) {
+    const ValidationResult v = validate_action(state, side, action);
+    if (!v.ok()) {
+        throw std::logic_error("apply_action: invalid action: " + v.reasons.front());
+    }
+}
+
+}  // namespace
+
+// start_game and apply_action change the state in place (so callers' references into it behave as they
+// always have) but keep a backup: if the engine throws (a programmer error), the state is restored and
+// the exception rethrown, so it is never left half-applied (D-026).
+template <typename Work>
+std::vector<GameEvent> with_rollback(GameState& state, Work work) {
+    GameState backup = state;
+    try {
+        return work();
+    } catch (...) {
+        state = std::move(backup);
+        throw;
+    }
+}
+
+std::vector<GameEvent> start_game(GameState& state) {
+    SeededDice dice(state.dice);  // the backup restores the dice position too
+    return with_rollback(state, [&] { return start_game_impl(state, dice); });
+}
+
+std::vector<GameEvent> start_game(GameState& state, DiceSource& dice) {
+    return with_rollback(state, [&] { return start_game_impl(state, dice); });
+}
 
 Side turn_side(const GameState& state) {
     return state.flow.turn_in_round == 0 ? state.first_turn : opponent(state.first_turn);
@@ -159,20 +192,14 @@ ValidationResult validate_action(const GameState& state, Side side, const GameAc
 }
 
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
-    const ValidationResult v = validate_action(state, side, action);
-    if (!v.ok()) {
-        throw std::logic_error("apply_action: invalid action: " + v.reasons.front());
-    }
-    Events events;
-    state.pending.reset();
-    std::visit([&](const auto& a) { detail::apply_details(state, side, a, dice, events); }, action);
-    detail::advance(state, dice, events);
-    return events;
+    require_valid(state, side, action);
+    return with_rollback(state, [&] { return apply_in_place(state, side, action, dice); });
 }
 
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action) {
+    require_valid(state, side, action);
     SeededDice dice(state.dice);
-    return apply_action(state, side, action, dice);
+    return with_rollback(state, [&] { return apply_in_place(state, side, action, dice); });
 }
 
 }  // namespace wh40k::core

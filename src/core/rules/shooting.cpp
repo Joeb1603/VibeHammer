@@ -39,12 +39,6 @@ const ShootingTypeInfo& info(ShootingType t) {
 std::string unit_label(UnitId id) { return "unit " + std::to_string(id.v); }
 std::string model_label(ModelId id) { return "model " + std::to_string(id.v); }
 
-std::string inches(float mm) {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%g\"", static_cast<double>(mm_to_inches(mm)));
-    return buf;
-}
-
 // [PISTOL] and [CLOSE-QUARTERS] are identical for all rules purposes (24.27); the loader parses both
 // to ability::CloseQuarters.
 bool is_close_quarters(const WeaponProfile& p) { return p.has<ability::CloseQuarters>(); }
@@ -99,7 +93,7 @@ std::optional<std::string> target_problem(const GameState& state, const Unit& un
         return "06.01: " + unit_label(target.id) + " is not visible to " + model_label(model.id);
     }
     if (!target_within_range(model, profile, target)) {
-        return "04.02: " + unit_label(target.id) + " is not within range (" + inches(*profile.range_mm) + ") of " +
+        return "04.02: " + unit_label(target.id) + " is not within range (" + format_inches(*profile.range_mm) + ") of " +
                model_label(model.id) + "'s '" + profile.name + "'";
     }
     return std::nullopt;
@@ -126,6 +120,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
     if (!profile.attacks.is_fixed() || !profile.damage.is_fixed()) {
         return "D-002: '" + profile.name + "' has a random characteristic, which V1 does not roll";
     }
+    if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026
     if (type == ShootingType::Assault && !profile.has<ability::Assault>()) {
         return "10.05: '" + profile.name + "' is not an [ASSAULT] weapon; assault shooting can only select "
                                            "[ASSAULT] weapons";

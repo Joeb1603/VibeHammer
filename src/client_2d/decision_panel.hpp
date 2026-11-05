@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "casualty_plan.hpp"
+#include "decision_view.hpp"
 #include "core/engine/actions.hpp"
 #include "melee_plan.hpp"
 #include "session.hpp"
@@ -22,6 +23,9 @@ public:
     // Draws inside the current ImGui window. `selected_model`: the model selected on the board, whose row
     // is highlighted (its override is what the player edits, D-001).
     std::optional<core::GameAction> draw(const GameSession& session, std::optional<core::ModelId> selected_model);
+    // Forget the editors: call when the session is replaced (new game, load) or rebuilt (undo), so the next
+    // draw builds them for the new state even if its step count is the same.
+    void reset() { synced_step_.reset(); }
 
 private:
     std::optional<core::GameAction> draw_shot_editor(const GameSession& session, const core::action::Shoot& tmpl,
@@ -32,7 +36,8 @@ private:
                                                          const core::action::OrderCasualties& tmpl);
     void sync(const GameSession& session);  // rebuild the editors when the game moves on
 
-    std::size_t synced_step_ = static_cast<std::size_t>(-1);
+    std::optional<std::size_t> synced_step_;  // the session step the editors were built for
+    DecisionView view_;                        // legal actions for that step, split (not rebuilt per frame)
     std::vector<ShotPlan> shots_;
     std::optional<MeleePlan> melee_;
     std::optional<CasualtyPlan> casualties_;

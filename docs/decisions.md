@@ -438,3 +438,23 @@ of the charge for that reason.
   - In V1 both players share the screen, so undo has no permission model.
 - **Seed.** A new game takes the seed from the panel (or `--seed`). It defaults to the scenario's own
   seed, and the dice position starts at 0. The panel shows the current game's seed.
+
+## D-026: Unimplemented attack-time abilities are rejected when selected (24.10, 24.38)
+**Decided:** 2026-11-05 (code review)
+- **What is rejected.** V1 does not implement [TWIN-LINKED] (24.38; it needs Re-rolls, D-011) or
+  [DEVASTATING WOUNDS] (24.10).
+  - Before this decision, validation accepted weapons with them. The engine then threw when the dice
+    were rolled, which left the game with an attack half-started and no pending decision.
+  - Such weapon profiles are now rejected when they are selected, with a rule-cited reason, as D-002
+    does for random characteristics.
+  - `shot_options` and `melee_options` don't offer them, and `legal_actions` lists no `Shoot` template
+    that needs one.
+- **Melee.** A model whose only melee weapons are unsupported (D-002 or D-026) counts as unable to make
+  melee attacks, so D-021 doesn't require it to declare one.
+- **Defence in depth.** `apply_action` and `start_game` keep a backup of the state and restore it if
+  the engine throws (a programmer error), so the caller's state is never left half-applied. They still
+  change the state in place: callers' references into it behave as before. A copy-and-commit version
+  was tried and dropped, because replacing the state's vectors left callers' references dangling.
+  `GameSession::submit` reports such an exception as a failure instead of letting it crash the client.
+- When either ability is implemented, remove it from `unimplemented_ability_problem`
+  (`rules/attacks.cpp`) and update this entry.

@@ -70,3 +70,16 @@ TEST(EngineValidation, ApplyingAnInvalidActionIsAProgrammerError) {
     EXPECT_THROW((void)apply_action(gs, Side::B, action::EndShootStep{}), std::logic_error);
     EXPECT_EQ(gs, before);  // rejected before anything changed
 }
+
+TEST(EngineApi, AnEngineExceptionLeavesTheStateUnchanged) {
+    // Programmer errors (here: scripted dice running out mid-attack) throw, but apply_action works on a
+    // copy and commits only on success, so the caller's state is never half-applied.
+    GameState gs = wh40k::test::shoot_step_state();
+    const GameState before = gs;
+    action::Shoot volley{gs.units[0].id, ShootingType::Normal, {}};
+    for (const Model& m : gs.units[0].models) volley.shots.push_back(ShotDeclaration{m.id, 0, 0, gs.units[1].id});
+    ScriptedDice too_few{3, 3};
+    EXPECT_THROW((void)apply_action(gs, Side::A, volley, too_few), std::logic_error);
+    EXPECT_EQ(gs, before);
+    EXPECT_TRUE(validate_action(gs, Side::A, volley).ok());  // still at the same decision
+}

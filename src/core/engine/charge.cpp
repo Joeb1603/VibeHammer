@@ -106,15 +106,7 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::Select
     const Unit& u = *state.find_unit(d.unit);
     const std::vector<UnitId> eligible = eligible_charge_targets(state, u, charge_roll_of(u));
     std::vector<GameAction> out;
-    // Every non-empty set of eligible targets, in a fixed order (bit order over `eligible`).
-    const std::size_t n = std::min<std::size_t>(eligible.size(), 10);
-    for (std::size_t mask = 1; mask < (std::size_t{1} << n); ++mask) {
-        action::StartChargeMove a{d.unit, {}};
-        for (std::size_t i = 0; i < n; ++i) {
-            if ((mask >> i) & 1u) a.targets.push_back(eligible[i]);
-        }
-        out.push_back(std::move(a));
-    }
+    for (auto& targets : nonempty_subsets(eligible)) out.push_back(action::StartChargeMove{d.unit, std::move(targets)});
     out.push_back(action::SkipChargeMove{d.unit});
     return out;
 }

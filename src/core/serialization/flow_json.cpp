@@ -314,18 +314,16 @@ void from_json(const Json& j, Activation& v) {
 }
 
 void to_json(Json& j, const BatchInProgress& v) {
-    j = Json{{"batch", v.batch},
-             {"wounds", v.wounds},
-             {"groups", v.groups},
-             {"order", v.order},
-             {"save_rolls", v.save_rolls}};
+    j = Json{{"batch", v.batch}, {"wounds", v.wounds}, {"groups", v.groups}};
+    put_opt(j, "order", v.order);
+    put_opt(j, "save_rolls", v.save_rolls);
 }
 void from_json(const Json& j, BatchInProgress& v) {
     j.at("batch").get_to(v.batch);
     j.at("wounds").get_to(v.wounds);
     j.at("groups").get_to(v.groups);
-    j.at("order").get_to(v.order);
-    j.at("save_rolls").get_to(v.save_rolls);
+    get_opt(j, "order", v.order);
+    get_opt(j, "save_rolls", v.save_rolls);
 }
 
 void to_json(Json& j, const AttackFlow& v) {

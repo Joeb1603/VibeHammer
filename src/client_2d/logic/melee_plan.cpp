@@ -39,11 +39,11 @@ std::vector<MeleeChoice> MeleePlan::choices() const {
 }
 
 void MeleePlan::override_model(core::ModelId model, core::MeleeDeclaration declaration) {
-    overrides_[model.v] = std::move(declaration);
+    overrides_[model] = std::move(declaration);
 }
 
 std::optional<core::MeleeDeclaration> MeleePlan::declaration_for(core::ModelId model) const {
-    if (const auto it = overrides_.find(model.v); it != overrides_.end()) return it->second;
+    if (const auto it = overrides_.find(model); it != overrides_.end()) return it->second;
     const std::vector<MeleeOption> mine = options_for(model);
     if (mine.empty()) return std::nullopt;  // no enemy unit is engaged with this model
     if (default_) {

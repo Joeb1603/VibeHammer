@@ -129,6 +129,10 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
             fight_progress(state, events);
             continue;
         }
+        // D-007 first: a wipe-out ends the game at once, even with forced fights (12.08) still to select.
+        if (!state.flow.activation && end_game_if_side_wiped_out(state, events)) {
+            return;
+        }
         if (!state.flow.forced_fights.empty()) {
             state.pending = forced_fight_decision(state);  // 12.08: the opponent selects each unit
             return;
