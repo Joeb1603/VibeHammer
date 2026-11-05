@@ -500,7 +500,9 @@ of the charge for that reason.
   - coherency (2", 03.03), around the unit being moved, during `MoveModels`. The 9" clause gets no
     ring: one around every model was clutter;
   - weapon ranges, around the selected model of the deciding side, during the `Shoot` decision;
-  - charge distance, around a unit with a charge roll, in the Charge phase.
+  - charge distance, the charge roll out from each model's base, while that unit's charge is being
+    made (selecting targets and the charge move). It is centred on the model's start position, so it
+    stays put while a model is dragged, and it goes once the charge is resolved.
 - **Wounds.** A model at full wounds shows nothing; a damaged model shows a pip per wound, filled for
   wounds remaining. The tooltip gives the numbers.
 - **Clipping.** Rings are drawn only inside the battlefield.

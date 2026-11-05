@@ -19,7 +19,7 @@ struct OverlayToggles {
     bool engagement = true;  // 2" around the enemies of a unit being moved (03.04)
     bool coherency = true;   // 2" around a unit being moved (03.03)
     bool ranges = true;      // the selected model's ranged weapon ranges, while choosing shots
-    bool charge = true;      // the charge roll around a unit that has rolled to charge (11.02)
+    bool charge = true;      // the charge roll around a unit whose charge is being made (11.02)
 };
 
 // A ring `distance_mm` out from the edge of `model`'s base (distances are edge to edge, 01.04), centred

@@ -424,15 +424,52 @@ TEST(M15_OverlayPlan, WeaponRangesOnlyForTheDecidingSidesSelectedModelWhileChoos
     EXPECT_TRUE(plan_overlays(gs, std::nullopt, OverlayToggles{}).empty());               // nothing selected
 }
 
-TEST(M15_OverlayPlan, TheChargeRollIsShownInTheChargePhase) {
-    const GameState gs = wh40k::test::after_successful_charge();
-    ASSERT_EQ(gs.flow.stage, Stage::Charge);
+namespace {
+
+// Side A's charge with a roll of 12, at the Select Charge Targets decision (Termagants 3" closer).
+GameState charging_state() {
+    GameState gs = wh40k::test::load_v1_scenario();
+    start_game(gs);
+    while (!(gs.flow.stage == Stage::Charge && turn_side(gs) == Side::A)) {
+        apply_action(gs, wh40k::test::decider(gs), legal_actions(gs, wh40k::test::decider(gs)).front());
+    }
+    for (auto& m : gs.units[1].models) m.position.y -= in(3);
+    ScriptedDice dice{6, 6};
+    apply_action(gs, Side::A, action::DeclareCharge{gs.units[0].id}, dice);
+    return gs;
+}
+
+}  // namespace
+
+TEST(M15_OverlayPlan, TheChargeRollIsShownOnlyWhileTheChargeIsMade) {
+    GameState gs = charging_state();
+    ASSERT_TRUE(std::holds_alternative<decision::SelectChargeTargets>(gs.pending->kind));
     const auto rings = plan_overlays(gs, std::nullopt, OverlayToggles{});
     EXPECT_EQ(count_rings(rings, RingKind::ChargeDistance), 5u);
-    EXPECT_FLOAT_EQ(rings.front().distance_mm, in(10));  // the charge roll (4 + 6)
+    EXPECT_FLOAT_EQ(rings.front().distance_mm, in(12));  // the charge roll (6 + 6)
     OverlayToggles off;
     off.charge = false;
     EXPECT_TRUE(plan_overlays(gs, std::nullopt, off).empty());
+    // Once a charge has been resolved the roll no longer matters: no ring.
+    const GameState done = wh40k::test::after_successful_charge();
+    ASSERT_EQ(done.flow.stage, Stage::Charge);
+    EXPECT_EQ(count_rings(plan_overlays(done, std::nullopt, OverlayToggles{}), RingKind::ChargeDistance), 0u);
+}
+
+TEST(M15_OverlayPlan, TheChargeDistanceStaysAtTheStartWhileAModelIsDragged) {
+    GameState gs = charging_state();
+    apply_action(gs, Side::A, action::StartChargeMove{gs.units[0].id, {gs.units[1].id}});
+    const Model& first = gs.units[0].models[0];
+    const Position start = first.position;
+    apply_action(gs, Side::A, action::ProposeModelMove{first.id, {Position{start.x, start.y + in(5), 0}}});
+    OverlayToggles only_charge;
+    only_charge.engagement = false;
+    only_charge.coherency = false;
+    const auto rings = plan_overlays(gs, std::nullopt, only_charge);
+    ASSERT_EQ(rings.size(), 5u);
+    const auto circles = ring_circles(gs, rings, {{first.id, Position{0, 0, 0}}});  // a drag preview
+    EXPECT_EQ(circles[0].centre, start);  // where the charge move started, not where the model is now
+    EXPECT_FLOAT_EQ(circles[0].radius_mm, first.base.diameter_mm * 0.5f + in(12));
 }
 
 TEST(M15_PhaseTrack, TheStartOfTheGameIsSideAsMovementPhase) {
@@ -608,14 +645,7 @@ TEST(M15_OverlayPlan, TheMovementRangeStaysAtTheStartWhileTheModelIsDragged) {
 }
 
 TEST(M15_OverlayPlan, AChargeMoveShowsTheChargeDistanceNotAMovementRange) {
-    GameState gs = wh40k::test::load_v1_scenario();
-    start_game(gs);
-    while (!(gs.flow.stage == Stage::Charge && turn_side(gs) == Side::A)) {
-        apply_action(gs, wh40k::test::decider(gs), legal_actions(gs, wh40k::test::decider(gs)).front());
-    }
-    for (auto& m : gs.units[1].models) m.position.y -= in(3);  // within charge range
-    ScriptedDice dice{6, 6};
-    apply_action(gs, Side::A, action::DeclareCharge{gs.units[0].id}, dice);
+    GameState gs = charging_state();
     apply_action(gs, Side::A, action::StartChargeMove{gs.units[0].id, {gs.units[1].id}});
     ASSERT_TRUE(std::holds_alternative<decision::MoveModels>(gs.pending->kind));
     const auto rings = plan_overlays(gs, std::nullopt, OverlayToggles{});

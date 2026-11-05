@@ -79,10 +79,15 @@ std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core
 
     // In the Charge phase: the charge roll around a unit that has rolled.
     if (toggles.charge && core::phase_of(state.flow.stage) == core::Phase::Charge) {
-        for (const core::Unit& u : state.units) {
-            if (!u.phase_flags.charge_roll) continue;
-            const float roll = core::inches_to_mm(static_cast<float>(*u.phase_flags.charge_roll));
-            for (const core::Model& m : u.models) out.push_back({m.id, RingKind::ChargeDistance, roll});
+        // Only while that unit's charge is being resolved (selecting targets, then the charge move), round
+        // each model's start position: like a movement range it stays put while a model is dragged.
+        const core::Unit* u = state.flow.charge ? state.find_unit(state.flow.charge->unit) : nullptr;
+        if (u != nullptr && u->phase_flags.charge_roll) {
+            const float roll = core::inches_to_mm(static_cast<float>(*u->phase_flags.charge_roll));
+            for (const core::Model& m : u->models) {
+                const core::Position start = core::move_start_position(state, m.id).value_or(m.position);
+                out.push_back({m.id, RingKind::ChargeDistance, roll, start});
+            }
         }
     }
     return out;
