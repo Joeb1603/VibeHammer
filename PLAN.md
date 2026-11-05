@@ -213,7 +213,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M14: Close formation and no-overlap model moves
+## M14: Close formation and no-overlap model moves ✅ (done)
 **Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
 
 > Start both squads in base contact (D-008: `gap_in` 0 in `v1_skirmish.json`) and reject a single model's proposed move that would end on another model (03.01 Ending a Move, checked per proposal: D-027). The "Move unit" handle orders its proposals so a touching unit can still be translated in any direction. Regenerate the replays for the new start positions.
