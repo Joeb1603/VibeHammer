@@ -7,6 +7,7 @@ add_library(wh40k_client_logic STATIC
     event_text.cpp
     melee_plan.cpp
     move_plan.cpp
+    ring_outline.cpp
     overlay_plan.cpp
     phase_track.cpp
     session.cpp

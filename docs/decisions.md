@@ -498,4 +498,12 @@ of the charge for that reason.
   - charge distance, around a unit with a charge roll, in the Charge phase.
 - **Wounds.** A model at full wounds shows nothing; a damaged model shows a pip per wound, filled for
   wounds remaining. The tooltip gives the numbers.
+- **Merged outlines.** Overlapping rings of one kind are drawn as a single border, the outer edge of the
+  union of their circles (`outline_arcs`, client logic). Different kinds are never merged.
+- **Dragging.** While a model or the whole unit is dragged, its rings are drawn at the preview
+  positions (`ring_circles` with overrides), and each dragged model shows its path from its start
+  position to the preview.
+- **Explanations.** Hovering the board inside a ring (not over a model) shows what each ring there
+  means; the sidebar legend uses the same text (`ring_name`, `ring_meaning`). Engagement range stays
+  around the enemy only: it is the zone a moving model must not end in.
 

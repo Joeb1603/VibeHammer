@@ -259,7 +259,8 @@ public:
         if (!io.WantCaptureKeyboard) handle_keys();
 
         draw_board(state(), camera_);
-        draw_overlays(state(), camera_, plan_overlays(state(), selected_model_, overlays_), ui_scale());
+        ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
+        draw_overlays(camera_, outline_arcs(ring_circles_), ui_scale());
         draw_selection_and_moves();
         draw_ui();
     }
@@ -276,6 +277,35 @@ private:
     Rectangle board_area() const {
         return Rectangle{0.0f, bar_height_, static_cast<float>(GetScreenWidth()) - panel_width(),
                          static_cast<float>(GetScreenHeight()) - bar_height_};
+    }
+
+    // D-028: while dragging, the dragged models' rings are drawn at their preview positions.
+    PositionOverrides drag_overrides() const {
+        PositionOverrides out;
+        if (!drag_) return out;
+        const core::Unit* u = state().find_unit(drag_->unit);
+        if (u == nullptr) return out;
+        const float dx = drag_->current.x - drag_->grab.x;
+        const float dy = drag_->current.y - drag_->grab.y;
+        for (const core::Model& m : u->models) {
+            if (drag_->whole_unit) {
+                out.emplace_back(m.id, core::Position{m.position.x + dx, m.position.y + dy, m.position.z});
+            } else if (m.id == drag_->model) {
+                out.emplace_back(m.id, drag_->current);
+            }
+        }
+        return out;
+    }
+
+    // The path a model has moved so far this move, then a line on to `to` (a drag preview).
+    void draw_path_to(const core::GameState& gs, const core::Model& m, Vector2 to, Color colour) {
+        std::vector<core::Position> path = model_path(gs, m.id);
+        if (path.empty()) path.push_back(m.position);
+        const float width = 2.0f * ui_scale();
+        for (std::size_t i = 1; i < path.size(); ++i) {
+            DrawLineEx(camera_.to_screen(path[i - 1]), camera_.to_screen(path[i]), width, colour);
+        }
+        DrawLineEx(camera_.to_screen(path.back()), to, width, colour);
     }
 
     Vector2 board_centre() const {
@@ -319,6 +349,7 @@ private:
 
         const auto hovered = model_at(state(), camera_, mouse);
         if (hovered && !drag_) draw_tooltip(*hovered);
+        if (!hovered && !drag_) draw_ring_tooltip(camera_.to_world(mouse));
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
         if (drag_) drag_->current = camera_.to_world(mouse);
@@ -371,6 +402,24 @@ private:
         if ((IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) && frame_ > 0) go_to(frame_ - 1);
         if (IsKeyPressed(KEY_HOME)) go_to(0);
         if (IsKeyPressed(KEY_END)) go_to(timeline_.size() - 1);
+    }
+
+    // D-028: what the rings under the cursor mean.
+    void draw_ring_tooltip(const core::Position& at) {
+        std::vector<RingKind> kinds;
+        for (const Circle& c : ring_circles_) {
+            const bool inside = std::hypot(at.x - c.centre.x, at.y - c.centre.y) <= c.radius_mm;
+            if (inside && std::find(kinds.begin(), kinds.end(), c.kind) == kinds.end()) kinds.push_back(c.kind);
+        }
+        if (kinds.empty()) return;
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+        for (const RingKind k : kinds) {
+            ImGui::TextColored(to_imvec(ring_color(k)), "%s", std::string(ring_name(k)).c_str());
+            ImGui::TextUnformatted(std::string(ring_meaning(k)).c_str());
+        }
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
     }
 
     void draw_tooltip(const HoveredModel& h) {
@@ -437,6 +486,7 @@ private:
                 std::optional<Ruler> worst;
                 for (const core::Model& m : u->models) {
                     const core::Position to{m.position.x + dx, m.position.y + dy, 0.0f};
+                    draw_path_to(gs, m, camera_.to_screen(to), Color{255, 255, 255, 160});
                     DrawCircleV(camera_.to_screen(to), camera_.to_px(m.base.diameter_mm * 0.5f), Color{255, 255, 255, 60});
                     const auto r = ruler(gs, m.id, to);
                     if (r && (!worst || r->moved_mm > worst->moved_mm)) worst = r;
@@ -448,7 +498,7 @@ private:
                     if (x.id == drag_->model) m = &x;
                 }
                 if (m != nullptr) {
-                    DrawLineEx(camera_.to_screen(m->position), cursor, 2.0f, YELLOW);
+                    draw_path_to(gs, *m, cursor, YELLOW);
                     DrawCircleV(cursor, camera_.to_px(m->base.diameter_mm * 0.5f), Color{255, 255, 255, 70});
                     draw_ruler(cursor, ruler(gs, m->id, drag_->current));
                 }
@@ -602,14 +652,10 @@ private:
         }
         ImGui::Spacing();
         ImGui::TextDisabled("Rings, each shown only when it is relevant:");
-        overlay_toggle("Engagement range", RingKind::Engagement, &overlays_.engagement,
-                       "2\" around enemy models while you move a unit (03.04)");
-        overlay_toggle("Coherency", RingKind::Coherency, &overlays_.coherency,
-                       "2\" around each model of the unit you are moving (03.03)");
-        overlay_toggle("Weapon ranges", RingKind::WeaponRange, &overlays_.ranges,
-                       "the selected model's weapon ranges while choosing shots");
-        overlay_toggle("Charge distance", RingKind::ChargeDistance, &overlays_.charge,
-                       "the charge roll around a unit that rolled to charge (11.02)");
+        overlay_toggle(RingKind::Engagement, &overlays_.engagement);
+        overlay_toggle(RingKind::Coherency, &overlays_.coherency);
+        overlay_toggle(RingKind::WeaponRange, &overlays_.ranges);
+        overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
         ImGui::Spacing();
         if (ImGui::Button("Fit board")) fit_pending_ = true;
         ImGui::SameLine();
@@ -619,15 +665,18 @@ private:
         ImGui::TextDisabled("click: select, left-drag: move, right-drag: pan, wheel: zoom");
     }
 
-    static void overlay_toggle(const char* label, RingKind kind, bool* value, const char* meaning) {
-        ImGui::PushID(label);
+    static void overlay_toggle(RingKind kind, bool* value) {
+        const std::string label(ring_name(kind));
+        ImGui::PushID(label.c_str());
         const float size = ImGui::GetFrameHeight();
         ImGui::ColorButton("##swatch", to_imvec(ring_color(kind)),
                            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(size, size));
         ImGui::SameLine();
-        ImGui::Checkbox(label, value);
+        ImGui::Checkbox(label.c_str(), value);
         ImGui::Indent(size + ImGui::GetStyle().ItemSpacing.x);
-        ImGui::TextDisabled("%s", meaning);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", std::string(ring_meaning(kind)).c_str());
+        ImGui::PopStyleColor();
         ImGui::Unindent(size + ImGui::GetStyle().ItemSpacing.x);
         ImGui::PopID();
     }
@@ -797,6 +846,7 @@ private:
     float user_scale_ = 1.0f;     // the "UI scale" slider
     float applied_scale_ = 0.0f;  // the scale the ImGui style was last built for
     ImGuiStyle base_style_;
+    std::vector<Circle> ring_circles_;  // this frame's rings, for the board tooltip
     char path_[512] = {};
     char save_path_[512] = {};
     char export_path_[512] = {};

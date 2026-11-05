@@ -237,6 +237,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 - The phase bar shows the battle round, the turn side, the current phase highlighted in the Command → Fight track and the current step; it says who is being waited for when that is not the turn side.
 - The panels cannot be moved or resized; the UI scale slider resizes text and widgets.
 - Models at full wounds carry no number; damaged models show pips.
+- Overlapping rings of one kind draw as one border; a dragged model's rings follow the cursor, with a line from where it started; hovering a ring explains it.
 ---
 
 ## Later (post-V1, rough order)

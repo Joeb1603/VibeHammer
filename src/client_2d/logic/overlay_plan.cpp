@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "core/geometry/coherency.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/units.hpp"
 
@@ -73,6 +74,47 @@ std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core
         }
     }
     return out;
+}
+
+std::vector<Circle> ring_circles(const core::GameState& state, const std::vector<Ring>& rings,
+                                 const PositionOverrides& overrides) {
+    std::vector<Circle> out;
+    for (const Ring& ring : rings) {
+        const core::Unit* unit = nullptr;
+        const core::Model* m = find_model(state, ring.model, &unit);
+        if (m == nullptr) continue;
+        core::Position centre = m->position;
+        for (const auto& [id, at] : overrides) {
+            if (id == ring.model) centre = at;
+        }
+        out.push_back(Circle{centre, core::base_radius(m->base) + ring.distance_mm, ring.kind});
+    }
+    return out;
+}
+
+std::string_view ring_name(RingKind kind) {
+    switch (kind) {
+        case RingKind::Engagement: return "Engagement range";
+        case RingKind::Coherency: return "Coherency";
+        case RingKind::WeaponRange: return "Weapon ranges";
+        case RingKind::ChargeDistance: return "Charge distance";
+    }
+    return "";
+}
+
+std::string_view ring_meaning(RingKind kind) {
+    switch (kind) {
+        case RingKind::Engagement:
+            return "2\" around the enemy models: a model inside it is engaged, and a Normal or Advance move "
+                   "can't end there (03.04)";
+        case RingKind::Coherency:
+            return "2\" around each model of the moving unit: every model must end within 2\" of another "
+                   "model of its unit (03.03)";
+        case RingKind::WeaponRange: return "the selected model's weapon ranges, while choosing shots";
+        case RingKind::ChargeDistance:
+            return "the charge roll around a unit that rolled to charge: how far it can move (11.02)";
+    }
+    return "";
 }
 
 }  // namespace wh40k::client

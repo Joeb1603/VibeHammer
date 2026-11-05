@@ -24,6 +24,7 @@
 #include "move_plan.hpp"
 #include "overlay_plan.hpp"
 #include "phase_track.hpp"
+#include "ring_outline.hpp"
 #include "session.hpp"
 #include "shot_plan.hpp"
 #include "core/data/load_error.hpp"
@@ -461,6 +462,128 @@ TEST(M15_PhaseTrack, StageNamesAreSpacedForDisplay) {
     EXPECT_EQ(spaced("MoveUnits"), "Move Units");
     EXPECT_EQ(spaced("StartOfBattleRound"), "Start Of Battle Round");
     EXPECT_EQ(spaced("Shoot"), "Shoot");
+}
+
+// ==== M15: merged ring outlines and rings at drag previews (D-028) ====
+
+namespace {
+
+constexpr float kPi = 3.14159265f;
+
+Circle circle_at(float x, float y, float r, RingKind kind = RingKind::Engagement) {
+    return Circle{Position{x, y, 0.0f}, r, kind};
+}
+
+float sweep(const Arc& a) { return a.end_rad - a.start_rad; }
+
+float total_sweep(const std::vector<Arc>& arcs, float centre_x) {
+    float total = 0.0f;
+    for (const Arc& a : arcs) {
+        if (std::abs(a.centre.x - centre_x) < 1e-3f) total += sweep(a);
+    }
+    return total;
+}
+
+}  // namespace
+
+TEST(M15_RingOutline, CirclesApartAreDrawnWhole) {
+    const auto arcs = outline_arcs({circle_at(0, 0, 10), circle_at(25, 0, 10)});
+    ASSERT_EQ(arcs.size(), 2u);
+    for (const Arc& a : arcs) EXPECT_NEAR(sweep(a), 2 * kPi, 1e-4f);
+}
+
+TEST(M15_RingOutline, OverlappingCirclesEachLoseTheArcFacingTheOther) {
+    // Equal circles 10 apart, radius 10: each loses 60 degrees either side of the line between them.
+    const auto arcs = outline_arcs({circle_at(0, 0, 10), circle_at(10, 0, 10)});
+    ASSERT_EQ(arcs.size(), 2u);
+    EXPECT_NEAR(sweep(arcs[0]), 2 * kPi - 2 * kPi / 3, 1e-4f);
+    EXPECT_NEAR(arcs[0].start_rad, kPi / 3, 1e-4f);      // the left circle's rim starts 60 degrees up
+    EXPECT_NEAR(arcs[0].end_rad, 2 * kPi - kPi / 3, 1e-4f);
+    EXPECT_NEAR(sweep(arcs[1]), 2 * kPi - 2 * kPi / 3, 1e-4f);
+    // The right circle's covered arc faces 180 degrees, so its outline runs from -120 to +120 degrees.
+    EXPECT_NEAR(arcs[1].start_rad, 2 * kPi - 2 * kPi / 3, 1e-4f);
+    EXPECT_NEAR(arcs[1].end_rad, 2 * kPi + 2 * kPi / 3, 1e-4f);
+}
+
+TEST(M15_RingOutline, ACircleInsideAnotherIsNotDrawn) {
+    const auto arcs = outline_arcs({circle_at(0, 0, 3), circle_at(1, 0, 10)});
+    ASSERT_EQ(arcs.size(), 1u);
+    EXPECT_NEAR(arcs[0].radius_mm, 10.0f, 1e-4f);
+}
+
+TEST(M15_RingOutline, TheMiddleOfThreeCirclesKeepsOnlyItsTopAndBottom) {
+    const auto arcs = outline_arcs({circle_at(0, 0, 10), circle_at(10, 0, 10), circle_at(20, 0, 10)});
+    EXPECT_NEAR(total_sweep(arcs, 10), 2 * kPi - 4 * kPi / 3, 1e-4f);  // two 60-degree arcs
+    std::size_t middle = 0;
+    for (const Arc& a : arcs) middle += std::abs(a.centre.x - 10) < 1e-3f ? 1 : 0;
+    EXPECT_EQ(middle, 2u);
+}
+
+TEST(M15_RingOutline, DifferentKindsAreNotMergedAndDuplicatesCountOnce) {
+    const auto kinds = outline_arcs({circle_at(0, 0, 10), circle_at(10, 0, 10, RingKind::Coherency)});
+    ASSERT_EQ(kinds.size(), 2u);
+    for (const Arc& a : kinds) EXPECT_NEAR(sweep(a), 2 * kPi, 1e-4f);
+    const auto dupes = outline_arcs({circle_at(0, 0, 10), circle_at(0, 0, 10)});
+    ASSERT_EQ(dupes.size(), 1u);
+    EXPECT_NEAR(sweep(dupes[0]), 2 * kPi, 1e-4f);
+}
+
+TEST(M15_RingOutline, TheTermagantsEngagementRangeIsOneBorder) {
+    // Two touching ranks of five (D-008): no arc of any model's ring lies inside another's.
+    GameSession session(wh40k::test::load_v1_scenario());
+    ASSERT_TRUE(session.submit(action::StartMove{session.state().units[0].id, MoveType::Normal, std::nullopt}).ok());
+    const auto circles = ring_circles(session.state(), plan_overlays(session.state(), std::nullopt, OverlayToggles{}));
+    const auto arcs = outline_arcs(circles);
+    for (const Arc& a : arcs) {
+        const float mid = (a.start_rad + a.end_rad) * 0.5f;
+        const Position p{a.centre.x + a.radius_mm * std::cos(mid), a.centre.y + a.radius_mm * std::sin(mid), 0};
+        for (const Circle& c : circles) {
+            if (c.kind != a.kind) continue;
+            EXPECT_GE(std::hypot(p.x - c.centre.x, p.y - c.centre.y), c.radius_mm - 1e-2f);
+        }
+    }
+    // The centre Termagant of the front rank is hemmed in left, right and behind: most of its ring is hidden.
+    const Position gant = session.state().units[1].models[2].position;
+    float shown = 0.0f;
+    for (const Arc& a : arcs) {
+        if (a.kind == RingKind::Engagement && std::abs(a.centre.x - gant.x) < 1e-3f &&
+            std::abs(a.centre.y - gant.y) < 1e-3f) {
+            shown += sweep(a);
+        }
+    }
+    EXPECT_GT(shown, 0.0f);
+    EXPECT_LT(shown, kPi);
+}
+
+TEST(M15_RingCircles, AnOverrideMovesOnlyThatModelsCircle) {
+    GameSession session(wh40k::test::load_v1_scenario());
+    const Unit& marines = session.state().units[0];
+    ASSERT_TRUE(session.submit(action::StartMove{marines.id, MoveType::Normal, std::nullopt}).ok());
+    const auto rings = plan_overlays(session.state(), std::nullopt, OverlayToggles{});
+    const ModelId dragged = marines.models[0].id;
+    const Position preview{100.0f, 100.0f, 0.0f};
+    const auto circles = ring_circles(session.state(), rings, {{dragged, preview}});
+    ASSERT_EQ(circles.size(), rings.size());
+    for (std::size_t i = 0; i < rings.size(); ++i) {
+        const Model* m = nullptr;
+        for (const Unit& u : session.state().units) {
+            for (const Model& x : u.models) {
+                if (x.id == rings[i].model) m = &x;
+            }
+        }
+        ASSERT_NE(m, nullptr);
+        EXPECT_FLOAT_EQ(circles[i].radius_mm, m->base.diameter_mm * 0.5f + in(2));  // edge to edge (01.04)
+        EXPECT_EQ(circles[i].centre, rings[i].model == dragged ? preview : m->position);
+    }
+}
+
+TEST(M15_RingText, EveryRingHasANameAndAnExplanation) {
+    for (const RingKind k : {RingKind::Engagement, RingKind::Coherency, RingKind::WeaponRange, RingKind::ChargeDistance}) {
+        EXPECT_FALSE(ring_name(k).empty());
+        EXPECT_FALSE(ring_meaning(k).empty());
+    }
+    EXPECT_NE(ring_meaning(RingKind::Engagement).find("03.04"), std::string_view::npos);
+    EXPECT_NE(ring_meaning(RingKind::Coherency).find("03.03"), std::string_view::npos);
 }
 
 // ==== M12 acceptance: no rules logic in the client (structural) ====
