@@ -141,6 +141,7 @@ void DecisionPanel::sync(const GameSession& session) {
     shots_.clear();
     melee_.reset();
     casualties_.reset();
+    casualty_custom_ = false;
     for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
             shots_.emplace_back(session.state(), s->unit, s->type);
@@ -171,6 +172,10 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
     const DecisionView& view = view_;
+    // D-032: the casualty order has its own bar (the default order, or Custom order...).
+    for (const core::GameAction& t : view.templates) {
+        if (const auto* c = std::get_if<core::action::OrderCasualties>(&t)) return draw_casualty_bar(session, *c);
+    }
     // D-030: a lone button with no editor is the bar's main action, drawn large on the right.
     const bool lone = view.buttons.size() == 1 && view.templates.empty();
     if (!begin_bar(lone ? action_label(gs, view.buttons.front()) : std::string())) return std::nullopt;
@@ -189,8 +194,7 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
                 if (auto a = draw_melee_editor(session, std::get<core::action::Fight>(t), selected_model)) chosen = a;
                 break;
             case EditorKind::Casualties:
-                if (auto a = draw_casualty_editor(session, std::get<core::action::OrderCasualties>(t))) chosen = a;
-                break;
+                break;  // drawn by draw_casualty_bar above
         }
     }
     if (path_hint) {
@@ -229,6 +233,9 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     // D-031: weapons are only chosen after the target; "Custom..." on the target edits them per model here.
     ShotPlan* custom = board.custom_shot() ? board.shot_plan() : nullptr;
     if (custom != nullptr) draw_shot_grid(gs, *custom, selected_model);
+    // D-032: the same for a fight's melee weapons.
+    MeleePlan* custom_fight = board.custom_melee() ? board.melee_plan() : nullptr;
+    if (custom_fight != nullptr) draw_melee_grid(gs, *custom_fight, selected_model);
     for (const core::GameAction& t : view_.templates) {
         if (editor_kind(t) == EditorKind::Path) {
             move_status(gs);
@@ -240,7 +247,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     bool back = false;
     {
         ButtonRow row;
-        if (custom != nullptr && row.button("Back")) back = true;
+        if ((custom != nullptr || custom_fight != nullptr) && row.button("Back")) back = true;
         if (const auto confirm = board.confirm()) {
             if (row.button(action_label(gs, *confirm))) chosen = *confirm;
         }
@@ -254,8 +261,9 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     // The main action when nothing is left to do on the board.
     if (end && primary_button(end->label, true)) end_actions = end->actions;
     if (custom != nullptr && primary_button("Shoot", true)) chosen = custom->expand();
+    if (custom_fight != nullptr && primary_button("Fight", true)) chosen = custom_fight->expand();
     ImGui::EndTable();
-    if (back) board.cancel();  // after drawing: `custom` belongs to the board's edit
+    if (back) board.cancel();  // after drawing: the plans being edited belong to the board
     if (!end_actions.empty()) return end_actions;
     if (chosen) return {*chosen};
     return {};
@@ -323,113 +331,130 @@ void DecisionPanel::draw_shot_grid(const core::GameState& gs, ShotPlan& plan,
 std::optional<core::GameAction> DecisionPanel::draw_melee_editor(const GameSession& session,
                                                                  const core::action::Fight& tmpl,
                                                                  std::optional<core::ModelId> selected_model) {
+    // The non-board fallback: the same grid as the custom fight editor, then Fight.
     if (!melee_ || melee_->unit() != tmpl.unit) return std::nullopt;
-    const core::GameState& gs = session.state();
-    MeleePlan& plan = *melee_;
     std::optional<core::GameAction> chosen;
-    const float combo_w = ImGui::GetFontSize() * 18.0f;
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(("Melee weapons: " + unit_name(gs, tmpl.unit)).c_str());
-    ImGui::SameLine();
-    if (plan.unit_default()) {
-        const MeleeChoice& def = *plan.unit_default();
-        const std::string current = def.weapon + " -> " + unit_name(gs, def.target);
-        ImGui::SetNextItemWidth(combo_w);
-        if (ImGui::BeginCombo("Whole unit", current.c_str())) {
-            for (const MeleeChoice& c : plan.choices()) {
-                if (ImGui::Selectable((c.weapon + " -> " + unit_name(gs, c.target)).c_str(), def == c)) {
-                    plan.set_default(c);
-                }
-            }
-            ImGui::EndCombo();
-        }
-        ImGui::SameLine();
-    }
-    // D-030: the per-model choices and attack splits are in a popup.
-    std::size_t overridden = 0;
-    for (const core::Model& m : gs.find_unit(tmpl.unit)->models) overridden += plan.is_overridden(m.id) ? 1 : 0;
-    const std::string per_model = "Per-model / split attacks..." +
-                                  (overridden > 0 ? " (" + std::to_string(overridden) + " changed)" : std::string());
-    if (ImGui::Button(per_model.c_str())) ImGui::OpenPopup("##melee_models");
-    ImGui::SameLine();
-    if (ImGui::Button("Fight")) chosen = plan.expand();
-    if (!ImGui::BeginPopup("##melee_models")) return chosen;
-    ImGui::TextDisabled("Each model's melee weapon and targets (D-021)");
-    for (const core::Model& m : gs.find_unit(tmpl.unit)->models) {
-        const auto d = plan.declaration_for(m.id);
-        if (!d) continue;  // no enemy unit engaged with this model
-        ImGui::PushID(static_cast<int>(m.id.v));
-        const bool selected = selected_model == m.id;
-        if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
-        const std::string label = "Model " + std::to_string(m.id.v) + (selected ? " *" : "");
-        ImGui::SetNextItemWidth(combo_w);
-        if (ImGui::BeginCombo(label.c_str(), melee_text(gs, *d, plan).c_str())) {
-            if (ImGui::Selectable("Use the unit's choice", !plan.is_overridden(m.id))) plan.clear_override(m.id);
-            for (const MeleeOption& o : plan.options_for(m.id)) {
-                if (ImGui::Selectable(melee_text(gs, o.declaration, plan).c_str())) plan.override_model(m.id, o.declaration);
-            }
-            ImGui::EndCombo();
-        }
-        if (selected) ImGui::PopStyleColor();
-        // 04.02 Splitting Melee Attacks: one count per engaged target of this weapon.
-        std::vector<core::UnitId> targets;
-        for (const MeleeOption& o : plan.options_for(m.id)) {
-            if (o.declaration.weapon_index == d->weapon_index && o.declaration.profile_index == d->profile_index) {
-                targets.push_back(o.declaration.targets.front().unit);
-            }
-        }
-        if (targets.size() > 1 && ImGui::TreeNode("Split attacks")) {
-            core::MeleeDeclaration split = *d;
-            split.targets.clear();
-            bool changed = false;
-            for (const core::UnitId t : targets) {
-                int n = 0;
-                for (const core::MeleeTarget& mt : d->targets) {
-                    if (mt.unit == t) n = mt.attacks;
-                }
-                changed |= ImGui::InputInt(unit_name(gs, t).c_str(), &n);
-                if (n > 0) split.targets.push_back(core::MeleeTarget{t, n});
-            }
-            if (changed) plan.override_model(m.id, split);  // the engine checks the split when submitted
-            ImGui::TreePop();
-        }
-        ImGui::PopID();
-    }
-    ImGui::EndPopup();
+    draw_melee_grid(session.state(), *melee_, selected_model);
+    if (ImGui::Button("Fight")) chosen = melee_->expand();
     return chosen;
 }
 
-std::optional<core::GameAction> DecisionPanel::draw_casualty_editor(const GameSession& session,
-                                                                    const core::action::OrderCasualties& tmpl) {
+void DecisionPanel::draw_melee_grid(const core::GameState& gs, MeleePlan& plan,
+                                    std::optional<core::ModelId> selected_model) {
+    // D-032: one combo per model that can fight (every one must, D-021), in as many columns as fit. A model
+    // whose weapon reaches more than one engaged unit can split its attacks (04.02) in a popup.
+    ImGui::PushID(static_cast<int>(plan.unit().v));
+    const float cell = ImGui::GetFontSize() * 24.0f;
+    const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
+    if (ImGui::BeginTable("##melee_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
+        for (const core::Model& m : gs.find_unit(plan.unit())->models) {
+            const auto d = plan.declaration_for(m.id);
+            if (!d) continue;  // no enemy unit engaged with this model
+            ImGui::TableNextColumn();
+            ImGui::PushID(static_cast<int>(m.id.v));
+            const bool selected = selected_model == m.id;
+            // 04.02 Splitting Melee Attacks: the engaged targets of this model's weapon.
+            std::vector<core::UnitId> targets;
+            for (const MeleeOption& o : plan.options_for(m.id)) {
+                if (o.declaration.weapon_index == d->weapon_index && o.declaration.profile_index == d->profile_index) {
+                    targets.push_back(o.declaration.targets.front().unit);
+                }
+            }
+            const bool can_split = targets.size() > 1;
+            if (selected) ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Model %u%s", m.id.v, selected ? " *" : "");
+            ImGui::SameLine();
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float split_w = ImGui::CalcTextSize("Split...").x + style.FramePadding.x * 2.0f;
+            ImGui::SetNextItemWidth(can_split ? -(split_w + style.ItemSpacing.x) : -FLT_MIN);
+            if (ImGui::BeginCombo("##choice", melee_text(gs, *d, plan).c_str())) {
+                for (const MeleeOption& o : plan.options_for(m.id)) {
+                    if (ImGui::Selectable(melee_text(gs, o.declaration, plan).c_str(), *d == o.declaration)) {
+                        plan.override_model(m.id, o.declaration);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (selected) ImGui::PopStyleColor();
+            if (can_split) {
+                ImGui::SameLine();
+                if (ImGui::Button("Split...")) ImGui::OpenPopup("##split");
+                if (ImGui::BeginPopup("##split")) {
+                    ImGui::TextDisabled("Model %u's attacks per target (04.02)", m.id.v);
+                    core::MeleeDeclaration split = *d;
+                    split.targets.clear();
+                    bool changed = false;
+                    for (const core::UnitId t : targets) {
+                        int n = 0;
+                        for (const core::MeleeTarget& mt : d->targets) {
+                            if (mt.unit == t) n = mt.attacks;
+                        }
+                        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+                        changed |= ImGui::InputInt(unit_name(gs, t).c_str(), &n);
+                        if (n > 0) split.targets.push_back(core::MeleeTarget{t, n});
+                    }
+                    if (changed) plan.override_model(m.id, split);  // the engine checks the split when submitted
+                    ImGui::EndPopup();
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::PopID();
+}
+
+std::optional<core::GameAction> DecisionPanel::draw_casualty_bar(const GameSession& session,
+                                                                 const core::action::OrderCasualties& tmpl) {
     if (!casualties_ || casualties_->target() != tmpl.target) return std::nullopt;
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
     const auto& order = casualties_->priority();
-    // D-030: the order on one line; reordering is in a popup.
-    std::string summary = "Casualty order for " + unit_name(gs, tmpl.target) + " (D-013): models ";
-    constexpr std::size_t kShown = 8;
-    for (std::size_t i = 0; i < order.size() && i < kShown; ++i) {
-        summary += (i > 0 ? ", " : "") + std::to_string(order[i].v);
-    }
-    if (order.size() > kShown) summary += ", ...";
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(summary.c_str());
-    ImGui::SameLine();
-    if (ImGui::Button("Edit order...")) ImGui::OpenPopup("##casualty_order");
-    ImGui::SameLine();
-    if (ImGui::Button("Confirm casualty order")) chosen = casualties_->action();
-    if (ImGui::BeginPopup("##casualty_order")) {
-        ImGui::TextDisabled("Most preferred first");
-        for (std::size_t i = 0; i < order.size(); ++i) {
-            ImGui::PushID(static_cast<int>(i));
-            if (ImGui::ArrowButton("up", ImGuiDir_Up)) casualties_->move_up(i);
-            ImGui::SameLine();
-            if (ImGui::ArrowButton("down", ImGuiDir_Down)) casualties_->move_down(i);
-            ImGui::SameLine();
-            ImGui::Text("%zu. model %u", i + 1, order[i].v);
-            ImGui::PopID();
+    const std::string confirm = casualty_custom_ ? "Confirm order" : "Remove in this order";
+    if (!begin_bar(confirm)) return std::nullopt;
+    headline(gs, session.pending()->side, core::describe(*session.pending()));
+    bool back = false;
+    if (!casualty_custom_) {
+        // D-032: the default order, confirmed with one click, or "Custom order..." to change it.
+        std::string summary = "Models of the " + unit_name(gs, tmpl.target) + " are removed in this order (D-013): ";
+        constexpr std::size_t kShown = 10;
+        for (std::size_t i = 0; i < order.size() && i < kShown; ++i) {
+            summary += (i > 0 ? ", " : "") + std::to_string(order[i].v);
         }
-        ImGui::EndPopup();
+        if (order.size() > kShown) summary += ", ...";
+        ImGui::TextWrapped("%s", summary.c_str());
+        if (ImGui::Button("Custom order...")) casualty_custom_ = true;
+    } else {
+        ImGui::TextWrapped("Most preferred first: move a model earlier or later, then confirm. Back restores the "
+                           "default order.");
+        const float cell = ImGui::GetFontSize() * 11.0f;
+        const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
+        if (ImGui::BeginTable("##casualty_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
+            for (std::size_t i = 0; i < order.size(); ++i) {
+                ImGui::TableNextColumn();
+                ImGui::PushID(static_cast<int>(i));
+                if (ImGui::ArrowButton("earlier", ImGuiDir_Left)) casualties_->move_up(i);
+                ImGui::SameLine();
+                if (ImGui::ArrowButton("later", ImGuiDir_Right)) casualties_->move_down(i);
+                ImGui::SameLine();
+                ImGui::Text("%zu. model %u", i + 1, order[i].v);
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    ImGui::TableNextColumn();
+    if (casualty_custom_) {
+        ButtonRow row;
+        back = row.button("Back");
+    }
+    if (primary_button(confirm, casualty_custom_)) chosen = casualties_->action();
+    ImGui::EndTable();
+    if (back) {
+        casualties_.emplace(gs, tmpl.target);  // the default order again
+        casualty_custom_ = false;
     }
     return chosen;
 }

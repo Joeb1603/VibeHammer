@@ -106,6 +106,12 @@ BoardInteraction::BoardInteraction(const core::GameState& state, std::vector<cor
         mode_ = Mode::Moving;
         actor_ = m->unit;
         actor_fixed_ = true;
+    } else if (const auto* f = std::get_if<d::DeclareMeleeAttacks>(&kind)) {
+        // D-032: click the enemy unit to attack, then a melee weapon (or Custom...).
+        mode_ = Mode::Melee;
+        actor_ = f->unit;
+        actor_fixed_ = true;
+        melee_.emplace(state, f->unit);
     }
     base_mode_ = mode_;
 }
@@ -146,7 +152,12 @@ bool BoardInteraction::clickable(core::UnitId unit) const {
             return (unit == actor_ && !actor_fixed_) || contains(target_options(), unit);
         case Mode::Moving:
         case Mode::CustomShot:
+        case Mode::CustomMelee:
             return unit == actor_;
+        case Mode::Melee: {
+            const auto choices = melee_->choices();
+            return std::any_of(choices.begin(), choices.end(), [&](const MeleeChoice& c) { return c.target == unit; });
+        }
     }
     return false;
 }
@@ -158,10 +169,12 @@ bool BoardInteraction::waiting_for_click() const {
                                [](const core::GameAction& action) { return board_unit(action).has_value(); });
         case Mode::Shoot:
         case Mode::Targets:
+        case Mode::Melee:
             return true;
         case Mode::Inactive:
         case Mode::Moving:
         case Mode::CustomShot:
+        case Mode::CustomMelee:
             return false;
     }
     return false;
@@ -175,8 +188,9 @@ bool BoardInteraction::greyed(core::UnitId unit) const {
 std::string BoardInteraction::prompt(const core::GameState& state) const {
     if (mode_ == Mode::Shoot && actor_) return "Pick a target for the " + unit_name(state, *actor_);
     if (mode_ == Mode::Targets) return "Pick the enemy units to " + target_verb_;
-    if (mode_ == Mode::CustomShot && actor_) {
-        std::string text = "Custom shot: " + unit_name(state, *actor_);
+    if (mode_ == Mode::Melee && actor_) return "Pick a target for the " + unit_name(state, *actor_) + "'s attacks";
+    if ((mode_ == Mode::CustomShot || mode_ == Mode::CustomMelee) && actor_) {
+        std::string text = (mode_ == Mode::CustomShot ? "Custom shot: " : "Custom fight: ") + unit_name(state, *actor_);
         if (custom_target_) text += " at " + unit_name(state, *custom_target_);
         return text;
     }
@@ -199,6 +213,11 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
         }
         case Mode::CustomShot:
             return "Choose each model's weapon and target, then Shoot. Esc or Back returns to picking a target.";
+        case Mode::Melee:
+            return "Click an engaged enemy unit, then pick a melee weapon (or Custom... to choose per model).";
+        case Mode::CustomMelee:
+            return "Choose each model's melee weapon and target (every model that can fight must), then Fight. "
+                   "Esc or Back returns to picking a target.";
         case Mode::Targets: {
             std::string text = "Click the enemy units to " + target_verb_ + ".";
             if (!targets_.empty()) {
@@ -220,7 +239,10 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
         case Mode::Inactive:
         case Mode::Moving:
         case Mode::CustomShot:
+        case Mode::CustomMelee:
             return {};
+        case Mode::Melee:
+            return melee_menu(unit);
         case Mode::PickActor:
             return pick_actor(state, unit);
         case Mode::Shoot: {
@@ -325,7 +347,65 @@ ClickResult BoardInteraction::choose(const core::GameState& state, const core::G
     return ClickResult{action, {}};
 }
 
+ClickResult BoardInteraction::melee_menu(core::UnitId unit) const {
+    // D-032: one entry per melee weapon choice at the clicked target, then "Custom...". A model that can't
+    // reach that target still fights with its first option (D-021), which the label counts separately.
+    ClickResult result;
+    for (const MeleeChoice& c : melee_->choices()) {
+        if (c.target != unit) continue;
+        MeleePlan plan = *melee_;
+        plan.set_default(c);
+        const a::Fight fight = plan.expand();
+        if (fight.declarations.empty()) continue;
+        std::size_t at = 0;
+        std::string profile;
+        for (const MeleeOption& o : plan.options()) {
+            if (o.weapon != c.weapon || o.declaration.profile_index != c.profile_index ||
+                o.declaration.targets.front().unit != unit) {
+                continue;
+            }
+            profile = o.profile;
+            if (plan.declaration_for(o.declaration.model) == o.declaration) ++at;
+        }
+        std::string label = c.weapon;
+        if (profile.rfind(c.weapon, 0) == 0) {
+            label = profile;
+        } else if (!profile.empty()) {
+            label += " (" + profile + ")";
+        }
+        label += ": " + std::to_string(at) + (at == 1 ? " model" : " models");
+        if (const std::size_t other = fight.declarations.size() - at; other > 0) {
+            label += " (+" + std::to_string(other) + " at another target)";
+        }
+        result.menu.push_back(MenuEntry{label, fight});
+    }
+    if (!result.menu.empty()) {
+        // The custom entry's action starts the editor: the first entry's declarations at the clicked target.
+        a::Fight seed = std::get<a::Fight>(result.menu.front().action);
+        std::erase_if(seed.declarations,
+                      [&](const core::MeleeDeclaration& d) { return d.targets.front().unit != unit; });
+        result.menu.push_back(MenuEntry{"Custom...", seed, true});
+    }
+    return result;
+}
+
 ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEntry& entry) {
+    if (const auto* f = std::get_if<a::Fight>(&entry.action);
+        entry.custom && f != nullptr && !f->declarations.empty() && mode_ == Mode::Melee && melee_) {
+        // D-032: a copy of the fighter's plan starting from the entry's weapon at its target.
+        MeleePlan plan = *melee_;
+        const core::MeleeDeclaration& first = f->declarations.front();
+        for (const MeleeOption& o : plan.options()) {
+            if (o.declaration == first) {
+                plan.set_default(MeleeChoice{o.weapon, first.profile_index, first.targets.front().unit});
+                break;
+            }
+        }
+        custom_target_ = first.targets.front().unit;
+        custom_melee_ = std::move(plan);
+        mode_ = Mode::CustomMelee;
+        return {};
+    }
     const auto* s = std::get_if<a::Shoot>(&entry.action);
     if (!entry.custom || s == nullptr || s->shots.empty() || mode_ != Mode::Shoot || !shot_) {
         return choose(state, entry.action);
@@ -349,9 +429,14 @@ ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEnt
 void BoardInteraction::cancel() {
     targets_.clear();
     custom_.reset();
+    custom_melee_.reset();
     custom_target_.reset();
     if (mode_ == Mode::CustomShot) {
         mode_ = Mode::Shoot;  // back to picking a target for the same shooter, with nothing customised
+        return;
+    }
+    if (mode_ == Mode::CustomMelee) {
+        mode_ = Mode::Melee;
         return;
     }
     shot_.reset();
@@ -360,7 +445,7 @@ void BoardInteraction::cancel() {
 }
 
 std::optional<EndPhase> BoardInteraction::end_phase() const {
-    if (end_label_.empty() || mode_ == Mode::CustomShot) return std::nullopt;
+    if (end_label_.empty() || custom_editor()) return std::nullopt;
     EndPhase end{end_label_, {}};
     for (const core::GameAction& action : legal_) {
         if (is_end_action(action)) end.actions.push_back(action);
@@ -371,7 +456,7 @@ std::optional<EndPhase> BoardInteraction::end_phase() const {
 
 std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
-    if (mode_ == Mode::CustomShot) return out;  // the panel's Back and Shoot only (D-031)
+    if (custom_editor()) return out;  // the panel's Back and Shoot / Fight only (D-031, D-032)
     for (const core::GameAction& action : legal_) {
         if (core::is_template(action) || board_unit(action)) continue;
         if (!end_label_.empty() && is_end_action(action)) continue;  // the end-phase button covers it

@@ -11,6 +11,7 @@
 
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
+#include "melee_plan.hpp"
 #include "shot_plan.hpp"
 
 namespace wh40k::client {
@@ -51,7 +52,9 @@ public:
     // unit is left to act (only the end-phase button), every unit (D-029).
     [[nodiscard]] bool greyed(core::UnitId unit) const;
     // Picking targets (shooting, charge, pile-in): a line follows the cursor from the actor.
-    [[nodiscard]] bool picking_target() const noexcept { return mode_ == Mode::Shoot || mode_ == Mode::Targets; }
+    [[nodiscard]] bool picking_target() const noexcept {
+        return mode_ == Mode::Shoot || mode_ == Mode::Targets || mode_ == Mode::Melee;
+    }
     [[nodiscard]] std::string hint(const core::GameState& state) const;
     // The panel's headline while picking a target ("Pick a target for the Intercessor Squad"), else empty.
     [[nodiscard]] std::string prompt(const core::GameState& state) const;
@@ -60,14 +63,18 @@ public:
     ClickResult click(const core::GameState& state, core::UnitId unit);
     // A menu entry was picked (a Shoot template selects that shooter; anything else is submitted).
     ClickResult choose(const core::GameState& state, const core::GameAction& action);
-    // The same for a whole entry: "Custom..." opens the custom-shot editor (D-031).
+    // The same for a whole entry: "Custom..." opens the custom shot or fight editor (D-031, D-032).
     ClickResult choose(const core::GameState& state, const MenuEntry& entry);
-    // Esc or a click on empty board: forget the selection (a fixed actor stays). In the custom-shot editor:
-    // back to picking a target for the same shooter.
+    // Esc or a click on empty board: forget the selection (a fixed actor stays). In a custom editor: back
+    // to picking a target for the same unit.
     void cancel();
-    // Editing a custom shot (D-031): each model's weapon and target are set in the panel, on shot_plan().
-    // A click on empty board doesn't cancel it.
+    // Editing a custom shot or fight (D-031, D-032): each model's weapon and target are set in the panel,
+    // on shot_plan() or melee_plan(). A click on empty board doesn't cancel it.
+    [[nodiscard]] bool custom_editor() const noexcept {
+        return mode_ == Mode::CustomShot || mode_ == Mode::CustomMelee;
+    }
     [[nodiscard]] bool custom_shot() const noexcept { return mode_ == Mode::CustomShot; }
+    [[nodiscard]] bool custom_melee() const noexcept { return mode_ == Mode::CustomMelee; }
 
     // Ending the phase (or step): every remaining unit remains stationary, End Shooting phase, Pass, ...
     [[nodiscard]] std::optional<EndPhase> end_phase() const;
@@ -80,6 +87,11 @@ public:
         if (mode_ == Mode::CustomShot) return custom_ ? &*custom_ : nullptr;
         return shot_ ? &*shot_ : nullptr;
     }
+    // While declaring melee attacks: the fighter's plan (edited per model in the custom fight editor).
+    [[nodiscard]] MeleePlan* melee_plan() {
+        if (mode_ == Mode::CustomMelee) return custom_melee_ ? &*custom_melee_ : nullptr;
+        return melee_ ? &*melee_ : nullptr;
+    }
 
 private:
     enum class Mode {
@@ -89,12 +101,15 @@ private:
         CustomShot, // "Custom..." was picked on a target: each model's choice is edited in the panel (D-031)
         Targets,    // the actor is picked: click enemy units to choose targets (charge, pile-in, consolidate)
         Moving,     // MoveModels: the moving unit is dragged on the board
+        Melee,      // DeclareMeleeAttacks: click an engaged enemy unit, then a melee weapon (D-032)
+        CustomMelee, // "Custom..." was picked on a fight target: each model's choice is edited in the panel
     };
 
     [[nodiscard]] std::vector<core::GameAction> actions_of(core::UnitId unit) const;
     [[nodiscard]] std::vector<core::UnitId> target_options() const;
     ClickResult pick_actor(const core::GameState& state, core::UnitId unit);
     ClickResult start_targets(core::UnitId unit);
+    [[nodiscard]] ClickResult melee_menu(core::UnitId unit) const;
 
     Mode mode_ = Mode::Inactive;
     Mode base_mode_ = Mode::Inactive;  // what cancel() returns to
@@ -104,7 +119,9 @@ private:
     std::vector<core::UnitId> targets_;
     std::optional<ShotPlan> shot_;
     std::optional<ShotPlan> custom_;             // CustomShot: the plan being edited (a copy of shot_)
-    std::optional<core::UnitId> custom_target_;  // CustomShot: the target "Custom..." was picked on
+    std::optional<core::UnitId> custom_target_;  // a custom editor: the target "Custom..." was picked on
+    std::optional<MeleePlan> melee_;             // Melee: the fighter's plan
+    std::optional<MeleePlan> custom_melee_;      // CustomMelee: the plan being edited (a copy of melee_)
     std::string verb_;         // picking a unit: "move", "shoot with", ... (for the hint)
     std::string target_verb_;  // picking targets: "charge", "pile in towards", ...
     std::string end_label_;    // the end-phase button, if this decision has one

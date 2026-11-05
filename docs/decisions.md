@@ -591,3 +591,21 @@ logic).
 - For units with many models the bar can grow to 45% of the window height, overlaying the top of the board.
   The board doesn't refit.
 
+## D-032: Fight weapons and casualty order follow the same flow (M19)
+**Decided:** 2026-11-05 (agreed with the user). Client only; extends D-031 and amends D-029/D-030.
+- **Fight weapons** (`DeclareMeleeAttacks`, 04.01/04.02, D-021) are picked on the board. The fighting unit
+  is fixed by the decision. The bar says "Pick a target for the <unit>'s attacks", a target line follows the
+  cursor, and only engaged enemy units can be clicked (the rest are grey).
+- Clicking a target offers each melee weapon choice at it, with the number of models that fight it there.
+  Models that can't reach that target still fight with their first option (every model that can fight
+  must), and the label counts them: "(+n at another target)". Then a separator and "Custom...". A weapon
+  submits the Fight at once.
+- "Custom..." opens "Custom fight: <unit> at <target>": one combo per model that can fight, offering each of
+  its melee weapons and targets (no "doesn't fight"). A **Split...** button opens the per-target attack
+  counts (04.02) when the model's weapon reaches more than one engaged unit. Back and a large green Fight
+  sit on the right. Esc, Back and empty-board clicks behave as in D-031.
+- **Casualty order** (`OrderCasualties`, D-013) stays a sidebar-mode decision. The bar shows the default
+  order (unit order) and a large "Remove in this order" button, plus **Custom order...**. That opens a grid of
+  "n. model m" with earlier/later arrows, Back (restores the default order) and a large "Confirm order".
+- Attack batch, allocation order and coherency removal are plain button choices and stay as they were.
+

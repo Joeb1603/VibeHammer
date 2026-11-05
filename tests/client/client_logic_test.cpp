@@ -838,6 +838,106 @@ TEST(M18_CustomShot, CancelReturnsToPickingATarget) {
     EXPECT_EQ(again.menu.front().action, r.menu.front().action);
 }
 
+namespace {
+// A session waiting for the Intercessors' melee declarations (DeclareMeleeAttacks, 04.01).
+GameSession declare_melee_session() {
+    GameSession session(wh40k::test::after_successful_charge());
+    EXPECT_TRUE(session.submit(action::EndChargeStep{}).ok());
+    while (session.state().flow.stage == Stage::PileIn) EXPECT_TRUE(session.submit(action::EndPileIns{}).ok());
+    EXPECT_TRUE(session.submit(action::SelectToFight{session.state().units[0].id, FightType::Normal}).ok());
+    return session;
+}
+}  // namespace
+
+// D-032: a fight's weapons are picked like a shot's: click the target, then a weapon or Custom...
+TEST(M19_CustomMelee, ATargetClickOffersTheMeleeWeaponsThenCustom) {
+    GameSession session = declare_melee_session();
+    ASSERT_TRUE(std::holds_alternative<decision::DeclareMeleeAttacks>(session.pending()->kind));
+    const GameState& gs = session.state();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, session.legal());
+    EXPECT_TRUE(board.active());
+    EXPECT_EQ(board.actor(), marines);
+    EXPECT_TRUE(board.picking_target());
+    EXPECT_TRUE(board.waiting_for_click());
+    EXPECT_TRUE(board.clickable(gants));
+    EXPECT_FALSE(board.clickable(marines));
+    EXPECT_EQ(board.prompt(gs), "Pick a target for the Intercessor Squad's attacks");
+    EXPECT_FALSE(board.end_phase().has_value());
+    EXPECT_TRUE(board.step_buttons().empty());
+
+    const ClickResult r = board.click(gs, gants);
+    EXPECT_FALSE(r.submit.has_value());
+    ASSERT_GE(r.menu.size(), 2u);
+    EXPECT_EQ(r.menu.back().label, "Custom...");
+    EXPECT_TRUE(r.menu.back().custom);
+    EXPECT_FALSE(r.menu.front().custom);
+    EXPECT_NE(r.menu.front().label.find(": 5 models"), std::string::npos) << r.menu.front().label;
+    const ClickResult fight = board.choose(gs, r.menu.front());
+    ASSERT_TRUE(fight.submit.has_value());
+    EXPECT_EQ(std::get<action::Fight>(*fight.submit).declarations.size(), 5u);
+    EXPECT_TRUE(session.submit(*fight.submit).ok());
+}
+
+TEST(M19_CustomMelee, CustomOpensTheEditorAndItsFightIsAccepted) {
+    GameSession session = declare_melee_session();
+    const GameState& gs = session.state();
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, session.legal());
+    const ClickResult r = board.click(gs, gants);
+    ASSERT_FALSE(r.menu.empty());
+    const ClickResult opened = board.choose(gs, r.menu.back());
+    EXPECT_FALSE(opened.submit.has_value());
+    EXPECT_TRUE(board.custom_editor());
+    EXPECT_TRUE(board.custom_melee());
+    EXPECT_FALSE(board.custom_shot());
+    EXPECT_FALSE(board.picking_target());
+    EXPECT_FALSE(board.waiting_for_click());
+    EXPECT_FALSE(board.greyed(gants));
+    EXPECT_FALSE(board.end_phase().has_value());
+    EXPECT_EQ(board.prompt(gs), "Custom fight: Intercessor Squad at Termagants");
+
+    MeleePlan* plan = board.melee_plan();
+    ASSERT_NE(plan, nullptr);
+    // Starts on the first menu entry's weapon.
+    EXPECT_EQ(plan->expand(), std::get<action::Fight>(r.menu.front().action));
+    // One model fights with another of its options, if it has one; the engine accepts the declaration.
+    const ModelId m = gs.units[0].models[0].id;
+    const auto now = plan->declaration_for(m);
+    ASSERT_TRUE(now.has_value());
+    for (const MeleeOption& o : plan->options_for(m)) {
+        if (!(o.declaration == *now)) {
+            plan->override_model(m, o.declaration);
+            break;
+        }
+    }
+    const action::Fight fight = plan->expand();
+    EXPECT_EQ(fight.declarations.size(), 5u);  // every model that can fight does (D-021)
+    ASSERT_TRUE(session.submit(fight).ok());
+}
+
+TEST(M19_CustomMelee, CancelReturnsToPickingATarget) {
+    GameSession session = declare_melee_session();
+    const GameState& gs = session.state();
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    BoardInteraction board(gs, session.legal());
+    const ClickResult r = board.click(gs, gants);
+    (void)board.choose(gs, r.menu.back());
+    ASSERT_TRUE(board.custom_melee());
+
+    board.cancel();  // Esc or Back
+    EXPECT_FALSE(board.custom_editor());
+    EXPECT_TRUE(board.picking_target());
+    EXPECT_EQ(board.actor(), marines);  // the fighter is fixed by the decision
+    const ClickResult again = board.click(gs, gants);
+    EXPECT_EQ(again.menu.size(), r.menu.size());
+    board.cancel();  // picking a target: the fighter stays
+    EXPECT_EQ(board.actor(), marines);
+    EXPECT_TRUE(board.picking_target());
+}
+
 TEST(M16_BoardInteraction, ClickingTheShooterAgainPicksAnotherUnit) {
     const GameState gs = wh40k::test::shoot_step_state();
     const auto legal = legal_actions(gs, Side::A);
@@ -926,6 +1026,15 @@ TEST(M16_BoardInteraction, OtherDecisionsStayInTheSidebarAndNothingIsGrey) {
     const UnitId marines = session.state().units[0].id;
     ASSERT_TRUE(session.submit(action::SelectToFight{marines, FightType::Normal}).ok());
     ASSERT_TRUE(std::holds_alternative<decision::DeclareMeleeAttacks>(session.pending()->kind));
+    // Since D-032 the melee declaration is picked on the board; the attacks that follow (attack batch,
+    // allocation order, casualties) stay in the sidebar.
+    ASSERT_TRUE(session.submit(MeleePlan(session.state(), marines).expand()).ok());
+    ASSERT_TRUE(session.pending().has_value());
+    const auto& kind = session.pending()->kind;
+    ASSERT_TRUE(std::holds_alternative<decision::SelectAttackBatch>(kind) ||
+                std::holds_alternative<decision::DeclareAllocationOrder>(kind) ||
+                std::holds_alternative<decision::OrderCasualties>(kind))
+        << decision_name(kind);
     const BoardInteraction board(session.state(), session.legal());
     EXPECT_FALSE(board.active());
     EXPECT_FALSE(board.clickable(marines));
@@ -1005,6 +1114,11 @@ GameAction choose_on_board(const GameSession& s, int& move_tries) {
         }
         if (std::holds_alternative<decision::PileIn>(kind) || std::holds_alternative<decision::Consolidate>(kind)) {
             return board.end_phase()->actions.front();  // End pile-ins / consolidations
+        }
+        if (std::holds_alternative<decision::DeclareMeleeAttacks>(kind)) {
+            // D-032: click the target, then the first melee weapon on the menu.
+            const ClickResult r = board.click(gs, *enemy_clickable());
+            return r.menu.front().action;
         }
         // Charge, charge targets, fights, overrun pile-ins: click the unit, then a target if needed.
         if (const auto unit = friendly_clickable()) {

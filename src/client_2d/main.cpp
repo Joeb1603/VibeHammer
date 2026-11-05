@@ -412,8 +412,8 @@ private:
         }
         if (!hovered) {
             selected_model_.reset();
-            // A click on empty board drops the board selection, but not a custom shot being edited (D-031).
-            if (!board_.custom_shot()) board_.cancel();
+            // A click on empty board drops the board selection, but not a custom shot or fight being edited (D-031, D-032).
+            if (!board_.custom_editor()) board_.cancel();
             return;
         }
         const core::UnitId unit = hovered->unit->id;
@@ -647,10 +647,10 @@ private:
                 fit_pending_ = true;
             }
             ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_));
-            const bool grows = mode_ == Mode::Play && board_.custom_shot();
+            const bool grows = mode_ == Mode::Play && (board_.custom_editor() || panel_.custom_editor());
             ImGuiWindowFlags action_flags = kFixed;
             if (grows) {
-                // D-031: the custom-shot editor may need more rows; the bar then overlays the board's top
+                // D-031, D-032: a custom shot, fight or casualty order may need more rows; the bar then overlays the board's top
                 // instead of resizing it, so the board doesn't refit.
                 ImGui::SetNextWindowSizeConstraints(ImVec2(w - panel_width(), action_height_),
                                                     ImVec2(w - panel_width(), h * 0.45f));

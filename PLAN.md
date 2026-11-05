@@ -283,6 +283,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M19: Target-then-weapon fights and custom casualty order ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-05)
+
+> Give the fight's weapon step the M18 flow (D-032): click the engaged enemy unit, then a melee weapon or "Custom..." to set each model's weapon, target and attack split in the action bar. The casualty order gets a one-click default with "Custom order..." to edit it. Client only.
+
+**Acceptance**
+- Picking the weapons in a fight is a click on the target, then a weapon or Custom...; there are no weapon controls before the target.
+- The custom melee editor submits a declaration the engine accepts; Back/Esc returns to picking the target.
+- The casualty order is confirmed with one button, or edited with Custom order... then confirmed.
+- A full game can still be played to GameOver by board clicks (logic test).
+
+---
+
 ## Later (post-V1, rough order)
 0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
