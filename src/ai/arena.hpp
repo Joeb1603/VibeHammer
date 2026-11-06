@@ -26,7 +26,9 @@ struct GameRecord {
     std::array<int, 2> surviving_models{};  // indexed by side_index
     std::array<int, 2> wounds_lost{};       // M41: wounds each side's models lost (destroyed models count all theirs)
     std::array<int, 2> coherency_removed{};  // M41: models each side removed to regain coherency (03.03)
-    std::size_t steps = 0;                  // accepted actions, the client's automatic ones included
+    std::array<int, 2> fight_move_steps{};   // M46: bot decisions in a Pile In or Consolidate step (12.02, 12.07)
+    std::array<int, 2> fight_moves{};        // M46: pile-ins and consolidations committed (12.03, 12.08)
+    std::size_t steps = 0;                 // accepted actions, the client's automatic ones included
     std::size_t rejected = 0;               // bot actions the session refused
     std::size_t reverted = 0;               // UnitMoveReverted events
     std::size_t fallbacks = 0;              // decisions the bots answered with the fallback
@@ -57,6 +59,8 @@ struct ArenaResult {
     std::array<double, 2> mean_surviving{};
     std::array<double, 2> mean_wounds_lost{};  // M41: by side; side A's is the damage side B dealt
     std::array<int, 2> coherency_removed{};     // M41: total models removed for coherency, by side
+    std::array<int, 2> fight_move_steps{};      // M46: totals, by side
+    std::array<int, 2> fight_moves{};           // M46: totals, by side
     std::size_t fallbacks = 0;
     double p50_ms = 0.0;
     double p95_ms = 0.0;
@@ -76,8 +80,8 @@ struct ArenaResult {
                                     BotConfig b, std::size_t step_cap = 5000);
 
 // The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
-// side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time and (M43) the seeds that
-// lost models to coherency.
+// side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time, (M43) the seeds that
+// lost models to coherency and (M46) the Pile In / Consolidate steps the bots answered and the moves they made.
 [[nodiscard]] std::string format_arena(const ArenaResult& r, const core::GameState& scenario);
 
 }  // namespace wh40k::ai

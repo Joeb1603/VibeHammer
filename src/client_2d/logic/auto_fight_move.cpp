@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <numbers>
 #include <optional>
 #include <variant>
@@ -9,6 +10,7 @@
 #include "core/engine/movement.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/geometry/engagement.hpp"
 #include "core/model/keywords.hpp"
 #include "core/state/queries.hpp"
 #include "fight_move_skip.hpp"
@@ -234,6 +236,64 @@ AutoFightMove auto_fight_move(const core::GameState& state) {
     if (first.result.ok()) return first.result;
     if (second.result.ok()) return second.result;
     return AutoFightMove{{}, first.result.problems};
+}
+
+FightMoveShape fight_move_shape(const core::GameState& state, core::UnitId unit_id,
+                                const std::vector<core::UnitId>& targets) {
+    FightMoveShape s;
+    const core::Unit* unit = state.find_unit(unit_id);
+    if (unit == nullptr) return s;
+    std::vector<const core::Unit*> alive;
+    for (const core::UnitId id : targets) {
+        const core::Unit* t = state.find_unit(id);
+        if (t != nullptr && !core::is_destroyed(*t)) alive.push_back(t);
+    }
+    if (alive.empty()) return s;
+    for (const core::Model& m : unit->models) {
+        std::optional<float> gap;
+        for (const core::Unit* t : alive) {
+            const std::optional<float> d = core::model_distance_to_unit(m, m.position, *t);
+            if (d && (!gap || *d < *gap)) gap = d;
+        }
+        if (gap) {
+            if (core::within(*gap, core::kEngagementRangeMm)) ++s.engaged;
+            if (core::in_base_contact(*gap)) ++s.in_contact;
+            s.total_gap += *gap;
+        }
+        s.links += friendly_links(*unit, m, m.position);
+    }
+    return s;
+}
+
+FightMoveShape shape_change(const FightMoveShape& before, const FightMoveShape& after) {
+    return FightMoveShape{after.engaged - before.engaged, after.in_contact - before.in_contact,
+                          after.total_gap - before.total_gap, after.links - before.links};
+}
+
+bool tidier(const FightMoveShape& a, const FightMoveShape& b) {
+    if (a.engaged != b.engaged) return a.engaged > b.engaged;
+    if (a.in_contact != b.in_contact) return a.in_contact > b.in_contact;
+    if (std::fabs(a.total_gap - b.total_gap) > kAutoMoveGapBandMm) return a.total_gap < b.total_gap;
+    return a.links > b.links;
+}
+
+std::string describe_shape_change(const FightMoveShape& c) {
+    std::vector<std::string> parts;
+    const auto count = [&](int n, const char* what) {
+        if (n > 0) parts.push_back(std::to_string(n) + " more " + what);
+    };
+    count(c.engaged, "engaged");
+    count(c.in_contact, "in base contact");
+    if (c.total_gap < -kAutoMoveGapBandMm) {
+        char buf[48];
+        std::snprintf(buf, sizeof buf, "%.1f\" closer in total", static_cast<double>(-c.total_gap / core::MM_PER_INCH));
+        parts.emplace_back(buf);
+    }
+    if (c.links > 0) parts.push_back("tighter coherency");
+    if (parts.empty()) return "no closer";
+    std::string out;
+    for (std::size_t i = 0; i < parts.size(); ++i) out += (i > 0 ? ", " : "") + parts[i];
+    return out;
 }
 
 }  // namespace wh40k::client

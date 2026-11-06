@@ -22,8 +22,31 @@ namespace wh40k::ai::normal {
 namespace {
 
 constexpr double kBetter = 1e-9;     // a choice must beat the current one by more than this (ties keep it)
+constexpr double kFightMoveTie = 1e-6;  // D-057: fight-move gains this close are equal (the tidier move wins)
 constexpr std::size_t kMaxSplits = 16;  // split-attack candidates per model (D-054: a fixed budget)
 constexpr int kDescentPasses = 2;
+
+// D-057 (M46): a pile-in or consolidation candidate, or not moving (no plan, no gain, no change).
+struct FightMoveCand {
+    std::optional<FightMovePlan> plan;
+    double gain = 0.0;
+    client::FightMoveShape change;  // the moving unit's shape after the move minus before it
+    std::string reason;
+};
+
+// D-057: more gain wins; gains within kFightMoveTie are a tie, which goes to the tidier move. Not moving has a
+// zero change, so a tied move wins over it only if it is tidier than standing still.
+bool beats(const FightMoveCand& a, const FightMoveCand& b) {
+    if (a.gain > b.gain + kFightMoveTie) return true;
+    if (a.gain < b.gain - kFightMoveTie) return false;
+    return client::tidier(a.change, b.change);
+}
+
+client::FightMoveShape move_change(const core::GameState& before, const core::GameState& after, core::UnitId unit,
+                                   const std::vector<core::UnitId>& targets) {
+    return client::shape_change(client::fight_move_shape(before, unit, targets),
+                                client::fight_move_shape(after, unit, targets));
+}
 
 std::string name_of(const core::GameState& state, core::UnitId id) {
     const core::Unit* u = state.find_unit(id);
@@ -48,6 +71,12 @@ PolicyResult from_steps(std::vector<PlannedStep> steps, const std::string& reaso
     PolicyResult r{steps.front().action, reason, {}};
     r.rest.assign(std::make_move_iterator(steps.begin() + 1), std::make_move_iterator(steps.end()));
     return r;
+}
+
+// "<head> - 3 more in base contact, 1.2\" closer in total (+0.000)": what the move does to the unit's shape, then
+// the gain (D-057). The combat log's short form keeps the head and the first clause after " - " (M45).
+std::string fight_move_reason(const std::string& head, const FightMoveCand& c) {
+    return head + " - " + client::describe_shape_change(c.change) + " (" + signed_value(c.gain) + ")";
 }
 
 std::optional<double> melee_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit,
@@ -346,24 +375,22 @@ std::optional<PolicyResult> decide_melee(analysis::OddsCache& cache, const core:
 std::optional<PolicyResult> decide_pile_in(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
                                            const std::vector<core::GameAction>& legal, std::uint64_t seed) {
     const double base = melee_exchange(cache, state, side);
-    std::optional<FightMovePlan> best;
-    double best_gain = 0.0;
-    std::string best_reason;
+    FightMoveCand best;  // not moving
     for (const core::GameAction& a : legal) {
         const auto* p = std::get_if<core::action::StartPileIn>(&a);
         if (p == nullptr || !client::fight_move_worthwhile(state, side, a)) continue;
-        const std::string reason = name_of(state, p->unit) + ": pile in towards " + names_of(state, p->targets);
-        std::optional<FightMovePlan> plan = simulate_fight_move(state, side, a, seed, reason);
-        if (!plan) continue;
-        const double gain = melee_exchange(cache, plan->after, side) - base;
-        if (gain > best_gain + kBetter) {
-            best_gain = gain;
-            best_reason = reason + " (" + signed_value(gain) + ")";
-            best = std::move(plan);
-        }
+        const std::string head = name_of(state, p->unit) + ": pile in towards " + names_of(state, p->targets);
+        FightMoveCand c;
+        c.plan = simulate_fight_move(state, side, a, seed, head);
+        if (!c.plan) continue;
+        c.gain = melee_exchange(cache, c.plan->after, side) - base;
+        c.change = move_change(state, c.plan->after, p->unit, p->targets);
+        c.reason = fight_move_reason(head, c);
+        if (beats(c, best)) best = std::move(c);
     }
-    if (best) return from_steps(std::move(best->steps), best_reason);
-    return single(core::action::EndPileIns{}, "End pile-ins: no pile-in improves the melee exchange");
+    if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);
+    return single(core::action::EndPileIns{},
+                  "End pile-ins: no pile-in improves the melee exchange or closes in without a cost");
 }
 
 std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, const core::GameState& state,
@@ -372,24 +399,22 @@ std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, c
     const auto& d = std::get<core::decision::OverrunPileIn>(state.pending->kind);
     const double base_theirs = side_melee(cache, state, side).theirs;
     const double skip_score = own_fight_value(cache, state, d.unit);
-    std::optional<FightMovePlan> best;
-    double best_score = skip_score;
-    std::string best_reason;
+    FightMoveCand best;  // skipping
     for (const core::GameAction& a : legal) {
         const auto* p = std::get_if<core::action::StartPileIn>(&a);
         if (p == nullptr) continue;
-        const std::string reason = name_of(state, d.unit) + ": Overrun pile-in towards " + names_of(state, p->targets);
-        std::optional<FightMovePlan> plan = simulate_fight_move(state, side, a, seed, reason);
-        if (!plan) continue;
-        const double score =
-            own_fight_value(cache, plan->after, d.unit) - (side_melee(cache, plan->after, side).theirs - base_theirs);
-        if (score > best_score + kBetter) {
-            best_score = score;
-            best_reason = reason + " (" + signed_value(score - skip_score) + ")";
-            best = std::move(plan);
-        }
+        const std::string head = name_of(state, d.unit) + ": Overrun pile-in towards " + names_of(state, p->targets);
+        FightMoveCand c;
+        c.plan = simulate_fight_move(state, side, a, seed, head);
+        if (!c.plan) continue;
+        const double score = own_fight_value(cache, c.plan->after, d.unit) -
+                             (side_melee(cache, c.plan->after, side).theirs - base_theirs);
+        c.gain = score - skip_score;
+        c.change = move_change(state, c.plan->after, d.unit, p->targets);
+        c.reason = fight_move_reason(head, c);
+        if (beats(c, best)) best = std::move(c);
     }
-    if (best) return from_steps(std::move(best->steps), best_reason);
+    if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);
     return single(core::action::SkipPileIn{d.unit},
                   name_of(state, d.unit) + ": skip the Overrun pile-in (12.06): it would not gain anything");
 }
@@ -398,24 +423,22 @@ std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, con
                                                  core::Side side, const std::vector<core::GameAction>& legal,
                                                  std::uint64_t seed) {
     const double base = consolidation_score(cache, state, side);
-    std::optional<FightMovePlan> best;
-    double best_gain = 0.0;
-    std::string best_reason;
+    FightMoveCand best;  // not moving
     for (const core::GameAction& a : legal) {
-        const auto* c = std::get_if<core::action::StartConsolidation>(&a);
-        if (c == nullptr || !client::fight_move_worthwhile(state, side, a)) continue;
-        const std::string reason = name_of(state, c->unit) + ": consolidate towards " + names_of(state, c->targets);
-        std::optional<FightMovePlan> plan = simulate_fight_move(state, side, a, seed, reason);
-        if (!plan) continue;
-        const double gain = consolidation_score(cache, plan->after, side) - base;
-        if (gain > best_gain + kBetter) {
-            best_gain = gain;
-            best_reason = reason + " (" + signed_value(gain) + ")";
-            best = std::move(plan);
-        }
+        const auto* s = std::get_if<core::action::StartConsolidation>(&a);
+        if (s == nullptr || !client::fight_move_worthwhile(state, side, a)) continue;
+        const std::string head = name_of(state, s->unit) + ": consolidate towards " + names_of(state, s->targets);
+        FightMoveCand c;
+        c.plan = simulate_fight_move(state, side, a, seed, head);
+        if (!c.plan) continue;
+        c.gain = consolidation_score(cache, c.plan->after, side) - base;
+        c.change = move_change(state, c.plan->after, s->unit, s->targets);
+        c.reason = fight_move_reason(head, c);
+        if (beats(c, best)) best = std::move(c);
     }
-    if (best) return from_steps(std::move(best->steps), best_reason);
-    return single(core::action::EndConsolidations{}, "End consolidations: no consolidation improves the position");
+    if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);
+    return single(core::action::EndConsolidations{},
+                  "End consolidations: no consolidation improves the position or closes in without a cost");
 }
 
 std::optional<PolicyResult> continue_fight_move(const core::GameState& state, core::Side side, std::uint64_t seed) {

@@ -1094,6 +1094,54 @@ compared with `--a normal --b normal` on the same scenario and seeds 1–200.
 
 ---
 
+## M46: Bots pile in and consolidate when it costs nothing ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (approved 2026-11-06) · **Rules:** 12.02, 12.03, 12.06, 12.07, 12.08 · **Decision:** D-057
+
+> In play the bots hardly ever piled in or consolidated, which looked passive. After a charge the models are
+> usually already engaged, so closing into base contact changes nothing in the melee exchange, and Normal and Hard
+> ended the step on a tie. Easy ended every pile-in and consolidation except an Overrun's.
+> - **Normal and Hard: move unless it hurts.** A tie goes to the tidier move (more engaged, more in base contact,
+>   closer, tighter coherency, as Auto move places models). A move that costs them is still refused.
+> - **Easy: always Auto move.** Every offered pile-in and consolidation worth making (D-047, D-049), if it stands.
+> - No rule or core change; the bot only picks among legal actions (D-054). The arena counts the Pile In /
+>   Consolidate steps the bots answer and the moves they make.
+
+**Acceptance**
+- Clean build; all of ctest passes. New ai tests `M46_*` and client tests `M46_FightMoveShape.*`.
+- Release arena (200 seeds; V1 and both bot scenarios; Easy/Easy, Normal/Easy, Easy/Normal, Hard/Normal,
+  Normal/Hard): the bots make a clearly larger share of the pile-ins and consolidations offered to them; no seat's
+  wins + draws drop by more than ~3 percentage points; no rejected actions, reverted moves or fallbacks.
+- The existing replays are byte-identical; the new replay `tests/replays/m46_bot_fight_moves.json` is byte-stable.
+
+**Results (2026-11-06):** all acceptance items met. Arena before (code at `95cb5e4` with the new counters) and
+after, `wh40k_bot_arena --games 200`:
+- **Fight moves made / Pile In and Consolidate steps the bot answered** (fewer steps reach the bot after, because
+  models in base contact can't move and the client skips the step, D-047):
+
+  | Scenario, A vs B | Side A before → after | Side B before → after |
+  |---|---|---|
+  | V1, Normal vs Easy | 60 / 183 → 138 / 140 | 0 / 136 → 94 / 96 |
+  | V1, Hard vs Normal | 34 / 127 → 125 / 125 | 1 / 63 → 43 / 43 |
+  | V1, Normal vs Hard | 30 / 91 → 91 / 91 | 1 / 56 → 41 / 41 |
+  | 20 Termagants, Easy vs Easy | 0 / 810 → 376 / 376 | 56 / 808 → 436 / 439 |
+  | 20 Termagants, Hard vs Normal | 109 / 649 → 346 / 351 | 50 / 984 → 522 / 530 |
+  | 20 Termagants, Normal vs Hard | 97 / 558 → 317 / 322 | 56 / 927 → 483 / 491 |
+- **Results** (Space Marines wins / Tyranid wins / draws): V1 and Termagants-first are unchanged in every pairing
+  (200/0/0, and Easy vs Normal on Termagants-first 199/0/1 both times). 20 Termagants: Easy/Easy 198/0/2 →
+  196/1/3; Normal/Easy 200/0/0 both; Easy/Normal 186/1/13 both; Hard/Normal 195/1/4 → 194/0/6; Normal/Hard 194/2/4
+  → 196/3/1. The largest change is Hard as Tyranids, wins + draws 6 → 4 (1 point in 100).
+- Clean everywhere: 0 rejected actions, 0 `UnitMoveReverted`, 0 fallbacks.
+- **Seen, not fixed (open):** Easy's Termagants, which aren't weighed, now lose models to coherency after
+  casualties (Auto move strings a big unit round the enemy). 20 Termagants: Easy/Easy 0 → 37 models, Normal/Easy
+  0 → 128; Termagants-first Normal/Easy 0 → 10. Normal's and Hard's Termagants are not affected (Hard/Normal
+  3 → 1); their Intercessors lose slightly more (5 → 9, 8 → 9).
+- **Decision time:** p95 at most 46 ms (budget 500 ms). Hard's slowest single decision on 20 Termagants went from
+  0.20 s to 1.46 s.
+- Replays: existing files unchanged; `m46_bot_fight_moves.json` (Normal vs Normal, 20 Termagants, seed 1; both
+  sides make fight moves) is identical across two regenerations and replays with core only.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

@@ -63,6 +63,12 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
                 if (const auto* r = std::get_if<core::event::ModelRemovedForCoherency>(&e)) {
                     if (const core::Unit* u = session.state().find_unit(r->unit)) ++rec.coherency_removed[core::side_index(u->side)];
                 }
+                if (const auto* c = std::get_if<core::event::UnitMoveCommitted>(&e)) {
+                    const bool fight_move =
+                        c->move_type == core::MoveType::PileIn || c->move_type == core::MoveType::Consolidation;
+                    const core::Unit* u = session.state().find_unit(c->unit);
+                    if (fight_move && u != nullptr) ++rec.fight_moves[core::side_index(u->side)];
+                }
             }
         }
     };
@@ -71,6 +77,10 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
         count_new();
         if (!session.pending()) break;
         const core::Side side = session.pending()->side;
+        if (std::holds_alternative<core::decision::PileIn>(session.pending()->kind) ||
+            std::holds_alternative<core::decision::Consolidate>(session.pending()->kind)) {
+            ++rec.fight_move_steps[core::side_index(side)];
+        }
         const auto t0 = std::chrono::steady_clock::now();
         const BotChoice choice = bots[core::side_index(side)].decide(session.state(), side);
         const auto t1 = std::chrono::steady_clock::now();
@@ -131,6 +141,10 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
         r.fallbacks += g.fallbacks;
         r.coherency_removed[0] += g.coherency_removed[0];
         r.coherency_removed[1] += g.coherency_removed[1];
+        for (std::size_t s = 0; s < 2; ++s) {
+            r.fight_move_steps[s] += g.fight_move_steps[s];
+            r.fight_moves[s] += g.fight_moves[s];
+        }
     }
     if (!r.games.empty()) {
         const double n = static_cast<double>(r.games.size());
@@ -163,6 +177,10 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                   r.reverted, r.fallbacks, r.p50_ms, r.p95_ms, r.max_ms, r.mean_result(core::Side::A),
                   r.mean_result(core::Side::B));
     std::string out = buf;
+    std::snprintf(buf, sizeof buf,
+                  "pile-in / consolidate steps answered: A %d, B %d; pile-ins and consolidations made: A %d, B %d\n",
+                  r.fight_move_steps[0], r.fight_move_steps[1], r.fight_moves[0], r.fight_moves[1]);
+    out += buf;
     std::string coherency;  // M43: which games lost models to coherency (for --trace)
     for (const GameRecord& g : r.games) {
         if (g.coherency_removed[0] + g.coherency_removed[1] > 0) coherency += " " + std::to_string(g.seed);

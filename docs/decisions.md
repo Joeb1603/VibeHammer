@@ -1128,7 +1128,8 @@ change.
     consolidations are ended. The one change: every move is simulated in full first (a proposal the engine refuses
     leaves that model where it is; the commit must pass `move_end_problems` and not be reverted), and a move that
     wouldn't stand is never started (Remain Stationary, SkipChargeMove, SkipPileIn instead). So Easy never resets a
-    move, and the arena sees no `UnitMoveReverted` at all.
+    move, and the arena sees no `UnitMoveReverted` at all. **Changed by D-057 (M46):** Easy's pile-ins (an Overrun's
+    too) and consolidations are now made by Auto move whenever one is worth making.
   - **Loop guard:** `LoopGuard` counts visits per state hash; the third visit uses the fallback. `Bot::forget()` (an
     undo, a new game, a load) clears it and the memo, so replaying a position after an undo is not a "loop".
   - **Driver:** `BotDriver::tick(now, inputs)` keys each decision on (state hash, history size, generation). A new key
@@ -1277,7 +1278,8 @@ change.
     enemy's; unengaged: our shooting at the gap minus theirs ([HEAVY] applying both ways); minus, for every enemy
     unit an Engaging Consolidation forces to fight now (`flow.forced_fights`), its attacks on us (a free fight that
     hasn't happened yet, so it is counted on top of the next one). It is made only if it beats not moving; so a
-    consolidation that changes nothing, or engages more enemy attackers than ours, is skipped.
+    consolidation that changes nothing, or engages more enemy attackers than ours, is skipped. **Changed by D-057
+    (M46):** a pile-in, Overrun pile-in or consolidation that ties with not moving is now made if it closes in.
   - **Plans and determinism:** a pile-in or consolidation is one plan (start, the `auto_fight_move` placements,
     commit) memoized as usual. From a mid-move state (a fresh bot, a load, an undo) `continue_fight_move` replans
     from a copy with the models back at the move's starts and no paths (the state just after the start) and
@@ -1621,3 +1623,32 @@ change.
 - **Not attempted:** a global optimum; two-segment paths; models swapping places; an arrangement for a unit that
   starts out of coherency (it is refined like any other, but nothing tries to repair it); Auto move after a manual
   drag (Undo or Reset first, as D-050).
+
+## D-057: Bot fight moves: ties go to the tidier move (M46)
+**Decided:** 2026-11-06 (agreed with the user). Bot only, plus a read-only client query; no rule, core, state or
+replay-format change. Extends D-054 (pile-in and consolidation weighing, Easy) and uses D-047/D-049/D-050.
+- **Why:** in play the bots hardly ever piled in or consolidated, which looked passive. After a charge the models
+  are usually already engaged (within 2"), so moving them into base contact changes nothing in the melee exchange:
+  a tie, and Normal and Hard kept the step's end on a tie.
+- **The shape** (`client::fight_move_shape`, `auto_fight_move.hpp`): for the moving unit against the move's target
+  units, the models engaged (03.04), in base contact (01.04), the sum of their gaps to the closest target unit, and
+  the friendly models within 2" of each (03.03, capped at 2, summed). A move's change is the shape after the
+  committed move minus the shape before it. `tidier` orders changes: more engaged, then more in base contact, then
+  a smaller total gap (by more than 1 mm, `kAutoMoveGapBandMm`), then more links: closeness first, then
+  coherency, the order Auto move places each model in.
+- **Normal (12.02, 12.03, 12.06, 12.07, 12.08):** the candidates are as before (each offered start that
+  `fight_move_worthwhile` keeps, simulated in full by Auto move). The highest gain wins. Gains within **1e-6** are
+  a tie, which goes to the tidier change. Not moving has a gain of 0 and a zero change, so a move that costs
+  nothing and closes in is made, and a move with a negative gain (e.g. one that brings more enemy models into the
+  fight) still loses. The same rule applies to the Overrun pile-in (against skipping it).
+- **Hard:** pile-ins are Normal's (unchanged). Consolidations keep Normal's answer as the default and leave it only
+  when another candidate's evaluation beats it by `margin` (as before). Without a Normal default (a negative
+  margin, for tuning) an equal score goes to the tidier move.
+- **Easy:** the first offered pile-in or consolidation (an Overrun's pile-in too) that `fight_move_worthwhile`
+  keeps, by Auto move, if the simulated move stands; otherwise the step's end (or SkipPileIn). No weighing. Its
+  MoveModels during a pile-in or consolidation are replanned with `continue_fight_move`, as Normal's.
+- **Reasons:** "Intercessor Squad: pile in towards Termagants - 5 more in base contact, 5.0" closer in total
+  (+0.000)". The combat log's short form (M45) keeps the head and the first clause after " - ".
+- **Seen in the arena (PLAN.md M46):** results unchanged within noise, and the bots now make nearly every
+  pile-in and consolidation that reaches them. Easy's Termagants, unweighted, now lose models to coherency after
+  casualties (Auto move strings them round the enemy): left as found and reported, not fixed here.

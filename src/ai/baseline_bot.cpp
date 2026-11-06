@@ -15,7 +15,9 @@
 #include "core/geometry/units.hpp"
 #include "core/state/queries.hpp"
 #include "decision_view.hpp"
+#include "fight_move_skip.hpp"
 #include "melee_plan.hpp"
+#include "normal/fight.hpp"
 #include "shot_plan.hpp"
 #include "simulator.hpp"
 #include "state_hash.hpp"
@@ -183,6 +185,11 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
     if (std::holds_alternative<decision::MoveUnits>(kind) && !view.buttons.empty()) {
         return move_units(gs, side, view, seed);
     }
+    if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
+        (gs.flow.move->type == MoveType::PileIn || gs.flow.move->type == MoveType::Consolidation)) {
+        // D-057 (M46): Easy's pile-ins and consolidations are Auto move (D-050), replanned from the move's start.
+        if (auto r = normal::continue_fight_move(gs, side, seed)) return std::move(*r);
+    }
     if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move) {
         // Normally answered from the plan memo. From a state the plan didn't come from (a load, an undo), the
         // rest of the move is planned again from the move's start positions, so it comes out the same.
@@ -201,13 +208,34 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
         return single(gs, action::SkipChargeMove{d->unit}, "no charge move that ends engaged");
     }
     if (const auto* d = std::get_if<decision::OverrunPileIn>(&kind)) {
-        if (!view.buttons.empty() && std::holds_alternative<action::StartPileIn>(view.buttons.front())) {
-            const std::string reason = unit_name(gs, d->unit) + ": Overrun pile-in";
-            if (auto plan = plan_move(gs, side, view.buttons.front(), seed, reason)) {
-                return from_plan(std::move(*plan));
-            }
+        // D-057 (M46): the first offered pile-in, by Auto move (D-050), if it stands.
+        for (const GameAction& a : legal) {
+            if (!std::holds_alternative<action::StartPileIn>(a)) continue;
+            const std::string reason = unit_name(gs, d->unit) + ": Overrun pile-in (auto move)";
+            if (auto plan = normal::simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
         }
         return single(gs, action::SkipPileIn{d->unit}, "no pile-in that stands");
+    }
+    if (std::holds_alternative<decision::PileIn>(kind) || std::holds_alternative<decision::Consolidate>(kind)) {
+        // D-057 (M46): the first offered move worth making (D-047, D-049), by Auto move (D-050), if it stands;
+        // no weighing. Otherwise the step's end button.
+        const bool pile_in = std::holds_alternative<decision::PileIn>(kind);
+        std::optional<GameAction> end;
+        for (const GameAction& a : legal) {
+            if (std::holds_alternative<action::EndPileIns>(a) || std::holds_alternative<action::EndConsolidations>(a)) {
+                end = a;
+            }
+        }
+        for (const GameAction& a : legal) {
+            std::optional<core::UnitId> unit;
+            if (const auto* p = std::get_if<action::StartPileIn>(&a)) unit = p->unit;
+            if (const auto* c = std::get_if<action::StartConsolidation>(&a)) unit = c->unit;
+            if (!unit || !client::fight_move_worthwhile(gs, side, a)) continue;
+            const std::string reason =
+                unit_name(gs, *unit) + (pile_in ? ": pile in (auto move)" : ": consolidate (auto move)");
+            if (auto plan = normal::simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
+        }
+        if (end) return single(gs, *end, pile_in ? "no pile-in worth making" : "no consolidation worth making");
     }
     for (const GameAction& t : view.templates) {
         switch (*client::editor_kind(t)) {

@@ -1,0 +1,1237 @@
+{
+  "description": "M46: a whole game played by the bot on both sides, level Normal vs Normal, from the 20-Termagant scenario with dice seed 1: both sides pile in and consolidate when it costs nothing (D-057). Replaying it needs only the engine.",
+  "expect": {
+    "battle_round": 2,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 1,
+        "x_mm": 258.1477966308594,
+        "y_mm": 471.51959228515625
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 199.85244750976563,
+        "y_mm": 476.7733154296875
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 277.9398498535156,
+        "y_mm": 497.3130798339844
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 409.7475280761719,
+        "y_mm": 476.7733154296875
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 372.9464416503906,
+        "y_mm": 475.1665344238281
+      }
+    ],
+    "result": {
+      "reason": "D-007: Side B has no models on the battlefield; Side A wins",
+      "winner": "A"
+    },
+    "stage": "GameOver"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "data/scenarios/bot_20_termagants.json",
+    "seed": 1
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 240.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 272.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 304.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 336.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 368.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 1,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 2,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 3,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 4,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          9,
+          8,
+          10,
+          7,
+          11,
+          6,
+          12,
+          16,
+          15,
+          17,
+          14,
+          18,
+          13,
+          19,
+          20,
+          25,
+          21,
+          24,
+          22,
+          23
+        ],
+        "target": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartChargeMove",
+        "targets": [
+          2
+        ],
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 258.1477966308594,
+            "y": 471.51959228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 199.85244750976563,
+            "y": 476.7733154296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 304.8000183105469,
+            "y": 469.6946716308594,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 409.7475280761719,
+            "y": 476.7733154296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 372.1477966308594,
+            "y": 471.51959228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartPileIn",
+        "targets": [
+          1
+        ],
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 335.0550231933594,
+            "y": 469.6946716308594,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 189.50462341308594,
+            "y": 505.2037048339844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 214.54998779296875,
+            "y": 528.449951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 318.529052734375,
+            "y": 525.4955444335938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 25,
+        "path": [
+          {
+            "x": 420.0953369140625,
+            "y": 505.2037048339844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 261.529052734375,
+            "y": 525.4955444335938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 333.29998779296875,
+            "y": 498.9499816894531,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 276.29998779296875,
+            "y": 495.9499816894531,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 1,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 2,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 3,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 4,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 5,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          }
+        ],
+        "kind": "Fight",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          23,
+          21,
+          22,
+          17,
+          15,
+          16,
+          24,
+          13,
+          19,
+          20,
+          14,
+          18,
+          25
+        ],
+        "target": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 13,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 16,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 17,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 18,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 19,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 20,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 24,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 25,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          }
+        ],
+        "kind": "Fight",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndConsolidations"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartConsolidation",
+        "targets": [
+          1
+        ],
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 276.1890869140625,
+            "y": 495.8007507324219,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 348.05267333984375,
+            "y": 443.8922119140625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartPileIn",
+        "targets": [
+          1
+        ],
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 354.79425048828125,
+            "y": 446.73614501953125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 13,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 16,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 17,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 18,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 19,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 20,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 24,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 25,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 1,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          }
+        ],
+        "kind": "Fight",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 1,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 2,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 3,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 4,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 5,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          }
+        ],
+        "kind": "Fight",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          13,
+          15,
+          16,
+          17,
+          18,
+          14,
+          19,
+          20,
+          24,
+          25
+        ],
+        "target": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndConsolidations"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartConsolidation",
+        "targets": [
+          2
+        ],
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 372.9464416503906,
+            "y": 475.1665344238281,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 1,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 1
+          },
+          {
+            "model": 2,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 1
+          },
+          {
+            "model": 3,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 1
+          },
+          {
+            "model": 4,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 1
+          },
+          {
+            "model": 5,
+            "profile_index": 0,
+            "target": 2,
+            "weapon_index": 1
+          }
+        ],
+        "type": "CloseQuarters",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          24,
+          14,
+          19,
+          20,
+          25
+        ],
+        "target": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartPileIn",
+        "targets": [
+          2
+        ],
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 277.9398498535156,
+            "y": 497.3130798339844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 1,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 2,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 3,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 4,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          },
+          {
+            "model": 5,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 2
+          }
+        ],
+        "kind": "Fight",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          14,
+          19,
+          20,
+          25
+        ],
+        "target": 2
+      },
+      "side": "B"
+    }
+  ]
+}

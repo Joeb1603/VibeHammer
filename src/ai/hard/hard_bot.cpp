@@ -12,6 +12,7 @@
 #include <variant>
 
 #include "analysis/charge_odds.hpp"
+#include "auto_fight_move.hpp"
 #include "fight_move_skip.hpp"
 #include "core/dice/dice.hpp"
 #include "core/engine/casualties.hpp"
@@ -705,9 +706,10 @@ std::optional<PolicyResult> decide_consolidation(HardContext& hc, analysis::Odds
         std::optional<normal::FightMovePlan> plan;  // nullopt: end consolidations
         Evaluation value;
         std::string reason;
+        client::FightMoveShape change;  // D-057: the unit's shape after minus before (zero for not moving)
     };
     std::vector<Cand> cands;
-    cands.push_back(Cand{end, std::nullopt, base, "End consolidations"});
+    cands.push_back(Cand{end, std::nullopt, base, "End consolidations", {}});
     for (const GameAction& a : legal) {
         const auto* c = std::get_if<core::action::StartConsolidation>(&a);
         if (c == nullptr || !client::fight_move_worthwhile(gs, side, a)) continue;
@@ -715,7 +717,10 @@ std::optional<PolicyResult> decide_consolidation(HardContext& hc, analysis::Odds
         std::optional<normal::FightMovePlan> plan = normal::simulate_fight_move(gs, side, a, seed, reason);
         if (!plan) continue;
         const Evaluation v = eval.evaluate(plan->after);
-        cands.push_back(Cand{a, std::move(plan), v, reason});
+        const client::FightMoveShape change =
+            client::shape_change(client::fight_move_shape(gs, c->unit, c->targets),
+                                 client::fight_move_shape(plan->after, c->unit, c->targets));
+        cands.push_back(Cand{a, std::move(plan), v, reason + " - " + client::describe_shape_change(change), change});
     }
     std::size_t best = 0;
     for (std::size_t i = 0; i < cands.size(); ++i) {
@@ -727,6 +732,9 @@ std::optional<PolicyResult> decide_consolidation(HardContext& hc, analysis::Odds
         if (i == best) continue;
         const bool better = cands[i].value.score > cands[best].value.score + kBetter;
         if (better && (!have_normal || deviates(hc, cands[i].value.score, cands[normal_index].value.score))) best = i;
+        // D-057 (M46): without Normal's default (tuning), an equal score goes to the tidier move, as in Normal.
+        const bool tie = std::fabs(cands[i].value.score - cands[best].value.score) <= kBetter;
+        if (!have_normal && tie && client::tidier(cands[i].change, cands[best].change)) best = i;
     }
     Cand& chosen = cands[best];
     const std::string why = " (Hard: " + signed_value(chosen.value.score) + " against " + signed_value(base.score) +

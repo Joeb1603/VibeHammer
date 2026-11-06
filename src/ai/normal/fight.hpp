@@ -8,6 +8,9 @@
 // - Pile-ins (12.02): each offered pile-in (unit and targets) is simulated in full (auto_fight_move, D-050,
 //   then the engine's end-of-move checks and the commit) and made only if it improves the exchange. Ending the
 //   step is always a candidate, so a pile-in that would bring more enemy attackers than ours is skipped.
+// - D-057 (M46): a tie (gains within 1e-6) goes to the tidier move (client::tidier: more models engaged, then
+//   in base contact, then closer in total, then tighter coherency), and not moving counts as no change. So a
+//   pile-in, Overrun pile-in or consolidation that costs nothing and closes in is made, as Auto move would.
 // - Selecting a unit to fight (12.04): each offered unit and fight type is simulated up to its attacks; an
 //   Overrun's additional pile-in (12.06) is planned as above, and the enemy units it newly engages (which then
 //   fight back) count against it. A pass (Appendix) only when no unit can make an attack.
