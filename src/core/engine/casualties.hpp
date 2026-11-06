@@ -25,6 +25,9 @@ struct CasualtyPreview {
     std::vector<DamageResult> results;  // the damage done so far, in order (forced steps included)
     std::vector<ModelId> options;       // who may be picked next; empty when every step is resolved
     std::optional<int> next_damage;     // the damage the next pick takes (05.04: the attack's D; 06.02: 1)
+    // The damage still to be allocated: the next step's and every damaging step after it (each attack's D,
+    // or 1 per mortal wound). 0 when done. Attacks lost because the unit would be wiped out don't count.
+    int damage_left = 0;
     int attacks_lost = 0;               // 05.04 excess attacks / 06.02 mortal wounds not inflicted (when done)
     [[nodiscard]] bool done() const noexcept { return options.empty(); }
     friend bool operator==(const CasualtyPreview&, const CasualtyPreview&) = default;

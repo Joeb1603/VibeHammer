@@ -414,6 +414,7 @@ TEST(D051_CasualtyPreview, MortalWoundsFromHazardsArePickedOneModelAtATime) {
     ASSERT_TRUE(none.has_value());
     EXPECT_EQ(none->options, wh40k::test::model_ids(gs.units[kMarines]));
     EXPECT_EQ(none->next_damage, 1);
+    EXPECT_EQ(none->damage_left, 2);
     // The picked model takes the second mortal wound too (06.02: wounded models first).
     const ModelId picked = gs.units[kMarines].models[3].id;
     const auto p = preview_casualties(gs, std::vector<ModelId>{picked});

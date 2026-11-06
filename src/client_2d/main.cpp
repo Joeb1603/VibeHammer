@@ -1229,6 +1229,14 @@ private:
         }
         ImGui::SameLine(0.0f, gap);
         ImGui::TextDisabled("CP: Side A %d, Side B %d", s.command_points[0], s.command_points[1]);
+        // D-051: while casualties are picked, how much damage is still to be placed.
+        if (const CasualtyPicks* picks = board_.casualty_picks(); picks != nullptr && picks->preview()) {
+            ImGui::SameLine(0.0f, gap);
+            const int left = picks->preview()->damage_left;
+            const std::string text = left > 0 ? "Damage left to allocate: " + std::to_string(left)
+                                              : std::string("All damage allocated: confirm the casualties");
+            chip(text.c_str(), left > 0 ? ImVec4(0.75f, 0.35f, 0.10f, 1.0f) : ImVec4(0.20f, 0.55f, 0.30f, 1.0f));
+        }
     }
 
     void draw_sidebar() {

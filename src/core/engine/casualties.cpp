@@ -70,18 +70,22 @@ std::optional<CasualtyPreview> preview_attack(const GameState& state, std::span<
 
     CasualtyPreview out;
     std::size_t damaging = 0;
+    bool stopped = false;
     for (const SaveStep& s : r.steps) {
-        if (s.damage) {
-            if (replay.stop_step() && damaging == *replay.stop_step()) {
-                out.options = replay.options();
-                out.next_damage = s.damage->damage;
-                return out;
-            }
-            ++damaging;
+        if (!s.damage) continue;
+        if (!stopped && replay.stop_step() && damaging == *replay.stop_step()) {
+            stopped = true;
+            out.options = replay.options();
+            out.next_damage = s.damage->damage;
+        }
+        ++damaging;
+        if (stopped) {
+            out.damage_left += s.damage->damage;  // the rest, as if each took the first option
+        } else {
             out.results.push_back(*s.damage);
         }
     }
-    out.attacks_lost = r.attacks_lost;
+    if (!stopped) out.attacks_lost = r.attacks_lost;
     return out;
 }
 
@@ -100,6 +104,7 @@ std::optional<CasualtyPreview> preview_mortal_wounds(const GameState& state, std
         if (replay.stop_step() && i == *replay.stop_step()) {
             out.options = replay.options();
             out.next_damage = 1;  // 06.02: each mortal wound is 1 damage
+            out.damage_left = static_cast<int>(r.steps.size() - i);
             return out;
         }
         out.results.push_back(r.steps[i]);

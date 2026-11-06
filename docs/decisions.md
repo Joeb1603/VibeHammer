@@ -987,6 +987,9 @@ change.
     says how much damage the next pick takes.
   - Each click shows its result on the board: a red ring, cross and "-2" for a model that dies, or an
     orange ring and "-1" for one that only loses wounds. The panel lists the same results ("So far: ...").
+  - The top bar shows **"Damage left to allocate: N"** (`CasualtyPreview::damage_left`): the damage of
+    the next step and every damaging step after it. Damage that would be lost because the unit is wiped
+    out isn't counted. At 0 it reads "All damage allocated: confirm the casualties".
   - "Undo pick" takes back the last pick (board-local, not a game action). "Confirm casualties" appears
     once nothing is left to pick, and submits the one `OrderCasualties`. "Use default order" (unit order)
     skips the picking.

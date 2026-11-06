@@ -82,8 +82,10 @@ TEST(M35_CasualtyPicks, EachClickShowsItsDamageAndConfirmGivesThoseCasualties) {
     const ModelId second = mid(gs, 3);
     BoardInteraction board(gs, session.legal());
 
+    EXPECT_EQ(board.casualty_picks()->preview()->damage_left, 3);  // the top bar's count
     board.click_model(gs, marines, first);
     EXPECT_EQ(board.casualty_picks()->marks(), (std::vector<CasualtyMark>{{first, 2, true}}));
+    EXPECT_EQ(board.casualty_picks()->preview()->damage_left, 1);
     EXPECT_FALSE(board.confirm().has_value());  // one more damage to place
     EXPECT_TRUE(board.model_dimmed(marines, first));  // it's already destroyed
     EXPECT_FALSE(board.model_dimmed(marines, second));

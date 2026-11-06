@@ -216,8 +216,13 @@ TEST(D051_CasualtyPreview, AClickedModelKeepsTakingItsForcedDamage) {
     std::erase(rest, first);
     EXPECT_EQ(p->options, rest);
 
+    EXPECT_EQ(p->damage_left, 1);  // the third damage
+    EXPECT_EQ(preview_casualties(gs, {})->damage_left, 3);
+
     const ModelId second = mid(gs, kMarines, 3);
     const auto done = preview_casualties(gs, std::vector<ModelId>{first, second});
+    ASSERT_TRUE(done.has_value());
+    EXPECT_EQ(done->damage_left, 0);
     ASSERT_TRUE(done.has_value());
     EXPECT_TRUE(done->done());
     ASSERT_EQ(done->results.size(), 3u);
@@ -289,6 +294,8 @@ TEST(D051_CasualtyPreview, ExcessAttacksAreLostWhenTheUnitIsWipedOut) {
     const UnitId gants = gs.units[kGants].id;
     ScriptedDice dice{3, 3, 3, 3, 3, 3, 1, 1, 1};  // 3 failed saves, one W1 model
     begin_attacks(gs, dice, gs.units[kMarines].id, kShooting, {select(gs, kMarines, 0, kBoltRifle, kSaturation, gants)});
+    // Only 1 damage can be placed: the other two attacks would be lost once the only model dies.
+    EXPECT_EQ(preview_casualties(gs, {})->damage_left, 1);
     const auto p = preview_casualties(gs, std::vector<ModelId>{mid(gs, kGants, 0)});
     ASSERT_TRUE(p.has_value());
     EXPECT_TRUE(p->done());
