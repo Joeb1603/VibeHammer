@@ -20,7 +20,7 @@ namespace wh40k::client {
 
 struct AutoSettings {
     bool skip_empty_steps = true;  // D-036, D-047
-    bool auto_allocate = true;     // D-038
+    bool auto_allocate = false;    // D-038; off by default since D-051 (casualties picked on the board)
 };
 
 // End shooting / charging / pile-ins / consolidations, pass in the fight sequence, skip an overrun pile-in.

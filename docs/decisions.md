@@ -722,7 +722,8 @@ logic).
   phase or keep shooting. The engine only offers a template for a unit with at least one valid shot
   (D-016), so "can still shoot" means a real target. A lone skip (D-036) never warns, because then no unit
   can shoot.
-- **Allocate damage automatically** (setting, on by default): the defender's `DeclareAllocationOrder`
+- **Allocate damage automatically** (setting, on by default; **off by default since D-051**, so casualties
+  are picked on the board): the defender's `DeclareAllocationOrder`
   takes the first legal order, and `OrderCasualties` takes `CasualtyPlan`'s default order. These are the
   defaults the panel offers. They go through `GameSession::submit` like the D-036 skips (`run_auto_actions`)
   and count with them for Undo. The attacker's choice of batch (04.03) is not damage allocation and is
@@ -989,6 +990,10 @@ change.
   - "Undo pick" takes back the last pick (board-local, not a game action). "Confirm casualties" appears
     once nothing is left to pick, and submits the one `OrderCasualties`. "Use default order" (unit order)
     skips the picking.
+- **Default (user, 2026-11-06):** "Allocate damage automatically" is now **off** by default, so casualties
+  are picked by hand unless the player ticks it. (The allocation-group order, 05.03, is then asked too, but
+  only when a unit has more than one legal order.) A destroyed model's red cross and its "-N" have a black
+  outline, so they show on red bases.
 - **Replaces D-032's casualty bar:** the "Custom order..." grid is gone. Without the board (no board
   interaction), the sidebar offers only "Use default order".
 

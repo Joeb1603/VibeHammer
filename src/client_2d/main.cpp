@@ -936,15 +936,23 @@ private:
                 const float r = camera_.to_px(m->base.diameter_mm * 0.5f) + 3.0f * s;
                 DrawRing(c, r - s, r + 2.5f * s, 0.0f, 360.0f, 48, colour);
                 if (mark.destroyed) {
+                    // A black outline under the red cross, so it shows on red (Termagant) bases too.
                     const float k = m->base.diameter_mm * 0.35f;
-                    DrawLineEx(camera_.to_screen(m->position.x - k, m->position.y - k),
-                               camera_.to_screen(m->position.x + k, m->position.y + k), 3.0f * s, colour);
-                    DrawLineEx(camera_.to_screen(m->position.x - k, m->position.y + k),
-                               camera_.to_screen(m->position.x + k, m->position.y - k), 3.0f * s, colour);
+                    const Vector2 a0 = camera_.to_screen(m->position.x - k, m->position.y - k);
+                    const Vector2 a1 = camera_.to_screen(m->position.x + k, m->position.y + k);
+                    const Vector2 b0 = camera_.to_screen(m->position.x - k, m->position.y + k);
+                    const Vector2 b1 = camera_.to_screen(m->position.x + k, m->position.y - k);
+                    DrawLineEx(a0, a1, 6.0f * s, BLACK);
+                    DrawLineEx(b0, b1, 6.0f * s, BLACK);
+                    DrawLineEx(a0, a1, 3.0f * s, colour);
+                    DrawLineEx(b0, b1, 3.0f * s, colour);
                 }
                 const std::string text = "-" + std::to_string(mark.wounds_lost);
-                DrawText(text.c_str(), static_cast<int>(c.x + r + 2.0f * s), static_cast<int>(c.y - r),
-                         static_cast<int>(kRulerText * s), colour);
+                const int tx = static_cast<int>(c.x + r + 2.0f * s);
+                const int ty = static_cast<int>(c.y - r);
+                const int size = static_cast<int>(kRulerText * s);
+                DrawText(text.c_str(), tx + 1, ty + 1, size, BLACK);  // shadow, for the same reason
+                DrawText(text.c_str(), tx, ty, size, colour);
             }
         }
         // Selection.
@@ -1628,7 +1636,7 @@ private:
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
     bool auto_skip_ = true;            // D-036: the "Skip steps with nothing to do" setting
     UndoGroups undo_groups_;            // D-039: the player's inputs, for Undo and "Undo last step"
-    bool auto_allocate_ = true;         // D-038: the "Allocate damage automatically" setting
+    bool auto_allocate_ = false;        // D-038: the "Allocate damage automatically" setting (off: D-051)
     bool warn_end_shooting_ = true;     // D-038: the "Warn before ending shooting with shots left" setting
     std::optional<std::vector<core::GameAction>> end_warning_;  // D-038: the end-phase actions waiting on it
     bool open_end_warning_ = false;
