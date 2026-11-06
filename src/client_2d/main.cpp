@@ -4,7 +4,10 @@
 //
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
 //                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
-//                        [--scenario <file>] [--dice <n>]
+//                        [--scenario <file>] [--dice <n>] [--menu <0|1>]
+//   M38 (D-055): with no flags the exe opens on the start screen and uses the settings saved next to it. Any flag
+//   skips the start screen and runs with the default settings (nothing is read or saved), so scripted runs are
+//   reproducible; --menu 1 shows the start screen anyway (for screenshots).
 //   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
 //   --seed n: the dice seed for the first new game (M13; the panel can change it for later games).
 //   --scenario file: the scenario for new games (default data/scenarios/v1_skirmish.json).
@@ -54,6 +57,8 @@
 #include "phase_track.hpp"
 #include "reach_area.hpp"
 #include "session.hpp"
+#include "settings.hpp"
+#include "start_screen.hpp"
 #include "timeline.hpp"
 #include "undo_groups.hpp"
 
@@ -80,10 +85,11 @@ fs::path find_data_root() {
     return fs::path(WH40K_REPO_ROOT);
 }
 const fs::path kRepoRoot = find_data_root();
-const fs::path kScenario = kRepoRoot / "data/scenarios/v1_skirmish.json";
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
 const fs::path kSavePath = kRepoRoot / "saves/game.json";              // gitignored
 const fs::path kExportPath = kRepoRoot / "replays/exported_replay.json";  // gitignored
+// M38 (D-055): the saved settings live next to the exe (under build/ in a source build, so not in the repo).
+fs::path settings_path() { return fs::path(GetApplicationDirectory()) / "vibehammer_settings.json"; }
 
 struct Options {
     std::optional<std::string> replay;
@@ -96,6 +102,7 @@ struct Options {
     std::optional<std::uint64_t> seed;
     std::optional<std::string> scenario;
     int dice = 0;  // --dice: 1 keeps the dice pop-ups from --steps, 2 also shows the first card's faces
+    bool menu = false;  // --menu 1: show the start screen even with other flags (M38)
 };
 
 // Throws std::invalid_argument naming the flag when a value can't be parsed.
@@ -115,6 +122,10 @@ Options parse_args(int argc, char** argv) {
         else if (key == "--seed") o.seed = std::stoull(value);
         else if (key == "--scenario") o.scenario = value;
         else if (key == "--dice") o.dice = std::stoi(value);
+        else if (key == "--menu") {
+            if (value != "0" && value != "1") throw std::invalid_argument("not 0 or 1");
+            o.menu = value == "1";
+        }
         } catch (const std::exception&) {
             throw std::invalid_argument("invalid value for " + key + ": '" + value + "'");
         }
@@ -126,7 +137,7 @@ std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Si
 
 float distance_px(Vector2 a, Vector2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
 
-enum class Mode { Play, Replay };
+enum class Mode { Menu, Play, Replay };  // Menu: the start screen (M38)
 
 // A drag on the board: one model's next straight line, or the whole unit (the "Move unit" handle).
 struct Drag {
@@ -153,15 +164,30 @@ struct Measure {
 
 class App {
 public:
-    App(std::optional<std::uint64_t> seed, std::optional<std::string> scenario)
-        : scenario_path_(scenario ? fs::path(*scenario) : kScenario) {
-        // D-038: a random seed for each new game unless one is fixed (--seed fixes it).
-        fixed_seed_ = seed.has_value();
-        seed_ = seed.value_or(0);
-        new_game();
+    // M38 (D-055): `settings` are the saved ones (persist: written back when they change) or, in a scripted run,
+    // the defaults with the CLI's overrides (never written). The game starts on the start screen if `menu`.
+    App(AppSettings settings, bool persist, std::optional<std::string> scenario_override, bool menu)
+        : settings_(std::move(settings)), saved_settings_(settings_), persist_(persist) {
+        if (scenario_override) scenario_override_ = fs::path(*scenario_override);
         std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
         std::snprintf(save_path_, sizeof(save_path_), "%s", kSavePath.string().c_str());
         std::snprintf(export_path_, sizeof(export_path_), "%s", kExportPath.string().c_str());
+        if (menu) {
+            open_menu();
+        } else {
+            new_game();
+        }
+    }
+
+    bool quit_requested() const { return quit_; }
+
+    // M38: write the settings if they changed since the last write (only in a run that persists them).
+    void save_settings_if_changed() {
+        if (!persist_ || settings_ == saved_settings_) return;
+        saved_settings_ = settings_;  // tried once per change, so a read-only folder doesn't retry every frame
+        if (!save_settings(settings_path(), settings_)) {
+            status_ = "Could not save the settings to " + settings_path().string();
+        }
     }
 
     // D-038: a fresh seed, client side (core only ever sees the seed in GameState, so it stays
@@ -175,13 +201,79 @@ public:
         try {
             // M13: the dice seed is chosen at game start (shown and editable in the panel). D-038: a new
             // random one each game unless "Fixed seed" is ticked.
-            if (!fixed_seed_) seed_ = random_seed();
-            start_session(GameSession::new_game(core::load_scenario(scenario_path_, kRepoRoot), seed_));
-            status_ = "New game: V1 scenario, seed " + std::to_string(seed_) +
-                      ". Hotseat: each side acts when the panel names it.";
+            if (!settings_.fixed_seed) settings_.seed = random_seed();
+            const fs::path scenario = scenario_path();
+            start_session(GameSession::new_game(core::load_scenario(scenario, kRepoRoot), settings_.seed));
+            status_ = "New game: " + scenario_info(scenario).name + ", seed " + std::to_string(settings_.seed) + ". " +
+                      players_text();
             auto_actions_as_group();  // D-036
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the scenario: ") + e.what();
+        }
+    }
+
+    // The scenario for new games: --scenario, else the setting (relative to the data root).
+    fs::path scenario_path() const {
+        return scenario_override_ ? *scenario_override_ : resolve_data_path(kRepoRoot, settings_.scenario);
+    }
+
+    // M38: who plays which side. The bot itself plays from M39; until then its side is played by hand.
+    std::string players_text() const {
+        if (!bot_sides_[0] && !bot_sides_[1]) return "Hotseat: each side acts when the panel names it.";
+        if (bot_sides_[0] && bot_sides_[1]) return "Bot vs bot (the bot isn't built yet: play both sides by hand).";
+        const core::Side bot = bot_sides_[0] ? core::Side::A : core::Side::B;
+        return "The bot plays " + side_name(bot) + " (not built yet: play it by hand for now).";
+    }
+
+    // ---- M38: the start screen ----
+    void open_menu() {
+        mode_ = Mode::Menu;
+        session_.reset();  // the current game is discarded (the Files section can save it first)
+        timeline_ = Timeline{};
+        ++generation_;
+        panel_.reset();
+        reasons_.clear();
+        drag_.reset();
+        measure_.reset();
+        open_sheets_.clear();
+        dice_.clear();
+        before_dice_.reset();
+        undo_groups_.clear();
+        victory_pending_ = false;
+        end_warning_.reset();
+        menu_.clear();
+        board_ = BoardInteraction();
+        board_key_.reset();
+        clear_selection();
+        bot_sides_ = {false, false};
+        status_.clear();  // the start screen shows only what goes wrong there
+        start_screen_.refresh(kRepoRoot);
+    }
+
+    void draw_menu() {
+        StartContext ctx;
+        ctx.data_root = kRepoRoot;
+        std::error_code ec;
+        ctx.save_exists = fs::is_regular_file(save_path_, ec);
+        ctx.save_label = save_path_;
+        ctx.message = status_;
+        ctx.version = std::string(core::engine_version());
+        const StartRequest r = start_screen_.draw(settings_, ctx);
+        switch (r.kind) {
+            case StartRequest::Kind::None: break;
+            case StartRequest::Kind::Play:
+                scenario_override_.reset();  // the start screen's scenario from now on
+                bot_sides_ = bot_sides_for(r.mode, settings_.human_side);
+                new_game();
+                break;
+            case StartRequest::Kind::ContinueSaved:
+                load_game();  // M39 adds the players block; a save loads as hotseat for now
+                break;
+            case StartRequest::Kind::WatchReplay:
+                std::snprintf(path_, sizeof(path_), "%s", resolve_data_path(kRepoRoot, r.replay).string().c_str());
+                load_replay(path_);
+                break;
+            case StartRequest::Kind::Quit: quit_ = true; break;
         }
     }
 
@@ -287,7 +379,7 @@ public:
 
     // D-028: the UI scale is the screen's scale times the user's "UI scale" slider.
     void set_auto_scale(float scale) { auto_scale_ = scale; }
-    float ui_scale() const { return std::clamp(auto_scale_ * user_scale_, 0.75f, 3.0f); }
+    float ui_scale() const { return std::clamp(auto_scale_ * settings_.ui_scale, 0.75f, 3.0f); }
     float panel_width() const { return kPanelWidth * ui_scale(); }
 
     void apply_scale() {
@@ -304,7 +396,17 @@ public:
     }
 
     void frame() {
+        if (menu_requested_) {  // M38: asked for while the last frame was drawn
+            menu_requested_ = false;
+            open_menu();
+        }
         apply_scale();
+        if (mode_ == Mode::Menu) {
+            ClearBackground(Color{18, 20, 24, 255});
+            draw_menu();
+            save_settings_if_changed();
+            return;
+        }
         if (!dice_.active() && before_dice_) {
             before_dice_.reset();  // D-033: the last pop-up closed: show the game as it is now
             scroll_log_ = true;
@@ -316,6 +418,7 @@ public:
             const int size = static_cast<int>(kRulerText * ui_scale());
             DrawText(status_.c_str(), size, size, size, RAYWHITE);
             draw_ui();
+            save_settings_if_changed();
             return;
         }
         if (fit_pending_ || IsWindowResized()) {
@@ -351,11 +454,15 @@ public:
         draw_selection_and_moves();
         draw_measure();
         draw_ui();
+        save_settings_if_changed();
     }
 
 private:
     // Something to show: a live game in Play mode, a loaded replay in Replay mode.
-    bool has_view() const { return mode_ == Mode::Play ? session_.has_value() : timeline_.size() > 0; }
+    bool has_view() const {
+        if (mode_ == Mode::Menu) return false;
+        return mode_ == Mode::Play ? session_.has_value() : timeline_.size() > 0;
+    }
 
     // What is drawn. Precondition: has_view(). D-033: while dice pop-ups show, the moment the dice were
     // rolled (the state before that action), so the board and bars don't run ahead of the roll.
@@ -506,7 +613,7 @@ private:
     // D-036 / D-038: answer the decisions the settings cover, recording them for Undo.
     void run_auto_actions_now() {
         if (mode_ != Mode::Play || !session_) return;
-        const AutoSettings settings{auto_skip_, auto_allocate_};
+        const AutoSettings settings{settings_.skip_empty_steps, settings_.auto_allocate};
         const std::vector<core::GameAction> done =
             run_auto_actions(*session_, settings, [this](const core::GameAction& a) { return submit_one(a); });
         std::string text;
@@ -528,7 +635,7 @@ private:
             // D-033: a pop-up for each roll the action made. While they show, the screen stays at the
             // moment of the roll (an earlier roll's moment if pop-ups were already showing).
             std::vector<DiceCard> cards =
-                show_dice_ ? dice_cards(session_->state(), session_->log(), dice_seen_) : std::vector<DiceCard>{};
+                settings_.show_dice ? dice_cards(session_->state(), session_->log(), dice_seen_) : std::vector<DiceCard>{};
             if (!cards.empty() && !dice_.active()) {
                 before_dice_ = std::move(before);
                 log_before_dice_ = log_before;
@@ -767,7 +874,7 @@ private:
         d.drop = d.current;
         d.fixed.reset();
         d.refused = false;
-        if (!fix_moves_ || !d.fix) return;
+        if (!settings_.fix_moves || !d.fix) return;
         d.fixed = fix_drop(*d.fix, d.from, d.current);
         if (d.fixed) {
             d.drop = d.fixed->to;
@@ -1319,12 +1426,15 @@ private:
     }
 
     void draw_toolbar() {
+        if (ImGui::Button("Main menu")) menu_requested_ = true;  // M38: this game is discarded
+        ImGui::SetItemTooltip("Back to the start screen. This game is discarded: save it first (Files) to keep it.");
+        ImGui::SameLine();
         if (ImGui::Button("New game")) new_game();
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
-        ImGui::InputScalar("seed", ImGuiDataType_U64, &seed_);
+        ImGui::InputScalar("seed", ImGuiDataType_U64, &settings_.seed);
         ImGui::SameLine();
-        ImGui::Checkbox("Fixed seed", &fixed_seed_);  // D-038
+        ImGui::Checkbox("Fixed seed", &settings_.fixed_seed);  // D-038
         ImGui::SetItemTooltip("Off: each new game gets a random seed. On: new games use the seed in the box.");
         const bool playing = mode_ == Mode::Play && session_.has_value();
         if (playing) {
@@ -1343,6 +1453,11 @@ private:
         const core::GameState& s = state();
         for (const core::Unit& u : s.units) {
             ImGui::TextColored(to_imvec(side_color(u.side)), "%s", side_name(u.side).c_str());
+            if (mode_ == Mode::Play && bot_sides_[static_cast<std::size_t>(u.side)]) {  // M38
+                ImGui::SameLine();
+                ImGui::TextDisabled("(bot)");
+                ImGui::SetItemTooltip("The bot plays this side from M39. Until then, play it by hand.");
+            }
             ImGui::SameLine();
             ImGui::Text("%s (unit %u): %zu/%d models%s", u.name.c_str(), u.id.v, u.models.size(), u.starting_strength,
                         u.battle_shocked ? ", battle-shocked" : "");
@@ -1355,17 +1470,17 @@ private:
         overlay_toggle(RingKind::WeaponRange, &overlays_.ranges);
         overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
         ImGui::Spacing();
-        if (ImGui::Checkbox("Show dice pop-ups", &show_dice_) && !show_dice_) dice_.clear();  // D-033
-        if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) auto_actions_as_group();
+        if (ImGui::Checkbox("Show dice pop-ups", &settings_.show_dice) && !settings_.show_dice) dice_.clear();  // D-033
+        if (ImGui::Checkbox("Skip steps with nothing to do", &settings_.skip_empty_steps) && settings_.skip_empty_steps) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
-        ImGui::Checkbox("Fix illegal moves", &fix_moves_);  // D-052
+        ImGui::Checkbox("Fix illegal moves", &settings_.fix_moves);  // D-052
         ImGui::SetItemTooltip("A model dropped where it can't go (too far, off the battlefield, on a model, into an "
                               "enemy model, not closer) goes to the nearest spot it can, shown while dragging. "
                               "Ending within Engagement Range is left for Commit to check.");
-        if (ImGui::Checkbox("Allocate damage automatically", &auto_allocate_) && auto_allocate_) auto_actions_as_group();
+        if (ImGui::Checkbox("Allocate damage automatically", &settings_.auto_allocate) && settings_.auto_allocate) auto_actions_as_group();
         ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
                               "05.04) instead of asking.");
-        ImGui::Checkbox("Warn before ending shooting with shots left", &warn_end_shooting_);
+        ImGui::Checkbox("Warn before ending shooting with shots left", &settings_.warn_end_shooting);
         ImGui::SetItemTooltip("Ask before ending the Shooting phase while a unit still has a target it can shoot.");
         ImGui::Spacing();
         if (ImGui::Button("Fit board")) fit_pending_ = true;
@@ -1373,10 +1488,11 @@ private:
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
         // D-038: the scale changes only when the slider is let go. Changing it while dragging resized the
         // slider under the mouse, so the value ran away.
-        if (!scale_slider_active_) scale_percent_ = static_cast<int>(std::lround(user_scale_ * 100.0f));
-        ImGui::SliderInt("UI scale", &scale_percent_, 75, 250, "%d%%");
+        if (!scale_slider_active_) scale_percent_ = static_cast<int>(std::lround(settings_.ui_scale * 100.0f));
+        ImGui::SliderInt("UI scale", &scale_percent_, static_cast<int>(kMinUiScale * 100.0f),
+                         static_cast<int>(kMaxUiScale * 100.0f), "%d%%");
         scale_slider_active_ = ImGui::IsItemActive();
-        if (ImGui::IsItemDeactivatedAfterEdit()) user_scale_ = static_cast<float>(scale_percent_) / 100.0f;
+        if (ImGui::IsItemDeactivatedAfterEdit()) settings_.ui_scale = static_cast<float>(scale_percent_) / 100.0f;
         ImGui::TextDisabled("click a unit to act, left-drag: move, right-click: datasheet, right-drag: pan, wheel: zoom, Esc: cancel");
     }
 
@@ -1457,7 +1573,7 @@ private:
         const bool ends_shooting = std::any_of(actions.begin(), actions.end(), [](const core::GameAction& a) {
             return std::holds_alternative<core::action::EndShootStep>(a);
         });
-        if (ends_shooting && warn_end_shooting_ && !units_that_can_still_shoot(session_->legal()).empty()) {
+        if (ends_shooting && settings_.warn_end_shooting && !units_that_can_still_shoot(session_->legal()).empty()) {
             end_warning_ = actions;
             open_end_warning_ = true;
             return;
@@ -1505,7 +1621,7 @@ private:
             end_warning_.reset();
             close = true;
         }
-        ImGui::Checkbox("Warn me about this", &warn_end_shooting_);
+        ImGui::Checkbox("Warn me about this", &settings_.warn_end_shooting);
         if (close || !end_warning_) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
@@ -1536,8 +1652,12 @@ private:
         bool new_one = false;
         if (ImGui::Button("New game")) new_one = true;
         ImGui::SameLine();
+        bool to_menu = false;
+        if (ImGui::Button("Main menu")) to_menu = true;  // M38
+        ImGui::SameLine();
         if (ImGui::Button("Close") || !text) ImGui::CloseCurrentPopup();
-        if (new_one) ImGui::CloseCurrentPopup();
+        if (new_one || to_menu) ImGui::CloseCurrentPopup();
+        if (to_menu) menu_requested_ = true;
         ImGui::EndPopup();
         if (new_one) new_game();
     }
@@ -1665,7 +1785,6 @@ private:
     };
 
     Mode mode_ = Mode::Play;
-    fs::path scenario_path_;
     std::uint64_t generation_ = 0;  // bumped whenever the session or replay is replaced or rebuilt
     std::optional<LogKey> log_key_;
     std::vector<LogLine> log_lines_;
@@ -1706,16 +1825,10 @@ private:
     std::optional<core::GameState> before_dice_;  // the state drawn while they show (before the roll's action)
     std::size_t log_before_dice_ = 0;   // the log entries shown while they show
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
-    bool show_dice_ = true;             // the "Show dice pop-ups" setting
-    bool auto_skip_ = true;            // D-036: the "Skip steps with nothing to do" setting
-    bool fix_moves_ = true;            // D-052: the "Fix illegal moves" setting
     UndoGroups undo_groups_;            // D-039: the player's inputs, for Undo and "Undo last step"
-    bool auto_allocate_ = false;        // D-038: the "Allocate damage automatically" setting (off: D-051)
-    bool warn_end_shooting_ = true;     // D-038: the "Warn before ending shooting with shots left" setting
     std::optional<std::vector<core::GameAction>> end_warning_;  // D-038: the end-phase actions waiting on it
     bool open_end_warning_ = false;
     bool victory_pending_ = false;      // D-038: the game ended while played; show the pop-up
-    bool fixed_seed_ = false;           // D-038: "Fixed seed" (--seed sets it)
     int scale_percent_ = 100;           // D-038: the UI scale slider's value while dragged
     bool scale_slider_active_ = false;
     bool fit_pending_ = true;
@@ -1725,15 +1838,22 @@ private:
     float action_height_ = 0.0f;  // the action bar's height under it (D-030)
     float action_drawn_height_ = 0.0f;  // its height as drawn this frame (taller in the custom-shot editor)
     float auto_scale_ = 1.0f;     // the screen's scale (D-028)
-    float user_scale_ = 1.0f;     // the "UI scale" slider
     float applied_scale_ = 0.0f;  // the scale the ImGui style was last built for
     ImGuiStyle base_style_;
     std::vector<Circle> ring_circles_;  // this frame's rings, for the board tooltip
     char path_[512] = {};
     char save_path_[512] = {};
     char export_path_[512] = {};
-    std::uint64_t seed_ = 0;
     std::string status_;
+    // M38 (D-055): every option (the start screen's and the sidebar's toggles, the seed, the UI scale) lives here.
+    AppSettings settings_;
+    AppSettings saved_settings_;  // as last written to the settings file
+    bool persist_ = false;        // false in a scripted (CLI) run: the settings file is never touched
+    std::optional<fs::path> scenario_override_;  // --scenario
+    BotSides bot_sides_{false, false};  // M38: which sides the bot plays (client state, not GameState; D-054)
+    StartScreen start_screen_;
+    bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
+    bool quit_ = false;            // the start screen's Quit
 };
 
 }  // namespace
@@ -1770,7 +1890,15 @@ int main(int argc, char** argv) {
         io.FontDefault = io.Fonts->AddFontFromFileTTF(ui_font.string().c_str(), kFontSize);
     }
 
-    App app(options.seed, options.scenario);
+    // M38 (D-055): with no flags, the start screen and the saved settings. Any flag: a scripted run with the
+    // defaults and the flags' overrides, which never reads or writes the settings file.
+    const bool scripted = argc > 1;
+    AppSettings settings = scripted ? AppSettings{} : load_settings(settings_path());
+    if (options.seed) {
+        settings.fixed_seed = true;  // D-038: --seed fixes it
+        settings.seed = *options.seed;
+    }
+    App app(settings, !scripted, options.scenario, !scripted || options.menu);
     app.set_auto_scale(std::max({1.0f, dpi, by_height}));
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
@@ -1781,7 +1909,7 @@ int main(int argc, char** argv) {
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;
     bool zoom_applied = false;
-    while (!WindowShouldClose() && frames_left != 0) {
+    while (!WindowShouldClose() && !app.quit_requested() && frames_left != 0) {
         BeginDrawing();
         rlImGuiBegin();
         app.frame();
@@ -1799,6 +1927,7 @@ int main(int argc, char** argv) {
         if (frames_left > 0) --frames_left;
     }
 
+    app.save_settings_if_changed();
     rlImGuiShutdown();
     CloseWindow();
     return 0;

@@ -24,6 +24,7 @@ add_library(wh40k_client_logic STATIC
     session.cpp
     undo_groups.cpp
     shot_plan.cpp
+    settings.cpp
     timeline.cpp)
 
 target_include_directories(wh40k_client_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

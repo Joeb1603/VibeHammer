@@ -559,7 +559,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M38: Start screen and saved settings
+## M38: Start screen and saved settings ✅ (done)
 **Effort:** `medium` · **Plan mode:** pre-approved (2026-11-06)
 
 > The exe opens on a start screen instead of a game. It has these buttons:
