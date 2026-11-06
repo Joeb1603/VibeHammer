@@ -22,9 +22,14 @@ inline constexpr float kWorthwhileMoveMm = 2.0f;
 // lets such a model move closer.
 inline constexpr float kNearBaseContactMm = 0.05f * core::MM_PER_INCH;
 
+// D-049: a move is worth making only if some model could end more than this much closer to the closest
+// target unit than it starts. A model can't gain more than its starting gap, so the gap is the bound.
+inline constexpr float kWorthwhileGainMm = 0.1f * core::MM_PER_INCH;
+
 // D-047: whether the pile-in (12.03) or consolidation (12.08) `start` could do anything worth doing: some
-// model of the unit can end more than kWorthwhileMoveMm from its start, or could reach the engagement
-// range of an enemy unit it isn't engaged with now. Per model, ignoring coherency and the unit-wide After
+// model of the unit starts more than kWorthwhileGainMm from the closest target unit (D-049) and can end
+// more than kWorthwhileMoveMm from its start, or could reach the engagement range of an enemy unit it
+// isn't engaged with now. Per model, ignoring coherency and the unit-wide After
 // Moving conditions, so it errs towards true. True for an action that isn't a valid start (nothing to judge).
 [[nodiscard]] bool fight_move_worthwhile(const core::GameState& state, core::Side side, const core::GameAction& start);
 

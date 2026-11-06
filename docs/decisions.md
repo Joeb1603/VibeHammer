@@ -884,6 +884,8 @@ replay-format change.
   ("Skipped (nothing worth doing): ...").
 - **Not tested end to end:** the overrun pile-in case (12.06) uses the same check but has no logic test of
   its own.
+- **Extended by D-048 and D-049 (M32, M33):** near base contact, and a model that can only get up to 0.1"
+  closer, also count as not worth making.
 
 ## D-048: Near base contact counts for step skipping only (M32) — house rule, review later
 **Decided:** 2026-11-06, chosen by the user. **Not rules text: review it** (e.g. if the client ever snaps
@@ -910,4 +912,18 @@ dragged models into base contact, the leeway may no longer be needed).
   ~1.3 mm below one Termagant, could swing down and left round the Termagant beside it. In person you'd
   usually leave that model where it is. The rule text allows it; whether to restrict it (e.g. "closer to
   the model it was closest to") needs a decision.
+
+## D-049: Skipping judges how much closer a model can get, not how far it can move (M33)
+**Decided:** 2026-11-06 (agreed with the user). Client only, like D-047; no rule changes.
+- **Extends D-047.** A model's move is also not worth making when its starting gap to the closest target
+  unit of the move (edge to edge, D-022) is **0.1" (2.54 mm) or less** (`kWorthwhileGainMm`). It can't end
+  more than that gap closer, however far it travels. Otherwise the D-047 test still applies (it must be able
+  to end more than 2 mm from its start). A model that could reach a new enemy unit's engagement range is
+  always offered, as before.
+- **Why:** seen in play (pile-in.png). After a charge every Intercessor was engaged and a millimetre or two
+  from the Termagants, but the end model could slide a long way round a Termagant to touch another one,
+  getting ~2 mm "closer to the unit". D-047 measured the distance moved, so the pile-in was offered.
+- **Errs towards offering the move:** the gap is an exact upper bound on the gain, so no move that could
+  really gain more than 0.1" is skipped. A model with a larger gap but only sideways room is still offered.
+- Subsumes D-048 for this test (0.05" < 0.1"); D-048 still keeps near-contact models out of the new-contact check.
 

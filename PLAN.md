@@ -465,8 +465,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 **Acceptance**
 - The engine: a model 0.04" from an enemy can still pile in or make an Ongoing Consolidation closer, and `move_reach` doesn't mark it immobile (core tests).
-- A pile-in whose only movable model is 1 mm from an enemy is skipped; at 1.5 mm it isn't (logic tests).
+- A pile-in whose only movable model is 1 mm from an enemy is skipped (logic test).
 - Existing tests and replays pass unchanged.
+
+---
+
+## M33: Skip moves that can only get marginally closer ✅ (done)
+**Effort:** `low` · **Plan mode:** yes (agreed 2026-11-06)
+
+> "Skip steps with nothing to do" judges a pile-in or consolidation by how much closer a model can get to the closest target unit, not how far it can travel (D-049, extends D-047). A model whose starting gap to that unit is 0.1" or less can't gain more than that, so it doesn't count. The engine is unchanged.
+
+**Acceptance**
+- A model 1.8 mm from the unit with room to slide ~12 mm is skipped; at just over 0.1" it isn't (logic tests).
+- The usual pile-in after a charge, the 3 mm pocket and the new-contact case are still offered; replays unchanged.
 
 ---
 

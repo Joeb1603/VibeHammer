@@ -10,6 +10,7 @@
 #include "core/geometry/engagement.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/fight.hpp"
+#include "core/state/queries.hpp"
 #include "reach_area.hpp"
 
 namespace wh40k::client {
@@ -79,6 +80,29 @@ bool nearly_in_base_contact(const core::GameState& state, const core::Unit& unit
     return false;
 }
 
+// D-049: the model's edge distance from its start to the closest target unit of the move (D-022); the
+// most it could get closer. nullopt if no target has models.
+std::optional<float> gap_to_closest_target(const core::GameState& state, const core::Model& model,
+                                           const core::Position& start) {
+    if (!state.flow.move) return std::nullopt;
+    std::optional<float> gap;
+    for (const core::UnitId id : state.flow.move->targets) {
+        const core::Unit* t = state.find_unit(id);
+        if (t == nullptr || core::is_destroyed(*t)) continue;
+        const std::optional<float> d = core::model_distance_to_unit(model, start, *t);
+        if (d && (!gap || *d < *gap)) gap = d;
+    }
+    return gap;
+}
+
+// D-047 / D-049: the model could end both well away from its start and noticeably closer to the target.
+bool can_get_worthwhile_closer(const core::GameState& state, const core::Model& model,
+                               const core::MoveReach& reach) {
+    const std::optional<float> gap = gap_to_closest_target(state, model, reach.start);
+    if (gap && *gap <= kWorthwhileGainMm + core::EPS_MM) return false;
+    return can_move_far_enough(reach);
+}
+
 bool skips_fight_moves(const core::GameAction& a) {
     using namespace core::action;
     return std::holds_alternative<EndPileIns>(a) || std::holds_alternative<EndConsolidations>(a) ||
@@ -98,7 +122,9 @@ bool fight_move_worthwhile(const core::GameState& state, core::Side side, const 
         const std::optional<core::MoveReach> reach = core::move_reach(*preview, m.id);
         if (!reach) continue;  // not moving (e.g. destroyed)
         if (nearly_in_base_contact(*preview, *unit, m, reach->start)) continue;  // D-048
-        if (can_move_far_enough(*reach) || could_make_new_contact(*preview, *unit, m, *reach)) return true;
+        if (can_get_worthwhile_closer(*preview, m, *reach) || could_make_new_contact(*preview, *unit, m, *reach)) {
+            return true;
+        }
     }
     return false;
 }

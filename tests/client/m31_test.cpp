@@ -1,5 +1,6 @@
 // M31: pile-ins and consolidations too small to matter are skipped under "Skip steps with nothing to do"
 // (D-047, extending D-036): 12.02, 12.03, 12.07, 12.08. M32: near base contact counts for skipping (D-048).
+// M33: so does a model that can only get up to 0.1" closer (D-049).
 
 #include <gtest/gtest.h>
 
@@ -139,9 +140,29 @@ TEST(M32_FightMoveSkip, AModelWithin005InchOfAnEnemyCountsAsInBaseContactForSkip
     EXPECT_EQ(side_a_skip(gs), GameAction{action::EndPileIns{}});
 }
 
-TEST(M32_FightMoveSkip, AModelMoreThan005InchFromAnEnemyIsNotSkipped) {
-    const GameState gs = near_contact_pile_in(1.5f);
+// (Was 1.5 mm in M32; D-049 now skips anything within 0.1", so a model 4 mm away shows the contrast.)
+TEST(M32_FightMoveSkip, AModelMoreThan01InchFromAnEnemyWithRoomIsNotSkipped) {
+    const GameState gs = near_contact_pile_in(4.0f);
     EXPECT_FALSE(side_a_skip(gs).has_value());
+}
+
+TEST(M33_FightMoveSkip, AModelThatCanOnlyGetMarginallyCloserIsSkippedEvenWithRoomToMove) {
+    // pile-in.png: 1.8 mm from one Termagant, with room to slide about 12 mm towards the other.
+    const GameState gs = near_contact_pile_in(1.8f);
+    const action::StartPileIn start{gs.units[kMarines].id, {gs.units[kGants].id}};
+    const auto preview = preview_fight_move(gs, Side::A, start);
+    ASSERT_TRUE(preview.has_value());
+    const auto reach = move_reach(*preview, gs.units[kMarines].models[0].id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_FALSE(reach->immobile);  // the engine lets it move, and it has room for more than 2 mm
+    EXPECT_FALSE(fight_move_worthwhile(gs, Side::A, start));
+    EXPECT_EQ(side_a_skip(gs), GameAction{action::EndPileIns{}});
+}
+
+TEST(M33_FightMoveSkip, JustOver01InchFromTheUnitIsNotSkipped) {
+    const GameState gs = near_contact_pile_in(in(0.1f) + 0.2f);
+    EXPECT_TRUE(fight_move_worthwhile(gs, Side::A, action::StartPileIn{gs.units[kMarines].id,
+                                                                         {gs.units[kGants].id}}));
 }
 
 TEST(M31_FightMoveSkip, AnOngoingConsolidationWithNoRoomIsSkipped) {
