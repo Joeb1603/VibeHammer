@@ -137,6 +137,7 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
     }
     r.p50_ms = percentile(ms, 0.50);
     r.p95_ms = percentile(ms, 0.95);
+    r.max_ms = ms.empty() ? 0.0 : *std::max_element(ms.begin(), ms.end());
     return r;
 }
 
@@ -149,12 +150,17 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                   "mean end round %.2f; mean surviving models: A %.2f, B %.2f\n"
                   "mean wounds lost: A %.2f, B %.2f; models removed for coherency: A %d, B %d\n"
                   "rejected actions %zu, UnitMoveReverted %zu, fallbacks %zu\n"
-                  "decision time p50 %.3f ms, p95 %.3f ms\n",
+                  "decision time p50 %.3f ms, p95 %.3f ms, max %.3f ms\n",
                   r.games.size(), a.c_str(), r.wins[0], b.c_str(), r.wins[1], r.draws, r.unfinished, r.mean_end_round,
                   r.mean_surviving[0], r.mean_surviving[1], r.mean_wounds_lost[0], r.mean_wounds_lost[1],
                   r.coherency_removed[0], r.coherency_removed[1], r.rejected,
-                  r.reverted, r.fallbacks, r.p50_ms, r.p95_ms);
+                  r.reverted, r.fallbacks, r.p50_ms, r.p95_ms, r.max_ms);
     std::string out = buf;
+    std::string coherency;  // M43: which games lost models to coherency (for --trace)
+    for (const GameRecord& g : r.games) {
+        if (g.coherency_removed[0] + g.coherency_removed[1] > 0) coherency += " " + std::to_string(g.seed);
+    }
+    if (!coherency.empty()) out += "coherency removals in seeds:" + coherency + "\n";
     for (const GameRecord& g : r.games) {
         if (g.problems.empty()) continue;
         out += "  seed " + std::to_string(g.seed) + ": " + g.problems.front() + "\n";

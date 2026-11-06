@@ -1345,6 +1345,74 @@ change.
   - **Arena:** zero rejections, reverts and fallbacks in all four pairings (PLAN.md, M42). The Tyranid open item is
     unchanged over 1000 seeds: their charges come after the first Bolt Rifle volley, with 4-6 Termagants in one
     rank that the baseline translation also engages in full; movement (M43) has to keep them out of Rapid Fire range.
+- **M43 notes (movement; `src/ai/normal/movement.*`, the score in `src/ai/normal/move_score.*`):**
+  - **Dispatch:** `normal_answer` now answers MoveUnits (`decide_move_units`) and the MoveModels of Normal, Advance
+    and Fall-back moves (`continue_unit_move`); level Normal no longer uses the baseline for anything it has an answer
+    for. `Exchange` moved from charge.cpp to value.hpp (no behaviour change).
+  - **Move types (MoveUnits):** for the first unit offered, each offered type is valued: Remain Stationary (scored
+    from the state after it, with its charge prospect); a Normal move and an Ordered Retreat (the whole planned move,
+    memoized from StartMove to the commit; a Normal move whose best plan is to stay put is left to Remain
+    Stationary); an **Advance before its roll**: the six results on scratch states with `ScriptedDice` faces 1-6 (as
+    `advance_odds`), the candidates made once for the largest roll and filtered by each roll's maximum, one refined
+    move per roll, the mean of the six; a **Desperate Escape** only when it is the only mode: planned with no failed
+    hazard roll (scripted sixes) less the expected hazard losses (`make_hazard_rolls` per face). The best value is
+    chosen (ties: the order above). An Advance or Desperate Escape plan stops at the StartMove (dice); after the
+    roll (and any casualties) `plan_unit_move` plans with the actual roll. The bot never resets a move to change its
+    type after a roll.
+  - **The plan of a move:** `plan_unit_move(origin)`, a pure function of the state just after StartMove (seed
+    `decision_seed(origin)`). `continue_unit_move` replans from `move_origin` (positions back at the starts, no
+    paths) and continues from the step whose expected hash is the state's; otherwise it commits a move that stands or
+    resets (only from a state the bot didn't make).
+  - **Candidates (`move_candidates`):** staying put (when that is legal for the type); the unit translated along the
+    16 fixed directions (`kDirections16`, most in line with the enemy first, so a tie goes to the straighter move) by
+    0.5", 1" ... 3", then every inch up to 24" and the move's maximum, plus, where a step first fails, the furthest
+    point found by 8 bisections ("as far as it can go": up to the board edge or just outside engagement range);
+    line-abreast and two-rank formations facing the enemy, centred 0", +-3", +-6", +-9", +-12" along the line to it and
+    shifted inside the battlefield. Formation slots: the models nearest the enemy take the front rank, each rank in
+    order along the line (no crossings); proposals furthest along the move first, and a model whose slot is on a
+    model still to move waits; a cycle is broken by parking one model beside its start (a 1" step past touching) and
+    proposing it again later with a direct line (a proposal replaces the earlier path, so no two-segment path is
+    needed). **Cheap checks** prune them: bases inside the battlefield, straight lines clear of enemy bases (not for a
+    Desperate Escape), ends more than engagement range + EPS + 0.05 mm from every enemy model, no base on a base, and
+    `check_coherency`. About 150-250 candidates per plan.
+  - **Pruning budgets (counts, never time):** every candidate gets the cheap score; in that order, up to 12 are
+    simulated in full on a Simulator (each ProposeModelMove validated, `move_end_problems` empty, the commit not
+    reverted) until 3 stand; those 3 are refined from the simulated state (`best_shooting`), the first 2 that can
+    charge also with `charge_prospect` (exact odds and the models each roll engages). The best refined one is the
+    plan. Release: a plan takes 3-6 ms, a whole MoveUnits decision 12-16 ms.
+  - **The score (`score_move_plan`, `refine_move_score`; M44's seam):** components in unit shares (our side
+    positive) along a `ScoreLine` (an Exchange whose losses are weighted per half-turn) over this turn, the enemy's
+    next turn and our next turn, cut by `turns_left` (D-007): `shoot_now` (each model at its own gap: range and half
+    range per profile; [HEAVY] after Remain Stationary or a move of no more than 3"; [ASSAULT] only after an Advance;
+    none after a Fall Back; close quarters while engaged), `charge` (E[max(charge, hold)] - hold; quick bound
+    `p_charge_roll_covers` on the gap to the enemy model left closest after our expected kills, or charge_prospect's
+    exact rolls), `hold` (the enemy's reply worst for us of: stay, close to its half range, or close by its M, each
+    with shooting and a charge if its roll covers the gap; Advance and [ASSAULT] shooting; keep away by its M as far
+    as the board allows; then our next turn's best of stay / close to half range / close by M, with a charge), `edge`,
+    `coherency`, `tie_break`. Engaged and staying: our close-quarters shooting and fight, then the enemy fights on or
+    falls back. Rates are cached by the range / half-range band of every profile, [HEAVY] and the shooting type.
+  - **Game length (D-007) and the weights (`MoveWeights`, M44 tunes them):** the exchange's lean (each side's best
+    shooting at half range plus melee, (ours - theirs) / total: Intercessors +0.76 against Termagants) sets a time
+    preference, `delay` 0.5: the winning side counts the enemy's losses one half-turn later x (1 - 0.5 x lean) (it
+    prefers to wipe the enemy out sooner), the losing side its own later losses the same way; and `survival` 1.0:
+    the losing side adds 1.0 x |lean| x (battle round / rounds) x P(it survives the enemy's reply) (the exact
+    distribution of models destroyed by that reply's shooting and, if it charges, its melee; the enemy's reply is
+    chosen with it). `edge` 0.05 x (1 - room / M) x the enemy's shooting rate on us (only when we move again within
+    the horizon); `coherency` 0.05 x the share of our models in groups of two or fewer linked by 2" (03.03 doesn't
+    need one group; such a pair loses a model whenever one of them is a casualty: one Release game lost a Termagant
+    that way with the first, weaker slack term); `tie_break` 1e-5 x lean x the gap in inches (the winner closes, the
+    loser keeps away, when nothing else differs). Arena sweeps (Easy vs Normal, 1000 seeds): survival 0 gave 2.20
+    rounds / 0.38 wounds dealt, 0.3 gave 2.31 / 0.40, 1.0 gave 2.38 / 0.40 (Easy: 1.91 / 0.36); without the losing
+    side's discount games were shorter (2.12 rounds over 300 seeds).
+  - **Reasons:** "Termagants: Advance (-0.19 on average over the advance roll) - 15.4\" from Intercessor Squad,
+    outside its half range, its charge odds next turn 17% (-0.19; Remain Stationary -0.21, Normal move -0.19)";
+    after the roll "Termagants: Advance (roll 5) 9.8\" obliquely back - ...".
+  - **Outcomes:** Intercessors move 6" at the Termagants (half range, then a charge); Termagants kite to 15-17"
+    (outside half range and most charges, still within 18"), Advance and shoot, fall back from a losing combat, and
+    charge when caught anyway. As Tyranids they still never draw (PLAN.md, M43: open item for M44).
+  - **Diagnostics (disabled tests, run on purpose):** `M43_Diagnostics.DISABLED_PrintTheRankedCandidates`,
+    `DISABLED_PrintDecisions` and `DISABLED_TimeThePlanner` print a position's ranked candidates with every score
+    component, the bot's choices across fixture layouts, and the planner's timings.
 
 ## D-055: Start screen and saved settings (M38)
 **Decided:** 2026-11-06 (M38, pre-approved batch). Client only; no rule, state or replay change.

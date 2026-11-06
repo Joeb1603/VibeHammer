@@ -10,6 +10,7 @@
 #include "normal/charge.hpp"
 #include "normal/defense.hpp"
 #include "normal/fight.hpp"
+#include "normal/movement.hpp"
 #include "normal/shooting.hpp"
 
 namespace wh40k::ai {
@@ -86,8 +87,14 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
         gs.flow.move->type == MoveType::Charge) {
         return normal::continue_charge_move(gs, side, seed);
     }
-    // M43 hook: MoveUnits (move types and destinations) and the MoveModels of Normal / Advance / Fall Back moves
-    // stay on the baseline.
+    // M43: the Movement phase (09.02-09.07): the move type and the whole planned move, and the MoveModels of
+    // Normal, Advance and Fall-back moves (replanned from the move's start).
+    if (std::holds_alternative<decision::MoveUnits>(kind)) return normal::decide_move_units(cache, gs, side, legal, seed);
+    if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
+        (gs.flow.move->type == MoveType::Normal || gs.flow.move->type == MoveType::Advance ||
+         gs.flow.move->type == MoveType::FallBack)) {
+        return normal::continue_unit_move(cache, gs, side);
+    }
     return std::nullopt;
 }
 

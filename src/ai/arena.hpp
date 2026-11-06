@@ -54,6 +54,7 @@ struct ArenaResult {
     std::size_t fallbacks = 0;
     double p50_ms = 0.0;
     double p95_ms = 0.0;
+    double max_ms = 0.0;  // M43: the slowest decision (M44 has a 500 ms p95 budget)
     [[nodiscard]] bool clean() const noexcept { return rejected == 0 && reverted == 0 && unfinished == 0; }
 };
 
@@ -62,7 +63,8 @@ struct ArenaResult {
                                     BotConfig b, std::size_t step_cap = 5000);
 
 // The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
-// side, rejected actions, UnitMoveReverted count, fallbacks and p50 / p95 decision time.
+// side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time and (M43) the seeds that
+// lost models to coherency.
 [[nodiscard]] std::string format_arena(const ArenaResult& r, const core::GameState& scenario);
 
 }  // namespace wh40k::ai

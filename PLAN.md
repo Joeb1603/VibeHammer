@@ -773,7 +773,7 @@ Every earlier level stays selectable as a regression opponent.
 - **As Space Marines: met.** Same wins (200), earlier mean end round (1.92 vs 1.94; over seeds 1–1000, 1.89 vs
   1.91). Normal's Intercessors pile in and consolidate into more Termagants, so they also take slightly more wounds
   back (0.47 vs 0.44) and keep 0.01 fewer models on average.
-- **As Tyranids: not met (open item, for M42/M43).** Normal's Termagants play exactly as well as Easy's: identical
+- **As Tyranids: not met (open item, for M42/M43; M43: they now play differently, see M43's results).** Normal's Termagants play exactly as well as Easy's: identical
   to two decimals over seeds 1–200 and 1–1000 (A wounds lost 0.36 vs 0.36, mean end round 1.91 vs 1.91 over 1000).
   Their outcome is decided by the decisions M41 leaves to the baseline: Easy's movement walks them 2" at a time into
   Rapid Fire range and its charge rule throws them into combat. Of the decisions M41 owns, the Termagants' only gun
@@ -853,7 +853,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M43: Movement planner and whole-turn plan
+## M43: Movement planner and whole-turn plan ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-06)
 **Rules:** 03.01–03.04, 09.02–09.07, 10.02–10.06, 11.02
 
@@ -893,6 +893,58 @@ Every earlier level stays selectable as a regression opponent.
   - as Intercessors vs Easy: ≥ 95% wins, with an earlier mean winning round than Easy vs Easy;
   - as Termagants vs Easy: more draws and wins, and more surviving models, than Easy vs Easy.
 - Zero rejections and zero reverts.
+
+**Results (2026-11-06):**
+- **Fixtures (ai tests `M43_*`, all pass):**
+  - holds still for Heavy: `M43_Heavy.InTheLastTurnFarFromAnotherIntercessorSquadItRemainsStationaryAndFiresHeavyFocusedFire`
+    (19" from a second Intercessor Squad in the game's last turn: Remain Stationary, then Heavy Focused Fire) and
+    `M43_Heavy.FarFromAnotherIntercessorSquadItMovesNoMoreThanThreeInchesAndKeepsHeavy` (20" in round 1: Remain
+    Stationary or a move of no more than 3", Heavy kept). Against the Termagants holding still never wins: a 6" move
+    loses only 4% of the shooting (Saturation 5.55 against Focused Fire 5.79) and buys a charge.
+  - closes to Rapid Fire and charge range: `M43_RapidFire.IntercessorsSixteenInchesFromTermagantsCloseToHalfRangeAndChargeRange`
+    (16" -> about 10": every Intercessor within 12", a charge can be declared, no Advance);
+  - stays out of the likely charge range: `M43_Kiting.TermagantsTenInchesFromIntercessorsKeepOutOfRapidFireAndChargeRangeAndStillShoot`
+    (10" in mid-board -> more than 14", P(charge after a move) under 25%, still within the Fleshborers' 18");
+  - never ends a move in Engagement Range unless charging, no reverts: `M43_Legal.AcrossAGridNoPlannedMoveEndsEngagedOrIsRevertedAndAFreshBotGivesTheSamePlan`
+    (both units, gaps 3"-16", two offsets, and both units starting engaged: no rejection, revert, reset or engaged end);
+  - Advance decided from its odds before the roll: `M43_Advance.DecidedFromTheOddsBeforeTheRollThenEachRollsMoveStandsAndKeepsTheAdvance`
+    (the same choice whatever `state.dice`; each of the six rolls gets its own legal plan, never reset, still an
+    Advance), and `M43_NeverPeeksAtDice.MovementDecisionsAreTheSameWhateverTheDiceAndFromAnyStateOfThePlan`;
+  - also `M43_FallBack.EngagedTermagantsFallBackAndEngagedIntercessorsStayInTheFight` and `M43_Arena` (12 seeds per
+    seat: every game won as Space Marines and sooner than Easy, later games as Tyranids, all clean).
+- Release arena, V1 skirmish, seeds 1–200:
+
+  | Run | A wins | B wins | Draws | Mean end round | Mean survivors A / B | Mean wounds lost A / B | Coherency removals | p95 / max decision |
+  |---|---|---|---|---|---|---|---|---|
+  | `--a easy --b easy` | 200 | 0 | 0 | 1.94 | 4.92 / 0.00 | 0.44 / 10.00 | 0 / 0 | 0.13 / 0.36 ms |
+  | `--a normal --b easy` | 200 | 0 | 0 | 1.41 | 4.93 / 0.00 | 0.35 / 10.00 | 0 / 0 | 8.7 / 23.3 ms |
+  | `--a easy --b normal` | 200 | 0 | 0 | 2.44 | 4.92 / 0.00 | 0.44 / 10.00 | 0 / 0 | 2.4 / 25.2 ms |
+  | `--a normal --b normal` | 200 | 0 | 0 | 1.51 | 4.95 / 0.00 | 0.30 / 10.00 | 0 / 0 | 7.9 / 17.0 ms |
+
+  Every run: 0 rejected actions, 0 `UnitMoveReverted`, 0 fallbacks, 0 unfinished. Over seeds 1–1000: Easy vs Easy
+  1.91 rounds, A wounds lost 0.36; Easy vs Normal 2.38 rounds, 0.40; Normal vs Easy 1.42 rounds (1000 wins). (The
+  arena now also prints the slowest decision and which seeds lost models to coherency.)
+- **As Intercessors vs Easy: met.** 200 wins of 200, mean winning round 1.41 against Easy vs Easy's 1.94 (1.42
+  against 1.91 over 1000 seeds). They move 6" straight at the Termagants (Saturation at half range, 5.55 expected),
+  charge at 42-92%, and usually end the game in round 1 or 2.
+- **As Termagants vs Easy: more draws + wins and more surviving models: not met (open item, for M44).** 0 draws and
+  0.00 surviving models, as Easy. It is out of reach in this matchup: Space Marines go first, so the first Bolt
+  Rifle volley (5.8 expected kills at 10", before the Termagants move at all) is unavoidable; the 24" board leaves at
+  most about 17" between the units and the Bolt Rifle reaches 24", so the Termagants can never get out of range or
+  sight (no terrain). Beyond 12" Easy's Focused Fire still kills 2.9 a turn, so a draw needs ten Termagants to
+  survive five volleys whose expected kills add up to about 17; no seed in 1000 does. Traces (e.g. `--trace 14 --a easy
+  --b normal`): R1 the 4-6 survivors Advance back to 15-16" (outside half range, the Intercessors' charge odds 17%)
+  and shoot; R2 the Intercessors walk 2" and shoot outside half range; the 1-2 left are caught in R2 or R3.
+  **The secondary signs improve clearly:** a later mean end round (2.44 against 1.94 over seeds 1–200, 2.38 against
+  1.91 over 1000) and more wounds dealt to the Marines (0.40 against 0.36 over 1000 seeds, +11%; equal over seeds
+  1–200, 0.44 and 0.44, where the difference is within the noise).
+- **The M41 open item (Normal Termagants play exactly as Easy's): resolved for play, open for results.** They now
+  play differently and better (kiting, Advance and shoot, Fall Back from losing combats, a last charge when doomed),
+  but they still never draw (above).
+- Performance (Release): a Movement decision takes 12-16 ms (the move's plan 3-6 ms, an Advance valued over its six
+  rolls, Remain Stationary with its charge prospect); the arena's slowest decision is 30 ms and p95 under 9 ms.
+- ctest: the M43 tests take about 21 s in Debug; the planner also plays Normal's moves in the M41 and M42 game tests
+  (about +15 s); the whole suite went from about 85 s to 127 s.
 
 ---
 

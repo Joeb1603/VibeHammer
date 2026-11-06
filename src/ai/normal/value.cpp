@@ -17,6 +17,8 @@ double unit_share(const core::Unit& unit, double model_equivalents) {
     return model_equivalents / static_cast<double>(n);
 }
 
+double alive_share(const core::Unit& unit) { return unit_share(unit, static_cast<double>(unit.models.size())); }
+
 double share_value(const core::GameState& state, std::span<const analysis::TargetOutcome> outcomes) {
     double total = 0.0;
     for (const analysis::TargetOutcome& o : outcomes) {

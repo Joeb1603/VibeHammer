@@ -7,6 +7,7 @@
 // volleys and makes the two sides' losses comparable, which model equivalents alone don't (a dead Intercessor
 // is not a dead Termagant). V1 is won by wiping the enemy out (D-007), so progress towards that is the measure.
 
+#include <algorithm>
 #include <map>
 #include <span>
 #include <vector>
@@ -18,6 +19,35 @@ namespace wh40k::ai::normal {
 
 // `model_equivalents` of `unit` as a share of its starting strength.
 [[nodiscard]] double unit_share(const core::Unit& unit, double model_equivalents);
+
+// The unit's models still on the battlefield, as a share of its starting strength.
+[[nodiscard]] double alive_share(const core::Unit& unit);
+
+// M42/M43: what is left of two opposing units, as shares of their starting strengths, as volleys land in
+// sequence. A volley is worth `rate` (shares of the target) at the attacker's strength when the exchange started,
+// so it is scaled by the attacker's surviving fraction and capped at what is left of the target.
+class Exchange {
+public:
+    Exchange(double us, double them) : us0_(us), them0_(them), us_(us), them_(them) {}
+    void we_hit(double rate) {
+        if (us0_ > 0.0) them_ -= std::min(them_, rate * us_ / us0_);
+    }
+    void they_hit(double rate) {
+        if (them0_ > 0.0) us_ -= std::min(us_, rate * them_ / them0_);
+    }
+    [[nodiscard]] double us() const noexcept { return us_; }
+    [[nodiscard]] double them() const noexcept { return them_; }
+    [[nodiscard]] double us0() const noexcept { return us0_; }
+    [[nodiscard]] double them0() const noexcept { return them0_; }
+    // Their losses minus ours.
+    [[nodiscard]] double value() const noexcept { return (them0_ - them_) - (us0_ - us_); }
+
+private:
+    double us0_;
+    double them0_;
+    double us_;
+    double them_;
+};
 
 // The sum of unit_share over the outcomes (each against its own target unit in `state`).
 [[nodiscard]] double share_value(const core::GameState& state, std::span<const analysis::TargetOutcome> outcomes);

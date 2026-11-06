@@ -1,6 +1,6 @@
 #pragma once
 
-// Level Normal (M41, M42, D-054). Every decision except movement uses the M40 analysis:
+// Level Normal (M41-M43, D-054). Every decision uses the M40 analysis:
 // - shooting (normal/shooting.hpp): which unit shoots, shooting type, each model's weapons, profiles and
 //   targets with overkill avoidance; the order of attack batches (SelectAttackBatch);
 // - defense (normal/defense.hpp): allocation order, casualty priority (also Desperate Escape hazards), and the
@@ -9,8 +9,9 @@
 //   consolidations;
 // - charges (normal/charge.hpp, M42): whether and which unit declares a charge, the charge targets after the roll
 //   (or no charge move), and the charge move itself (the client's Auto move for charges, D-056).
-// Movement (MoveUnits and the moves it starts) is the baseline's (easy_policy) until M43 (movement planner)
-// replaces it: see `normal_policy`'s dispatch. Any decision the Normal level has no answer of its own for also goes to the
+// - movement (normal/movement.hpp, M43): the move type (Remain Stationary, Normal, Advance decided from its odds
+//   before the roll, Fall Back) and the planned move, scored for the whole turn (normal/move_score.hpp).
+// Any decision the Normal level has no answer of its own for goes to the
 // baseline, and Bot::decide still validates every answer and falls back if one isn't legal.
 
 #include <cstdint>

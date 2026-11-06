@@ -71,30 +71,7 @@ bool offered(const std::vector<core::GameAction>& legal, const core::GameAction&
 
 // ---- the value model (see the header) ----
 
-// What is left of each unit, as shares of its starting strength (value.hpp's currency), as volleys land.
-class Exchange {
-public:
-    Exchange(double us, double them) : us0_(us), them0_(them), us_(us), them_(them) {}
-    // A volley worth `rate` (shares of the target) at the attacker's strength when the exchange started.
-    void we_hit(double rate) {
-        if (us0_ > 0.0) them_ -= std::min(them_, rate * us_ / us0_);
-    }
-    void they_hit(double rate) {
-        if (them0_ > 0.0) us_ -= std::min(us_, rate * them_ / them0_);
-    }
-    [[nodiscard]] double us() const noexcept { return us_; }
-    [[nodiscard]] double them() const noexcept { return them_; }
-    // Their losses minus ours.
-    [[nodiscard]] double value() const noexcept { return (them0_ - them_) - (us0_ - us_); }
-
-private:
-    double us0_;
-    double them0_;
-    double us_;
-    double them_;
-};
-
-double alive(const core::Unit& u) { return unit_share(u, static_cast<double>(u.models.size())); }
+double alive(const core::Unit& u) { return alive_share(u); }
 
 struct Rates {
     double melee = 0.0;   // every model fighting with its best melee weapon

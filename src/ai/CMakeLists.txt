@@ -12,6 +12,8 @@ add_library(wh40k_ai STATIC
     normal/charge.cpp
     normal/defense.cpp
     normal/fight.cpp
+    normal/move_score.cpp
+    normal/movement.cpp
     normal/normal_bot.cpp
     normal/shooting.cpp
     normal/value.cpp
