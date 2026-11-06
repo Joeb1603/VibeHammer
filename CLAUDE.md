@@ -20,6 +20,7 @@ data/units/*.json         unit datasheets generated from BSData (do not hand-edi
 data/scenarios/*.json     battlefield size, deployment, armies, loadouts
 tools/extract_rules.py    PDF -> docs/rules/   (needs pdftotext on PATH)
 tools/fetch_bsdata.py     BSData wh40k-11e -> data/units/
+tools/package.ps1         Release build -> VibeHammer.zip for sending the game to someone
 src/core/                 wh40k_core: headless rules library
 src/client_2d/            wh40k_client_2d: raylib + Dear ImGui executable (hotseat play + replay viewer)
   logic/                  wh40k_client_logic: the client's raylib-free code (GameSession, editors) (D-024)
@@ -50,6 +51,10 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=Replay.DISABLED_RegenerateReplays
 ```
 
+- To send the game to someone: `powershell -ExecutionPolicy Bypass -File tools\package.ps1`. It builds Release,
+  stages the exe, VC++ runtime DLLs, `data/` and `tests/replays/` with a README, smoke-tests the staged exe, and
+  writes `VibeHammer.zip` in the repo root (gitignored). The exe looks for `data/` next to itself first, then the
+  source tree. Never add `docs/rules/` or the PDF to the package.
 - Dependencies come from CMake `FetchContent` pinned to exact tags: raylib, Dear ImGui, rlImGui, nlohmann_json, GoogleTest.
 - Treat warnings as errors in `wh40k_core` (`/W4 /WX /permissive-`). Don't silence a warning to get a build through.
 - A change is not done until it builds and `ctest` passes. Report test failures as they are; never skip, delete or weaken a test to get to green.

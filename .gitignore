@@ -60,3 +60,6 @@ desktop.ini
 
 # ---- Claude Code local settings ----
 .claude/settings.local.json
+
+# ---- Distribution zip (built locally) ----
+/VibeHammer.zip

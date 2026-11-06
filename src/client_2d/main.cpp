@@ -71,7 +71,15 @@ constexpr float kDragThresholdPx = 3.0f;
 constexpr float kRulerText = 18.0f;
 constexpr float kFontSize = 15.0f;
 const Color kFixCue{255, 200, 90, 200};  // D-052: the cursor's outline and line to a fixed drop
-const fs::path kRepoRoot{WH40K_REPO_ROOT};
+// The folder holding data/: next to the exe when it has been copied out of the build (a zipped
+// distribution), otherwise the source tree it was built from.
+fs::path find_data_root() {
+    const fs::path exe_dir = fs::path(GetApplicationDirectory());
+    std::error_code ec;
+    if (fs::exists(exe_dir / "data/scenarios", ec)) return exe_dir;
+    return fs::path(WH40K_REPO_ROOT);
+}
+const fs::path kRepoRoot = find_data_root();
 const fs::path kScenario = kRepoRoot / "data/scenarios/v1_skirmish.json";
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
 const fs::path kSavePath = kRepoRoot / "saves/game.json";              // gitignored
