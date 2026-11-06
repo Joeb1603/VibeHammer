@@ -1,0 +1,36 @@
+{
+  "name": "Bot - Termagants first",
+  "battlefield": { "width_in": 24, "depth_in": 24 },
+  "battle_rounds": 5,
+  "first_turn": "B",
+  "sides": {
+    "A": {
+      "name": "Space Marines",
+      "deployment_zone": { "edge": "south", "depth_in": 6 },
+      "units": [
+        {
+          "unit_file": "data/units/intercessor_squad.json",
+          "models": [
+            { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
+            { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
+          ],
+          "formation": { "ranks": 1, "gap_in": 0, "centre_x_in": 12, "anchor": "zone_front" }
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": { "edge": "north", "depth_in": 6 },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ],
+          "formation": { "ranks": 2, "gap_in": 0, "centre_x_in": 12, "anchor": "zone_front" }
+        }
+      ]
+    }
+  },
+  "notes": "M44 bot scenario (D-054): the V1 skirmish (same armies, deployment and formations, D-008) with the Tyranids taking the first turn. Unit-specific abilities (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse, Combat Doctrines) are present in the unit data but out of scope for V1; the engine ignores them until a milestone implements them."
+}

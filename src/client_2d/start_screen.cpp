@@ -117,9 +117,6 @@ void StartScreen::draw_play(AppSettings& s, const StartContext& ctx, StartReques
     ImGui::Spacing();
     if (big_button("Watch bot vs bot")) out = StartRequest{StartRequest::Kind::Play, GameMode::BotVsBot, {}};
     ImGui::SetItemTooltip("The bot plays both sides.");
-    ImGui::PushTextWrapPos(0.0f);
-    ImGui::TextDisabled("The bot isn't built yet: for now, play its side by hand.");
-    ImGui::PopTextWrapPos();
 
     ImGui::SeparatorText("Resume or watch");
     ImGui::BeginDisabled(!ctx.save_exists);
@@ -175,7 +172,9 @@ void StartScreen::draw_options(AppSettings& s, const StartContext& /*ctx*/) {
     constexpr BotSpeed kSpeeds[] = {BotSpeed::Slow, BotSpeed::Normal, BotSpeed::Fast, BotSpeed::Instant};
     ImGui::SetNextItemWidth(field);
     enum_combo("Level", s.bot_level, kLevels, &bot_level_name);
-    ImGui::SetItemTooltip("A level that isn't built yet plays as the best one that is.");
+    ImGui::SetItemTooltip(
+        "Easy: the baseline. Normal: plans its shooting, charges, fights and moves from the odds. Hard: Normal's "
+        "plans, weighed with the chances of winning, drawing or losing the game and a look ahead (D-054).");
     ImGui::SetNextItemWidth(field);
     enum_combo("Speed", s.bot_speed, kSpeeds, &bot_speed_name);
     ImGui::SetItemTooltip("How long the bot pauses between its actions, so you can follow them.");

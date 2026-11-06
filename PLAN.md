@@ -948,7 +948,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M44: Game-aware evaluator, lookahead, tuning (level Hard)
+## M44: Game-aware evaluator, lookahead, tuning (level Hard) ✅ (done, with open items)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-06)
 
 > **Evaluator:**
@@ -973,6 +973,87 @@ Every earlier level stays selectable as a regression opponent.
   subset runs in ctest.
 - p95 decision time under 500 ms in Release (reported by the arena, not asserted in ctest).
 - Zero rejections and zero reverts. Replays unchanged.
+
+**"Beats" (defined before the final arena runs):** each Hard seat (`--a hard --b normal`, `--a normal --b hard`) is
+compared with `--a normal --b normal` on the same scenario and seeds 1–200.
+- **Primary:** the mean game result per game from the seat's point of view (win +1, draw 0, loss −1). Hard beats
+  Normal in the seat when its mean is higher.
+- **When both runs sit at the same ceiling or floor in the seat** (the seat wins every game, or loses every game),
+  pre-declared tie-breaks, in order:
+  - as the side that always wins: an earlier mean end round, then fewer mean wounds lost;
+  - as the side that always loses: more draws, then a later mean end round, then more mean wounds dealt.
+- Equal on every measure is not a win; a tied primary result off the ceiling or floor is not a win either.
+
+**Results (2026-11-06):**
+- **What Hard is** (D-054, M44 notes): Normal's modules plus a game-aware evaluator (a Markov chain over each unit's
+  wounds left, the half-turn and the range band, with each unit's room to back away; V = P(win) − P(loss), a draw
+  worth 0, plus a time preference and material as tie-breaks) and a lookahead (6 Monte Carlo rollouts per move plan
+  of the rest of our turn and the enemy's reply, on the bot's own dice, at most 6000 simulated actions). Movement,
+  charges, casualty order, coherency removal and consolidation use the evaluator. Every Hard decision starts from
+  Normal's answer and plays something else only when the evaluator values it more than 0.01 higher
+  (`BotWeights::margin`).
+- Release arena, seeds 1–200 (Hard's weights `BotWeights{}`; the sweeps are in D-054, M44 notes):
+
+  | Scenario | Run | A wins | B wins | Draws | Mean result A | Mean end round | Mean survivors A / B | Mean wounds lost A / B | Coherency removals | p95 / max decision |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | V1 skirmish | `--a normal --b normal` | 200 | 0 | 0 | +1.000 | 1.51 | 4.95 / 0.00 | 0.30 / 10.00 | 0 / 0 | 10.0 / 22.7 ms |
+  | V1 skirmish | `--a hard --b normal` | 200 | 0 | 0 | +1.000 | 1.51 | 4.95 / 0.00 | 0.30 / 10.00 | 0 / 0 | 19.6 / 134.9 ms |
+  | V1 skirmish | `--a normal --b hard` | 200 | 0 | 0 | +1.000 | 1.67 | 4.96 / 0.00 | 0.27 / 10.00 | 0 / 0 | 14.8 / 132.6 ms |
+  | V1 skirmish | `--a hard --b hard` | 200 | 0 | 0 | +1.000 | 1.67 | 4.96 / 0.00 | 0.27 / 10.00 | 0 / 0 | 50.3 / 132.4 ms |
+  | Termagants first | `--a normal --b normal` | 200 | 0 | 0 | +1.000 | 2.05 | 4.61 / 0.00 | 1.25 / 10.00 | 0 / 0 | 10.6 / 22.4 ms |
+  | Termagants first | `--a hard --b normal` | 200 | 0 | 0 | +1.000 | 2.05 | 4.61 / 0.00 | 1.25 / 10.00 | 0 / 0 | 21.7 / 135.4 ms |
+  | Termagants first | `--a normal --b hard` | 200 | 0 | 0 | +1.000 | 2.06 | 4.61 / 0.00 | 1.25 / 10.00 | 0 / 0 | 29.9 / 182.6 ms |
+  | Termagants first | `--a hard --b hard` | 200 | 0 | 0 | +1.000 | 2.06 | 4.61 / 0.00 | 1.25 / 10.00 | 0 / 0 | 54.7 / 181.2 ms |
+  | 20 Termagants | `--a normal --b normal` | 195 | 1 | 4 | +0.970 | 2.59 | 4.35 / 0.07 | 1.80 / 19.93 | 5 / 3 | 16.0 / 96.6 ms |
+  | 20 Termagants | `--a hard --b normal` | 195 | 1 | 4 | +0.970 | 2.60 | 4.35 / 0.07 | 1.79 / 19.93 | 5 / 3 | 26.9 / 338.0 ms |
+  | 20 Termagants | `--a normal --b hard` | 194 | 2 | 4 | +0.960 | 2.73 | 4.38 / 0.11 | 1.76 / 19.89 | 8 / 0 | 25.0 / 419.3 ms |
+  | 20 Termagants | `--a hard --b hard` | 194 | 2 | 4 | +0.960 | 2.73 | 4.38 / 0.12 | 1.76 / 19.89 | 8 / 0 | 35.5 / 512.1 ms |
+
+  Every run: 0 rejected actions, 0 `UnitMoveReverted`, 0 fallbacks, 0 unfinished. Normal vs Normal reproduces the
+  numbers measured before any M44 code (and M43's V1 row), so Normal's play is unchanged. (The arena now also
+  prints the mean result per game and the seeds with a `UnitMoveReverted`, and `--trace` prints each decision's
+  time; `--weights` overrides Hard's weights for tuning.)
+- **As Tyranids (Hard B against Normal A): beats Normal on every scenario.**
+  - V1: both always lose, with no draws either way; a later mean end round, 1.67 against 1.51. Hard falls back from
+    a losing combat instead of staying to be finished off, and keeps away.
+  - Termagants first: both always lose, no draws; a later mean end round, 2.06 against 2.05. The margin is a few
+    games in 200 and varies with the weights (2.04–2.06 across the sweeps): within the noise, recorded as measured.
+  - 20 Termagants: mean result −0.960 against −0.970 (2 wins and 4 draws against 1 and 4).
+- **As Space Marines (Hard A against Normal B): ties on every scenario: not met (open item).**
+  - V1 and Termagants first: both win every game, with the same mean end round (1.51; 2.05) and the same wounds lost
+    (0.30; 1.25). Hard keeps Normal's answers in nearly every Space Marine decision: the evaluator puts P(win) at
+    100% for both and their tempo values within the margin.
+  - 20 Termagants: the same mean result, +0.970 (195 wins, 1 loss, 4 draws), with a mean end round of 2.60 against
+    2.59. The non-wins are long melees with the big Termagant unit (for Normal, seeds 39, 97, 119, 131 and 190; the
+    Intercessors end with 0–2 models).
+  - Evidence that it is out of reach for this design: with the margin at 0 (or Normal's answer only one candidate
+    among others) Hard's own choices as the Marines do slightly worse: V1 1.52 rounds, Termagants first 2.06, 20
+    Termagants 194 wins and 6 draws (the same mean result). Only 2 of the first 120 V1 seeds change, both a round
+    later (seeds 33 and 59). There Normal consolidates into the last Termagants, and Normal's Termagants then stay
+    in the combat and die in their own turn. The chain assumes the enemy plays its best (falling back), so it
+    values not consolidating a hair higher. Normal's Marines are already at the ceiling in V1 and Termagants first:
+    the end round is decided by the first charge roll (42–72% after the first volley) and the fight after it. A
+    stronger opponent model (the enemy's actual policy in the rollouts) or a deeper search would be the next step.
+- **Performance: met.** p95 at most 55 ms (hard vs hard, Termagants first); the slowest decision took 512 ms (hard
+  vs hard, 20 Termagants: a Movement decision of the 20-model unit with its Advance and Fall Back options). A chain
+  table costs 14 ms (V1) or 27 ms (20 Termagants) in Release and is built about once per game per bot. A whole Hard
+  vs Hard game takes 0.2 s (V1) to 0.5 s (20 Termagants).
+- **Zero rejections, reverts and fallbacks: met** in every run above, and in every sweep after `escape_stands`
+  (D-054). Replays unchanged; no core change.
+- **Tests (ai tests `M44_*`, all pass):**
+  - the evaluator: V within [−1, 1] and zero-sum across a grid, obvious positions ordered, a draw worth 0, terminal
+    states exact (a hypothetical wipe-out too), more wounds never worse, a cached table equal to a fresh one;
+  - the Monte Carlo: the same result for the same state and when only `state.dice` changes, and the budget respected;
+  - Hard never peeks at dice, and a fresh bot gives the same answer (16 Hard decisions of two games, 6+ kinds);
+  - play for the draw: four Termagants 9" from a whole Intercessor Squad in battle round 5 back away out of half
+    range, shoot and declare no charge;
+  - the new scenarios load, deploy legally and play clean games. The 20 Termagants stand in three ranks of 7, 7 and
+    6 (two ranks of 10 would break the 9" clause of 03.03). A small V1 arena (2 seeds per seat) is clean, wins every
+    game as the Marines and lasts no shorter as the Tyranids;
+  - `M39_Levels.HardPlaysAsNormalUntilItIsBuilt` (written for this milestone) became
+    `M39_Levels.EveryLevelIsBuiltAndHardIsItsOwnLevel`: `effective_level(Hard) == Hard`, and Hard's MoveUnits reason
+    comes from the evaluator ("Hard: win ...") while Normal's doesn't.
+- ctest: the M44 tests take about 22 s in Debug; the whole suite went from about 127 s to about 150 s.
 
 ---
 

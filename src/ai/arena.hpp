@@ -56,6 +56,13 @@ struct ArenaResult {
     double p95_ms = 0.0;
     double max_ms = 0.0;  // M43: the slowest decision (M44 has a 500 ms p95 budget)
     [[nodiscard]] bool clean() const noexcept { return rejected == 0 && reverted == 0 && unfinished == 0; }
+    // M44: the mean game result from `side`'s point of view (win +1, draw 0, loss -1; an unfinished game 0).
+    [[nodiscard]] double mean_result(core::Side side) const noexcept {
+        if (games.empty()) return 0.0;
+        const int own = wins[core::side_index(side)];
+        const int other = wins[core::side_index(core::opponent(side))];
+        return static_cast<double>(own - other) / static_cast<double>(games.size());
+    }
 };
 
 // `games` games with seeds first_seed, first_seed + 1, ...

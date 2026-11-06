@@ -13,21 +13,28 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "fallback.hpp"
+#include "hard/weights.hpp"
 #include "settings.hpp"
 
 namespace wh40k::ai {
+
+namespace hard {
+struct HardContext;
+}
 
 // One source of truth for the levels: the client's (settings.hpp, D-055).
 using BotLevel = client::BotLevel;
 
 struct BotConfig {
     BotLevel level = BotLevel::Easy;
+    hard::BotWeights hard{};  // M44: level Hard's weights (the tuned defaults; the arena can override them)
 };
 
 struct BotChoice {
@@ -53,7 +60,7 @@ struct PolicyResult {
     std::vector<PlannedStep> rest;
 };
 
-// The level actually played: Hard (M44) isn't built yet, so it plays as Normal (M41; M42-M43 extend it).
+// The level actually played. Every level is built since M44, so it is the level requested.
 [[nodiscard]] BotLevel effective_level(BotLevel requested);
 
 // The seed of the bot's own dice and choices for this state: a function of state_hash only (D-054).
@@ -61,7 +68,13 @@ struct PolicyResult {
 
 class Bot {
 public:
-    explicit Bot(BotConfig config = {}) : config_(config) {}
+    explicit Bot(BotConfig config = {});
+    ~Bot();
+    // A copy plays the same (the Hard level's chain tables are a cache and are not copied).
+    Bot(const Bot& other);
+    Bot& operator=(const Bot& other);
+    Bot(Bot&& other) noexcept;
+    Bot& operator=(Bot&& other) noexcept;
 
     // One action for `side`'s pending decision. Precondition: state.pending->side == side (otherwise the
     // choice is `stopped`).
@@ -71,17 +84,17 @@ public:
     void forget() noexcept;
 
     [[nodiscard]] const BotConfig& config() const noexcept { return config_; }
-    void set_config(BotConfig config) noexcept {
-        config_ = config;
-        forget();
-    }
+    void set_config(BotConfig config);
 
     // Decisions answered from the memo, and by the fallback (for tests and the arena).
     [[nodiscard]] std::size_t memo_hits() const noexcept { return memo_hits_; }
     [[nodiscard]] std::size_t fallbacks() const noexcept { return fallbacks_; }
+    // M44: chain tables the Hard level has built (tests: the cache is used, never relied on).
+    [[nodiscard]] std::size_t chain_tables_built() const noexcept;
 
 private:
     BotConfig config_;
+    std::unique_ptr<hard::HardContext> hard_;  // level Hard's weights and chain cache (never behaviour, D-054)
     std::vector<PlannedStep> memo_;  // the plan's remaining steps, next first
     LoopGuard guard_;
     std::size_t memo_hits_ = 0;

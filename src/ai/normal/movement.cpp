@@ -683,6 +683,29 @@ std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const Game
     return choose(ctx, origin, u->side, cands, ranked, decision_seed(origin), true);
 }
 
+std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameState& origin, const MoveWeights& weights,
+                                        std::size_t count, std::size_t attempts) {
+    std::vector<PlannedMove> out;
+    if (!origin.flow.move || !origin.flow.move->paths.empty()) return out;
+    const core::Unit* u = origin.find_unit(origin.flow.move->unit);
+    if (u == nullptr || u->models.empty()) return out;
+    const std::vector<MoveCandidate> cands = move_candidates(origin);
+    MoveScoreContext ctx(cache, origin, u->id, weights);
+    const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
+    const std::uint64_t seed = decision_seed(origin);
+    std::size_t tried = 0;
+    for (const Ranked& r : ranked) {
+        if (out.size() >= count || tried >= attempts) break;
+        const MoveCandidate& c = cands[r.index];
+        if (!fits(origin, c)) continue;
+        ++tried;
+        std::optional<Simulated> sim = simulate(origin, u->side, c, seed);
+        if (!sim) continue;
+        out.push_back(PlannedMove{c, r.score, std::move(sim->steps), std::move(sim->after)});
+    }
+    return out;
+}
+
 std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const GameState& gs, core::Side side,
                                               const std::vector<GameAction>& legal, std::uint64_t seed,
                                               MoveTypeValues* values) {

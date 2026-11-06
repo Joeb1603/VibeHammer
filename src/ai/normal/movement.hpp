@@ -65,6 +65,13 @@ struct PlannedMove {
 // decision_seed(origin)). nullopt if no candidate stands.
 [[nodiscard]] std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const core::GameState& origin);
 
+// M44's seam (the Hard level): the candidates of the move just started in `origin` that stand when simulated in full,
+// in the cheap score's order (with `weights`), up to `count` of them after at most `attempts` simulations. Each
+// keeps its cheap score (not refined). A pure function of its arguments; Normal's plan_unit_move doesn't use it.
+[[nodiscard]] std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const core::GameState& origin,
+                                                      const MoveWeights& weights, std::size_t count,
+                                                      std::size_t attempts);
+
 // The value of each move type for `unit` at `side`'s MoveUnits decision (for tests and reasons): nullopt where the
 // type isn't offered. Advance is the mean over the six advance results.
 struct MoveTypeValues {

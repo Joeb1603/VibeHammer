@@ -300,14 +300,20 @@ TEST(M39_LoopGuard, TheBotStopsWithReasonsWhenItHasNoDecision) {
     EXPECT_FALSE(fb.problems.empty());
 }
 
-TEST(M39_Levels, HardPlaysAsNormalUntilItIsBuilt) {
-    // M39 mapped Normal and Hard to Easy; since M41 Normal is its own level and Hard plays as Normal (M44).
+TEST(M39_Levels, EveryLevelIsBuiltAndHardIsItsOwnLevel) {
+    // M39 mapped Normal and Hard to Easy; M41 built Normal (Hard played as Normal until M44). Since M44 Hard is its
+    // own level: it decides a move with the evaluator and the lookahead (M44_Levels checks what it does).
     EXPECT_EQ(effective_level(BotLevel::Easy), BotLevel::Easy);
     EXPECT_EQ(effective_level(BotLevel::Normal), BotLevel::Normal);
-    EXPECT_EQ(effective_level(BotLevel::Hard), BotLevel::Normal);
-    const client::GameSession s(wh40k::test::load_v1_scenario());
-    EXPECT_EQ(Bot(BotConfig{BotLevel::Hard}).decide(s.state(), s.deciding_side()).action,
-              Bot(BotConfig{BotLevel::Normal}).decide(s.state(), s.deciding_side()).action);
+    EXPECT_EQ(effective_level(BotLevel::Hard), BotLevel::Hard);
+    const std::optional<GameState> move = first_state(1, [](const GameState& gs) {
+        return gs.pending->side == Side::A && std::holds_alternative<decision::MoveUnits>(gs.pending->kind);
+    });
+    ASSERT_TRUE(move.has_value());
+    const BotChoice hard = Bot(BotConfig{BotLevel::Hard}).decide(*move, Side::A);
+    const BotChoice normal = Bot(BotConfig{BotLevel::Normal}).decide(*move, Side::A);
+    EXPECT_NE(hard.reason.find("Hard: win"), std::string::npos) << hard.reason;
+    EXPECT_EQ(normal.reason.find("Hard:"), std::string::npos) << normal.reason;
 }
 
 // ==== Driver: pacing, pop-ups, stale results ====

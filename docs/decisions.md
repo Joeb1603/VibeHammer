@@ -1413,6 +1413,130 @@ change.
   - **Diagnostics (disabled tests, run on purpose):** `M43_Diagnostics.DISABLED_PrintTheRankedCandidates`,
     `DISABLED_PrintDecisions` and `DISABLED_TimeThePlanner` print a position's ranked candidates with every score
     component, the bot's choices across fixture layouts, and the planner's timings.
+- **M44 notes (level Hard; `src/ai/hard/`, namespace `wh40k::ai::hard`):**
+  - **Files:** `weights.hpp` (`BotWeights`: every weight Hard plays with), `evaluator.*` (the chain, `Evaluator`,
+    `ChainCache`), `lookahead.*` (the rollout policy and `monte_carlo`), `hard_bot.*` (`hard_policy`, the move plan
+    and the decisions). `Bot` owns a `HardContext` (the weights and the chain cache; a copied `Bot` gets an empty
+    cache) and `BotConfig` carries `hard::BotWeights` (the arena's `--weights` overrides them for tuning).
+    `effective_level(Hard) = Hard`. Two behaviour-neutral additions to shared code: `AttackOutcome::wounds_left_pmf`
+    (M40's exact outcome also reports the distribution of the target's wounds left) and `normal::standing_moves`
+    (the M43 candidates that stand when simulated, in the cheap score's order; Normal doesn't call it). Normal and
+    Easy play exactly as before: Normal vs Normal reproduces, on every scenario, the numbers measured before any M44
+    code (and M43's V1 row).
+  - **When Hard applies:** a duel, exactly one unit with models on each side (every V1 scenario); otherwise Hard
+    plays as Normal. Hard answers MoveUnits and the MoveModels of its Normal, Advance and Fall-back moves, Charge,
+    SelectChargeTargets, OrderCasualties, RestoreCoherency and Consolidate; everything else (shooting, attack batch
+    order, allocation order, fights, pile-ins, the MoveModels of charge moves, pile-ins and consolidations) is
+    Normal's.
+  - **The evaluator (a Markov chain, expectimax):** the state is each unit's wounds left (with the wounded model
+    first, 05.04, that fixes what is left of a unit whose models share one W; Intercessors 0-10, Termagants 0-10 or
+    0-20), the half-turn (battle round and turn: whose turn, how many are left, D-007) and the range band: the gap
+    in 2" bands (0 = engaged) on a 1D line as long as the gap plus both units' rooms to back away (measured along the
+    best of the 16 fixed directions within 60 degrees of straight away, as M43's `room_away`; 10 bands = 20" on the
+    V1 board), so each unit's room behind it is part of the state. In its half-turn the side to move picks what is
+    best for it: unengaged, a Normal move to any band in reach (towards, staying, or back as far as its room
+    allows; [HEAVY] after no more than 3", strategic knowledge as `allowance_after`) or an Advance (each D6 result,
+    then the best band; [ASSAULT] only, no charge); its shooting; then (unless it advanced) a charge if it wants
+    one (P = `p_charge_roll_covers` of the band's gap), and the fight (it strikes first, 11.04 / 12.04, then the
+    defender replies); engaged, stay (close-quarters shooting, then the fight) or Fall Back (its M away, no
+    shooting or charge). Every volley's outcome is M40's exact distribution of the target's wounds left
+    (`expected_outcome`) for the attacker's models alive (copies of the unit's most common model, profile picks
+    from `unit_ranged_volley` / `unit_melee_volley` in that band against the target at starting strength) against
+    the target's wounds left; no threshold is typed. Payoffs: win +1 + tempo x (H - h) / H, loss -1 - tempo x
+    (H - h) / H (h the half-turn it happens in, H = 10), draw 0, plus material x (our share of wounds left - theirs).
+    V = P(win) - P(loss) under the chain's play is reported apart from that score. For the half-turn in progress
+    the evaluator uses the real position: the shooting's exact distribution from the engine's `best_shooting`, and
+    after it the gap to the enemy model left closest (the defender removes its front models, M40's
+    `distance_after_casualties`). Approximations: every model fights in melee, no battle-shock or Desperate Escape
+    hazards, a unit's formation (the gap after casualties) only in the half-turn in progress, [BLAST] counted at the
+    target's starting strength (no V1 weapon has it).
+  - **Tables and the cache:** one table holds every state from a half-turn on, up to the wounds left then. Its key
+    is the two representative models (their JSON without ids, positions and names), the keywords, starting wounds,
+    game length, who goes first, the line length and the chain weights; a later decision whose state it covers
+    reuses it (at most 8 kept). A state's value is the same whichever table answers (the same terms in the same
+    order: tested), so the cache never changes a decision. Distributions are shared between attack kinds with the
+    same volley (the Fleshborer's Heavy and Moved volleys are one). A table costs 14 ms (V1) or 27 ms (20
+    Termagants) in Release, 100-200 ms in Debug.
+  - **The lookahead:** `monte_carlo` plays `rollouts` rollouts from the position a plan leaves to the start of our
+    next turn (or the game's end) on a `Simulator` with the bot's own dice, seeded from `rollout_seed` (a dice-free
+    hash of the round and turn and every model's id, position (for a move in progress, its start) and wounds, so
+    every option of one decision meets the same rollout dice) and the rollout's index, and values each end with the
+    evaluator. The rollout policy: the chain's own choices for the move (`turn_choice`: a Normal move, an Advance or
+    a Fall Back by the distance the chain likes best, made as a straight translation along the line between the
+    units' centres, or the closest of the 16 fixed directions within 60 degrees that stands, as far as it can go by
+    bisection, after cheap checks: battlefield edges, enemy bases on the path, engagement range, bases on bases) and
+    for declaring a charge (`wants_charge`); a declared charge is Normal's `plan_charge_move` (the D-056 Auto move,
+    simulated in full); everything else is the baseline's (`easy_policy`). A refused action takes the fallback, and
+    a unit whose move can't be made stays put for the rest of the phase. Budgets count simulated actions, never
+    time: at most `rollout_actions` per rollout and `budget_actions` per Monte Carlo; a rollout cut short is valued
+    where it stopped.
+  - **Hard's move plan (`hard_plan_unit_move`, a pure function of the state just after StartMove):** Normal's own
+    plan (`plan_unit_move`) and the best `static_plans` M43 candidates that stand when simulated, each valued with
+    the evaluator at the position after it; Normal's plan and the `lookahead.plans` best others are checked by the
+    Monte Carlo; value = (1 - share) x the chain's value + share x the rollouts' mean. A MoveModels decision replans
+    from `move_origin` and continues from the step whose expected hash is the state's, as M43 does. **MoveUnits:**
+    Remain Stationary (valued after it, with the Monte Carlo), a Normal move and an Ordered Retreat (their plans), an
+    Advance before its roll (each D6 result's best plan by the chain on a scratch state with that roll scripted; the
+    Monte Carlo rolls it with the bot's dice and then makes that result's plan), and a Desperate Escape only when it
+    is the only fall-back mode and every likely hazard outcome (one to three failures, our casualties chosen as Hard
+    chooses them) leaves a fall-back move that stands (`escape_stands`: in an early run the hazard losses broke the
+    Termagants' coherency, no move could restore it, and the move had to be reset, which the arena counts as a
+    UnitMoveReverted).
+  - **The other decisions:** Charge: the chain's fight (we strike first) against holding, with P from the 2D6
+    roll covering the gap (declaring costs nothing). SelectChargeTargets: Normal's planned charge move against
+    `SkipChargeMove`, both valued after the fact. OrderCasualties: Normal's order, the front models first, the rear
+    models first, each previewed with the engine's `preview_casualties` (who dies, wounds lost), the coherency
+    losses of 03.03 estimated greedily, and valued. RestoreCoherency: each model's removal (and the further
+    removals it needs), valued. Consolidate: each worthwhile consolidation simulated (Normal's `simulate_fight_move`)
+    and not moving, valued.
+  - **Normal as the default (`BotWeights::margin`):** every Hard decision starts from Normal's answer (its move
+    type, its plan, its charge and charge move, its casualty order, its coherency pick, its consolidation) and
+    plays something else only when the evaluator (with the lookahead, for moves) values it more than `margin`
+    higher. Without it (margin < 0, or 0) Hard deviated on near-ties the chain can't tell apart, and lost as often
+    as it gained: as Space Marines it consolidated less into a unit about to be wiped out (the chain expects the
+    Termagants to fall back from the combat; Normal's stay and die, so Normal's Marines end the game a round
+    earlier: seeds 33 and 59 of V1), and as Tyranids in the Termagants-first scenario 12 of 100 seeds changed, 6
+    for the better and 6 for the worse.
+  - **Final weights (`BotWeights{}`):** `chain.tempo` 0.2, `chain.material` 0.05, `lookahead.share` 0.5,
+    `lookahead.plans` 3, `lookahead.rollouts` 6, `lookahead.rollout_actions` 400, `lookahead.budget_actions` 6000,
+    `static_plans` 4, `margin` 0.01 (half a half-turn of tempo), `move` = M43's `MoveWeights{}`.
+  - **Sweeps** (Release, seeds 1-200, Hard against Normal in both seats on the three scenarios; "beats" as defined
+    in PLAN.md, M44; Marines / Tyranids seat):
+
+    | Weights changed | V1 | Termagants first | 20 Termagants |
+    |---|---|---|---|
+    | none (final) | tie / beats (1.67 rounds) | tie / beats (2.06) | tie / beats (-0.960) |
+    | margin -1 (no default) | worse (1.52) / beats (1.75) | worse (2.06) / worse (2.04) | tie / beats (-0.965) + 1 revert (before `escape_stands`) |
+    | margin 0 | worse (1.52) / beats (1.75) | worse (2.06) / worse (2.04) | tie (194 W, 6 D) / beats (-0.965) |
+    | margin 0.005 | tie / beats (1.72) | worse (2.06) / worse (dealt 1.24) | tie / beats (-0.960) |
+    | margin 0.03 | tie / tie | tie / tie | tie / beats (-0.960) |
+    | tempo 0.4 | tie / beats (1.73) | worse (2.06) / worse (2.04) | tie / beats (-0.960) |
+    | share 0 (no lookahead) | tie / beats (1.66) | tie / worse (dealt 1.24) | tie / beats (-0.960) |
+    | share 1 | tie / beats (1.67) | worse (2.06) / beats (2.06) | tie / beats (-0.965) |
+    | rollouts 12 | tie / beats (1.67) | tie / tie (2.05) | tie / beats (-0.960) |
+
+    Normal vs Normal: V1 1.51 rounds, Termagants first 2.05 rounds (both 200 Marine wins), 20 Termagants 195 Marine
+    wins, 1 loss, 4 draws (+0.970 for the Marines). "Tie": the same mean result (and, where both always win or always
+    lose, the same end round and wounds).
+  - **Results:** in PLAN.md (M44). As Tyranids Hard beats Normal on every scenario (most clearly in V1, where it
+    falls back from losing combats and keeps away: 1.67 rounds against 1.51); as Space Marines it plays as Normal
+    and ties on every scenario (open item: with the margin lowered its own choices do slightly worse).
+  - **Reasons** (`BotChoice::reason`; M45 puts them in the combat log): every Hard reason ends in "(Hard: ...)":
+    the chain's odds ("win 100%, draw 0%, loss 0%") and the score ("value +1.22", V plus tempo and material, so a
+    winning side reads above +1 and a losing one below -1), "lookahead +1.22 over 6 rollouts" when the Monte Carlo
+    ran, ", as Normal" / "(Normal's plan)" when Hard kept Normal's answer, and the other options' values. E.g.
+    "Intercessor Squad: Normal move 6\" towards (Normal's plan) - 6.0\" from Termagants (Hard: win 100%, draw 0%,
+    loss 0%, value +1.22; lookahead +1.22 over 6 rollouts, as Normal; Remain Stationary +1.19, Advance +1.21)",
+    "Intercessor Squad: declare a charge (Hard: 42% charge odds against Termagants; the fight +1.21 (win 100%, draw
+    0%, loss 0%), holding +1.17 (win 100%, draw 0%, loss 0%))", "Intercessor Squad: charge move (roll 9): 4 of 5
+    models engaged (Hard: +1.21, win 100%, draw 0%, loss 0%; holding +1.17)". A casualty order keeps Normal's reason
+    with Hard's value appended ("Termagants: casualties front models first (Intercessor Squad may charge), keeping
+    coherency (Hard: -1.20, win 0%, draw 0%, loss 100%)"). The reasons are full but long; the "value" (above +1 for
+    a winner) and the tie-break numbers mean little to a player, so the combat log may want only the action and the
+    win / draw / loss odds.
+  - **Diagnostics (disabled tests, run on purpose):** `M44_Diagnostics.DISABLED_TimeHardDecisions`,
+    `DISABLED_PrintChainValues` and `DISABLED_TimeTheChainTable`. The arena's `--trace` now prints each decision's
+    time, and its report the mean result per game and the seeds with a UnitMoveReverted.
 
 ## D-055: Start screen and saved settings (M38)
 **Decided:** 2026-11-06 (M38, pre-approved batch). Client only; no rule, state or replay change.

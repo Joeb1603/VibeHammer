@@ -1,0 +1,36 @@
+{
+  "name": "Bot - 20 Termagants vs Intercessors",
+  "battlefield": { "width_in": 24, "depth_in": 24 },
+  "battle_rounds": 5,
+  "first_turn": "A",
+  "sides": {
+    "A": {
+      "name": "Space Marines",
+      "deployment_zone": { "edge": "south", "depth_in": 6 },
+      "units": [
+        {
+          "unit_file": "data/units/intercessor_squad.json",
+          "models": [
+            { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
+            { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
+          ],
+          "formation": { "ranks": 1, "gap_in": 0, "centre_x_in": 12, "anchor": "zone_front" }
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": { "edge": "north", "depth_in": 6 },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 20, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ],
+          "formation": { "ranks": 3, "gap_in": 0, "centre_x_in": 12, "anchor": "zone_front" }
+        }
+      ]
+    }
+  },
+  "notes": "M44 bot scenario (D-054): the V1 skirmish with 20 Termagants (the datasheet allows 10-20) against the 5 Intercessors. Formation (D-008): three ranks of 7, 7 and 6 in base contact; two ranks of 10 would break the 9\" clause of 03.03 (front-left to back-right is about 9.04\" edge to edge). Unit-specific abilities (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse, Combat Doctrines) are present in the unit data but out of scope for V1; the engine ignores them until a milestone implements them."
+}

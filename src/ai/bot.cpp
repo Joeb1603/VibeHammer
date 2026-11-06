@@ -6,6 +6,7 @@
 #include "baseline_bot.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "hard/hard_bot.hpp"
 #include "normal/normal_bot.hpp"
 #include "state_hash.hpp"
 
@@ -30,8 +31,8 @@ std::optional<std::string> problem(const core::GameState& state, core::Side side
 BotLevel effective_level(BotLevel requested) {
     switch (requested) {
         case BotLevel::Easy: return BotLevel::Easy;
-        case BotLevel::Normal: return BotLevel::Normal;  // M41 (shooting, defense, fight); M42-M43 extend it
-        case BotLevel::Hard: return BotLevel::Normal;    // M44
+        case BotLevel::Normal: return BotLevel::Normal;  // M41-M43
+        case BotLevel::Hard: return BotLevel::Hard;      // M44
     }
     return BotLevel::Easy;
 }
@@ -42,6 +43,42 @@ std::uint64_t decision_seed(const core::GameState& state) {
     h.u64(0x626f74ull);  // "bot": a seed apart from the hash itself
     return h.value();
 }
+
+Bot::Bot(BotConfig config) : config_(config), hard_(std::make_unique<hard::HardContext>()) {
+    hard_->weights = config_.hard;
+}
+
+Bot::~Bot() = default;
+
+Bot::Bot(const Bot& other)
+    : config_(other.config_),
+      hard_(std::make_unique<hard::HardContext>()),
+      memo_(other.memo_),
+      guard_(other.guard_),
+      memo_hits_(other.memo_hits_),
+      fallbacks_(other.fallbacks_) {
+    hard_->weights = config_.hard;
+}
+
+Bot& Bot::operator=(const Bot& other) {
+    if (this != &other) {
+        Bot copy(other);
+        *this = std::move(copy);
+    }
+    return *this;
+}
+
+Bot::Bot(Bot&& other) noexcept = default;
+Bot& Bot::operator=(Bot&& other) noexcept = default;
+
+void Bot::set_config(BotConfig config) {
+    config_ = config;
+    if (!hard_) hard_ = std::make_unique<hard::HardContext>();
+    hard_->weights = config_.hard;
+    forget();
+}
+
+std::size_t Bot::chain_tables_built() const noexcept { return hard_ ? hard_->chains.builds() : 0; }
 
 void Bot::forget() noexcept {
     memo_.clear();
@@ -70,8 +107,14 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
             memo_.clear();
             switch (effective_level(config_.level)) {
                 case BotLevel::Easy: chosen = easy_policy(state, side, legal, decision_seed(state)); break;
-                case BotLevel::Normal:
-                case BotLevel::Hard: chosen = normal_policy(state, side, legal, decision_seed(state)); break;
+                case BotLevel::Normal: chosen = normal_policy(state, side, legal, decision_seed(state)); break;
+                case BotLevel::Hard:
+                    if (!hard_) {
+                        hard_ = std::make_unique<hard::HardContext>();
+                        hard_->weights = config_.hard;
+                    }
+                    chosen = hard::hard_policy(state, side, legal, decision_seed(state), *hard_);
+                    break;
             }
             memo_ = std::move(chosen->rest);
             chosen->rest.clear();
