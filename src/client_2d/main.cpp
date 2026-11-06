@@ -45,6 +45,7 @@
 #include "decision_view.hpp"
 #include "dice_cards.hpp"
 #include "dice_popup.hpp"
+#include "drop_fix.hpp"
 #include "event_text.hpp"
 #include "help_widgets.hpp"
 #include "measure.hpp"
@@ -69,6 +70,7 @@ constexpr float kHandlePx = 11.0f;
 constexpr float kDragThresholdPx = 3.0f;
 constexpr float kRulerText = 18.0f;
 constexpr float kFontSize = 15.0f;
+const Color kFixCue{255, 200, 90, 200};  // D-052: the cursor's outline and line to a fixed drop
 const fs::path kRepoRoot{WH40K_REPO_ROOT};
 const fs::path kScenario = kRepoRoot / "data/scenarios/v1_skirmish.json";
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
@@ -126,6 +128,13 @@ struct Drag {
     core::Position grab;     // world position where the drag started
     core::Position current;  // world position of the cursor now
     Vector2 grab_screen{0, 0};
+    // D-052 ("Fix illegal moves"): where the drag's straight line starts (the model, or the grab point for
+    // the whole unit) and the region a refused drop is fixed into (none if the model can't be moved).
+    core::Position from;
+    std::optional<ReachRegion> fix;
+    core::Position drop;             // where letting go drops now: the cursor, or the fixed spot
+    std::optional<FixedDrop> fixed;  // set when `drop` is a fixed spot
+    bool refused = false;            // the fix is on but found no spot for a refused drop
 };
 
 // D-035: the measuring ruler, from a left-press on nothing clickable.
@@ -365,13 +374,13 @@ private:
         if (!drag_) return out;
         const core::Unit* u = state().find_unit(drag_->unit);
         if (u == nullptr) return out;
-        const float dx = drag_->current.x - drag_->grab.x;
-        const float dy = drag_->current.y - drag_->grab.y;
+        const float dx = drag_->drop.x - drag_->grab.x;
+        const float dy = drag_->drop.y - drag_->grab.y;
         for (const core::Model& m : u->models) {
             if (drag_->whole_unit) {
                 out.emplace_back(m.id, core::Position{m.position.x + dx, m.position.y + dy, m.position.z});
             } else if (m.id == drag_->model) {
-                out.emplace_back(m.id, drag_->current);
+                out.emplace_back(m.id, drag_->drop);
             }
         }
         return out;
@@ -619,7 +628,10 @@ private:
             return;
         }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
-        if (drag_) drag_->current = camera_.to_world(mouse);
+        if (drag_) {
+            drag_->current = camera_.to_world(mouse);
+            update_drop(*drag_);
+        }
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && drag_) release(mouse);
     }
 
@@ -666,6 +678,9 @@ private:
         const auto moving = moving_unit();
         if (const auto handle = unit_handle_screen(); handle && distance_px(*handle, mouse) <= kHandlePx * ui_scale()) {
             drag_ = Drag{true, {}, *moving, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
+            drag_->from = drag_->grab;
+            drag_->fix = fix_region(unit_region(state(), *moving, drag_->grab));  // D-052
+            update_drop(*drag_);
             return;
         }
         if (!hovered) {
@@ -684,6 +699,11 @@ private:
         if (moving && *moving == unit) {
             selected_model_ = hovered->model->id;
             drag_ = Drag{false, hovered->model->id, unit, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
+            drag_->from = hovered->model->position;
+            if (const auto reach = core::move_reach(state(), hovered->model->id)) {
+                drag_->fix = fix_region(model_region(*reach));  // D-052
+            }
+            update_drop(*drag_);
             return;
         }
         if (board_.picking_model()) {
@@ -705,15 +725,40 @@ private:
         if (distance_px(d.grab_screen, mouse) < kDragThresholdPx * ui_scale()) return;  // a click, not a drag
         if (d.whole_unit) {
             // The "Move unit" handle: one ProposeModelMove per model, each validated by the engine, all one
-            // Undo group (D-039).
+            // Undo group (D-039). With a fixed drop (D-052), the fixed offset.
             std::vector<core::GameAction> moves;
-            for (const auto& a : translate_unit(state(), d.unit, d.current.x - d.grab.x, d.current.y - d.grab.y)) {
+            for (const auto& a : translate_unit(state(), d.unit, d.drop.x - d.grab.x, d.drop.y - d.grab.y)) {
                 moves.push_back(a);
             }
             submit_group(moves, false);
+            if (d.fixed && reasons_.empty()) status_ = fix_message(*d.fixed);
             return;
         }
+        // D-052: the fixed spot, checked by the engine first. If it were refused (it shouldn't be), the drop is
+        // made as it was, so the engine's reasons show as before.
+        if (d.fixed) {
+            const core::action::ProposeModelMove fixed = extend_path(state(), d.model, d.drop);
+            if (session_->check(fixed).ok()) {
+                if (submit(fixed)) status_ = fix_message(*d.fixed);
+                return;
+            }
+        }
         submit(extend_path(state(), d.model, d.current));
+    }
+
+    // D-052: where letting go drops: the cursor, or with "Fix illegal moves" on and a drop the engine would
+    // refuse, the nearest spot it can go (fix_drop). Drawn while dragging, so the player sees it first.
+    void update_drop(Drag& d) const {
+        d.drop = d.current;
+        d.fixed.reset();
+        d.refused = false;
+        if (!fix_moves_ || !d.fix) return;
+        d.fixed = fix_drop(*d.fix, d.from, d.current);
+        if (d.fixed) {
+            d.drop = d.fixed->to;
+        } else {
+            d.refused = drop_problem(*d.fix, d.current).has_value();
+        }
     }
 
     void handle_keys() {
@@ -989,9 +1034,12 @@ private:
         // The drag preview and the live ruler.
         if (drag_) {
             const Vector2 cursor = camera_.to_screen(drag_->current);
+            const Vector2 dropped = camera_.to_screen(drag_->drop);
+            // D-052: a red ghost when the fix found no spot for a refused drop.
+            const Color ghost = drag_->refused ? Color{230, 60, 60, 110} : Color{255, 255, 255, 70};
             if (drag_->whole_unit) {
-                const float dx = drag_->current.x - drag_->grab.x;
-                const float dy = drag_->current.y - drag_->grab.y;
+                const float dx = drag_->drop.x - drag_->grab.x;
+                const float dy = drag_->drop.y - drag_->grab.y;
                 const core::Unit* u = gs.find_unit(drag_->unit);
                 std::optional<Ruler> worst;
                 for (const core::Model& m : u->models) {
@@ -1008,10 +1056,16 @@ private:
                     if (x.id == drag_->model) m = &x;
                 }
                 if (m != nullptr) {
-                    draw_path_to(gs, *m, cursor, YELLOW);
-                    DrawCircleV(cursor, camera_.to_px(m->base.diameter_mm * 0.5f), Color{255, 255, 255, 70});
-                    draw_ruler(cursor, ruler(gs, m->id, drag_->current));
+                    draw_path_to(gs, *m, dropped, YELLOW);
+                    DrawCircleV(dropped, camera_.to_px(m->base.diameter_mm * 0.5f), ghost);
+                    draw_ruler(cursor, ruler(gs, m->id, drag_->drop));
+                    if (drag_->fixed) DrawCircleLinesV(cursor, camera_.to_px(m->base.diameter_mm * 0.5f), kFixCue);
                 }
+            }
+            // D-052: the cursor and where the fixed drop will go.
+            if (drag_->fixed) {
+                DrawLineEx(cursor, dropped, 1.5f * ui_scale(), kFixCue);
+                DrawCircleLinesV(cursor, 4.0f * ui_scale(), kFixCue);
             }
         }
     }
@@ -1289,6 +1343,10 @@ private:
         if (ImGui::Checkbox("Show dice pop-ups", &show_dice_) && !show_dice_) dice_.clear();  // D-033
         if (ImGui::Checkbox("Skip steps with nothing to do", &auto_skip_) && auto_skip_) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
+        ImGui::Checkbox("Fix illegal moves", &fix_moves_);  // D-052
+        ImGui::SetItemTooltip("A model dropped where it can't go (too far, off the battlefield, on a model, into an "
+                              "enemy model, not closer) goes to the nearest spot it can, shown while dragging. "
+                              "Ending within Engagement Range is left for Commit to check.");
         if (ImGui::Checkbox("Allocate damage automatically", &auto_allocate_) && auto_allocate_) auto_actions_as_group();
         ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
                               "05.04) instead of asking.");
@@ -1635,6 +1693,7 @@ private:
     std::size_t dice_seen_ = 0;         // log entries already turned into dice pop-ups
     bool show_dice_ = true;             // the "Show dice pop-ups" setting
     bool auto_skip_ = true;            // D-036: the "Skip steps with nothing to do" setting
+    bool fix_moves_ = true;            // D-052: the "Fix illegal moves" setting
     UndoGroups undo_groups_;            // D-039: the player's inputs, for Undo and "Undo last step"
     bool auto_allocate_ = false;        // D-038: the "Allocate damage automatically" setting (off: D-051)
     bool warn_end_shooting_ = true;     // D-038: the "Warn before ending shooting with shots left" setting

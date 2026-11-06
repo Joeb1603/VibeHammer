@@ -120,14 +120,6 @@ std::vector<Interval> shadow_on_row(const Shadow& s, float y) {
     return out;
 }
 
-float point_segment_distance(const core::Position& p, const core::Position& a, const core::Position& b) {
-    const float dx = b.x - a.x, dy = b.y - a.y;
-    const float len2 = dx * dx + dy * dy;
-    float t = len2 > 0.0f ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2 : 0.0f;
-    t = std::clamp(t, 0.0f, 1.0f);
-    return std::hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-}
-
 Shadow shifted(Shadow s, float dx, float dy) {
     s.from.x += dx;
     s.from.y += dy;
@@ -141,6 +133,14 @@ core::Rect intersect(const core::Rect& a, const core::Rect& b) {
 }
 
 }  // namespace
+
+float point_segment_distance(const core::Position& p, const core::Position& a, const core::Position& b) {
+    const float dx = b.x - a.x, dy = b.y - a.y;
+    const float len2 = dx * dx + dy * dy;
+    float t = len2 > 0.0f ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2 : 0.0f;
+    t = std::clamp(t, 0.0f, 1.0f);
+    return std::hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
 
 ReachRegion model_region(const core::MoveReach& reach) {
     ReachRegion region;

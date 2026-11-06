@@ -773,6 +773,8 @@ logic).
 - **Extended by D-041 (M28):** the area follows each step, covers pile-ins and consolidations, and is shown
   for whole-unit drags too.
 - **Extended by D-046 (M30):** charge moves are shaded too.
+- **Used by D-052 (M36):** "Fix illegal moves" fixes a refused drop into this area, without its Engagement
+  Range parts.
 
 ## D-041: The movement area follows each step, covers pile-ins and whole-unit drags (M28)
 **Decided:** 2026-11-05 (agreed with the user). Read-only core query and client only; movement validation
@@ -915,6 +917,8 @@ dragged models into base contact, the leeway may no longer be needed).
   ~1.3 mm below one Termagant, could swing down and left round the Termagant beside it. In person you'd
   usually leave that model where it is. The rule text allows it; whether to restrict it (e.g. "closer to
   the model it was closest to") needs a decision.
+- **See D-052 (M36):** with "Fix illegal moves" on, a drag onto an enemy model now ends in exact base
+  contact, so this leeway may no longer be needed. Not changed yet.
 
 ## D-049: Skipping judges how much closer a model can get, not how far it can move (M33)
 **Decided:** 2026-11-06 (agreed with the user). Client only, like D-047; no rule changes.
@@ -1004,3 +1008,43 @@ change.
 - **Replaces D-032's casualty bar:** the "Custom order..." grid is gone. Without the board (no board
   interaction), the sidebar offers only "Use default order".
 
+## D-052: "Fix illegal moves": a refused drop goes to the nearest spot it can go (M36)
+**Decided:** 2026-11-06 (agreed with the user). Client only (`drop_fix`); no rule, state or replay change.
+- **The setting:** "Fix illegal moves", on by default. When a drag of a model, or of the Move unit handle
+  (D-041), ends where the engine would refuse the `ProposeModelMove`, the model goes to the nearest spot it
+  can go instead. The ghost, path line, rings and ruler follow the fixed spot while dragging, so the player
+  sees where the model will land before letting go. The fixed drop is an ordinary `ProposeModelMove`,
+  checked by `validate_action` before it is submitted, and is one Undo step. If no spot is found, the raw
+  drop is submitted as before and the engine's reasons show.
+- **What is fixed:** only what the engine refuses for a proposal:
+  - too far: the move's maximum, less the path so far (03.01, 09.05-09.07, 11.04, 12.03, 12.08);
+  - off the battlefield (03.01);
+  - ending on another model (03.01, D-027);
+  - the line crossing an enemy model's base (03.01, D-044);
+  - a charge not ending closer to a charge target (11.04);
+  - a pile-in or consolidation not ending closer to the closest target (12.03, 12.08).
+
+  The region fixed into is `move_reach`'s area (D-040, D-041, D-044, D-046) without its Engagement Range
+  parts. Each enemy's engagement circle becomes a plain "not on it" circle.
+- **Engagement Range is never fixed (user, 2026-11-06):** a model may move through it, and ending in it is
+  checked only at Commit (D-040). So a drop within 2" of an enemy (Normal, Advance, Fall Back), a charge
+  ending within 2" of a non-target, and a pile-in or consolidation model leaving Engagement Range of a unit
+  it started engaged with are all left where they were dropped. Commit flags them as before. This also
+  keeps waypoints inside 2" possible, for going round an enemy model in two drags.
+- **How the spot is chosen:**
+  - **A line into or through an enemy model** (the drop is on its base or in its D-044 shadow): the model
+    goes **along the drag**, to the furthest point on the line it may end at. That is usually base
+    contact with the first enemy model the line meets. It is never routed round the model: through a gap
+    too narrow for its base, it stops before the gap.
+  - **Anything else:** the **nearest spot** to the drop. Too far gives the point along the drag at the
+    maximum. Off the edge, it stays at the edge. On a model, it ends touching it beside the drop.
+  - **At most 1" away:** if the nearest spot is further (e.g. a drop on a friendly model's centre), the
+    model goes along the drag instead, so it never jumps to the far side of something.
+  - The search is exact and deterministic: projections onto the area's circles and lines and their
+    intersections, or the line's crossings with them. It works on the area moved 0.005 mm inwards (below
+    EPS_MM). So a point against a model is in base contact (01.04) but not on it, as with D-050's contact
+    nudge.
+- **Not fixed: rules about the whole unit.** Coherency (03.03), "engaged with all charge targets" (11.04)
+  and "the unit must be engaged" (12.03) are checked at Commit, as before, with the existing warning.
+  Pulling a model towards its friends would put it somewhere the player didn't drag it.
+- **With the setting off,** drops are submitted exactly as they were made, as before M36.

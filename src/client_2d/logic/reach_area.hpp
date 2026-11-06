@@ -53,4 +53,8 @@ struct ReachSpan {
 // Whether a point is in the region (the same test the spans use).
 [[nodiscard]] bool in_region(const ReachRegion& region, const core::Position& p);
 
+// The distance from `p` to the segment from `a` to `b` (the shadow test: a shadow holds the points whose
+// line from `from` passes within the disc's radius of its centre).
+[[nodiscard]] float point_segment_distance(const core::Position& p, const core::Position& a, const core::Position& b);
+
 }  // namespace wh40k::client

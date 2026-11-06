@@ -507,6 +507,28 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M36: Fix illegal moves
+**Effort:** `xhigh` · **Plan mode:** yes (agreed 2026-11-06)
+
+> A new setting, **Fix illegal moves** (on by default, D-052), client only. A drag the engine would refuse goes to the nearest spot it can go, shown while dragging:
+> - too far: stops at the maximum, along the drag;
+> - off the battlefield: stops at the edge;
+> - on another model: stops touching it;
+> - a charge, pile-in or consolidation that doesn't end closer: goes to the nearest spot that does.
+>
+> A line into or through an enemy model stops along the drag, before that model (base contact), and is never routed round it. The fix only moves a model by up to 1" sideways. Anything further goes back along the drag instead.
+>
+> Engagement Range is never fixed: a model may move through it, and ending in it is left for Commit to check, as now (user's choice). The same goes for coherency and the other rules about the whole unit. Each fixed drop is an ordinary `ProposeModelMove`, checked by the engine.
+
+**Acceptance**
+- Engagement Range is left alone: a drop within 2" of an enemy, a drag through it, a charge within 2" of a non-target, and a pile-in that leaves it are all untouched. A Fall Back dragged too far stops at its maximum (logic tests).
+- Along the drag: too far ends exactly at the maximum, and a second line uses only the distance left. A charge or Normal drag onto an enemy base ends in base contact, on the line. A gap too narrow for the base stops the model before it. A drop on a friendly model's centre stops on the near side (logic tests).
+- Nearest spot: off the edge stays at the edge; a glancing drop on a friend touches it beside the drop; a pile-in that isn't closer goes to the nearest closer spot, and onto the target gives base contact (logic tests).
+- A legal drop is untouched; no legal spot gives no fix; a whole-unit drag too far or off the edge is accepted for every model (logic tests).
+- Over grids of drops (Normal, charge, pile-in), every fix is accepted by the engine and is within 1" of the drop or on the drag line, and the same input gives the same output (logic tests). Replays unchanged.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

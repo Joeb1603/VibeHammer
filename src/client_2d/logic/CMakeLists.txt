@@ -9,6 +9,7 @@ add_library(wh40k_client_logic STATIC
     casualty_plan.cpp
     decision_view.cpp
     dice_cards.cpp
+    drop_fix.cpp
     event_text.cpp
     fight_move_skip.cpp
     melee_plan.cpp
