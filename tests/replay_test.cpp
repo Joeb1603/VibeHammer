@@ -314,7 +314,7 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     fight.steps = charge.steps;
     GameState f10 = replay_initial_state(fight, repo_root());
     start_game(f10);
-    for (const ReplayStep& s : fight.steps) apply_action(f10, s.side, s.action);
+    for (const ReplayStep& step : fight.steps) apply_action(f10, step.side, step.action);
     auto f_act = [&](const GameAction& a) {
         const Side side = decider(f10);
         const auto v = validate_action(f10, side, a);
@@ -420,8 +420,8 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     auto start_of = [&](ModelId id) { return *move_start_position(g14, id); };
     m_act(action::StartMove{g14.units[0].id, MoveType::Normal, std::nullopt});
     for (auto it = g14.units[0].models.rbegin(); it != g14.units[0].models.rend(); ++it) {  // east-most first
-        const Position s = start_of(it->id);
-        m_act(action::ProposeModelMove{it->id, {Position{s.x + wh40k::test::in(2), s.y, 0}}});
+        const Position start = start_of(it->id);
+        m_act(action::ProposeModelMove{it->id, {Position{start.x + wh40k::test::in(2), start.y, 0}}});
     }
     m_act(action::CommitUnitMove{});
     m_act(action::EndShootStep{});
