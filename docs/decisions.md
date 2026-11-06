@@ -1065,3 +1065,42 @@ change.
   ("No hits to roll for"), or a save roll with no wounds ("No wounds to roll saves for"), is shown with its
   result straight away. Its button is OK, or Continue if more cards follow. There is no face-down tray and
   no Roll click (`needs_roll`).
+
+## D-054: The bot opponent: a player, not the rules (M38–M45)
+**Decided:** 2026-11-06 (asked for by the user; the milestones are pre-approved as one batch). Client and the new
+`wh40k_ai` library only; no rule, state or replay change.
+- **Where it lives:** `src/ai/` → `wh40k_ai` (namespace `wh40k::ai`), headless, linking `wh40k_client_logic`
+  (ai → logic → core). Include-checked like core and logic (no raylib, ImGui or OS headers). Tests in
+  `tests/ai/` → `wh40k_ai_tests`.
+- **A player, not the rules (extends D-024):** the bot reads `const GameState&` and, in a live game, acts only
+  through `GameSession::submit`, like a human. Legality comes only from `legal_actions`, `validate_action` and
+  `move_end_problems`. Probabilities come from core's own functions (`make_hit_rolls` / `make_wound_rolls` driven by
+  `ScriptedDice` faces, `check_save_roll`, `required_wound_roll`, `make_attack_profile`, `gather_attack_dice`,
+  `resolve_attack_batch` on a scratch `Unit`); thresholds are never re-typed in ai code. The bot may hold strategic
+  knowledge ("an Advance means no charge this turn"), but legality is always confirmed by the engine.
+- **Simulation:** `simulator.cpp` is the only ai file that calls `apply_action(`, always with the 4-argument
+  overload, a bot-owned `DiceSource`, and a bare `GameState` copy (never `GameSession`, for speed). Guard-tested.
+- **Never peeks at dice:** the bot's RNG is seeded from an FNV-1a hash of the state that excludes `state.dice`.
+  Changing only `state.dice` never changes a decision (tested). The bot never resets a move to dodge a roll it has
+  already seen (e.g. starting an Advance, seeing the roll, then switching to a Normal move), although D-005 lets a
+  player do that.
+- **Deterministic:** work budgets count candidates or simulated actions, never wall-clock time. Candidate directions
+  come from a constant unit-vector table, not `sin`/`cos`, so results don't drift with the maths library. A plan is
+  a pure function of the state when planning starts, so undo, save/load and the arena reproduce it.
+- **One action per decision:** `Bot::decide(state, side)` returns one `GameAction` and a reason. A multi-step plan
+  (a unit's model moves) is memoized and replayed only while the state hash matches what the plan expected;
+  otherwise it replans. A plan never runs past an action that rolls dice (Advance, Desperate Escape,
+  DeclareCharge, Shoot, Fight).
+- **No silent reverts:** before `CommitUnitMove` the bot checks the full proposal with `move_end_problems`.
+  `fix_drop` (D-052) handles neither Engagement Range nor coherency, so the bot checks both. Arena acceptance is zero
+  rejected actions and zero `UnitMoveReverted` events.
+- **Fallback and loop guard:** every decision kind has an always-legal fallback (lone skip / End step, Remain
+  Stationary, SkipChargeMove, PassFight, the `MeleePlan` default, the `CasualtyPlan` default). The same state hash
+  and decision three times means the fallback is used. If the fallback is rejected, the bot stops and shows the
+  reasons instead of looping.
+- **Client:** which sides are bots is client state (`std::array<bool,2>`), plus an optional `"players"` block in the
+  save JSON; there is still no seat or player abstraction in core. Human input is ignored while a bot owns the
+  pending decision. Auto-allocate (D-038) never answers a bot's decision. Undo pops the bot's trailing input groups
+  and the human's last one. Bot pacing (thinking pauses, auto-rolled bot dice) is presentation only.
+- **Levels:** Easy = the M12 test policy (baseline), Normal = the M41–M43 decisions, Hard = the M44 evaluator and
+  lookahead. Tuned weights and arena results are recorded here as the milestones land.

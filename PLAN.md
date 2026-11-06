@@ -543,6 +543,317 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## Start screen and bot opponent (M38–M45)
+
+**Run note (agreed with the user 2026-11-06):** M38–M45 are pre-approved as one batch and run back to back
+without `/clear` and without per-milestone sign-off. This overrides "one milestone per session" and "agree each
+milestone first" for these milestones only. Each milestone is implemented by a sub-agent at the effort shown,
+then verified (build, `ctest`, `git diff tests/replays` empty), marked ✅, committed and pushed.
+
+Every bot milestone follows **D-054** (the bot is a player, not the rules; it never peeks at dice; it is
+deterministic). Strength targets are measured with the Release arena tool (`wh40k_bot_arena`) and the numbers are
+recorded under the milestone. A missed target is recorded as an open item, never lowered silently.
+
+Bot levels: **Easy** = baseline (M39), **Normal** = M41–M43 decisions, **Hard** = M44 evaluator and lookahead.
+Every earlier level stays selectable as a regression opponent.
+
+---
+
+## M38: Start screen and saved settings
+**Effort:** `medium` · **Plan mode:** pre-approved (2026-11-06)
+
+> The exe opens on a start screen instead of a game. It has these buttons:
+> - **Play hotseat**;
+> - **Play vs bot**, with "You play: Space Marines / Tyranids" (default Space Marines; the bot takes the other side);
+> - **Watch bot vs bot**;
+> - **Continue saved game** (only if `saves/game.json` exists);
+> - **Watch a replay** (combo of `tests/replays/*.json`);
+> - **Quit**.
+>
+> Under the buttons are the options:
+> - scenario (combo of `data/scenarios/*.json`); seed (random, or fixed with a value);
+> - bot level (Easy / Normal / Hard; levels not built yet fall back to the best one available);
+> - bot speed (Slow / Normal / Fast / Instant); "Bot rolls its own dice automatically";
+> - the existing toggles: show dice pop-ups, skip steps with nothing to do, fix illegal moves, allocate damage
+>   automatically, warn before ending shooting with shots left; UI scale.
+>
+> **Settings:**
+> - They are an `AppSettings` struct in `src/client_2d/logic/settings.{hpp,cpp}`.
+> - They are saved as JSON to `vibehammer_settings.json` next to the exe.
+> - Missing, unknown or corrupt keys fall back to the defaults.
+> - The sidebar toggles stay where they are and write back to the settings.
+>
+> **In-game:** the sidebar toolbar and the victory pop-up get a **Main menu** button.
+>
+> **CLI:**
+> - Any CLI flag skips the start screen, so `package.ps1`'s smoke test (`--screenshot --steps 3 --seed 1`)
+>   still renders a game.
+> - `--menu 1` shows the start screen (for screenshots).
+>
+> **Bot sides:** the game records which sides are bots (`std::array<bool,2>` in the client, not in `GameState`).
+> The bot itself plays from M39; until then a bot side is played by hand.
+
+**Acceptance**
+- Settings round-trip through JSON. A missing file, a corrupt file and an unknown or wrong-typed key all give the
+  defaults for what they affect (logic tests `M38_Settings`).
+- The scenario list finds `v1_skirmish.json`; the replay list finds the `tests/replays` files (logic tests).
+- `--menu 1 --screenshot` renders the start screen. The existing smoke flags still render a game (screenshot).
+- Replays unchanged.
+
+---
+
+## M39: Bot framework, driver, baseline bot, arena
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-06)
+
+> **The `wh40k_ai` library:**
+> - A new headless library in `src/ai/` (`wh40k_ai`, namespace `wh40k::ai`).
+> - It links `wh40k_client_logic`, so the dependencies run ai → logic → core with no cycle.
+> - It is include-checked with `cmake/CheckCoreIncludes.cmake`, with `/W4 /WX`.
+> - Tests go in `tests/ai/` → `wh40k_ai_tests`, named `M39_...`.
+>
+> **The files:**
+> - `bot.hpp`:
+>   - `enum class BotLevel { Easy, Normal, Hard }`, `struct BotConfig`;
+>   - `struct BotChoice { core::GameAction action; std::string reason; }`;
+>   - `class Bot { BotChoice decide(const core::GameState&, core::Side); }`. It is a stateless policy plus an
+>     optional plan memo (D-054).
+> - `state_hash.*`: FNV-1a over unit positions, wounds, flags, flow and pending. It excludes `state.dice`. It is used
+>   for the bot's own RNG seed and the plan memo.
+> - `simulator.*`: a bare `GameState` copy stepped with the 4-argument `apply_action` and a bot-owned `SeededDice`.
+>   It is the **only** ai file that may call `apply_action(`.
+> - `baseline_bot.*`: the M12 `choose()` policy (`tests/client/client_logic_test.cpp`, "Normal move towards the
+>   enemy when more than 8" away", translate 2" or the charge roll minus 1", charge once, editor defaults). It is
+>   moved in unchanged as level Easy; the old test keeps passing, through the moved code if convenient.
+> - `fallback.*`: a legal answer for every one of the 15 decision kinds, and the loop guard (the same state hash and
+>   decision three times → fallback; fallback rejected → the bot stops and reports the reasons).
+> - `bot_driver.*`: raylib-free pacing.
+>   - `tick(double now)` returns an action when it's due.
+>   - Thinking pauses per action kind, scaled by speed. Normal speed: 0.8 s before a unit's activation, 0.12 s
+>     between model placements, 0.4 s before a commit, 0.6 s for reactive allocation and casualty answers.
+>   - Slow ×2, Fast ×0.4, Instant 0.
+>   - It runs `decide` on a worker `std::thread` with a `GameState` copy. A generation counter drops results that
+>     went stale after undo, a new game or a load.
+> - `arena.*` and `arena_main.cpp` (exe `wh40k_bot_arena`, run in Release):
+>   - flags `--games N --a <level> --b <level> --scenario <file> --seed <first>`;
+>   - prints win, draw and loss counts, the mean end round, mean surviving models, rejected actions,
+>     `UnitMoveReverted` count and p50/p95 decision time.
+>
+> **Client changes:**
+> - Auto actions: `AutoSettings` gets the bot sides, so auto-allocate never answers a bot's decision.
+> - Undo: `UndoGroups` tags each group with its owner; Undo pops any trailing bot groups plus the human's last group.
+> - Input gating: every board click, drag and panel button checks that a human controls the deciding side.
+> - Panel: while the bot decides it shows "Bot (Tyranids) is thinking… — <reason>", with **Pause** and **Step**.
+> - Dice: a bot's own dice cards auto-roll and auto-continue after a dwell (about 1.2 s at Normal speed; a click
+>   skips it), when "Bot rolls its own dice automatically" is on. The bot never submits while a pop-up is open.
+> - The bot also answers its reactive decisions (allocation order, casualties) during the human's turn.
+> - Saves: the save JSON gets an optional `"players": {"A": "human", "B": "bot", "bot_level": ...}` block. Old saves
+>   load as hotseat. `GameState` is unchanged.
+> - CLI: `--bot A|B|both|none`, `--bot-speed slow|normal|fast|instant`, `--bot-level easy|normal|hard`, and
+>   `--bot-steps n` (runs n bot decisions instantly before the first frame, for screenshots).
+
+**Acceptance**
+- 40 seeded Easy-vs-Easy games finish (`state().result` set) with zero rejected actions and zero `UnitMoveReverted`
+  events (ai tests).
+- Changing only `state.dice` never changes a decision, over the states of several games (ai tests).
+- Guard test: `apply_action(` only appears in `simulator.cpp`; no raylib, ImGui or OS headers (ai tests and the
+  include check).
+- Driver: delays follow the speed (Instant is 0); it never acts while dice are showing; a stale worker result is
+  dropped (ai tests).
+- Undo against a bot returns to the human's last input; auto-allocate leaves the bot's decisions to the bot; a save
+  with a `"players"` block reloads and an old save loads as hotseat (logic tests).
+- `--bot B --bot-steps 20 --screenshot` renders (screenshot). Replays unchanged.
+
+---
+
+## M40: Odds and threat analysis
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-06)
+
+> `src/ai/analysis/`. All numbers come from core's own functions (D-054); thresholds are never re-typed.
+>
+> **`odds.*`:**
+> - Per-die hit, wound and save probabilities, made by driving `make_hit_rolls` / `make_wound_rolls` with
+>   `ScriptedDice` faces 1–6, and from `check_save_roll` / `required_wound_roll`.
+> - Weapon abilities come from `make_attack_profile` / `ability_effects` / `gather_attack_dice`: Heavy, Torrent,
+>   Rapid Fire (half range), Assault, Blast, criticals.
+> - Expected damage per weapon profile against a target unit, and a damage distribution sampled by
+>   `resolve_attack_batch` on a scratch `Unit` with the bot's dice (it handles W2 spillover and wounded models
+>   first).
+> - Weapons the engine rejects (D-002, D-026) are excluded via `unimplemented_ability_problem`.
+>
+> **`charge_odds.*`:**
+> - Exact P(charge succeeds): for each 2D6 total, a scratch state with that roll (`ScriptedDice`) and a check that
+>   a legal charge move exists. A quick distance bound is used first, and a placement check from M42 once it exists.
+> - The same for the six advance results.
+> - The distance to the (expected kills + 1)-th closest enemy model after our shooting.
+>
+> **`threat.*`:**
+> - Threat ranges: M, M + advance, weapon range, M + charge distribution.
+> - Unit role: ranged vs melee expected value against the actual enemy unit.
+> - Matchup value per range band: engaged, within half range, in range, out of range.
+
+**Acceptance**
+- For every V1 weapon profile, with and without Heavy and within or outside Rapid Fire range, analytic expected
+  damage is within 2% of the mean of 20,000 sampled engine batches (ai tests, fixed seed).
+- Charge P(success) equals a brute-force enumeration over all 36 dice pairs, for several distances (ai tests).
+- Against each other, the Termagants rate as ranged-leaning and the Intercessors as strong at both (ai tests).
+
+---
+
+## M41: Shooting, defensive and fight decisions (level Normal)
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-06)
+
+> Every decision except movement and charging now uses the M40 analysis. Movement and charges stay on the baseline
+> policy until M42/M43.
+>
+> **Shooting:**
+> - Shooting type, and each model's weapon, profile and target, maximizing expected value with overkill avoidance.
+>   E.g. Saturation vs Focused Fire falls out of the numbers (Heavy after ≤ 3" of movement, Rapid Fire within 12").
+> - `SelectAttackBatch`: D2 batches before D1 against W2 targets.
+>
+> **Defense:**
+> - Allocation order and casualty priority:
+>   - keep coherency;
+>   - prefer to remove the models closest to an enemy that may charge, or the engaged models to break a combat,
+>     whichever is worth more;
+>   - keep models with better weapons.
+> - Also covered: `RestoreCoherency` removal, and Desperate Escape hazard casualties.
+>
+> **Fight:**
+> - Fight type (Normal / Overrun), `PassFight`, `ForcedFight` order, weapon and attack split (`MeleePlan`
+>   options), `OverrunPileIn` (pile in or skip).
+> - Pile-ins and consolidations use `auto_fight_move` (D-050) with target choice; skipping is always a candidate.
+> - An Engaging Consolidation is weighed against the free fight it gives an enemy unit that hasn't fought (12.08).
+
+**Acceptance**
+- Fixtures (ai tests):
+  - the profile choice changes correctly with range and with how far the unit moved;
+  - casualty order keeps coherency where possible (no `RestoreCoherency` losses where avoidable);
+  - the front models are removed when an enemy charge threatens;
+  - a pointless consolidation is skipped.
+- Arena: 20 seeds per seat in ctest, 200 in the Release arena (recorded here). Normal does better than Easy in both
+  seats, with zero rejections and zero reverts.
+
+---
+
+## M42: Charge planner
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-06)
+**Rules:** 11.02, 11.04, 03.01, 03.03, 03.04
+
+> **Auto charge moves:**
+> - `auto_fight_move` (D-050) is generalized to charge moves (11.04): every model ends closer to a charge target; it
+>   aims for base contact, else within 1", else engaged; it never ends engaged with a non-target; the whole unit
+>   ends engaged with every target.
+> - The client's **Auto move** button also works for charge moves.
+> - The 11.04 "if possible" clauses are still not enforced by the engine (TODO(if-possible)); the planner just tries
+>   to satisfy them.
+>
+> **The bot's charge decision:**
+> - Declare only when P(success) × value (Fights First, 11.04; what the enemy's shooting and fighting can do to us
+>   next turn) beats both a failed charge and not charging.
+> - Choose the charge targets.
+> - `SkipChargeMove` when no legal placement exists for the roll.
+
+**Acceptance**
+- Over a grid of positions and rolls, every planned charge move passes `move_end_problems` and commits without a
+  revert, and it engages at least as many models as the M39 baseline translation (ai and logic tests).
+- Charge declaration fixtures: it charges when the odds and value are good, and holds when the odds are poor and
+  shooting is worth more (ai tests).
+- Human Auto move for charges: offered only before any drag, one Undo group, deterministic (logic tests
+  `M42_...`).
+- Arena: zero reverted charge moves. Replays unchanged.
+
+---
+
+## M43: Movement planner and whole-turn plan
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-06)
+**Rules:** 03.01–03.04, 09.02–09.07, 10.02–10.06, 11.02
+
+> **Candidates:**
+> - Move types: Remain Stationary, Normal, Advance, Fall Back (Ordered Retreat / Desperate Escape).
+> - Destinations:
+>   - the unit translated along 16 fixed directions (a constant unit-vector table, no `sin`/`cos`) × distance
+>     steps;
+>   - line-abreast and wedge formations facing the enemy.
+> - Formation changes assign models to slots in a collision-free order, with two-segment paths to break cycles.
+> - Each spot is snapped with `move_reach` / `fix_drop`, then the whole proposal is checked with
+>   `move_end_problems` before Commit (D-054).
+>
+> **Whole-turn scoring (M40 analysis):**
+> - Our shooting value this turn: Heavy if we move ≤ 3", Assault weapons only after an Advance, none after a Fall
+>   Back, Rapid Fire within half range.
+> - Plus charge odds × melee value (no charge after an Advance or Fall Back).
+> - Minus the enemy's expected reply next turn: their shooting from where they can get to, and their charge odds ×
+>   melee.
+> - Plus terms for board edges, coherency slack, and engaged shooting (engaged Termagants can't shoot; Intercessors
+>   can fire Bolt pistols).
+>
+> **What should come out of the scoring:**
+> - A shooting unit stays out of the enemy's likely charge range while it can still shoot. If it will be caught
+>   anyway, it closes and charges first.
+> - A melee unit closes, and only Advances when it can't charge this turn anyway.
+> - An engaged unit Falls Back when staying in combat is worth less than shooting next turn.
+
+**Acceptance**
+- Fixtures (ai tests):
+  - holds still for Heavy when that's best;
+  - closes to Rapid Fire range plus charge range when that's better;
+  - stays out of the enemy's likely charge range when kiting is better;
+  - never ends a move in Engagement Range unless it is charging;
+  - no reverts.
+- Arena (Release, 200 seeds, recorded here):
+  - as Intercessors vs Easy: ≥ 95% wins, with an earlier mean winning round than Easy vs Easy;
+  - as Termagants vs Easy: more draws and wins, and more surviving models, than Easy vs Easy.
+- Zero rejections and zero reverts.
+
+---
+
+## M44: Game-aware evaluator, lookahead, tuning (level Hard)
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-06)
+
+> **Evaluator:**
+> - A small Markov chain over (models left on each side, battle round, range band) for the remaining half-turns.
+> - It gives V = P(win) − P(loss), with a draw worth 0 (D-007: wipe-out wins, round 5 is a draw).
+> - The winning side pushes to wipe the enemy out, and a losing side plays for the draw (kiting, staying out of
+>   charge range).
+> - Movement, casualty order, coherency removal and consolidation all use V.
+>
+> **Lookahead:** the top 3 move plans are checked by an engine-backed Monte Carlo of the rest of our turn and the
+> enemy's reply. It uses the simulator with the bot's own dice, a cheap rollout policy and a fixed work budget
+> (simulated actions, never wall-clock time).
+>
+> **Tuning:**
+> - Weights live in a `BotWeights` struct, tuned with arena runs; the final values and results are recorded in
+>   D-054.
+> - New scenarios so the tuning isn't done on one matchup: `data/scenarios/bot_termagants_first.json` and
+>   `data/scenarios/bot_20_termagants.json`.
+
+**Acceptance**
+- Hard beats Normal in both seats over 200 Release arena seeds on every scenario (recorded here). A small seeded
+  subset runs in ctest.
+- p95 decision time under 500 ms in Release (reported by the arena, not asserted in ctest).
+- Zero rejections and zero reverts. Replays unchanged.
+
+---
+
+## M45: Bot polish, packaging, docs
+**Effort:** `medium` · **Plan mode:** pre-approved (2026-11-06)
+
+> **Watching the bot:**
+> - The bot's reasons appear in the combat log, e.g. "Termagants advance 9" to stay out of charge range".
+> - Bot vs bot gets watch controls (pause, step, speed).
+>
+> **Packaging and docs:**
+> - `package.ps1`: the README covers the start screen and the bot, and there's a second smoke test
+>   `--bot B --bot-steps 5`.
+> - A bot-game replay, `tests/replays/m45_bot_game.json` (a full game; replaying it doesn't need the bot).
+> - CLAUDE.md documents the new flags and the arena tool.
+
+**Acceptance**
+- Both package smoke tests pass; the zip is built.
+- The new replay replays cleanly and is byte-stable; the existing replays are unchanged.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

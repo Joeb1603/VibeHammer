@@ -24,8 +24,10 @@ tools/package.ps1         Release build -> VibeHammer.zip for sending the game t
 src/core/                 wh40k_core: headless rules library
 src/client_2d/            wh40k_client_2d: raylib + Dear ImGui executable (hotseat play + replay viewer)
   logic/                  wh40k_client_logic: the client's raylib-free code (GameSession, editors) (D-024)
+src/ai/                   wh40k_ai: the bot opponent, headless (D-054); wh40k_bot_arena exe (bot vs bot stats)
 tests/                    wh40k_tests: GoogleTest for wh40k_core, run via CTest
   client/                 wh40k_client_tests: GoogleTest for wh40k_client_logic
+  ai/                     wh40k_ai_tests: GoogleTest for wh40k_ai
   replays/*.json          saved replays; each must replay cleanly (regression tests, D-014)
 ```
 
@@ -85,12 +87,13 @@ Each unit JSON records the BSData commit it came from in `source.commit`. Pin to
 - `wh40k_core` is a pure C++20 static library. **It must never include raylib, ImGui, Windows or any rendering/IO-device headers.** It depends only on the standard library and nlohmann_json.
 - `wh40k_client_2d` links `wh40k_client_logic` (which links `wh40k_core`) and owns everything visual. It **never mutates `GameState`**. Every game change goes through `GameSession::submit`, which calls `validate_action` before `apply_action`. The client may call core's read-only queries for display and editor choices (`shot_options`, `melee_options`, `max_move_distance_mm`, `move_end_problems`, `check_save_roll`, ...) but contains no rules logic (D-024).
 - `wh40k_client_logic` must not include raylib, ImGui or OS headers (checked on every build, like core).
-- `wh40k_tests` links only `wh40k_core`. `wh40k_client_tests` links `wh40k_client_logic`.
+- `wh40k_ai` (the bot, D-054) links `wh40k_client_logic` and must not include raylib, ImGui or OS headers. The bot is a player, not the rules: in a live game it acts only through `GameSession::submit`, and legality comes only from the engine. Only `src/ai/simulator.cpp` may call `apply_action`, on a scratch copy with the bot's own dice, so the bot never sees the real future rolls.
+- `wh40k_tests` links only `wh40k_core`. `wh40k_client_tests` links `wh40k_client_logic`. `wh40k_ai_tests` links `wh40k_ai`.
 
 ### Two sides
 - There are exactly two sides: `enum class Side : uint8_t { A, B };`. Every unit belongs to a side.
 - Rules use "active player / opposing player" (01.03). Model that as `Side active_side()`, which changes while a unit is selected to move, shoot or fight. Don't hard-code "the player whose turn it is" where the rule says active player.
-- Multi-seat play is out of scope. Don't add seat or player abstractions.
+- Multi-seat play is out of scope. Don't add seat or player abstractions to core. The client may let the bot (D-054) control a side; which sides are bots is client state, never part of `GameState`.
 
 ### Engine API (the only way in or out)
 ```cpp
@@ -143,7 +146,7 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 
 ## Working style for Claude in this repo
 
-- One milestone per session. Run `/clear` between milestones. Re-read `PLAN.md` and the relevant `docs/rules/` files at the start.
+- One milestone per session. Run `/clear` between milestones (except where `PLAN.md` records a batch the user pre-approved, such as M38–M45). Re-read `PLAN.md` and the relevant `docs/rules/` files at the start.
 - For milestones marked "plan mode" in `PLAN.md`, propose the design (types, files, decision flow) and wait for approval before writing code.
 - Commit at the end of each green milestone with a message naming the milestone and rule numbers covered, then push. In cloud sessions the environment's stop hook requires uncommitted work to be committed and pushed. Open a pull request and merge it (rebase merge, to keep `main` linear) only when the user asks.
 - The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests (`wh40k_client_tests`) and screenshots under `xvfb-run`. The client's flags for this are `--screenshot <file.png>`, `--steps <n>` (click the first decision button n times), `--select <unit id>`, `--select-model <model id>`, `--seed <n>` (fixes the seed; without it each game's seed is random, D-038), `--scenario <file>`, `--replay <file>`, `--frame <n>`, `--zoom <px per mm>` and `--dice <n>` (1 keeps the dice pop-ups that the `--steps` rolls made, 2 also reveals the first; they're dropped otherwise, D-033). `--steps` only clicks panel buttons, so it can't reach decisions made by clicking the board (picking shooters, targets, charges), or the rolls they lead to. A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows.
