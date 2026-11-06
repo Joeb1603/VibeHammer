@@ -75,6 +75,7 @@ private:
     bool undo_step_available_ = false;  // D-039
     bool undo_step_requested_ = false;
     bool cancel_requested_ = false;  // D-041
+    std::string auto_move_message_;   // D-050: why the last Auto move found nothing (until the next step)
 };
 
 }  // namespace wh40k::client

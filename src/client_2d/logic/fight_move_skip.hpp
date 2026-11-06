@@ -26,6 +26,11 @@ inline constexpr float kNearBaseContactMm = 0.05f * core::MM_PER_INCH;
 // target unit than it starts. A model can't gain more than its starting gap, so the gap is the bound.
 inline constexpr float kWorthwhileGainMm = 0.1f * core::MM_PER_INCH;
 
+// D-049: the edge distance from `model`, placed at `pos`, to the closest target unit of the move in
+// progress (D-022). nullopt if no move is in progress or no target has models.
+[[nodiscard]] std::optional<float> gap_to_closest_target(const core::GameState& state, const core::Model& model,
+                                                         const core::Position& pos);
+
 // D-047: whether the pile-in (12.03) or consolidation (12.08) `start` could do anything worth doing: some
 // model of the unit starts more than kWorthwhileGainMm from the closest target unit (D-049) and can end
 // more than kWorthwhileMoveMm from its start, or could reach the engagement range of an enemy unit it

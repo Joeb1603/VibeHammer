@@ -927,3 +927,37 @@ dragged models into base contact, the leeway may no longer be needed).
   really gain more than 0.1" is skipped. A model with a larger gap but only sideways room is still offered.
 - Subsumes D-048 for this test (0.05" < 0.1"); D-048 still keeps near-contact models out of the new-contact check.
 
+## D-050: "Auto move" for pile-ins and consolidations (M34)
+**Decided:** 2026-11-06 (agreed with the user). Client only (`auto_fight_move`); no rule, state or replay
+change.
+- **What it does:** during a pile-in (12.03) or consolidation (12.08), before any model has been dragged, an
+  **Auto move** button next to Commit / Reset places the unit's models. It submits ordinary
+  `ProposeModelMove`s (one straight line per moved model) as one Undo group. The player reviews the result,
+  adjusts or undoes it, and commits. Each placement is planned in a scratch `GameSession`, so the engine
+  validates every one, and the arrangement is only offered if `move_end_problems` is empty. Otherwise the
+  panel says "Auto move: no legal arrangement found (<the engine's first reason>)".
+- **Greedy placement**, closest model to the target first (ties by model id). For each model, the spot it can
+  reach in one straight line (inside `move_reach`'s area, D-040/D-041), ranked by:
+  1. gap to the closest target unit (D-022), in **1 mm bands**;
+  2. **friendly models within 2"** (03.03), up to 2;
+  3. base contact;
+  4. gap (to 0.1 mm);
+  5. the shorter move.
+
+  The candidates are the direct line into contact with the nearest target model, contact points every 5°
+  round each target model in reach, and a 1 mm × 5° sample of the area.
+- **Coherency (03.03) is kept after every placement:** a spot is only used if the whole unit is in
+  coherency with the model there (unless the unit started out of coherency). So no model runs ahead and
+  cuts a friend off.
+- **Formation balance (user's concern):** a unit only just in coherency can be split when a model dies.
+  So spots within the same 1 mm band count as equally close, and the one with more friends within 2" wins.
+  It gives up at most a millimetre, never a real gain.
+- **D-049:** a model 0.1" or less from the target only moves straight into contact (no sliding round to
+  another enemy model, the D-048 open question). Models in base contact (12.03 / 12.08 Ongoing) stay put.
+- **Both orders:** the pass is run closest-first and furthest-first. Of the results the engine accepts,
+  the one with more models in base contact, then less total gap, is kept. (A rear model moving first can
+  let the front one reach contact without breaking coherency.)
+- **Not attempted:** a global optimum; re-planning a model after others have moved; "engaged with it if
+  possible" for every model (`TODO(if-possible)` stays with the player); auto move after a manual drag
+  (Undo or Reset first).
+

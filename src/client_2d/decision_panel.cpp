@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "action_text.hpp"
+#include "auto_fight_move.hpp"
 #include "board_view.hpp"
 #include "core/engine/movement.hpp"
 #include "decision_view.hpp"
@@ -142,6 +143,7 @@ void DecisionPanel::sync(const GameSession& session) {
     melee_.reset();
     casualties_.reset();
     casualty_custom_ = false;
+    auto_move_message_.clear();
     for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
             shots_.emplace_back(session.state(), s->unit, s->type);
@@ -242,6 +244,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
             break;
         }
     }
+    if (!auto_move_message_.empty()) ImGui::TextColored(kWarning, "%s", auto_move_message_.c_str());  // D-050
 
     ImGui::TableNextColumn();
     bool back = false;
@@ -264,6 +267,16 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
             ImGui::PushID(static_cast<int>(i));
             if (row.button(action_label(gs, steps[i]))) chosen = steps[i];
             ImGui::PopID();
+        }
+        // D-050: place the pile-in / consolidation automatically; the player reviews it, then commits.
+        if (auto_fight_move_available(gs) && row.button("Auto move")) {
+            AutoFightMove plan = auto_fight_move(gs);
+            if (plan.ok()) {
+                end_actions = std::move(plan.moves);
+            } else {
+                auto_move_message_ = "Auto move: no legal arrangement found (" +
+                                     (plan.problems.empty() ? std::string("?") : plan.problems.front()) + ")";
+            }
         }
         // D-039: undo the last drag (one model, or the whole unit for a unit drag) of this move.
         if (undo_step_available_ && row.button("Undo last step")) undo_step_requested_ = true;

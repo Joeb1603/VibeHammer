@@ -3,6 +3,7 @@
 add_library(wh40k_client_logic STATIC
     action_text.cpp
     auto_actions.cpp
+    auto_fight_move.cpp
     board_interaction.cpp
     casualty_plan.cpp
     decision_view.cpp

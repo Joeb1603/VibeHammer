@@ -481,6 +481,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M34: Auto move for pile-ins and consolidations ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-06)
+
+> An **Auto move** button next to Commit / Reset places a pile-in or consolidation (12.03, 12.08) for the player to review and commit (D-050). It is a greedy placement: each model goes to the reachable spot closest to the target, with ties within 1 mm going to more friends within 2". Coherency (03.03) is kept after every placement, both model orders are tried and the better legal one is kept. It is client-only: ordinary `ProposeModelMove`s submitted as one Undo group, each validated by the engine.
+
+**Acceptance**
+- After a charge, the pile-in is legal and puts at least 3 Intercessors in base contact; an Ongoing Consolidation is legal and gains contact; an Engaging Consolidation ends engaged with its target (logic tests).
+- A model 1.8 mm away goes straight into contact (D-049), not round to another Termagant; a pocketed model with 3 mm room ends in contact; a unit all in base contact gets "no model can get closer" (logic tests).
+- Coherency holds after every proposal, and a rear model moving first lets the front one reach contact; among equally close spots, the one within 2" of two friends wins (logic tests).
+- Offered only for pile-ins and consolidations, before any drag; one Undo group; the history replays; the same input gives the same output (logic tests). Replays unchanged.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

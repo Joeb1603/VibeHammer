@@ -80,21 +80,6 @@ bool nearly_in_base_contact(const core::GameState& state, const core::Unit& unit
     return false;
 }
 
-// D-049: the model's edge distance from its start to the closest target unit of the move (D-022); the
-// most it could get closer. nullopt if no target has models.
-std::optional<float> gap_to_closest_target(const core::GameState& state, const core::Model& model,
-                                           const core::Position& start) {
-    if (!state.flow.move) return std::nullopt;
-    std::optional<float> gap;
-    for (const core::UnitId id : state.flow.move->targets) {
-        const core::Unit* t = state.find_unit(id);
-        if (t == nullptr || core::is_destroyed(*t)) continue;
-        const std::optional<float> d = core::model_distance_to_unit(model, start, *t);
-        if (d && (!gap || *d < *gap)) gap = d;
-    }
-    return gap;
-}
-
 // D-047 / D-049: the model could end both well away from its start and noticeably closer to the target.
 bool can_get_worthwhile_closer(const core::GameState& state, const core::Model& model,
                                const core::MoveReach& reach) {
@@ -110,6 +95,19 @@ bool skips_fight_moves(const core::GameAction& a) {
 }
 
 }  // namespace
+
+std::optional<float> gap_to_closest_target(const core::GameState& state, const core::Model& model,
+                                           const core::Position& pos) {
+    if (!state.flow.move) return std::nullopt;
+    std::optional<float> gap;
+    for (const core::UnitId id : state.flow.move->targets) {
+        const core::Unit* t = state.find_unit(id);
+        if (t == nullptr || core::is_destroyed(*t)) continue;
+        const std::optional<float> d = core::model_distance_to_unit(model, pos, *t);
+        if (d && (!gap || *d < *gap)) gap = d;
+    }
+    return gap;
+}
 
 bool fight_move_worthwhile(const core::GameState& state, core::Side side, const core::GameAction& start) {
     const std::optional<core::UnitId> id = moving_unit(start);
