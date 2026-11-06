@@ -234,17 +234,27 @@ bool in_region(const ReachRegion& region, const core::Position& p) {
     if (region.empty) return false;
     const core::Rect& b = region.bounds;
     if (p.x < b.min_x || p.x > b.max_x || p.y < b.min_y || p.y > b.max_y) return false;
+    // Plain loops (the auto moves call this for thousands of candidate spots).
     const auto inside = [&](const core::ReachCircle& c) {
         return std::hypot(p.x - c.centre.x, p.y - c.centre.y) < c.radius_mm;
     };
-    if (!std::all_of(region.inside_all.begin(), region.inside_all.end(), inside)) return false;
-    for (const auto& group : region.inside_any) {
-        if (!std::any_of(group.begin(), group.end(), inside)) return false;
+    for (std::size_t i = 0; i < region.inside_all.size(); ++i) {
+        if (!inside(region.inside_all[i])) return false;
     }
-    if (std::any_of(region.outside_all.begin(), region.outside_all.end(), inside)) return false;
-    return std::none_of(region.outside_shadows.begin(), region.outside_shadows.end(), [&](const Shadow& s) {
-        return point_segment_distance(s.disc.centre, s.from, p) < s.disc.radius_mm;
-    });
+    for (std::size_t g = 0; g < region.inside_any.size(); ++g) {
+        const std::vector<core::ReachCircle>& group = region.inside_any[g];
+        bool any = false;
+        for (std::size_t i = 0; i < group.size() && !any; ++i) any = inside(group[i]);
+        if (!any) return false;
+    }
+    for (std::size_t i = 0; i < region.outside_all.size(); ++i) {
+        if (inside(region.outside_all[i])) return false;
+    }
+    for (std::size_t i = 0; i < region.outside_shadows.size(); ++i) {
+        const Shadow& s = region.outside_shadows[i];
+        if (point_segment_distance(s.disc.centre, s.from, p) < s.disc.radius_mm) return false;
+    }
+    return true;
 }
 
 }  // namespace wh40k::client

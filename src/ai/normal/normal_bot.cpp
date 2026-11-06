@@ -7,6 +7,7 @@
 
 #include "analysis/odds.hpp"
 #include "baseline_bot.hpp"
+#include "normal/charge.hpp"
 #include "normal/defense.hpp"
 #include "normal/fight.hpp"
 #include "normal/shooting.hpp"
@@ -76,8 +77,17 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     if (std::holds_alternative<decision::MoveModels>(kind) && is_fight_move(gs)) {
         return normal::continue_fight_move(gs, side, seed);
     }
-    // M42 / M43 hook: MoveUnits (move types and destinations), MoveModels for Normal / Advance / Fall Back /
-    // Charge moves, Charge (DeclareCharge or EndChargeStep) and SelectChargeTargets stay on the baseline.
+    // M42: charges (11.02, 11.04).
+    if (std::holds_alternative<decision::Charge>(kind)) return normal::decide_charge(cache, gs, side, legal, seed);
+    if (std::holds_alternative<decision::SelectChargeTargets>(kind)) {
+        return normal::decide_charge_targets(cache, gs, side, legal, seed);
+    }
+    if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
+        gs.flow.move->type == MoveType::Charge) {
+        return normal::continue_charge_move(gs, side, seed);
+    }
+    // M43 hook: MoveUnits (move types and destinations) and the MoveModels of Normal / Advance / Fall Back moves
+    // stay on the baseline.
     return std::nullopt;
 }
 

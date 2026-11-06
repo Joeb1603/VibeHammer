@@ -787,7 +787,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M42: Charge planner
+## M42: Charge planner ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-06)
 **Rules:** 11.02, 11.04, 03.01, 03.03, 03.04
 
@@ -813,6 +813,43 @@ Every earlier level stays selectable as a regression opponent.
 - Human Auto move for charges: offered only before any drag, one Undo group, deterministic (logic tests
   `M42_...`).
 - Arena: zero reverted charge moves. Replays unchanged.
+
+**Results (2026-11-06):**
+- **Placements (D-056):** the logic grid (`M42_AutoChargeMove.*Grid*`: gaps 2.5"-11.5", sideways offsets 0", 3", 7",
+  two formations per charger, every roll that makes the target eligible) has 186 cases for each charger. Every one
+  gets a legal arrangement that commits without a revert. The M39 baseline translation stands in 173 (Intercessors)
+  and 152 (Termagants) of them; the auto move engages at least as many models every time, and more in 121 and
+  152 of them (for the Termagants the back rank is brought in, not left 2.1" behind). The ai grid
+  (`M42_ChargeMove.AcrossAGrid...`: 88 cases, both chargers) replays the bot's planned steps through the engine:
+  every step valid at the hash it expects, `move_end_problems` empty, no revert, at least the baseline's engaged
+  models in all 88 and more in 61.
+- **Declarations (ai tests `M42_Declare`):** Intercessors 4" from Termagants declare (92% odds, a charge move
+  +0.94 on average against +0.45 for holding). Termagants 11.5" from Intercessors hold ("3% charge odds; the
+  Intercessor Squad would win the fight"), and so do Termagants 10" from Intercessors that are locked in combat
+  with other Termagants (nothing threatens them, a charge only joins a losing fight). Termagants 10" from free
+  Intercessors are a near tie (−0.944 for a charge against −0.962 for holding): the Intercessors would shoot and
+  then charge them next turn anyway, so striking first is very slightly better, and the bot declares.
+- **Auto move for charges (logic tests `M42_AutoChargeMove`):** offered only for a charge move before any model is
+  moved, submitted as one Undo group, deterministic, legal; it never ends engaged with a unit that isn't a target,
+  engages both of two targets, and says why when no arrangement exists.
+- Release arena, V1 skirmish, seeds 1–200:
+
+  | Run | A wins | B wins | Draws | Mean end round | Mean survivors A / B | Mean wounds lost A / B | Coherency removals | p95 decision |
+  |---|---|---|---|---|---|---|---|---|
+  | `--a easy --b easy` | 200 | 0 | 0 | 1.94 | 4.92 / 0.00 | 0.44 / 10.00 | 0 / 0 | 0.119 ms |
+  | `--a normal --b easy` | 200 | 0 | 0 | 1.92 | 4.91 / 0.00 | 0.47 / 10.00 | 0 / 0 | 0.675 ms |
+  | `--a easy --b normal` | 200 | 0 | 0 | 1.93 | 4.91 / 0.00 | 0.47 / 10.00 | 0 / 0 | 0.443 ms |
+  | `--a normal --b normal` | 200 | 0 | 0 | 1.92 | 4.91 / 0.00 | 0.47 / 10.00 | 0 / 0 | 0.969 ms |
+
+  Every run: 0 rejected actions, 0 `UnitMoveReverted`, 0 fallbacks, 0 unfinished.
+- **The M41 Tyranid open item: not improved (still open, for M43).** Over seeds 1–200 Easy-vs-Normal reads 0.47 A
+  wounds lost against Easy-vs-Easy's 0.44, but over seeds 1–1000 the two are identical (A wounds lost 0.36 / 0.36,
+  mean end round 1.91 / 1.91, A survivors 4.93 / 4.94). The baseline movement walks the Termagants into Rapid Fire
+  range, the first Bolt Rifle volley leaves 4–6 of them, and their charges (at about 8"–10", which both levels
+  declare) are made with a single rank that the baseline translation also engages in full. In 60 games each level
+  declared 61 Tyranid charges and made 12 charge moves. The difference has to come from movement (M43).
+- ctest: the M42 logic tests take about 6.5 s and the ai tests about 7.5 s in Debug; the whole suite went from about
+  77 s to 85 s.
 
 ---
 

@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "action_text.hpp"
+#include "auto_charge_move.hpp"
 #include "auto_fight_move.hpp"
 #include "board_view.hpp"
 #include "core/engine/movement.hpp"
@@ -291,14 +292,26 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
             if (row.button(default_order ? "Use default order" : action_label(gs, steps[i]))) chosen = steps[i];
             ImGui::PopID();
         }
-        // D-050: place the pile-in / consolidation automatically; the player reviews it, then commits.
-        if (auto_fight_move_available(gs) && row.button("Auto move")) {
-            AutoFightMove plan = auto_fight_move(gs);
-            if (plan.ok()) {
-                end_actions = std::move(plan.moves);
+        // D-050: place the pile-in / consolidation automatically; D-056: the charge move too. The player
+        // reviews it, then commits.
+        const bool fight_move = auto_fight_move_available(gs);
+        if ((fight_move || auto_charge_move_available(gs)) && row.button("Auto move")) {
+            std::vector<core::GameAction> moves;
+            std::vector<std::string> problems;
+            if (fight_move) {
+                AutoFightMove plan = auto_fight_move(gs);
+                if (plan.ok()) moves = std::move(plan.moves);
+                problems = std::move(plan.problems);
+            } else {
+                AutoChargeMove plan = auto_charge_move(gs);
+                if (plan.ok()) moves = std::move(plan.moves);
+                problems = std::move(plan.problems);
+            }
+            if (!moves.empty()) {
+                end_actions = std::move(moves);
             } else {
                 auto_move_message_ = "Auto move: no legal arrangement found (" +
-                                     (plan.problems.empty() ? std::string("?") : plan.problems.front()) + ")";
+                                     (problems.empty() ? std::string("?") : problems.front()) + ")";
             }
         }
         // D-039: undo the last drag (one model, or the whole unit for a unit drag) of this move.

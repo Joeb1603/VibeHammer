@@ -52,6 +52,11 @@ struct MeleeChoice {
 // The standing position after a consolidation, for `side` (see the file comment).
 [[nodiscard]] double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side);
 
+// The model positions and paths of the move in progress put back to its start (a copy, for planning only): the
+// state just after the move was started, so a plan is a function of that state (D-054). Precondition: a move is
+// in progress.
+[[nodiscard]] core::GameState move_origin(const core::GameState& state);
+
 // A pile-in or consolidation simulated in full from `state`: `start` (StartPileIn / StartConsolidation), the
 // auto_fight_move placements and the commit, each step with the hash of the state it expects. nullopt if any
 // step is refused, the move would be reverted, or auto_fight_move finds no arrangement.

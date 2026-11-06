@@ -1288,6 +1288,63 @@ change.
     fallbacks, and `--trace <seed>` (one game's bot decisions with their reasons). Results are in PLAN.md: as Space
     Marines Normal ends games earlier (1.92 vs 1.94); as Tyranids it plays exactly as Easy (open item: their result
     is decided by the baseline movement and charges, M42/M43).
+- **M42 notes (charges; `src/ai/normal/charge.*`, the placement in `src/client_2d/logic/auto_charge_move.*`, D-056):**
+  - **Placement priorities (D-056):** each model aims for base contact with a charge target model, else within 1",
+    else Engagement Range, else as close as it can get, never within Engagement Range of a unit that isn't a target
+    (11.04), always in one straight line inside `move_reach`'s area. Arrangements are ranked by **models engaged**,
+    then within 1", then in base contact, then the least total gap. Engaged comes first (not base contact, as first
+    proposed) because only engaged models fight and the acceptance measure is "engages at least as many models as
+    the baseline"; base contact still wins every tie, so most charges end with most models touching.
+  - **The charge move in the bot:** `plan_charge_move` simulates StartChargeMove, the auto move's placements,
+    `move_end_problems` and the commit on a scratch state (no `UnitMoveReverted`), so a roll with no such plan is a
+    failed charge and the bot answers `SkipChargeMove`. It is memoized as one plan; from a mid-move state
+    `continue_charge_move` replans from the move's start (as `continue_fight_move`) and continues only while the
+    moves so far are the plan's.
+  - **Odds:** `charge_odds` (M40) with that placement as its `PlacementCheck`, one scratch state per 2D6 total with a
+    scripted roll. A legal arrangement for a roll is legal for any larger one, so once a roll's plan engages every
+    model the larger rolls reuse its value (fewer placements to plan). The real roll is never read before the
+    declaration; after it (SelectChargeTargets) the actual roll is used.
+  - **Value model** (unit shares, as M41) over this Fight phase, the enemy's next turn and our next turn, cut at the
+    game's end (D-007: one half-turn left in the last round when the enemy still plays, none in the game's last
+    turn). Volleys are M40 expected outcomes of a whole unit (melee with its best weapon, [CLOSE-QUARTERS] shooting
+    while engaged, shooting across the gap with [HEAVY]), scaled by the attacker's surviving fraction and capped at
+    what is left of the target (`Exchange`).
+    - Holding (= a failed charge: the unit doesn't move, 11.02): the enemy shoots us, then charges us with
+      `p_charge_after_move(gap)` if, in its own view, charging beats not charging (it strikes first, we reply, then
+      our turn engaged), else our turn's shooting. An enemy already engaged neither shoots us nor charges, and the
+      engine (`shot_options`) says whether we may shoot it (04.02: not while it is engaged).
+    - A successful charge: the fight now with Fights First (our models engaged or within pile-in reach, 3" + 2",
+      strike first; theirs within the same reach reply), then the enemy's turn engaged (its close-quarters shooting,
+      it fights first, we reply) and ours (our close-quarters shooting, we fight first). So engaged Termagants
+      can't shoot and engaged Intercessors still fire their Bolt pistols.
+    - Declaring costs nothing (no move on a failure, and after the roll the bot can still make no charge move), so
+      the gain of declaring is E[max(charge value, hold)] - hold over the roll; a unit declares when the gain is
+      positive, and of several units the one with the largest gain goes first (the others are weighed again at the
+      next Charge decision). After the roll, the target set with the best planned value is charged if it beats
+      holding, else `SkipChargeMove`.
+    - Outcomes (V1): Intercessors always want to charge Termagants (at 4": 92% odds, +0.94 against +0.45 for
+      holding). Termagants against free Intercessors are doomed either way: the Intercessors would shoot and charge
+      them next turn, so a charge first is very slightly better (−0.944 against −0.962 at 10") and they declare up
+      to about 10"; at 11.5" holding keeps a chance of not being caught and they hold. Termagants hold when the
+      Intercessors are locked in another combat (holding is worth 0, a charge only joins a losing fight). The
+      "Termagants 10" away hold" example first suggested for the fixture is that near tie, so the fixtures use 11.5"
+      and the locked-in-combat position instead (PLAN.md, M42 results).
+  - **Reasons:** "Intercessor Squad: declare a charge (92% charge odds against Termagants; a charge move +0.94 on
+    average, holding +0.45)", "Termagants: no charge (3% charge odds; the Intercessor Squad would win the fight: a
+    charge move −0.94, holding −0.87)", "<unit>: charge move into <targets> (roll N): E of M models engaged, C in
+    base contact (<value> against <hold> for holding)", "<unit>: no charge move stands for a roll of N (<the
+    engine's reason>)".
+  - **M43's seam:** `charge_prospect(cache, state, unit, seed, enemy_losses)` gives `p_success`, `hold`, `expected`,
+    `gain` and the value and engaged models per roll. From a Shoot or MoveUnits decision of the same turn it first
+    takes a scratch copy to the Charge step (no more shooting; units not yet moved remain stationary), and
+    `enemy_losses` takes our shooting's expected kills off the enemy's front (the worst case for a charge, as
+    `distance_after_casualties`). It plans a charge move per roll, so M43 should rank candidates with the quick
+    bound (`ThreatRanges::p_charge_now`) and call it for the few best.
+  - **Still TODO(if-possible): 11.04** "each model that can end within 1" / engaged must": not enforced by the
+    engine; the ranking satisfies as many models as the arrangements tried allow, not provably every one.
+  - **Arena:** zero rejections, reverts and fallbacks in all four pairings (PLAN.md, M42). The Tyranid open item is
+    unchanged over 1000 seeds: their charges come after the first Bolt Rifle volley, with 4-6 Termagants in one
+    rank that the baseline translation also engages in full; movement (M43) has to keep them out of Rapid Fire range.
 
 ## D-055: Start screen and saved settings (M38)
 **Decided:** 2026-11-06 (M38, pre-approved batch). Client only; no rule, state or replay change.
@@ -1306,3 +1363,31 @@ change.
   loads it as hotseat until M39 adds the save's players block.
 - **Bot sides** are client state (`BotSides`, from `bot_sides_for(mode, human side)`), shown as "(bot)" in the
   sidebar and in the new-game status. Until M39 a bot side is played by hand.
+
+## D-056: "Auto move" for charge moves (M42)
+**Decided:** 2026-11-06 (M42, pre-approved batch). Client only (`auto_charge_move`); no rule, state or replay
+change.
+- **What it does:** during a charge move (11.04), before any model has been moved, the **Auto move** button next
+  to Commit / Reset (D-050) also places the charging unit's models: ordinary `ProposeModelMove`s, one straight line
+  per moved model, submitted as one Undo group. The player reviews the result, adjusts or undoes it, and commits.
+  Every proposal is checked on a scratch `GameSession` and the arrangement is offered only if `move_end_problems` is
+  empty; otherwise the panel says "Auto move: no legal arrangement found (<the first reason>)". The bot's charge
+  moves (D-054, M42 notes) are the same arrangement.
+- **Each model's aim:** base contact with a charge target model, else within 1", else within Engagement Range,
+  else as close as it can get (11.04 While Moving, its "if possible" clauses: TODO(if-possible), not enforced by
+  the engine). Its spots are the ones `move_reach` allows (D-046: up to the charge roll, closer to a charge target,
+  not on a model or through an enemy one, not within Engagement Range of a unit that isn't a target), sampled with a
+  fixed table of directions (`directions.hpp`, every 5°, no sin/cos): rings round each target model in contact,
+  just inside 1" and just inside 2", the straight line to each target model, and rings round the model's start.
+- **The arrangement:** the unit is first moved as a block towards the targets (towards their centre, along the
+  closest pair of models, towards the closest target model), as far as every model's spot is allowed, and also the
+  M39 baseline (1" short). Each start is then refined one model at a time: a model moves to its best spot as long as
+  the whole unit stays in coherency (03.03, core's check), every charge target stays engaged by some model (11.04
+  After Moving) and the models can still be proposed one at a time without one ending on a model still to move
+  (D-027; a cycle is not attempted). Closest-first and furthest-first orders, and a "least movement" aim (engage
+  with the shortest move, keeping the block together) followed by the closest aim, are tried.
+- **Ranking:** the most models engaged, then within 1", then in base contact, then the least total gap (D-054 M42
+  notes say why engaged comes first). The best arrangement the engine accepts is used.
+- **Not attempted:** a global optimum; two-segment paths; models swapping places; an arrangement for a unit that
+  starts out of coherency (it is refined like any other, but nothing tries to repair it); Auto move after a manual
+  drag (Undo or Reset first, as D-050).

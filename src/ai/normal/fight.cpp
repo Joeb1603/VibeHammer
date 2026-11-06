@@ -119,22 +119,6 @@ double own_fight_value(analysis::OddsCache& cache, const core::GameState& state,
     return p ? p->value : 0.0;
 }
 
-// The model positions and paths of the move in progress put back to its start (a copy, for planning only): the
-// state just after the move was started, so the plan is a function of that state (D-054).
-core::GameState move_origin(const core::GameState& state) {
-    core::GameState origin = state;
-    core::MoveInProgress& mv = *origin.flow.move;
-    if (core::Unit* u = origin.find_unit(mv.unit)) {
-        for (core::Model& m : u->models) {
-            for (const core::ModelStart& s : mv.starts) {
-                if (s.model == m.id) m.position = s.position;
-            }
-        }
-    }
-    mv.paths.clear();
-    return origin;
-}
-
 // From a pile-in or consolidation in progress: the auto_fight_move arrangement planned from the move's start,
 // the placements not yet made and the commit, each simulated and checked.
 std::optional<FightMovePlan> plan_rest(const core::GameState& state, core::Side side, std::uint64_t seed,
@@ -172,6 +156,20 @@ std::optional<FightMovePlan> plan_rest(const core::GameState& state, core::Side 
 }
 
 }  // namespace
+
+core::GameState move_origin(const core::GameState& state) {
+    core::GameState origin = state;
+    core::MoveInProgress& mv = *origin.flow.move;
+    if (core::Unit* u = origin.find_unit(mv.unit)) {
+        for (core::Model& m : u->models) {
+            for (const core::ModelStart& s : mv.starts) {
+                if (s.model == m.id) m.position = s.position;
+            }
+        }
+    }
+    mv.paths.clear();
+    return origin;
+}
 
 std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit) {
     const core::Unit* u = state.find_unit(unit);
