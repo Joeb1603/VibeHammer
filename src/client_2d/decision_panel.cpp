@@ -250,6 +250,18 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         }
     }
     if (!auto_move_message_.empty()) ImGui::TextColored(kWarning, "%s", auto_move_message_.c_str());  // D-050
+    // D-051: how much damage is still to be placed, in a coloured box under the hint.
+    if (const CasualtyPicks* picks = board.casualty_picks(); picks != nullptr && picks->preview()) {
+        const int left = picks->preview()->damage_left;
+        const std::string text = left > 0 ? "Damage left to allocate: " + std::to_string(left)
+                                          : std::string("All damage allocated: confirm the casualties");
+        const ImVec4 colour = left > 0 ? ImVec4(0.75f, 0.35f, 0.10f, 1.0f) : ImVec4(0.20f, 0.55f, 0.30f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, colour);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, colour);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, colour);
+        ImGui::Button(text.c_str());  // a label, not a control
+        ImGui::PopStyleColor(3);
+    }
     // D-051: what the casualty picks so far do.
     if (const CasualtyPicks* picks = board.casualty_picks(); picks != nullptr && !picks->marks().empty()) {
         std::string line = "So far:";
