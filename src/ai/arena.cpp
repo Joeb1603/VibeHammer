@@ -19,6 +19,15 @@ std::size_t reverts_in(const client::LogEntry& entry) {
     }));
 }
 
+// Every model's wounds left, by side (a destroyed model is gone, so it counts 0).
+std::array<int, 2> wounds_left(const core::GameState& state) {
+    std::array<int, 2> out{};
+    for (const core::Unit& u : state.units) {
+        for (const core::Model& m : u.models) out[core::side_index(u.side)] += m.wounds_remaining;
+    }
+    return out;
+}
+
 double percentile(std::vector<double> v, double p) {
     if (v.empty()) return 0.0;
     std::sort(v.begin(), v.end());
@@ -29,10 +38,11 @@ double percentile(std::vector<double> v, double p) {
 }  // namespace
 
 GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
-                         std::size_t step_cap, std::vector<double>* decision_ms) {
+                         std::size_t step_cap, std::vector<double>* decision_ms, std::vector<std::string>* trace) {
     GameRecord rec;
     rec.seed = seed;
     client::GameSession session = client::GameSession::new_game(scenario, seed);
+    const std::array<int, 2> wounds_at_start = wounds_left(session.state());
     std::array<Bot, 2> bots{Bot(a), Bot(b)};
     // As the client runs a bot game: skip steps with nothing to do, never auto-allocate for a bot (D-054).
     client::AutoSettings autos;
@@ -41,7 +51,15 @@ GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, Bo
     autos.bot_controlled = {true, true};
     std::size_t logged = 0;
     const auto count_new = [&] {
-        for (; logged < session.log().size(); ++logged) rec.reverted += reverts_in(session.log()[logged]);
+        for (; logged < session.log().size(); ++logged) {
+            const client::LogEntry& entry = session.log()[logged];
+            rec.reverted += reverts_in(entry);
+            for (const core::GameEvent& e : entry.events) {
+                if (const auto* r = std::get_if<core::event::ModelRemovedForCoherency>(&e)) {
+                    if (const core::Unit* u = session.state().find_unit(r->unit)) ++rec.coherency_removed[core::side_index(u->side)];
+                }
+            }
+        }
     };
     while (session.pending() && session.history().size() < step_cap) {
         (void)client::run_auto_actions(session, autos);
@@ -52,6 +70,11 @@ GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, Bo
         const BotChoice choice = bots[core::side_index(side)].decide(session.state(), side);
         const auto t1 = std::chrono::steady_clock::now();
         if (decision_ms != nullptr) decision_ms->push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
+        if (trace != nullptr) {
+            trace->push_back("R" + std::to_string(session.state().flow.battle_round) + " " +
+                             (side == core::Side::A ? "A " : "B ") + std::string(core::action_name(choice.action)) +
+                             ": " + choice.reason);
+        }
         if (choice.stopped) {
             rec.problems = choice.problems;
             rec.problems.insert(rec.problems.begin(), "the bot stopped: " + choice.reason);
@@ -72,6 +95,8 @@ GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, Bo
     if (!rec.finished && rec.problems.empty()) rec.problems.push_back("step cap reached");
     rec.end_round = end.flow.battle_round;
     for (const core::Unit& u : end.units) rec.surviving_models[core::side_index(u.side)] += static_cast<int>(u.models.size());
+    const std::array<int, 2> wounds_at_end = wounds_left(end);
+    for (std::size_t i = 0; i < 2; ++i) rec.wounds_lost[i] = wounds_at_start[i] - wounds_at_end[i];
     rec.fallbacks = bots[0].fallbacks() + bots[1].fallbacks();
     return rec;
 }
@@ -96,12 +121,19 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
         r.mean_end_round += g.end_round;
         r.mean_surviving[0] += g.surviving_models[0];
         r.mean_surviving[1] += g.surviving_models[1];
+        r.mean_wounds_lost[0] += g.wounds_lost[0];
+        r.mean_wounds_lost[1] += g.wounds_lost[1];
+        r.fallbacks += g.fallbacks;
+        r.coherency_removed[0] += g.coherency_removed[0];
+        r.coherency_removed[1] += g.coherency_removed[1];
     }
     if (!r.games.empty()) {
         const double n = static_cast<double>(r.games.size());
         r.mean_end_round /= n;
         r.mean_surviving[0] /= n;
         r.mean_surviving[1] /= n;
+        r.mean_wounds_lost[0] /= n;
+        r.mean_wounds_lost[1] /= n;
     }
     r.p50_ms = percentile(ms, 0.50);
     r.p95_ms = percentile(ms, 0.95);
@@ -115,10 +147,13 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
     std::snprintf(buf, sizeof buf,
                   "games %zu: side A (%s) wins %d, side B (%s) wins %d, draws %d, unfinished %d\n"
                   "mean end round %.2f; mean surviving models: A %.2f, B %.2f\n"
-                  "rejected actions %zu, UnitMoveReverted %zu\n"
+                  "mean wounds lost: A %.2f, B %.2f; models removed for coherency: A %d, B %d\n"
+                  "rejected actions %zu, UnitMoveReverted %zu, fallbacks %zu\n"
                   "decision time p50 %.3f ms, p95 %.3f ms\n",
                   r.games.size(), a.c_str(), r.wins[0], b.c_str(), r.wins[1], r.draws, r.unfinished, r.mean_end_round,
-                  r.mean_surviving[0], r.mean_surviving[1], r.rejected, r.reverted, r.p50_ms, r.p95_ms);
+                  r.mean_surviving[0], r.mean_surviving[1], r.mean_wounds_lost[0], r.mean_wounds_lost[1],
+                  r.coherency_removed[0], r.coherency_removed[1], r.rejected,
+                  r.reverted, r.fallbacks, r.p50_ms, r.p95_ms);
     std::string out = buf;
     for (const GameRecord& g : r.games) {
         if (g.problems.empty()) continue;

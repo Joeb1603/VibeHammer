@@ -6,6 +6,7 @@
 #include "baseline_bot.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "normal/normal_bot.hpp"
 #include "state_hash.hpp"
 
 namespace wh40k::ai {
@@ -29,9 +30,8 @@ std::optional<std::string> problem(const core::GameState& state, core::Side side
 BotLevel effective_level(BotLevel requested) {
     switch (requested) {
         case BotLevel::Easy: return BotLevel::Easy;
-        case BotLevel::Normal:  // M41-M43
-        case BotLevel::Hard:    // M44
-            return BotLevel::Easy;
+        case BotLevel::Normal: return BotLevel::Normal;  // M41 (shooting, defense, fight); M42-M43 extend it
+        case BotLevel::Hard: return BotLevel::Normal;    // M44
     }
     return BotLevel::Easy;
 }
@@ -69,9 +69,9 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
         } else {
             memo_.clear();
             switch (effective_level(config_.level)) {
-                case BotLevel::Easy:
+                case BotLevel::Easy: chosen = easy_policy(state, side, legal, decision_seed(state)); break;
                 case BotLevel::Normal:
-                case BotLevel::Hard: chosen = easy_policy(state, side, legal, decision_seed(state)); break;
+                case BotLevel::Hard: chosen = normal_policy(state, side, legal, decision_seed(state)); break;
             }
             memo_ = std::move(chosen->rest);
             chosen->rest.clear();

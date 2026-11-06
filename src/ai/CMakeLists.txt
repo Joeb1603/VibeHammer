@@ -9,6 +9,11 @@ add_library(wh40k_ai STATIC
     bot.cpp
     bot_driver.cpp
     fallback.cpp
+    normal/defense.cpp
+    normal/fight.cpp
+    normal/normal_bot.cpp
+    normal/shooting.cpp
+    normal/value.cpp
     simulator.cpp
     state_hash.cpp)
 

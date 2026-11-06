@@ -23,6 +23,8 @@ struct GameRecord {
     std::optional<core::Side> winner;   // nullopt: a draw (or unfinished)
     int end_round = 0;
     std::array<int, 2> surviving_models{};  // indexed by side_index
+    std::array<int, 2> wounds_lost{};       // M41: wounds each side's models lost (destroyed models count all theirs)
+    std::array<int, 2> coherency_removed{};  // M41: models each side removed to regain coherency (03.03)
     std::size_t steps = 0;                  // accepted actions, the client's automatic ones included
     std::size_t rejected = 0;               // bot actions the session refused
     std::size_t reverted = 0;               // UnitMoveReverted events
@@ -32,9 +34,11 @@ struct GameRecord {
 
 // One game from `scenario` (not started) with the dice `seed`, side A played by `a` and side B by `b`. Stops at
 // the game's end, at the first rejected action, when a bot stops, or after `step_cap` actions (unfinished).
-// `decision_ms`, if given, gets each bot decision's time in milliseconds.
+// `decision_ms`, if given, gets each bot decision's time in milliseconds; `trace`, if given, a line per bot
+// decision ("R1 A Shoot: <reason>").
 [[nodiscard]] GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
-                                       std::size_t step_cap = 5000, std::vector<double>* decision_ms = nullptr);
+                                       std::size_t step_cap = 5000, std::vector<double>* decision_ms = nullptr,
+                                       std::vector<std::string>* trace = nullptr);
 
 struct ArenaResult {
     std::vector<GameRecord> games;
@@ -45,6 +49,9 @@ struct ArenaResult {
     std::size_t reverted = 0;
     double mean_end_round = 0.0;
     std::array<double, 2> mean_surviving{};
+    std::array<double, 2> mean_wounds_lost{};  // M41: by side; side A's is the damage side B dealt
+    std::array<int, 2> coherency_removed{};     // M41: total models removed for coherency, by side
+    std::size_t fallbacks = 0;
     double p50_ms = 0.0;
     double p95_ms = 0.0;
     [[nodiscard]] bool clean() const noexcept { return rejected == 0 && reverted == 0 && unfinished == 0; }
@@ -54,8 +61,8 @@ struct ArenaResult {
 [[nodiscard]] ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a,
                                     BotConfig b, std::size_t step_cap = 5000);
 
-// The arena's report: win / draw / loss counts, mean end round, mean surviving models, rejected actions,
-// UnitMoveReverted count and p50 / p95 decision time.
+// The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
+// side, rejected actions, UnitMoveReverted count, fallbacks and p50 / p95 decision time.
 [[nodiscard]] std::string format_arena(const ArenaResult& r, const core::GameState& scenario);
 
 }  // namespace wh40k::ai

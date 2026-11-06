@@ -716,7 +716,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M41: Shooting, defensive and fight decisions (level Normal)
+## M41: Shooting, defensive and fight decisions (level Normal) ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-06)
 
 > Every decision except movement and charging now uses the M40 analysis. Movement and charges stay on the baseline
@@ -749,6 +749,41 @@ Every earlier level stays selectable as a regression opponent.
   - a pointless consolidation is skipped.
 - Arena: 20 seeds per seat in ctest, 200 in the Release arena (recorded here). Normal does better than Easy in both
   seats, with zero rejections and zero reverts.
+
+**"Better" (defined before the arena runs; compared with Easy vs Easy on the same seeds 1–200):**
+- As Space Marines (Normal A vs Easy B): no fewer A wins, and an earlier mean end round or more mean A surviving
+  models.
+- As Tyranids (Easy A vs Normal B): more mean wounds dealt to the Marines (A's mean wounds lost), a later mean end
+  round or more mean B surviving models; and no fewer B wins + draws.
+- In both seats: zero rejected actions, `UnitMoveReverted`, fallbacks, and no more models removed for coherency
+  than Easy. (The arena now also prints mean wounds lost per side, models removed for coherency and fallbacks, and
+  `--trace <seed>` prints one game's bot decisions with their reasons.)
+
+**Results (2026-11-06):**
+- Release arena, V1 skirmish, seeds 1–200:
+
+  | Run | A wins | B wins | Draws | Mean end round | Mean survivors A / B | Mean wounds lost A / B | Coherency removals | p95 decision |
+  |---|---|---|---|---|---|---|---|---|
+  | `--a easy --b easy` | 200 | 0 | 0 | 1.94 | 4.92 / 0.00 | 0.44 / 10.00 | 0 / 0 | 0.118 ms |
+  | `--a normal --b easy` | 200 | 0 | 0 | 1.92 | 4.91 / 0.00 | 0.47 / 10.00 | 0 / 0 | 0.339 ms |
+  | `--a easy --b normal` | 200 | 0 | 0 | 1.94 | 4.92 / 0.00 | 0.44 / 10.00 | 0 / 0 | 0.393 ms |
+  | `--a normal --b normal` | 200 | 0 | 0 | 1.92 | 4.91 / 0.00 | 0.47 / 10.00 | 0 / 0 | 0.345 ms |
+
+  Every run: 0 rejected actions, 0 `UnitMoveReverted`, 0 fallbacks, 0 unfinished.
+- **As Space Marines: met.** Same wins (200), earlier mean end round (1.92 vs 1.94; over seeds 1–1000, 1.89 vs
+  1.91). Normal's Intercessors pile in and consolidate into more Termagants, so they also take slightly more wounds
+  back (0.47 vs 0.44) and keep 0.01 fewer models on average.
+- **As Tyranids: not met (open item, for M42/M43).** Normal's Termagants play exactly as well as Easy's: identical
+  to two decimals over seeds 1–200 and 1–1000 (A wounds lost 0.36 vs 0.36, mean end round 1.91 vs 1.91 over 1000).
+  Their outcome is decided by the decisions M41 leaves to the baseline: Easy's movement walks them 2" at a time into
+  Rapid Fire range and its charge rule throws them into combat. Of the decisions M41 owns, the Termagants' only gun
+  is the Fleshborer, their default casualty order is already front rank first, and they lose the melee exchange, so
+  they end pile-ins and consolidations as Easy does; the few fights they still win something in (a pile-in that adds
+  Termagant attackers, keeping engaged models while they still fight) don't move the numbers. No coherency losses
+  occur in either level's games (one did, in a Normal game, before the casualty order chose the whole set of models
+  to lose instead of one pick at a time; fixed).
+- ctest: `M41_Arena` plays 20 seeds per seat and asserts only the robust direction (no fewer wins or wins + draws
+  than Easy, no more coherency removals, every game clean). The M41 tests add about 11 s in Debug.
 
 ---
 

@@ -1219,6 +1219,75 @@ change.
     InRange (at its longest range), OutOfRange (nothing). Each unengaged band has stationary, moved and advanced
     shooting. Intercessors -> Termagants: engaged 6.26 (pistols 1.85, melee 4.44), half range 5.79 (moved 5.55), 24"
     3.70 (Saturation). Termagants -> Intercessors: engaged 0.28, in range 0.42 (0.83 wounds).
+- **M41 notes (level Normal: shooting, defense, fight; `src/ai/normal/`, namespace `wh40k::ai::normal`):**
+  - **Levels:** `effective_level(Normal) = Normal`, `effective_level(Hard) = Normal` until M44. `normal_policy`
+    answers Shoot, SelectAttackBatch, DeclareAllocationOrder, OrderCasualties, RestoreCoherency, SelectUnitToFight,
+    ForcedFight, DeclareMeleeAttacks, PileIn, OverrunPileIn, Consolidate and the MoveModels of its own pile-ins and
+    consolidations. **Everything else is the baseline's (`easy_policy`)**: MoveUnits and the moves it starts, Charge
+    (declare or end), SelectChargeTargets and charge moves. That dispatch (`normal_answer` in `normal_bot.cpp`) is
+    the hook M42 (charges) and M43 (movement) replace. A decision Normal has no answer for also goes to the baseline.
+  - **Value currency:** a share of the target unit's starting strength (`unit_share` = model equivalents / starting
+    strength). It adds up across volleys and makes the two sides' losses comparable (1 of 5 Intercessors = 0.2, 1 of
+    10 Termagants = 0.1); V1 is won by wiping the enemy out (D-007), so progress towards that is the measure.
+  - **Shooting:** for each offered Shoot (unit, type), each model's loadouts from `shot_options` (one profile and
+    target per weapon, D-016; within one 24.07 weapon set; at most 64 per model), its best one valued alone, then
+    coordinate descent (3 passes, one model at a time) on the whole declaration's value, each target's batches in
+    their best order. **Overkill rule:** nothing extra is typed: the exact outcome (M40) loses excess damage and
+    attacks after a wipe, so a model moves its shots off a unit likely to be destroyed when another target is worth
+    more; with one target unit it is just the best profile mix. The unit and type with the most value shoots; the
+    step ends when no offered Shoot is worth more than 0. Focused Fire vs Saturation comes out of the numbers: within
+    12" and stationary Focused Fire (1.157 per Intercessor), otherwise Saturation (1.111 after moving over 3"; beyond
+    12" 0.741 vs 0.579).
+  - **Batch order (04.03):** for each offered batch, the best order of its target's remaining batches starting with
+    it (every permutation up to 6 batches, else by damage per attack); the batch with the most value goes first,
+    ties keep the engine's order. So D2 goes before D1 against W2 models (the D1 attacks then finish wounded models),
+    and against W1 models the order is left alone.
+  - **Casualty heuristics (05.04, 06.02):** first the number of models the batch destroys (from `preview_casualties`
+    with the first legal pick each time); then which models to lose: wounded ones first (the engine forces them),
+    then greedily the one whose removal leaves the fewest coherency losses, then the lowest score; then swaps while
+    one leaves fewer coherency losses (03.03). Picking one model at a time was myopic: in one Release game it
+    isolated a Termagant the End of Turn step then removed; choosing the whole set fixed it. The picks then go
+    through the preview step by step (a chosen model while one is a legal choice, else the legal choice with the
+    lowest score), so the answer is always legal. **Score** (lower goes first): 10 per coherency loss
+    (`coherency_losses`: greedy, each time the model whose removal leaves the fewest coherency problems), plus the
+    position term by **stance**, plus 2 × (worth / mean worth - 1) (`model_worth`: the model's best ranged weapons at
+    0" plus its best melee weapon against the closest enemy, so a special weapon is kept), plus 0.05 × the fraction
+    of wounds left. Stances: unengaged and the enemy gains more from a combat than we do (`melee_share` both ways)
+    -> AvoidContact, the models closest to it first (its charge gets longer; position weight 1 while it may charge
+    after a move, 0.3 otherwise); unengaged and we gain more -> SeekContact, the furthest first; engaged and still to
+    fight this phase -> HoldCombat (keep the engaged models, they fight back); engaged, already fought and losing ->
+    BreakCombat (the engaged models first); falling back (Desperate Escape hazards, 09.07) -> BreakCombat (the
+    engaged models are the ones that must get away). Allocation order (05.03, never more than one legal order in
+    V1): the groups from the lowest worth per wound first.
+  - **RestoreCoherency (03.03):** each model's cost is 1 + the coherency losses left after removing it; the lowest
+    cost, then the lowest score as above.
+  - **Fight:** the measure is the **melee exchange**: `plan_melee` values (each model's weapon, profile and targets,
+    attacks split between two engaged units when that is worth more, by coordinate descent on the exact outcome) of
+    our units that will still fight this phase, minus those of the enemy units that will still fight and are engaged
+    with ours. **Pile-ins (12.02):** each offered pile-in that `fight_move_worthwhile` keeps is simulated in full
+    (`auto_fight_move`, then `move_end_problems` and the commit, no revert) and made only if it raises the exchange;
+    otherwise EndPileIns. The Termagants pile in only to add attackers against Intercessors already engaged; the
+    Intercessors pile in to bring more of theirs in. **Selecting a unit to fight (12.04, 12.08 ForcedFight):** each
+    offered unit and type is simulated to its attacks; an Overrun's additional pile-in (12.06) is planned as above,
+    and the enemy units it newly engages (they fight back, "OVERRUN FIGHTS" sidebar) count against it: the score is
+    our fight's value minus the enemy's new attacks. **PassFight** (Appendix) only when it is offered and no unit
+    could make an attack. **OverrunPileIn:** the pile-in only if it beats skipping by the same score.
+  - **Consolidation weighing (12.07, 12.08):** each offered consolidation is simulated; the position score after it
+    is, for each of our units, engaged: our next fight (`plan_melee`) and close-quarters shooting minus the engaged
+    enemy's; unengaged: our shooting at the gap minus theirs ([HEAVY] applying both ways); minus, for every enemy
+    unit an Engaging Consolidation forces to fight now (`flow.forced_fights`), its attacks on us (a free fight that
+    hasn't happened yet, so it is counted on top of the next one). It is made only if it beats not moving; so a
+    consolidation that changes nothing, or engages more enemy attackers than ours, is skipped.
+  - **Plans and determinism:** a pile-in or consolidation is one plan (start, the `auto_fight_move` placements,
+    commit) memoized as usual. From a mid-move state (a fresh bot, a load, an undo) `continue_fight_move` replans
+    from a copy with the models back at the move's starts and no paths (the state just after the start) and
+    continues if the moves so far are the plan's; otherwise it commits a move that stands or resets. Tested: a fresh
+    Normal bot gives the played answer at every decision of 4 Normal-vs-Normal games, also with only the dice changed.
+  - **Arena metrics:** "better" for M41 is defined in PLAN.md (M41). The arena gained mean wounds lost per side (the
+    wounds every model lost, destroyed models counting all of theirs), models removed for coherency per side,
+    fallbacks, and `--trace <seed>` (one game's bot decisions with their reasons). Results are in PLAN.md: as Space
+    Marines Normal ends games earlier (1.92 vs 1.94); as Tyranids it plays exactly as Easy (open item: their result
+    is decided by the baseline movement and charges, M42/M43).
 
 ## D-055: Start screen and saved settings (M38)
 **Decided:** 2026-11-06 (M38, pre-approved batch). Client only; no rule, state or replay change.

@@ -300,13 +300,14 @@ TEST(M39_LoopGuard, TheBotStopsWithReasonsWhenItHasNoDecision) {
     EXPECT_FALSE(fb.problems.empty());
 }
 
-TEST(M39_Levels, NormalAndHardPlayAsEasyUntilTheyAreBuilt) {
+TEST(M39_Levels, HardPlaysAsNormalUntilItIsBuilt) {
+    // M39 mapped Normal and Hard to Easy; since M41 Normal is its own level and Hard plays as Normal (M44).
     EXPECT_EQ(effective_level(BotLevel::Easy), BotLevel::Easy);
-    EXPECT_EQ(effective_level(BotLevel::Normal), BotLevel::Easy);
-    EXPECT_EQ(effective_level(BotLevel::Hard), BotLevel::Easy);
+    EXPECT_EQ(effective_level(BotLevel::Normal), BotLevel::Normal);
+    EXPECT_EQ(effective_level(BotLevel::Hard), BotLevel::Normal);
     const client::GameSession s(wh40k::test::load_v1_scenario());
     EXPECT_EQ(Bot(BotConfig{BotLevel::Hard}).decide(s.state(), s.deciding_side()).action,
-              Bot(easy()).decide(s.state(), s.deciding_side()).action);
+              Bot(BotConfig{BotLevel::Normal}).decide(s.state(), s.deciding_side()).action);
 }
 
 // ==== Driver: pacing, pop-ups, stale results ====

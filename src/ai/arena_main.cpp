@@ -1,11 +1,12 @@
 // wh40k_bot_arena (M39, D-054): bot vs bot games, headless. Run it in Release for strength numbers.
 //
 // Usage: wh40k_bot_arena [--games N] [--a easy|normal|hard] [--b easy|normal|hard] [--scenario <file>]
-//                        [--seed <first>] [--step-cap N]
+//                        [--seed <first>] [--step-cap N] [--trace <seed>]
 //   Plays N games (default 200) with seeds first, first + 1, ... (default 1); side A is played at level --a,
 //   side B at --b (default easy). The scenario is relative to the repo root (default
 //   data/scenarios/v1_skirmish.json). Exits 1 if any action was rejected, any move was reverted, or a game
-//   didn't finish within the step cap (default 5000); 2 for a bad flag.
+//   didn't finish within the step cap (default 5000); 2 for a bad flag. --trace plays the one game with that
+//   seed and prints every bot decision and its reason instead.
 
 #include <cstdio>
 #include <exception>
@@ -13,6 +14,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "arena.hpp"
 #include "core/data/scenario_loader.hpp"
@@ -48,6 +50,7 @@ int main(int argc, char** argv) {
     std::string scenario = "data/scenarios/v1_skirmish.json";
     std::uint64_t seed = 1;
     std::size_t step_cap = 5000;
+    std::optional<std::uint64_t> trace;
     for (int i = 1; i < argc; i += 2) {
         const std::string key = argv[i];
         if (i + 1 >= argc) {
@@ -67,6 +70,8 @@ int main(int argc, char** argv) {
                 scenario = value;
             } else if (key == "--seed") {
                 seed = std::stoull(value);
+            } else if (key == "--trace") {
+                trace = std::stoull(value);
             } else if (key == "--step-cap") {
                 step_cap = static_cast<std::size_t>(std::stoul(value));
             } else {
@@ -82,6 +87,17 @@ int main(int argc, char** argv) {
         fs::path file(scenario);
         if (!fs::exists(file)) file = root / scenario;
         const wh40k::core::GameState initial = wh40k::core::load_scenario(file, root);
+        if (trace) {
+            std::vector<std::string> lines;
+            const wh40k::ai::GameRecord g =
+                wh40k::ai::play_bot_game(initial, *trace, a, b, step_cap, nullptr, &lines);
+            for (const std::string& l : lines) std::printf("%s\n", l.c_str());
+            std::printf("finished %d, winner %s, round %d, surviving A %d B %d, wounds lost A %d B %d\n",
+                        g.finished ? 1 : 0, g.winner ? (*g.winner == wh40k::core::Side::A ? "A" : "B") : "none",
+                        g.end_round, g.surviving_models[0], g.surviving_models[1], g.wounds_lost[0], g.wounds_lost[1]);
+            for (const std::string& p : g.problems) std::printf("problem: %s\n", p.c_str());
+            return 0;
+        }
         std::printf("arena: %d games, A %s vs B %s, %s, seeds %llu..%llu\n", games, level_name(a.level),
                     level_name(b.level), scenario.c_str(), static_cast<unsigned long long>(seed),
                     static_cast<unsigned long long>(seed + static_cast<std::uint64_t>(games > 0 ? games - 1 : 0)));

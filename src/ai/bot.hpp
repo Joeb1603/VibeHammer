@@ -53,7 +53,7 @@ struct PolicyResult {
     std::vector<PlannedStep> rest;
 };
 
-// The level actually played: Normal (M41-M43) and Hard (M44) aren't built yet, so they play as Easy.
+// The level actually played: Hard (M44) isn't built yet, so it plays as Normal (M41; M42-M43 extend it).
 [[nodiscard]] BotLevel effective_level(BotLevel requested);
 
 // The seed of the bot's own dice and choices for this state: a function of state_hash only (D-054).
