@@ -1,5 +1,5 @@
 // M31: pile-ins and consolidations too small to matter are skipped under "Skip steps with nothing to do"
-// (D-047, extending D-036): 12.02, 12.03, 12.07, 12.08.
+// (D-047, extending D-036): 12.02, 12.03, 12.07, 12.08. M32: near base contact counts for skipping (D-048).
 
 #include <gtest/gtest.h>
 
@@ -104,6 +104,44 @@ TEST(M31_FightMoveSkip, ASmallMoveThatCouldReachANewEnemyUnitIsNotSkipped) {
     EXPECT_TRUE(fight_move_worthwhile(gs, Side::A, start));  // D-047: new contact always counts
     EXPECT_FALSE(side_a_skip(gs).has_value());
     EXPECT_NE(other, gs.units[kGants].id);
+}
+
+namespace {
+
+// One Intercessor `gap_mm` from a Termagant to its west, and a second Termagant of the same unit 0.5" to
+// its east: it could pile in about 12 mm east (ending closer to the Termagants than it is now).
+GameState near_contact_pile_in(float gap_mm) {
+    GameState gs = wh40k::test::after_successful_charge();
+    gs.units[kMarines].models.resize(1);
+    gs.units[kGants].models.resize(2);
+    Model& marine = gs.units[kMarines].models[0];
+    marine.position = Position{gs.battlefield.width_mm / 2, gs.battlefield.depth_mm / 2, 0.0f};
+    const float touching = base_radius(marine.base) + base_radius(gs.units[kGants].models[0].base);
+    gs.units[kGants].models[0].position = Position{marine.position.x - touching - gap_mm, marine.position.y, 0.0f};
+    gs.units[kGants].models[1].position = Position{marine.position.x + touching + in(0.5f), marine.position.y, 0.0f};
+    apply_action(gs, Side::A, action::EndChargeStep{});
+    EXPECT_EQ(*gs.pending, (PendingDecision{Side::A, decision::PileIn{}}));
+    return gs;
+}
+
+}  // namespace
+
+TEST(M32_FightMoveSkip, AModelWithin005InchOfAnEnemyCountsAsInBaseContactForSkipping) {
+    const GameState gs = near_contact_pile_in(1.0f);
+    // D-048: the engine still lets it pile in closer...
+    const auto reach_gs = preview_fight_move(gs, Side::A, action::StartPileIn{gs.units[kMarines].id,
+                                                                              {gs.units[kGants].id}});
+    ASSERT_TRUE(reach_gs.has_value());
+    const auto reach = move_reach(*reach_gs, gs.units[kMarines].models[0].id);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_FALSE(reach->immobile);
+    // ...but the step is skipped as if it were in base contact.
+    EXPECT_EQ(side_a_skip(gs), GameAction{action::EndPileIns{}});
+}
+
+TEST(M32_FightMoveSkip, AModelMoreThan005InchFromAnEnemyIsNotSkipped) {
+    const GameState gs = near_contact_pile_in(1.5f);
+    EXPECT_FALSE(side_a_skip(gs).has_value());
 }
 
 TEST(M31_FightMoveSkip, AnOngoingConsolidationWithNoRoomIsSkipped) {

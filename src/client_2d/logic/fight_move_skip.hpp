@@ -8,12 +8,19 @@
 #include <vector>
 
 #include "core/engine/actions.hpp"
+#include "core/geometry/units.hpp"
 #include "core/state/game_state.hpp"
 
 namespace wh40k::client {
 
 // D-047: a move is worth making if some model can end more than this far from where it started.
 inline constexpr float kWorthwhileMoveMm = 2.0f;
+
+// D-048 (house rule, client only): for skipping, a model whose base is this close to an enemy model is
+// treated as in base contact in a pile-in (12.03) or an Ongoing Consolidation (12.08), so as not moving.
+// A mouse drag can't reach exact contact the way models are pushed together on a table. The engine still
+// lets such a model move closer.
+inline constexpr float kNearBaseContactMm = 0.05f * core::MM_PER_INCH;
 
 // D-047: whether the pile-in (12.03) or consolidation (12.08) `start` could do anything worth doing: some
 // model of the unit can end more than kWorthwhileMoveMm from its start, or could reach the engagement

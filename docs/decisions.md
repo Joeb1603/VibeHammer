@@ -360,7 +360,8 @@ of the charge for that reason.
   charges).
 - **Base contact.** A model is in base contact with an enemy model if it is within `EPS_MM` of it at the
   start of the move. Such a model cannot be moved in a pile-in move or an Ongoing Consolidation.
-  **Extended by D-048 (M32):** the tolerance is now 0.05" (house rule).
+  (D-048: the client's step skipping treats 0.05" as base contact; the rules don't.) **Open question
+  (D-048):** "closer to the closest unit" lets a model slide round to a different enemy model; review later.
 - **If possible.** "And engaged with it if possible" is left to the player in V1 (`TODO(if-possible)`).
 - **Reverted moves.** A pile-in or consolidation move that fails its end conditions (03.01), or is
   reset, returns the models and goes back to the same decision: the Pile In step, the Consolidate step,
@@ -884,20 +885,29 @@ replay-format change.
 - **Not tested end to end:** the overrun pile-in case (12.06) uses the same check but has no logic test of
   its own.
 
-## D-048: Base contact within 0.05" (M32) — house rule, review later
-**Decided:** 2026-11-06, chosen by the user. **This is not rules text: review it** (e.g. if the client ever
-snaps dragged models into base contact, this leeway may no longer be needed).
-- **The rules:** base contact means the bases touch. Until M32 the engine used `dist <= EPS_MM` (0.01 mm).
-- **The change:** two models whose bases are **0.05" (1.27 mm) or less** apart are in base contact
-  (`kBaseContactToleranceMm`, `in_base_contact` in `geometry/distance.hpp`).
-- **Why:** on a table you push models into tactile base contact. Dragging with a mouse can't be that exact,
-  so a model dropped "touching" often ends a fraction of a millimetre short. Seen in play: a Termagant
-  about 1.2 mm from an Intercessor made an Ongoing Consolidation 0.57" sideways that ended only ~0.7 mm
-  closer. Under the strict reading that was legal; with this leeway the model is in base contact and can't move.
-- **Effects:** 12.03 pile-in and 12.08 Ongoing Consolidation: such a model cannot be moved (validation and
-  the `move_reach` shaded area, so D-047's skip follows too). Any later rule that asks "in base contact"
-  inherits the leeway.
-- **Unchanged:** bases still can't overlap (`bases_overlap`, path blocking keep `EPS_MM`); a model further
-  than 0.05" away can still move, up to its full distance; engagement range, coherency and all
-  "within"/"more than" checks keep `EPS_MM`.
-- **Extends D-022** (its "Base contact" bullet).
+## D-048: Near base contact counts for step skipping only (M32) — house rule, review later
+**Decided:** 2026-11-06, chosen by the user. **Not rules text: review it** (e.g. if the client ever snaps
+dragged models into base contact, the leeway may no longer be needed).
+- **The rules engine is unchanged:** base contact is `dist <= EPS_MM` (01.04, D-022). A model a fraction
+  of a millimetre from an enemy may still pile in (12.03) or make an Ongoing Consolidation (12.08), as long
+  as it ends closer. Skipping is a convenience, so playing with "Skip steps with nothing to do" off keeps the
+  literal rules.
+- **The leeway (client only):** for "Skip steps with nothing to do" (D-036, D-047), in a pile-in or an
+  Ongoing Consolidation a model whose base is **0.05" (1.27 mm) or less** from an enemy model is treated as
+  in base contact, so as not moving (`kNearBaseContactMm`, `fight_move_skip`). If every model of every
+  offered move is like that, or otherwise can't move more than 2 mm, the step is skipped.
+- **Why:** on a table you push models into tactile base contact. A mouse drag can't be that exact, so a model
+  dropped "touching" often ends a fraction of a millimetre short, and the step was then offered for
+  pointless moves. Seen in play: a Termagant about 1.2 mm from an Intercessor made an Ongoing Consolidation
+  0.57" sideways that ended only ~0.7 mm closer.
+- **History:** M32 first put the leeway in the engine's `in_base_contact`; the user then limited it to
+  skipping the same day (commit c92bc57 was replaced).
+- **Extends D-047.**
+- **Open question, not changed (user, 2026-11-06), look at later:** "closer to the closest pile-in target /
+  selected enemy unit" is measured to the nearest model of that *unit* (D-022). So a model almost touching
+  one Termagant may slide round, away from it, into contact with a different Termagant of the same unit: its
+  gap to the unit shrinks, so the move is legal. Seen in play (pile-in): the end Intercessor of a line,
+  ~1.3 mm below one Termagant, could swing down and left round the Termagant beside it. In person you'd
+  usually leave that model where it is. The rule text allows it; whether to restrict it (e.g. "closer to
+  the model it was closest to") needs a decision.
+

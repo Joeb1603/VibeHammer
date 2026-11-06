@@ -30,9 +30,9 @@ namespace wh40k::core {
     return distance_mm > limit_mm + EPS_MM;
 }
 
-// Base contact: dist <= 0.05" (D-048: leeway for mouse placement; a house rule, not rules text).
+// Base contact: dist <= EPS_MM. (D-048: the client's step skipping uses a looser 0.05"; rules don't.)
 [[nodiscard]] constexpr bool in_base_contact(float distance_mm) noexcept {
-    return distance_mm <= kBaseContactToleranceMm;
+    return distance_mm <= EPS_MM;
 }
 
 // Two bases overlap (one model is "on" another, 03.01 Ending a Move) when they intersect by more

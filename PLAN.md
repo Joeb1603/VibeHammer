@@ -458,14 +458,14 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M32: Base contact within 0.05" ✅ (done)
+## M32: Near base contact counts for step skipping ✅ (done)
 **Effort:** `low` · **Plan mode:** yes (agreed 2026-11-06)
 
-> House rule (D-048, to review later): bases up to 0.05" apart count as in base contact, because a mouse drag can't reach the exact contact you get by pushing models together on a table. A model that close to an enemy can't be moved in a pile-in (12.03) or an Ongoing Consolidation (12.08). Overlap, engagement, coherency and other distance checks are unchanged.
+> House rule (D-048, to review later), client only: for "Skip steps with nothing to do", a model within 0.05" of an enemy model in a pile-in (12.03) or Ongoing Consolidation (12.08) counts as in base contact, so as not moving, because a mouse drag can't reach the exact contact you get by pushing models together on a table. The engine keeps exact base contact, so with skipping off such a model may still move closer. D-048 also records an open question for later: "closer to the closest unit" lets a model slide round to a different enemy model.
 
 **Acceptance**
-- `in_base_contact`: 0, 1.2 mm and 0.05" are contact; 1.3 mm is not (core test).
-- A model 0.04" from an enemy can't pile in or make an Ongoing Consolidation, and `move_reach` marks it immobile; at 0.06" it can move closer (core tests).
+- The engine: a model 0.04" from an enemy can still pile in or make an Ongoing Consolidation closer, and `move_reach` doesn't mark it immobile (core tests).
+- A pile-in whose only movable model is 1 mm from an enemy is skipped; at 1.5 mm it isn't (logic tests).
 - Existing tests and replays pass unchanged.
 
 ---

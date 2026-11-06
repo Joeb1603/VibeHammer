@@ -501,7 +501,7 @@ TEST(R12_08_ConsolidationMove, AnEngagedUnitMustMakeAnOngoingConsolidation) {
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::B, decision::Consolidate{}}));
 }
 
-// ---- D-048: bases up to 0.05" apart are in base contact (house rule) ----
+// ---- D-048: the engine keeps exact base contact; only the client's step skipping is looser ----
 
 namespace {
 
@@ -534,53 +534,32 @@ std::pair<GameState, ModelId> ongoing_consolidation_with_gap(float gap_in) {
 
 }  // namespace
 
-TEST(D048_BaseContact, BasesUpTo005InchApartAreInContact) {
+TEST(D048_BaseContact, OnlyTouchingBasesAreInContactInTheEngine) {
     EXPECT_TRUE(in_base_contact(0.0f));
-    EXPECT_TRUE(in_base_contact(1.2f));
-    EXPECT_TRUE(in_base_contact(in(0.05f)));
-    EXPECT_FALSE(in_base_contact(1.3f));
+    EXPECT_TRUE(in_base_contact(EPS_MM));
+    EXPECT_FALSE(in_base_contact(0.1f));
 }
 
-TEST(D048_BaseContact, AModel004InchFromAnEnemyCannotPileIn) {
+TEST(D048_BaseContact, AModel004InchFromAnEnemyCanStillPileInCloser) {
     GameState gs = after_successful_charge();
     const ModelId centre = put_centre_marine_near_a_gant(gs, 0.04f);
     act(gs, action::EndChargeStep{});
     act(gs, action::StartPileIn{id_of(gs, kMarines), {id_of(gs, kGants)}});
     const Position c = find_model(gs, centre)->position;
-    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.02f), 0}}}).at(0),
-              "12.03: model 3 is in base contact with an enemy model and cannot be moved");
-    const auto reach = move_reach(gs, centre);
-    ASSERT_TRUE(reach.has_value());
-    EXPECT_TRUE(reach->immobile);
-}
-
-TEST(D048_BaseContact, AModel006InchFromAnEnemyCanStillPileInCloser) {
-    GameState gs = after_successful_charge();
-    const ModelId centre = put_centre_marine_near_a_gant(gs, 0.06f);
-    act(gs, action::EndChargeStep{});
-    act(gs, action::StartPileIn{id_of(gs, kMarines), {id_of(gs, kGants)}});
-    const Position c = find_model(gs, centre)->position;
-    expect_valid(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.03f), 0}}});
+    expect_valid(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.02f), 0}}});
     const auto reach = move_reach(gs, centre);
     ASSERT_TRUE(reach.has_value());
     EXPECT_FALSE(reach->immobile);
 }
 
-TEST(D048_BaseContact, AModel004InchFromAnEnemyCannotMoveInAnOngoingConsolidation) {
+TEST(D048_BaseContact, AModel004InchFromAnEnemyCanStillConsolidateCloser) {
     auto [gs, centre] = ongoing_consolidation_with_gap(0.04f);
     ASSERT_EQ(gs.flow.move->consolidation_mode, ConsolidationMode::Ongoing);
     const Position c = find_model(gs, centre)->position;
-    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.02f), 0}}}).at(0),
-              "12.08: model 3 is in base contact with an enemy model and cannot be moved");
+    expect_valid(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.02f), 0}}});
     const auto reach = move_reach(gs, centre);
     ASSERT_TRUE(reach.has_value());
-    EXPECT_TRUE(reach->immobile);
-}
-
-TEST(D048_BaseContact, AModel006InchFromAnEnemyCanStillConsolidateCloser) {
-    auto [gs, centre] = ongoing_consolidation_with_gap(0.06f);
-    const Position c = find_model(gs, centre)->position;
-    expect_valid(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.03f), 0}}});
+    EXPECT_FALSE(reach->immobile);
 }
 
 TEST(R12_08_ConsolidationMove, EngagingConsolidationForcesAnEnemyThatHasNotFoughtToFight) {

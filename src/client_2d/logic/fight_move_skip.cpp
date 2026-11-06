@@ -60,6 +60,25 @@ bool could_make_new_contact(const core::GameState& state, const core::Unit& unit
     return false;
 }
 
+// D-048: in a pile-in or an Ongoing Consolidation, the model is within kNearBaseContactMm of an enemy
+// model, so for skipping it counts as in base contact (it "cannot be moved").
+bool nearly_in_base_contact(const core::GameState& state, const core::Unit& unit, const core::Model& model,
+                            const core::Position& start) {
+    if (!state.flow.move) return false;
+    const auto& mv = *state.flow.move;
+    const bool pile_in = mv.type == core::MoveType::PileIn;
+    const bool ongoing = mv.type == core::MoveType::Consolidation &&
+                         mv.consolidation_mode == core::ConsolidationMode::Ongoing;
+    if (!pile_in && !ongoing) return false;
+    for (const core::Unit& other : state.units) {
+        if (other.side == unit.side || core::is_destroyed(other)) continue;
+        for (const core::Model& o : other.models) {
+            if (core::base_distance(start, model.base, o.position, o.base) <= kNearBaseContactMm) return true;
+        }
+    }
+    return false;
+}
+
 bool skips_fight_moves(const core::GameAction& a) {
     using namespace core::action;
     return std::holds_alternative<EndPileIns>(a) || std::holds_alternative<EndConsolidations>(a) ||
@@ -78,6 +97,7 @@ bool fight_move_worthwhile(const core::GameState& state, core::Side side, const 
     for (const core::Model& m : unit->models) {
         const std::optional<core::MoveReach> reach = core::move_reach(*preview, m.id);
         if (!reach) continue;  // not moving (e.g. destroyed)
+        if (nearly_in_base_contact(*preview, *unit, m, reach->start)) continue;  // D-048
         if (can_move_far_enough(*reach) || could_make_new_contact(*preview, *unit, m, *reach)) return true;
     }
     return false;
