@@ -1,0 +1,176 @@
+#include "state_hash.hpp"
+
+#include <cstring>
+#include <optional>
+#include <variant>
+
+namespace wh40k::ai {
+
+void Fnv1a::bytes(const void* data, std::size_t size) noexcept {
+    const auto* p = static_cast<const unsigned char*>(data);
+    for (std::size_t i = 0; i < size; ++i) {
+        h_ ^= p[i];
+        h_ *= 1099511628211ull;
+    }
+}
+
+void Fnv1a::f32(float v) noexcept {
+    if (v == 0.0f) v = 0.0f;  // -0 -> +0
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &v, sizeof bits);
+    bytes(&bits, sizeof bits);
+}
+
+namespace {
+
+void add(Fnv1a& h, const core::Position& p) {
+    h.f32(p.x);
+    h.f32(p.y);
+    h.f32(p.z);
+}
+
+void add(Fnv1a& h, core::UnitId id) { h.u64(id.v); }
+void add(Fnv1a& h, core::ModelId id) { h.u64(id.v); }
+
+template <typename T>
+void add_opt_int(Fnv1a& h, const std::optional<T>& v) {
+    h.flag(v.has_value());
+    if (v) h.i32(static_cast<int>(*v));
+}
+
+void add(Fnv1a& h, const core::Unit& u) {
+    add(h, u.id);
+    h.u64(static_cast<std::uint64_t>(u.side));
+    h.flag(u.battle_shocked);
+    h.i32(u.starting_strength);
+    const core::UnitTurnFlags& t = u.turn_flags;
+    for (const bool b : {t.advanced, t.fell_back, t.moved_over_3in, t.made_charge_move, t.fights_first}) h.flag(b);
+    const core::UnitPhaseFlags& p = u.phase_flags;
+    for (const bool b : {p.selected_to_move, p.desperate_escape_hazards_made, p.selected_to_shoot, p.declared_charge,
+                         p.piled_in, p.engaged_at_fight_step_start, p.selected_to_fight,
+                         p.eligible_to_fight_this_phase, p.selected_for_overrun, p.forced_to_fight, p.consolidated}) {
+        h.flag(b);
+    }
+    add_opt_int(h, p.advance_roll);
+    add_opt_int(h, p.charge_roll);
+    h.u64(u.models.size());
+    for (const core::Model& m : u.models) {
+        add(h, m.id);
+        add(h, m.position);
+        h.i32(m.wounds_remaining);
+    }
+}
+
+void add(Fnv1a& h, const core::FlowState& f) {
+    h.u64(static_cast<std::uint64_t>(f.stage));
+    h.i32(f.battle_round);
+    h.i32(f.turn_in_round);
+    h.flag(f.activation.has_value());
+    if (f.activation) {
+        add(h, f.activation->unit);
+        h.u64(static_cast<std::uint64_t>(f.activation->kind));
+    }
+    h.flag(f.attack.has_value());
+    if (f.attack) {
+        const core::AttackFlow& a = *f.attack;
+        add(h, a.attacker);
+        h.u64(a.batches.size());
+        for (const core::AttackBatch& b : a.batches) {
+            add(h, b.target);
+            h.i32(b.attack_dice);
+        }
+        for (const bool d : a.batch_done) h.flag(d);
+        h.flag(a.current_target.has_value());
+        if (a.current_target) add(h, *a.current_target);
+        h.flag(a.current.has_value());
+        if (a.current) {
+            h.u64(a.current->batch);
+            h.i32(a.current->wounds);
+            h.u64(a.current->groups.size());
+            h.flag(a.current->order.has_value());
+            if (a.current->order) {
+                for (const std::size_t i : *a.current->order) h.u64(i);
+            }
+            h.flag(a.current->save_rolls.has_value());
+            if (a.current->save_rolls) {
+                for (const int r : *a.current->save_rolls) h.i32(r);
+            }
+        }
+    }
+    h.flag(f.move.has_value());
+    if (f.move) {
+        const core::MoveInProgress& m = *f.move;
+        add(h, m.unit);
+        h.u64(static_cast<std::uint64_t>(m.type));
+        add_opt_int(h, m.mode);
+        for (const core::ModelStart& s : m.starts) {
+            add(h, s.model);
+            add(h, s.position);
+        }
+        h.u64(m.paths.size());
+        for (const core::ModelPath& p : m.paths) {
+            add(h, p.model);
+            h.u64(p.points.size());
+            for (const core::Position& pt : p.points) add(h, pt);
+        }
+        h.i32(m.pending_mortal_wounds);
+        for (const core::UnitId t : m.targets) add(h, t);
+        add_opt_int(h, m.consolidation_mode);
+    }
+    h.flag(f.charge.has_value());
+    if (f.charge) add(h, f.charge->unit);
+    h.flag(f.step_done[0]);
+    h.flag(f.step_done[1]);
+    h.flag(f.fight_sequence.has_value());
+    if (f.fight_sequence) {
+        h.u64(static_cast<std::uint64_t>(f.fight_sequence->sub_step));
+        h.u64(static_cast<std::uint64_t>(f.fight_sequence->selecting));
+        add_opt_int(h, f.fight_sequence->last_pass);
+    }
+    h.flag(f.fight.has_value());
+    if (f.fight) {
+        add(h, f.fight->unit);
+        h.u64(static_cast<std::uint64_t>(f.fight->type));
+        h.flag(f.fight->overrun_pile_in_pending);
+        h.flag(f.fight->attacks_started);
+        h.flag(f.fight->forced);
+    }
+    h.u64(f.forced_fights.size());
+    for (const core::UnitId u : f.forced_fights) add(h, u);
+}
+
+// The decision's kind and the unit it is about (every kind holds at most one id).
+void add(Fnv1a& h, const core::PendingDecision& d) {
+    h.u64(static_cast<std::uint64_t>(d.side));
+    h.u64(d.kind.index());
+    std::visit(
+        [&](const auto& k) {
+            using K = std::decay_t<decltype(k)>;
+            if constexpr (requires { k.unit; }) add(h, k.unit);
+            if constexpr (requires { k.target; }) add(h, k.target);
+            if constexpr (requires { k.attacker; }) add(h, k.attacker);
+            (void)sizeof(K);
+        },
+        d.kind);
+}
+
+}  // namespace
+
+std::uint64_t state_hash(const core::GameState& state) {
+    Fnv1a h;
+    h.i32(state.battle_rounds);
+    h.u64(static_cast<std::uint64_t>(state.first_turn));
+    h.u64(state.units.size());
+    for (const core::Unit& u : state.units) add(h, u);
+    h.i32(state.command_points[0]);
+    h.i32(state.command_points[1]);
+    add(h, state.flow);
+    h.flag(state.pending.has_value());
+    if (state.pending) add(h, *state.pending);
+    h.flag(state.result.has_value());
+    if (state.result) add_opt_int(h, state.result->winner);
+    // state.dice is deliberately not hashed (D-054: the bot never peeks at the rolls to come).
+    return h.value();
+}
+
+}  // namespace wh40k::ai

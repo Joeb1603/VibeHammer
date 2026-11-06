@@ -1,4 +1,4 @@
-add_subdirectory(logic)
+# logic/ (wh40k_client_logic) is added from the root CMakeLists, before src/ai which links it.
 
 add_executable(wh40k_client_2d
     main.cpp
@@ -10,7 +10,7 @@ add_executable(wh40k_client_2d
     overlays.cpp
     start_screen.cpp)
 
-target_link_libraries(wh40k_client_2d PRIVATE wh40k_client_logic imgui_rlimgui raylib)
+target_link_libraries(wh40k_client_2d PRIVATE wh40k_ai wh40k_client_logic imgui_rlimgui raylib)
 # The viewer loads data/scenarios and tests/replays from the source tree.
 target_compile_definitions(wh40k_client_2d PRIVATE WH40K_REPO_ROOT="${PROJECT_SOURCE_DIR}")
 

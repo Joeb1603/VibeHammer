@@ -602,7 +602,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M39: Bot framework, driver, baseline bot, arena
+## M39: Bot framework, driver, baseline bot, arena ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-06)
 
 > **The `wh40k_ai` library:**
@@ -662,6 +662,14 @@ Every earlier level stays selectable as a regression opponent.
 - Undo against a bot returns to the human's last input; auto-allocate leaves the bot's decisions to the bot; a save
   with a `"players"` block reloads and an old save loads as hotseat (logic tests).
 - `--bot B --bot-steps 20 --screenshot` renders (screenshot). Replays unchanged.
+
+**Results (2026-11-06):**
+- Release arena, `wh40k_bot_arena --games 200 --a easy --b easy` (V1 skirmish, seeds 1–200): Space Marines win 200,
+  Tyranids 0, draws 0, unfinished 0; mean end round 1.94; mean surviving models A 4.92, B 0.00; rejected actions 0,
+  `UnitMoveReverted` 0; decision time p50 0.008 ms, p95 0.289 ms.
+- The baseline is lopsided: Easy is the M12 test policy, whose Termagants walk 2" at a time into Bolt Rifle fire. That
+  is the yardstick the later levels have to beat, not a balance problem to fix here.
+- ctest: 40 seeded Easy-vs-Easy games in `M39_Arena` (about 2.5 s in Debug).
 
 ---
 

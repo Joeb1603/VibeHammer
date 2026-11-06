@@ -5,8 +5,9 @@
 // - "Skip steps with nothing to do" (D-036, M23): the only legal action is to end a step or pass, or
 //   (D-047, M31) every pile-in or consolidation left is too small to matter (fight_move_skip).
 // - "Allocate damage automatically" (D-038, M25): the defender's allocation order (05.03) and casualty
-//   order (05.04) take their defaults.
+//   order (05.04) take their defaults, unless a bot plays the defender (D-054: the bot answers its own).
 
+#include <array>
 #include <cstddef>
 #include <functional>
 #include <optional>
@@ -21,6 +22,9 @@ namespace wh40k::client {
 struct AutoSettings {
     bool skip_empty_steps = true;  // D-036, D-047
     bool auto_allocate = false;    // D-038; off by default since D-051 (casualties picked on the board)
+    // D-054 (M39): the sides a bot plays, indexed by side_index. auto_allocate never answers their decisions;
+    // the forced skips (a lone skip, D-047) still apply to them, as to a human.
+    std::array<bool, 2> bot_controlled{};
 };
 
 // End shooting / charging / pile-ins / consolidations, pass in the fight sequence, skip an overrun pile-in.

@@ -13,6 +13,13 @@
 
 namespace wh40k::client {
 
+// D-054 (M39): a bot's own dice, rolled and continued by themselves ("Bot rolls its own dice automatically"):
+// the pause before the roll and how long the result stays up. A click or Enter / Space skips the wait.
+struct DicePace {
+    double roll_pause_s = 0.0;
+    double dwell_s = 0.0;
+};
+
 class DicePopup {
 public:
     void push(std::vector<DiceCard> cards);
@@ -24,8 +31,9 @@ public:
     // The card being shown, if any (the action bar follows its roller while dice show, D-033).
     [[nodiscard]] const DiceCard* current() const noexcept { return queue_.empty() ? nullptr : &queue_.front(); }
 
-    // Draws the current card centred in `area` (screen pixels): Roll, then the result and Continue.
-    void draw(Rectangle area, float ui_scale);
+    // Draws the current card centred in `area` (screen pixels): Roll, then the result and Continue. With
+    // `pace` (the current card is a bot's), it rolls and continues by itself.
+    void draw(Rectangle area, float ui_scale, std::optional<DicePace> pace = std::nullopt);
 
 private:
     void next();
@@ -34,6 +42,8 @@ private:
     int shown_ = 0;   // cards finished in this run of the queue (for "Roll 2 of 5")
     bool revealed_ = false;
     std::optional<double> rolling_since_;  // the tumble after Roll is pressed
+    std::optional<double> card_since_;     // when the current card was first drawn (D-054 pacing)
+    std::optional<double> revealed_at_;    // when its result was first shown
 };
 
 }  // namespace wh40k::client

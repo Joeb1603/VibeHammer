@@ -21,6 +21,7 @@ add_library(wh40k_client_logic STATIC
     datasheet_view.cpp
     measure.cpp
     rules_help.cpp
+    saved_game.cpp
     session.cpp
     undo_groups.cpp
     shot_plan.cpp

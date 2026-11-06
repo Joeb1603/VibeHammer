@@ -1,0 +1,130 @@
+#include "arena.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <variant>
+
+#include "auto_actions.hpp"
+#include "core/engine/actions.hpp"
+#include "session.hpp"
+
+namespace wh40k::ai {
+
+namespace {
+
+std::size_t reverts_in(const client::LogEntry& entry) {
+    return static_cast<std::size_t>(std::count_if(entry.events.begin(), entry.events.end(), [](const core::GameEvent& e) {
+        return std::holds_alternative<core::event::UnitMoveReverted>(e);
+    }));
+}
+
+double percentile(std::vector<double> v, double p) {
+    if (v.empty()) return 0.0;
+    std::sort(v.begin(), v.end());
+    const std::size_t i = std::min(v.size() - 1, static_cast<std::size_t>(p * static_cast<double>(v.size() - 1) + 0.5));
+    return v[i];
+}
+
+}  // namespace
+
+GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
+                         std::size_t step_cap, std::vector<double>* decision_ms) {
+    GameRecord rec;
+    rec.seed = seed;
+    client::GameSession session = client::GameSession::new_game(scenario, seed);
+    std::array<Bot, 2> bots{Bot(a), Bot(b)};
+    // As the client runs a bot game: skip steps with nothing to do, never auto-allocate for a bot (D-054).
+    client::AutoSettings autos;
+    autos.skip_empty_steps = true;
+    autos.auto_allocate = false;
+    autos.bot_controlled = {true, true};
+    std::size_t logged = 0;
+    const auto count_new = [&] {
+        for (; logged < session.log().size(); ++logged) rec.reverted += reverts_in(session.log()[logged]);
+    };
+    while (session.pending() && session.history().size() < step_cap) {
+        (void)client::run_auto_actions(session, autos);
+        count_new();
+        if (!session.pending()) break;
+        const core::Side side = session.pending()->side;
+        const auto t0 = std::chrono::steady_clock::now();
+        const BotChoice choice = bots[core::side_index(side)].decide(session.state(), side);
+        const auto t1 = std::chrono::steady_clock::now();
+        if (decision_ms != nullptr) decision_ms->push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
+        if (choice.stopped) {
+            rec.problems = choice.problems;
+            rec.problems.insert(rec.problems.begin(), "the bot stopped: " + choice.reason);
+            break;
+        }
+        const core::ValidationResult r = session.submit(choice.action);
+        if (!r.ok()) {
+            ++rec.rejected;
+            rec.problems.push_back("rejected " + std::string(core::action_name(choice.action)) + ": " + r.reasons.front());
+            break;
+        }
+        count_new();
+    }
+    const core::GameState& end = session.state();
+    rec.steps = session.history().size();
+    rec.finished = end.result.has_value();
+    if (end.result) rec.winner = end.result->winner;
+    if (!rec.finished && rec.problems.empty()) rec.problems.push_back("step cap reached");
+    rec.end_round = end.flow.battle_round;
+    for (const core::Unit& u : end.units) rec.surviving_models[core::side_index(u.side)] += static_cast<int>(u.models.size());
+    rec.fallbacks = bots[0].fallbacks() + bots[1].fallbacks();
+    return rec;
+}
+
+ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a, BotConfig b,
+                      std::size_t step_cap) {
+    ArenaResult r;
+    std::vector<double> ms;
+    for (int i = 0; i < games; ++i) {
+        r.games.push_back(play_bot_game(scenario, first_seed + static_cast<std::uint64_t>(i), a, b, step_cap, &ms));
+    }
+    for (const GameRecord& g : r.games) {
+        if (!g.finished) {
+            ++r.unfinished;
+        } else if (g.winner) {
+            ++r.wins[core::side_index(*g.winner)];
+        } else {
+            ++r.draws;
+        }
+        r.rejected += g.rejected;
+        r.reverted += g.reverted;
+        r.mean_end_round += g.end_round;
+        r.mean_surviving[0] += g.surviving_models[0];
+        r.mean_surviving[1] += g.surviving_models[1];
+    }
+    if (!r.games.empty()) {
+        const double n = static_cast<double>(r.games.size());
+        r.mean_end_round /= n;
+        r.mean_surviving[0] /= n;
+        r.mean_surviving[1] /= n;
+    }
+    r.p50_ms = percentile(ms, 0.50);
+    r.p95_ms = percentile(ms, 0.95);
+    return r;
+}
+
+std::string format_arena(const ArenaResult& r, const core::GameState& scenario) {
+    char buf[1024];
+    const std::string a = scenario.sides[0].name;
+    const std::string b = scenario.sides[1].name;
+    std::snprintf(buf, sizeof buf,
+                  "games %zu: side A (%s) wins %d, side B (%s) wins %d, draws %d, unfinished %d\n"
+                  "mean end round %.2f; mean surviving models: A %.2f, B %.2f\n"
+                  "rejected actions %zu, UnitMoveReverted %zu\n"
+                  "decision time p50 %.3f ms, p95 %.3f ms\n",
+                  r.games.size(), a.c_str(), r.wins[0], b.c_str(), r.wins[1], r.draws, r.unfinished, r.mean_end_round,
+                  r.mean_surviving[0], r.mean_surviving[1], r.rejected, r.reverted, r.p50_ms, r.p95_ms);
+    std::string out = buf;
+    for (const GameRecord& g : r.games) {
+        if (g.problems.empty()) continue;
+        out += "  seed " + std::to_string(g.seed) + ": " + g.problems.front() + "\n";
+    }
+    return out;
+}
+
+}  // namespace wh40k::ai

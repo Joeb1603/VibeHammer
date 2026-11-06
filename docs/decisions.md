@@ -433,6 +433,8 @@ of the charge for that reason.
     result to equal "state". A mismatch, or an invalid step, is a corrupt file (`DataError`).
   - A bare `GameState` JSON also loads, as a game with no history.
   - The client saves to `saves/game.json` by default; `/saves/` is gitignored.
+  - M39 (D-054) adds an optional `"players"` block (which sides the bot played, and its level). Old saves
+    have none and load as hotseat.
 - **Replay export.** `GameSession::to_replay` writes the initial-state form of a replay (D-014), with
   the current state as its `expect` block. The client exports to `replays/exported_replay.json` by
   default (gitignored); the file can be copied into `tests/replays/` to make it a regression test.
@@ -1104,6 +1106,54 @@ change.
   and the human's last one. Bot pacing (thinking pauses, auto-rolled bot dice) is presentation only.
 - **Levels:** Easy = the M12 test policy (baseline), Normal = the M41–M43 decisions, Hard = the M44 evaluator and
   lookahead. Tuned weights and arena results are recorded here as the milestones land.
+- **M39 notes:**
+  - **Files:** `src/ai/` holds `bot` (the `Bot` class, `BotConfig`, `BotChoice`, the level dispatch), `state_hash`,
+    `simulator`, `baseline_bot` (level Easy), `fallback` (the fallback and `LoopGuard`), `bot_driver` (pacing) and
+    `arena` (+ `arena_main.cpp`, exe `wh40k_bot_arena`). `BotLevel` and `BotSpeed` are the client's enums
+    (`settings.hpp`); `ai::speed_factor` is the one place the speed multipliers live (the bot's dice pop-ups use it
+    too). Normal and Hard play as Easy until M41/M44 (`effective_level`); the start screen and the game status say so.
+  - **How a level plugs in:** a policy is `(state, side, legal, seed) -> PolicyResult {action, reason, rest}`.
+    `Bot::decide` hashes the state, runs the loop guard, replays the memo while its next step's `expect_hash` equals
+    the state's hash, otherwise calls the level's policy and keeps its `rest` as the new memo; then it validates the
+    answer (`validate_action`, no template, `move_end_problems` for a commit) and falls back if it isn't legal. A
+    policy must give the same answer from any state along its own plan (Easy plans a move from the move's start
+    positions, so a replan after a load or undo comes out identical; tested against a fresh bot at every decision).
+  - **The hash** covers units (ids, side, flags, rolls already made such as charge and advance rolls), models (id,
+    position bits, wounds), command points, the flow (stage, round, activation, attack batches and the batch in
+    progress, the move in progress with its starts and paths, charge, step_done, fight sequence and fight, forced
+    fights), the pending decision and the result. It leaves out `state.dice` and static data (names, weapons).
+  - **Easy (the M12 policy, kept as it was):** Normal move 2" towards the enemy while it is more than 8" away, else
+    Remain Stationary; shooting, melee and casualties with the editors' defaults; charge whenever it can; a charge move
+    translates the unit to 1" short of the enemy; an Overrun's pile-in goes 2" towards it; other pile-ins and
+    consolidations are ended. The one change: every move is simulated in full first (a proposal the engine refuses
+    leaves that model where it is; the commit must pass `move_end_problems` and not be reverted), and a move that
+    wouldn't stand is never started (Remain Stationary, SkipChargeMove, SkipPileIn instead). So Easy never resets a
+    move, and the arena sees no `UnitMoveReverted` at all.
+  - **Loop guard:** `LoopGuard` counts visits per state hash; the third visit uses the fallback. `Bot::forget()` (an
+    undo, a new game, a load) clears it and the memo, so replaying a position after an undo is not a "loop".
+  - **Driver:** `BotDriver::tick(now, inputs)` keys each decision on (state hash, history size, generation). A new key
+    starts a job (on a `std::async` worker, or synchronously at Instant speed and in tests); a stale worker is waited
+    for, its result dropped. The pause (0.8 s activation, 0.12 s placement, 0.4 s commit and step buttons, 0.6 s
+    allocation and casualties, times the speed factor) starts when the decision appears and restarts while a pop-up
+    is open or the bot is paused; Step hands over the next action at once. A refused or stopped bot stops the driver
+    (the panel shows the reasons) until the next invalidate.
+  - **Client:** the action bar shows "Bot (<army>) is thinking..." (or "is paused" / "has stopped") with Pause /
+    Resume, Step, the bot speed and the next or last reason. While a bot owns the decision the board is inactive (no
+    clicks, drags, move handle or menus) and the decision panel isn't drawn; `--steps` also stops there. Each bot
+    action is its own Undo group, tagged `InputOwner::Bot`; against a bot, Undo (`undo_human`) removes the bot's
+    groups after the human's last input and that input, and is disabled until the human has an input to undo (so it
+    is always off in bot vs bot). "Undo last step" is never offered for the bot's placements. A bot's dice pop-ups
+    roll after 0.35 s and continue after 1.2 s (times the speed factor; at Instant, at once, with no tumble) when "Bot
+    rolls its own dice automatically" is on (a sidebar toggle in a game with a bot); a click or Enter skips the wait.
+  - **Save players block (extends D-025):** `saved_game.{hpp,cpp}` writes
+    `"players": {"A": "human"|"bot", "B": ..., "bot_level": "easy"|"normal"|"hard"}`. Loading restores the bot sides
+    and that game's level (kept apart from the settings' level, so loading doesn't change the user's setting). A save
+    without the block, a bare GameState, or a block that can't be read loads as hotseat; an unknown level keeps Easy.
+  - **CLI:** `--bot A|B|both|none`, `--bot-level`, `--bot-speed`, `--bot-steps n` (bad values exit 2). `--bot-steps`
+    runs after `--steps` and stops at a human's decision, so `--seed 1 --bot B --bot-steps 20` shows side A's first
+    decision (A moves first); `--seed 1 --bot B --steps 6 --bot-steps 4 --bot-speed slow` shows the bot mid-move.
+  - **Build:** `src/client_2d/logic` is now added from the root CMakeLists (before `src/ai`, which links it, and
+    `src/client_2d`, whose exe links `wh40k_ai`).
 
 ## D-055: Start screen and saved settings (M38)
 **Decided:** 2026-11-06 (M38, pre-approved batch). Client only; no rule, state or replay change.

@@ -4,7 +4,8 @@
 //
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
 //                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
-//                        [--scenario <file>] [--dice <n>] [--menu <0|1>]
+//                        [--scenario <file>] [--dice <n>] [--menu <0|1>] [--bot A|B|both|none]
+//                        [--bot-level easy|normal|hard] [--bot-speed slow|normal|fast|instant] [--bot-steps <n>]
 //   M38 (D-055): with no flags the exe opens on the start screen and uses the settings saved next to it. Any flag
 //   skips the start screen and runs with the default settings (nothing is read or saved), so scripted runs are
 //   reproducible; --menu 1 shows the start screen anyway (for screenshots).
@@ -13,6 +14,9 @@
 //   --scenario file: the scenario for new games (default data/scenarios/v1_skirmish.json).
 //   --dice n: 1 keeps the dice pop-ups the --steps rolls made (otherwise dropped), 2 also shows the first
 //             card's faces (M20, for screenshots).
+//   M39 (D-054): --bot: the sides the bot plays in the first game (default none: hotseat); --bot-level and
+//   --bot-speed set its level and pacing; --bot-steps n: after --steps, run up to n bot decisions at once
+//   before the first frame (it stops at a human's decision; their dice pop-ups are dropped unless --dice).
 
 #include <imgui.h>
 #include <raylib.h>
@@ -35,6 +39,8 @@
 #include "auto_actions.hpp"
 #include "board_interaction.hpp"
 #include "board_view.hpp"
+#include "bot.hpp"
+#include "bot_driver.hpp"
 #include "camera.hpp"
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/engine.hpp"
@@ -56,6 +62,7 @@
 #include "overlays.hpp"
 #include "phase_track.hpp"
 #include "reach_area.hpp"
+#include "saved_game.hpp"
 #include "session.hpp"
 #include "settings.hpp"
 #include "start_screen.hpp"
@@ -103,6 +110,10 @@ struct Options {
     std::optional<std::string> scenario;
     int dice = 0;  // --dice: 1 keeps the dice pop-ups from --steps, 2 also shows the first card's faces
     bool menu = false;  // --menu 1: show the start screen even with other flags (M38)
+    BotSides bots{false, false};        // --bot (M39)
+    std::optional<BotLevel> bot_level;  // --bot-level
+    std::optional<BotSpeed> bot_speed;  // --bot-speed
+    int bot_steps = 0;                  // --bot-steps
 };
 
 // Throws std::invalid_argument naming the flag when a value can't be parsed.
@@ -125,6 +136,21 @@ Options parse_args(int argc, char** argv) {
         else if (key == "--menu") {
             if (value != "0" && value != "1") throw std::invalid_argument("not 0 or 1");
             o.menu = value == "1";
+        } else if (key == "--bot") {
+            if (value == "A") o.bots = {true, false};
+            else if (value == "B") o.bots = {false, true};
+            else if (value == "both") o.bots = {true, true};
+            else if (value == "none") o.bots = {false, false};
+            else throw std::invalid_argument("not A, B, both or none");
+        } else if (key == "--bot-level") {
+            o.bot_level = bot_level_from_key(value);
+            if (!o.bot_level) throw std::invalid_argument("not easy, normal or hard");
+        } else if (key == "--bot-speed") {
+            o.bot_speed = bot_speed_from_key(value);
+            if (!o.bot_speed) throw std::invalid_argument("not slow, normal, fast or instant");
+        } else if (key == "--bot-steps") {
+            o.bot_steps = std::stoi(value);
+            if (o.bot_steps < 0) throw std::invalid_argument("negative");
         }
         } catch (const std::exception&) {
             throw std::invalid_argument("invalid value for " + key + ": '" + value + "'");
@@ -166,8 +192,8 @@ class App {
 public:
     // M38 (D-055): `settings` are the saved ones (persist: written back when they change) or, in a scripted run,
     // the defaults with the CLI's overrides (never written). The game starts on the start screen if `menu`.
-    App(AppSettings settings, bool persist, std::optional<std::string> scenario_override, bool menu)
-        : settings_(std::move(settings)), saved_settings_(settings_), persist_(persist) {
+    App(AppSettings settings, bool persist, std::optional<std::string> scenario_override, bool menu, BotSides bots)
+        : settings_(std::move(settings)), saved_settings_(settings_), persist_(persist), bot_sides_(bots) {
         if (scenario_override) scenario_override_ = fs::path(*scenario_override);
         std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
         std::snprintf(save_path_, sizeof(save_path_), "%s", kSavePath.string().c_str());
@@ -203,6 +229,7 @@ public:
             // random one each game unless "Fixed seed" is ticked.
             if (!settings_.fixed_seed) settings_.seed = random_seed();
             const fs::path scenario = scenario_path();
+            game_bot_level_ = settings_.bot_level;  // M39: the level this game is played at (saved with it)
             start_session(GameSession::new_game(core::load_scenario(scenario, kRepoRoot), settings_.seed));
             status_ = "New game: " + scenario_info(scenario).name + ", seed " + std::to_string(settings_.seed) + ". " +
                       players_text();
@@ -217,12 +244,17 @@ public:
         return scenario_override_ ? *scenario_override_ : resolve_data_path(kRepoRoot, settings_.scenario);
     }
 
-    // M38: who plays which side. The bot itself plays from M39; until then its side is played by hand.
+    // M38 / M39: who plays which side, and the bot's level.
     std::string players_text() const {
         if (!bot_sides_[0] && !bot_sides_[1]) return "Hotseat: each side acts when the panel names it.";
-        if (bot_sides_[0] && bot_sides_[1]) return "Bot vs bot (the bot isn't built yet: play both sides by hand).";
+        std::string level = bot_level_name(game_bot_level_);
+        const ai::BotLevel played = ai::effective_level(game_bot_level_);
+        if (played != game_bot_level_) {
+            level += std::string(" (not built yet: it plays as ") + bot_level_name(played) + ")";
+        }
+        if (bot_sides_[0] && bot_sides_[1]) return "Bot vs bot, level " + level + ".";
         const core::Side bot = bot_sides_[0] ? core::Side::A : core::Side::B;
-        return "The bot plays " + side_name(bot) + " (not built yet: play it by hand for now).";
+        return "The bot plays " + side_name(bot) + ", level " + level + ".";
     }
 
     // ---- M38: the start screen ----
@@ -246,6 +278,7 @@ public:
         board_key_.reset();
         clear_selection();
         bot_sides_ = {false, false};
+        driver_.invalidate();  // M39: any bot decision in progress is dropped
         status_.clear();  // the start screen shows only what goes wrong there
         start_screen_.refresh(kRepoRoot);
     }
@@ -267,7 +300,7 @@ public:
                 new_game();
                 break;
             case StartRequest::Kind::ContinueSaved:
-                load_game();  // M39 adds the players block; a save loads as hotseat for now
+                load_game();  // M39: with the save's players block (an old save loads as hotseat)
                 break;
             case StartRequest::Kind::WatchReplay:
                 std::snprintf(path_, sizeof(path_), "%s", resolve_data_path(kRepoRoot, r.replay).string().c_str());
@@ -294,6 +327,12 @@ public:
         undo_groups_.clear();  // D-039
         victory_pending_ = false;  // D-038: only a game that ends while it is played shows the pop-up
         end_warning_.reset();
+        // M39 (D-054): the bot starts afresh on the new game, at this game's level.
+        driver_.set_config(ai::BotConfig{game_bot_level_});
+        driver_.invalidate();
+        bot_paused_ = false;
+        bot_step_ = false;
+        bot_reason_.clear();
     }
 
     // --dice: keep (1) or also reveal (2) the pop-ups the --steps rolls made; otherwise drop them.
@@ -305,7 +344,7 @@ public:
     void save_game() {
         if (!session_) return;
         try {
-            session_->save(save_path_);
+            save_game_file(save_path_, *session_, SavePlayers{bot_sides_, game_bot_level_});  // M39: and its players
             status_ = std::string("Saved to ") + save_path_;
         } catch (const std::exception& e) {
             status_ = std::string("Could not save: ") + e.what();
@@ -314,8 +353,12 @@ public:
 
     void load_game() {
         try {
-            start_session(GameSession::load(save_path_));
-            status_ = std::string("Loaded ") + save_path_ + " (seed " + std::to_string(session_->seed()) + ")";
+            LoadedGame loaded = load_game_file(save_path_);
+            bot_sides_ = loaded.players.bots;  // M39 (D-054): an old save has no players block: hotseat
+            game_bot_level_ = loaded.players.bot_level;
+            start_session(std::move(loaded.session));
+            status_ = std::string("Loaded ") + save_path_ + " (seed " + std::to_string(session_->seed()) + "). " +
+                      players_text();
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the save: ") + e.what();
         }
@@ -361,12 +404,22 @@ public:
         scroll_log_ = true;
     }
 
-    // --steps: click the first decision button (never a template) `n` times.
+    // --steps: click the first decision button (never a template) `n` times. It stops at the bot's decision
+    // (D-054: the human's buttons don't answer it).
     void auto_steps(int n) {
-        for (int i = 0; i < n && mode_ == Mode::Play && session_ && session_->pending(); ++i) {
+        for (int i = 0; i < n && mode_ == Mode::Play && session_ && session_->pending() && !bot_deciding(); ++i) {
             const DecisionView view = make_decision_view(session_->legal());
             if (view.buttons.empty()) break;
             submit(view.buttons.front());
+        }
+    }
+
+    // --bot-steps (M39): up to `n` bot decisions now, at once, before the first frame. Stops at a human's
+    // decision.
+    void bot_steps(int n) {
+        for (int i = 0; i < n && mode_ == Mode::Play && session_ && bot_deciding(); ++i) {
+            const ai::BotChoice c = driver_.decide_now(session_->state(), session_->pending()->side);
+            if (!submit_bot(c)) break;
         }
     }
 
@@ -411,6 +464,7 @@ public:
             before_dice_.reset();  // D-033: the last pop-up closed: show the game as it is now
             scroll_log_ = true;
         }
+        bot_tick();  // M39 (D-054)
         ClearBackground(Color{24, 26, 30, 255});
         if (!has_view()) {
             // No game and no replay (e.g. the scenario could not be loaded): show why, and the panel can
@@ -477,6 +531,57 @@ private:
     // bar shows who is rolling. Everything is rebuilt for the real decision when the last card closes.
     bool waiting_for_dice() const { return mode_ == Mode::Play && dice_.active(); }
 
+    // D-054 (M39): a bot owns the pending decision. Human input (board clicks, drags, the decision panel) is
+    // ignored meanwhile; the action bar shows the bot thinking, with Pause and Step.
+    bool bot_deciding() const {
+        return mode_ == Mode::Play && session_ && session_->pending() &&
+               bot_sides_[core::side_index(session_->pending()->side)];
+    }
+    // The board takes no input now (dice showing, or the bot's decision).
+    bool board_waits() const { return waiting_for_dice() || bot_deciding(); }
+
+    // D-054: the bot's action as its own Undo group (with what follows automatically). False if it stopped or
+    // was refused; the driver then stops and the reasons are shown.
+    bool submit_bot(const ai::BotChoice& c) {
+        if (c.stopped) {
+            driver_.stop(c.problems);
+            status_ = "The bot stopped: " + (c.problems.empty() ? c.reason : c.problems.front());
+            return false;
+        }
+        bot_reason_ = c.reason;
+        undo_groups_.begin(session_->history().size(), InputOwner::Bot);
+        const bool ok = submit_one(c.action);
+        if (ok) run_auto_actions_now();
+        undo_groups_.end(session_->history().size());
+        if (!ok) {
+            driver_.stop(reasons_);
+            status_ = "The bot's action was refused: " + (reasons_.empty() ? std::string("?") : reasons_.front());
+        }
+        return ok;
+    }
+
+    // D-054: hand the driver the time and what's in the way; submit the bot's action when it is due. At Instant
+    // speed several actions may go in one frame (decided on this thread, so there is no wait for a worker).
+    void bot_tick() {
+        if (mode_ != Mode::Play || !session_) return;
+        driver_.set_speed(settings_.bot_speed);
+        const bool instant = settings_.bot_speed == BotSpeed::Instant;
+        driver_.set_threading(instant ? ai::BotDriver::Threading::Synchronous : ai::BotDriver::Threading::Worker);
+        for (int i = 0; i < (instant ? 20 : 1) && bot_deciding(); ++i) {
+            ai::DriverInputs in;
+            in.state = &session_->state();
+            in.step = session_->history().size();
+            in.bot_sides = bot_sides_;
+            in.popup_open = dice_.active() || end_warning_.has_value();
+            in.paused = bot_paused_;
+            in.step_once = bot_step_;
+            const std::optional<ai::BotChoice> c = driver_.tick(GetTime(), in);
+            if (!c) return;
+            bot_step_ = false;
+            if (!submit_bot(*c)) return;
+        }
+    }
+
     Rectangle board_area() const {
         const float top = bar_height_ + action_height_;
         return Rectangle{0.0f, top, static_cast<float>(GetScreenWidth()) - panel_width(),
@@ -519,7 +624,7 @@ private:
 
     // D-029: the board's click state for the current decision, rebuilt whenever the decision changes.
     void sync_board() {
-        if (waiting_for_dice()) {
+        if (board_waits()) {  // D-054: the bot's decision is not offered to the human either
             // D-033: the session has already moved on to the next decision; don't offer it yet.
             board_ = BoardInteraction();
             board_key_.reset();
@@ -598,7 +703,13 @@ private:
     // M13 / D-039: undo the last group (a whole drag, a button, with what followed automatically).
     void undo_last() {
         if (!session_) return;
-        undo_groups_.undo(*session_);
+        // D-054: against the bot, Undo goes back to the human's last input (the bot's moves after it go too).
+        if (bot_sides_[0] || bot_sides_[1]) {
+            undo_groups_.undo_human(*session_);
+        } else {
+            undo_groups_.undo(*session_);
+        }
+        driver_.invalidate();
         panel_.reset();  // the rebuilt state may have the same step count as the editors' old one
         ++generation_;
         reasons_.clear();
@@ -613,7 +724,7 @@ private:
     // D-036 / D-038: answer the decisions the settings cover, recording them for Undo.
     void run_auto_actions_now() {
         if (mode_ != Mode::Play || !session_) return;
-        const AutoSettings settings{settings_.skip_empty_steps, settings_.auto_allocate};
+        const AutoSettings settings{settings_.skip_empty_steps, settings_.auto_allocate, bot_sides_};
         const std::vector<core::GameAction> done =
             run_auto_actions(*session_, settings, [this](const core::GameAction& a) { return submit_one(a); });
         std::string text;
@@ -693,7 +804,7 @@ private:
 
     // The unit being moved model by model, if it is this player's MoveModels decision.
     std::optional<core::UnitId> moving_unit() const {
-        if (mode_ != Mode::Play || !session_->pending() || waiting_for_dice()) return std::nullopt;  // D-033
+        if (mode_ != Mode::Play || !session_->pending() || board_waits()) return std::nullopt;  // D-033, D-054
         if (const auto* d = std::get_if<core::decision::MoveModels>(&session_->pending()->kind)) return d->unit;
         return std::nullopt;
     }
@@ -742,10 +853,10 @@ private:
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && measure_) {
             const Measure m = *measure_;
             measure_.reset();
-            if (distance_px(m.grab_screen, mouse) < kDragThresholdPx * ui_scale() && !waiting_for_dice()) empty_click();
+            if (distance_px(m.grab_screen, mouse) < kDragThresholdPx * ui_scale() && !board_waits()) empty_click();
         }
 
-        if (waiting_for_dice()) {  // D-033: the board waits while a dice pop-up is open (zoom, pan, measuring still work)
+        if (board_waits()) {  // D-033 / D-054: the board waits for the dice or the bot (zoom, pan, measuring still work)
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !hovered) measure_ = Measure{camera_.to_world(mouse), mouse};
             return;
         }
@@ -884,7 +995,7 @@ private:
     }
 
     void handle_keys() {
-        if (mode_ == Mode::Play && !waiting_for_dice() && IsKeyPressed(KEY_ESCAPE)) {
+        if (mode_ == Mode::Play && !board_waits() && IsKeyPressed(KEY_ESCAPE)) {
             board_.cancel();
             if (!moving_unit()) clear_selection();  // D-041: as Cancel
         }
@@ -1324,6 +1435,8 @@ private:
             if (mode_ == Mode::Play) {
                 if (const DiceCard* card = dice_.current()) {
                     draw_rolling(*card);  // D-033: the next decision waits for the dice pop-ups
+                } else if (bot_deciding()) {
+                    draw_bot_thinking();  // D-054
                 } else {
                     draw_decision();
                 }
@@ -1341,7 +1454,7 @@ private:
         ImGui::End();
         if (has_view()) draw_datasheets();  // D-034
         // D-033: the dice pop-up, over everything else.
-        if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale());
+        if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale(), bot_dice_pace());
         if (mode_ == Mode::Play) {
             draw_end_warning();  // D-038
             draw_victory();
@@ -1439,8 +1552,9 @@ private:
         const bool playing = mode_ == Mode::Play && session_.has_value();
         if (playing) {
             ImGui::SameLine();
-            ImGui::BeginDisabled(!session_->can_undo());
-            if (ImGui::Button("Undo")) undo_last();  // D-039: the last input, with what followed it
+            const bool vs_bot = bot_sides_[0] || bot_sides_[1];
+            ImGui::BeginDisabled(!session_->can_undo() || (vs_bot && !undo_groups_.has_human_group(*session_)));
+            if (ImGui::Button("Undo")) undo_last();  // D-039: the last input, with what followed it (D-054)
             ImGui::SetItemTooltip("Undo your last action (a whole drag or button), and anything done "
                                   "automatically after it.");
             ImGui::EndDisabled();
@@ -1456,7 +1570,7 @@ private:
             if (mode_ == Mode::Play && bot_sides_[static_cast<std::size_t>(u.side)]) {  // M38
                 ImGui::SameLine();
                 ImGui::TextDisabled("(bot)");
-                ImGui::SetItemTooltip("The bot plays this side from M39. Until then, play it by hand.");
+                ImGui::SetItemTooltip("The bot plays this side (D-054).");
             }
             ImGui::SameLine();
             ImGui::Text("%s (unit %u): %zu/%d models%s", u.name.c_str(), u.id.v, u.models.size(), u.starting_strength,
@@ -1478,6 +1592,10 @@ private:
                               "enemy model, not closer) goes to the nearest spot it can, shown while dragging. "
                               "Ending within Engagement Range is left for Commit to check.");
         if (ImGui::Checkbox("Allocate damage automatically", &settings_.auto_allocate) && settings_.auto_allocate) auto_actions_as_group();
+        if (bot_sides_[0] || bot_sides_[1]) {  // M39 (D-054)
+            ImGui::Checkbox("Bot rolls its own dice automatically", &settings_.bot_auto_dice);
+            ImGui::SetItemTooltip("The bot's dice pop-ups roll and continue by themselves (a click skips the wait).");
+        }
         ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
                               "05.04) instead of asking.");
         ImGui::Checkbox("Warn before ending shooting with shots left", &settings_.warn_end_shooting);
@@ -1545,6 +1663,51 @@ private:
             }
             ImGui::EndCombo();
         }
+    }
+
+    // D-054: a bot's own dice roll and continue by themselves when "Bot rolls its own dice automatically" is on,
+    // paced by the bot speed (a click or Enter skips the wait). A human's dice wait for the human as before.
+    std::optional<DicePace> bot_dice_pace() const {
+        const DiceCard* card = dice_.current();
+        if (card == nullptr || !settings_.bot_auto_dice || !bot_sides_[core::side_index(card->roller)]) {
+            return std::nullopt;
+        }
+        return DicePace{ai::bot_dice_roll_pause_seconds(settings_.bot_speed),
+                        ai::bot_dice_dwell_seconds(settings_.bot_speed)};
+    }
+
+    // D-054: the action bar while the bot decides: who, what it is about to do, Pause / Resume and Step.
+    void draw_bot_thinking() {
+        const core::Side side = session_->pending()->side;
+        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
+        const std::string tag = "Bot (" + session_->state().side(side).name + ")";
+        chip(tag.c_str(), to_imvec(side_color(side)));
+        ImGui::SameLine(0.0f, ImGui::GetFontSize() * 0.6f);
+        ImGui::AlignTextToFramePadding();
+        if (driver_.stopped()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "has stopped: it found no legal action");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", bot_paused_ ? "is paused" : "is thinking...");
+        }
+        ImGui::PopFont();
+        if (ImGui::Button(bot_paused_ ? "Resume" : "Pause")) bot_paused_ = !bot_paused_;
+        ImGui::SameLine();
+        if (ImGui::Button("Step")) bot_step_ = true;
+        ImGui::SetItemTooltip("Let the bot take its next action now (also while paused).");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+        int speed = static_cast<int>(settings_.bot_speed);
+        if (ImGui::Combo("Bot speed", &speed, "Slow\0Normal\0Fast\0Instant\0")) settings_.bot_speed = static_cast<BotSpeed>(speed);
+        const std::optional<std::string> next = driver_.pending_reason();
+        std::string text;
+        if (driver_.stopped()) {
+            for (const std::string& r : driver_.stop_reasons()) text += (text.empty() ? "" : "; ") + r;
+        } else if (next) {
+            text = "Next: " + *next;
+        } else if (!bot_reason_.empty()) {
+            text = "Last: " + bot_reason_;
+        }
+        if (!text.empty()) ImGui::TextWrapped("%s", text.c_str());
     }
 
     // D-033: the action bar while a dice pop-up is open: who is rolling and what for, matching the pop-up.
@@ -1851,6 +2014,11 @@ private:
     bool persist_ = false;        // false in a scripted (CLI) run: the settings file is never touched
     std::optional<fs::path> scenario_override_;  // --scenario
     BotSides bot_sides_{false, false};  // M38: which sides the bot plays (client state, not GameState; D-054)
+    BotLevel game_bot_level_ = BotLevel::Easy;  // M39: this game's bot level (from the settings, or the save)
+    ai::BotDriver driver_;              // M39 (D-054): paces the bot's decisions
+    bool bot_paused_ = false;           // the action bar's Pause
+    bool bot_step_ = false;             // the action bar's Step (until the next action is handed over)
+    std::string bot_reason_;            // why the bot did its last action
     StartScreen start_screen_;
     bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
     bool quit_ = false;            // the start screen's Quit
@@ -1898,11 +2066,14 @@ int main(int argc, char** argv) {
         settings.fixed_seed = true;  // D-038: --seed fixes it
         settings.seed = *options.seed;
     }
-    App app(settings, !scripted, options.scenario, !scripted || options.menu);
+    if (options.bot_level) settings.bot_level = *options.bot_level;  // M39
+    if (options.bot_speed) settings.bot_speed = *options.bot_speed;
+    App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots);
     app.set_auto_scale(std::max({1.0f, dpi, by_height}));
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
     app.auto_steps(options.steps);
+    app.bot_steps(options.bot_steps);  // M39
     app.cli_dice(options.dice);
     app.select(options.select_unit, options.select_model);
 

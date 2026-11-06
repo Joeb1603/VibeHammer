@@ -127,6 +127,23 @@ const char* bot_speed_name(BotSpeed speed) {
     return "?";
 }
 
+const char* bot_level_key(BotLevel level) { return kLevelKeys[static_cast<std::size_t>(level)]; }
+const char* bot_speed_key(BotSpeed speed) { return kSpeedKeys[static_cast<std::size_t>(speed)]; }
+
+std::optional<BotLevel> bot_level_from_key(std::string_view key) {
+    for (std::size_t i = 0; i < kLevelKeys.size(); ++i) {
+        if (key == kLevelKeys[i]) return static_cast<BotLevel>(i);
+    }
+    return std::nullopt;
+}
+
+std::optional<BotSpeed> bot_speed_from_key(std::string_view key) {
+    for (std::size_t i = 0; i < kSpeedKeys.size(); ++i) {
+        if (key == kSpeedKeys[i]) return static_cast<BotSpeed>(i);
+    }
+    return std::nullopt;
+}
+
 BotSides bot_sides_for(GameMode mode, core::Side human) {
     switch (mode) {
         case GameMode::Hotseat: return {false, false};

@@ -27,7 +27,7 @@ std::optional<core::GameAction> next_auto_action(const core::GameState& state,
         if (auto skip = lone_skip(legal)) return skip;
         if (auto skip = pointless_fight_step_skip(state, legal)) return skip;  // D-047
     }
-    if (settings.auto_allocate && state.pending) {
+    if (settings.auto_allocate && state.pending && !settings.bot_controlled[core::side_index(state.pending->side)]) {
         if (std::holds_alternative<core::decision::DeclareAllocationOrder>(state.pending->kind) && !legal.empty()) {
             return legal.front();  // 05.03: the first legal order, as the panel offers first
         }

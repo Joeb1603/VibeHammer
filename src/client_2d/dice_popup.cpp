@@ -103,6 +103,8 @@ void DicePopup::clear() {
     shown_ = 0;
     revealed_ = false;
     rolling_since_.reset();
+    card_since_.reset();
+    revealed_at_.reset();
 }
 
 void DicePopup::next() {
@@ -110,18 +112,37 @@ void DicePopup::next() {
     ++shown_;
     revealed_ = false;
     rolling_since_.reset();
+    card_since_.reset();
+    revealed_at_.reset();
     if (queue_.empty()) shown_ = 0;
 }
 
-void DicePopup::draw(Rectangle area, float ui_scale) {
+void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pace) {
     if (queue_.empty()) return;
     const DiceCard& card = queue_.front();
     const double now = ImGui::GetTime();
+    if (!card_since_) card_since_ = now;
     if (rolling_since_ && now - *rolling_since_ >= kTumbleSeconds) {
         rolling_since_.reset();
         revealed_ = true;
     }
     if (!needs_roll(card)) revealed_ = true;  // D-053: nothing to roll, so no Roll click
+    bool auto_advance = false;
+    if (pace) {
+        // D-054: the bot rolls after a short pause (at once at Instant speed, with no tumble) and continues
+        // after a dwell; a click anywhere skips the wait.
+        const bool click = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        if (!revealed_ && !rolling_since_) {
+            if (pace->roll_pause_s <= 0.0) {
+                revealed_ = true;
+            } else if (click || now - *card_since_ >= pace->roll_pause_s) {
+                rolling_since_ = now;
+            }
+        } else if (revealed_) {
+            if (!revealed_at_) revealed_at_ = now;
+            if (click || now - *revealed_at_ >= pace->dwell_s) auto_advance = true;
+        }
+    }
 
     const Color side = side_color(card.roller);
     const ImVec4 side_colour(side.r / 255.0f, side.g / 255.0f, side.b / 255.0f, 1.0f);
@@ -199,7 +220,7 @@ void DicePopup::draw(Rectangle area, float ui_scale) {
         ImGui::EndDisabled();
     }
     ImGui::End();
-    if (advance) next();
+    if (advance || auto_advance) next();
 }
 
 }  // namespace wh40k::client

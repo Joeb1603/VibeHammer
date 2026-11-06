@@ -6,7 +6,9 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -52,6 +54,11 @@ bool save_settings(const std::filesystem::path& path, const AppSettings& s);
 
 [[nodiscard]] const char* bot_level_name(BotLevel level);
 [[nodiscard]] const char* bot_speed_name(BotSpeed speed);
+// The JSON and CLI spellings: "easy" / "normal" / "hard", "slow" / "normal" / "fast" / "instant" (M39).
+[[nodiscard]] const char* bot_level_key(BotLevel level);
+[[nodiscard]] const char* bot_speed_key(BotSpeed speed);
+[[nodiscard]] std::optional<BotLevel> bot_level_from_key(std::string_view key);
+[[nodiscard]] std::optional<BotSpeed> bot_speed_from_key(std::string_view key);
 
 // The start screen's ways to play, and which sides the bot plays in each (client state, never GameState).
 enum class GameMode : std::uint8_t { Hotseat, VsBot, BotVsBot };
