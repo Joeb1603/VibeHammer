@@ -986,7 +986,11 @@ change.
   - Only the unit losing models can be clicked. Its models that can't be picked next are grey, and the hint
     says how much damage the next pick takes.
   - Each click shows its result on the board: a red ring, cross and "-2" for a model that dies, or an
-    orange ring and "-1" for one that only loses wounds. The panel lists the same results ("So far: ...").
+    orange ring and "-1" for one that only loses wounds.
+  - **Removed, to revisit (user, 2026-11-06):** a "So far: model n -d (destroyed), ..." text line in the action
+    bar. It clipped the fixed-height bar under the hint, then ran off the screen beside the damage box, and
+    the board's marks already show the same. If it comes back, it needs a bar that grows (as the custom
+    shot editor's does) or a tooltip on the damage box. `CasualtyPicks::marks()` still provides the data.
   - The action bar shows **"Damage left to allocate: N"** in a coloured box under the hint (`CasualtyPreview::damage_left`): the damage of
     the next step and every damaging step after it. Damage that would be lost because the unit is wiped
     out isn't counted. At 0 it reads "All damage allocated: confirm the casualties".

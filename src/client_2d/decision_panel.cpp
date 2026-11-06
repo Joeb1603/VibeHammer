@@ -250,8 +250,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         }
     }
     if (!auto_move_message_.empty()) ImGui::TextColored(kWarning, "%s", auto_move_message_.c_str());  // D-050
-    // D-051: how much damage is still to be placed, in a coloured box under the hint, and on the same line
-    // (so the fixed-height bar has room) what the picks so far do.
+    // D-051: how much damage is still to be placed, in a coloured box under the hint.
     if (const CasualtyPicks* picks = board.casualty_picks(); picks != nullptr && picks->preview()) {
         const int left = picks->preview()->damage_left;
         const std::string text = left > 0 ? "Damage left to allocate: " + std::to_string(left)
@@ -262,21 +261,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, colour);
         ImGui::Button(text.c_str());  // a label, not a control
         ImGui::PopStyleColor(3);
-        if (!picks->marks().empty()) {
-            std::string line = "So far:";
-            bool first = true;
-            for (const CasualtyMark& m : picks->marks()) {
-                line += (first ? " " : ", ") + std::string("model ") + std::to_string(m.model.v) + " -" +
-                        std::to_string(m.wounds_lost) + (m.destroyed ? " (destroyed)" : "");
-                first = false;
-            }
-            if (picks->done() && picks->preview()->attacks_lost > 0) {
-                line += "; " + std::to_string(picks->preview()->attacks_lost) + " lost (the unit is destroyed)";
-            }
-            ImGui::SameLine();
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextDisabled("%s", line.c_str());
-        }
+        // The "So far: model n -d ..." text line was removed (D-051): the board's marks show the same.
     }
 
     ImGui::TableNextColumn();
