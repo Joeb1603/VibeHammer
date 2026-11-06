@@ -315,7 +315,7 @@ DamageResult resolve_damage(Unit& target, ModelId model, int damage) {
 
 InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup> ordered_groups,
                                    std::span<const int> save_rolls, const AttackProfile& profile,
-                                   const ModelChooser& choose_model) {
+                                   const ModelChooser& choose_model, bool ask_when_forced) {
     InflictDamageResult out;
     std::vector<int> rolls(save_rolls.begin(), save_rolls.end());
     std::sort(rolls.begin(), rolls.end());  // lowest result(s) to highest result(s)
@@ -335,7 +335,7 @@ InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup
         if (step.check->outcome == SaveOutcome::InflictsDamage) {
             const std::vector<ModelId> options = selectable_models(target, group);
             ModelId chosen = options.front();
-            if (options.size() > 1) {
+            if (options.size() > 1 || ask_when_forced) {
                 chosen = choose_model(target, options);
                 if (!contains(options, chosen)) {
                     throw std::logic_error("05.04: selected model " + std::to_string(chosen.v) +

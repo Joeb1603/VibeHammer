@@ -82,7 +82,7 @@ Color side_color(core::Side side) {
 
 void draw_board(const core::GameState& state, const BoardCamera& cam,
                 const std::function<bool(core::UnitId)>& dimmed, std::optional<core::UnitId> emphasised,
-                float ui_scale) {
+                float ui_scale, const std::function<bool(core::UnitId, core::ModelId)>& model_dimmed) {
     const core::Rect board{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm};
     DrawRectangleRec(cam.to_screen(board), kBoardFill);
     for (const core::Side side : {core::Side::A, core::Side::B}) {
@@ -95,7 +95,8 @@ void draw_board(const core::GameState& state, const BoardCamera& cam,
     for (const core::Unit& unit : state.units) {
         const bool grey = dimmed && dimmed(unit.id);
         for (const core::Model& model : unit.models) {
-            draw_model(unit, model, cam, grey, emphasised == unit.id ? 3.0f * ui_scale : 0.0f);
+            const bool model_grey = grey || (model_dimmed && model_dimmed(unit.id, model.id));
+            draw_model(unit, model, cam, model_grey, emphasised == unit.id && !model_grey ? 3.0f * ui_scale : 0.0f);
         }
     }
 }

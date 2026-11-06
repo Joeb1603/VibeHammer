@@ -494,6 +494,19 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M35: Pick casualties on the board ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-06)
+
+> With "Allocate damage automatically" off, the defender clicks the models that take the damage, one at a time (D-051). Only legal models can be picked; each click shows what it does. A picked model keeps taking the damage forced onto it (05.04 / 06.02), and no model takes damage without a click, even a forced one. Then "Confirm casualties" (or "Undo pick", or "Use default order"). The engine now always asks for casualties when damage is inflicted (amends D-013); the answer is still one `OrderCasualties`.
+
+**Acceptance**
+- A forced casualty is still asked for; all saves passed means no decision (core tests).
+- `preview_casualties`: the options are the current group (wounded models first) and a forced model still needs its click. A picked model keeps its forced damage (W2, and W3 with another wounded model). Illegal or surplus picks give nothing, later allocation groups wait, and excess attacks are counted. Mortal wounds work the same. The preview equals the real resolution (core tests).
+- The board handles the decision: models that can't be picked are grey and can't be clicked; marks show each click's damage; Undo pick; Confirm only when done, giving the previewed casualties; "Use default order" is the unit order; automatic allocation still answers at once (logic tests).
+- Replays regenerated on purpose: byte-identical.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

@@ -189,18 +189,9 @@ std::optional<PendingDecision> move_decision(const GameState& state) {
         return std::nullopt;  // the move ends (move_progress)
     }
     if (mv.pending_mortal_wounds > 0) {
-        // 06.02 Select Model, answered once (D-013) when there is a real choice.
-        Unit copy = u;
-        bool asked = false;
-        const ModelChooser probe = [&asked](const Unit&, std::span<const ModelId> options) {
-            asked = true;
-            return options.front();
-        };
-        (void)inflict_mortal_wounds(copy, mv.pending_mortal_wounds, probe);
-        if (asked) {
-            return PendingDecision{u.side, decision::OrderCasualties{u.id}};
-        }
-        return std::nullopt;
+        // 06.02 Select Model, answered once (D-013). Every mortal wound selects a model, so the player is
+        // always asked, even when the selection is forced (D-051).
+        return PendingDecision{u.side, decision::OrderCasualties{u.id}};
     }
     return PendingDecision{u.side, decision::MoveModels{u.id}};
 }
@@ -233,7 +224,8 @@ void move_progress(GameState& state, DiceSource&, Events& events) {
         return;
     }
     if (mv.pending_mortal_wounds > 0) {
-        resolve_move_mortal_wounds(state, ids_of(u), events);  // no real choice (D-013)
+        // Not reached since D-051 (move_decision always asks); kept so progress can't stall.
+        resolve_move_mortal_wounds(state, ids_of(u), events);
         return;
     }
     throw std::logic_error("move_progress: the move is waiting for a decision");

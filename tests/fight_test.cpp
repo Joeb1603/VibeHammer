@@ -666,6 +666,7 @@ TEST(D007_GameEnd, AWipeOutDuringForcedFightsEndsTheGameAtOnce) {
     act(gs, action::SelectToFight{id_of(gs, kMarines), FightType::Normal});
     ScriptedDice kill{6, 6, 6, 6, 6, 6, 1, 1, 1};
     act(gs, first_melee_options(gs, id_of(gs, kMarines)), kill);
+    wh40k::test::answer_casualties(gs);  // D-051: the forced casualty is still picked
     ASSERT_EQ(gs.flow.stage, Stage::Consolidate);
 
     // Engaging Consolidation into both: Side B must make both fight (12.08).
@@ -679,7 +680,8 @@ TEST(D007_GameEnd, AWipeOutDuringForcedFightsEndsTheGameAtOnce) {
     // unit 4.
     act(gs, action::SelectToFight{third, FightType::Normal});
     ScriptedDice lethal{6, 6, 1};
-    const auto events = act(gs, first_melee_options(gs, third), lethal);
+    act(gs, first_melee_options(gs, third), lethal);
+    const auto events = wh40k::test::answer_casualties(gs);  // D-051
     EXPECT_EQ(gs.flow.stage, Stage::GameOver);
     ASSERT_TRUE(gs.result.has_value());
     EXPECT_EQ(gs.result->winner, Side::B);

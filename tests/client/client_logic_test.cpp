@@ -1156,8 +1156,8 @@ TEST(M16_BoardInteraction, OtherDecisionsStayInTheSidebarAndNothingIsGrey) {
     const UnitId marines = session.state().units[0].id;
     ASSERT_TRUE(session.submit(action::SelectToFight{marines, FightType::Normal}).ok());
     ASSERT_TRUE(std::holds_alternative<decision::DeclareMeleeAttacks>(session.pending()->kind));
-    // Since D-032 the melee declaration is picked on the board; the attacks that follow (attack batch,
-    // allocation order, casualties) stay in the sidebar.
+    // Since D-032 the melee declaration is picked on the board, and since D-051 the casualties too; the attack
+    // batch and allocation order stay in the sidebar.
     ASSERT_TRUE(session.submit(MeleePlan(session.state(), marines).expand()).ok());
     ASSERT_TRUE(session.pending().has_value());
     const auto& kind = session.pending()->kind;
@@ -1166,9 +1166,14 @@ TEST(M16_BoardInteraction, OtherDecisionsStayInTheSidebarAndNothingIsGrey) {
                 std::holds_alternative<decision::OrderCasualties>(kind))
         << decision_name(kind);
     const BoardInteraction board(session.state(), session.legal());
-    EXPECT_FALSE(board.active());
-    EXPECT_FALSE(board.clickable(marines));
-    EXPECT_FALSE(board.greyed(marines));  // the sidebar's decisions grey nothing
+    if (std::holds_alternative<decision::OrderCasualties>(kind)) {
+        EXPECT_TRUE(board.active());  // D-051: picked on the board
+        EXPECT_FALSE(board.clickable(marines));  // only the unit losing models
+    } else {
+        EXPECT_FALSE(board.active());
+        EXPECT_FALSE(board.clickable(marines));
+        EXPECT_FALSE(board.greyed(marines));  // the sidebar's decisions grey nothing
+    }
     EXPECT_FALSE(BoardInteraction().active());  // replay mode
     EXPECT_FALSE(BoardInteraction().greyed(marines));
 }

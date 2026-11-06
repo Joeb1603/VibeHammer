@@ -161,10 +161,13 @@ struct InflictDamageResult {
 // 05.04 for a set of save rolls, lowest to highest, against groups in allocation order. Each save
 // roll is checked against the current group first; a model is selected only when the attack
 // inflicts damage. (Selecting first, as written, gives the same result: every model in a group has
-// the same Sv and InSv, and a failed attack does nothing to the selected model.)
+// the same Sv and InSv, and a failed attack does nothing to the selected model.) `choose_model` is called
+// only when there is more than one legal model, or for every damaging step when `ask_when_forced`
+// (D-051's preview, which follows each step).
 [[nodiscard]] InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup> ordered_groups,
                                                  std::span<const int> save_rolls,
-                                                 const AttackProfile& profile, const ModelChooser& choose_model);
+                                                 const AttackProfile& profile, const ModelChooser& choose_model,
+                                                 bool ask_when_forced = false);
 
 // ---- One batch, 05.01 to 05.04 ----
 

@@ -32,8 +32,6 @@ public:
     // Forget the editors: call when the session is replaced (new game, load) or rebuilt (undo), so the next
     // draw builds them for the new state even if its step count is the same.
     void reset() { synced_step_.reset(); }
-    // Editing a custom casualty order (D-032): the action bar may grow over the board.
-    [[nodiscard]] bool custom_editor() const noexcept { return casualty_custom_; }
     // D-039: offer "Undo last step" next to Commit / Reset in the next draw; whether it was clicked (once).
     void set_undo_step_available(bool available) noexcept { undo_step_available_ = available; }
     // D-041: the Cancel button for picking a shooting target was clicked (once); the app clears its selection.
@@ -61,17 +59,13 @@ private:
     std::optional<core::GameAction> draw_melee_editor(const GameSession& session, const core::action::Fight& tmpl,
                                                       std::optional<core::ModelId> selected_model);
     void draw_melee_grid(const core::GameState& gs, MeleePlan& plan, std::optional<core::ModelId> selected_model);
-    // The whole bar for a casualty order (D-032): the default order, or the custom order editor.
-    std::optional<core::GameAction> draw_casualty_bar(const GameSession& session,
-                                                      const core::action::OrderCasualties& tmpl);
     void sync(const GameSession& session);  // rebuild the editors when the game moves on
 
     std::optional<std::size_t> synced_step_;  // the session step the editors were built for
     DecisionView view_;                        // legal actions for that step, split (not rebuilt per frame)
     std::vector<ShotPlan> shots_;
     std::optional<MeleePlan> melee_;
-    std::optional<CasualtyPlan> casualties_;
-    bool casualty_custom_ = false;  // "Custom order..." was picked for this casualty order
+    std::optional<CasualtyPlan> casualties_;  // the default order, without the board (D-051)
     bool undo_step_available_ = false;  // D-039
     bool undo_step_requested_ = false;
     bool cancel_requested_ = false;  // D-041

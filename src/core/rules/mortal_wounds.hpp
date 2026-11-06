@@ -26,8 +26,10 @@ struct MortalWoundsResult {
 
 // 06.02: resolves `count` mortal wounds one at a time (each: select a model, it loses 1 wound) until
 // all are inflicted or the unit is destroyed. `choose` is called only when there is more than one
-// candidate (the controlling player's choice; M5 makes it a PendingDecision).
-[[nodiscard]] MortalWoundsResult inflict_mortal_wounds(Unit& unit, int count, const ModelChooser& choose);
+// candidate (the controlling player's choice; M5 makes it a PendingDecision), or for every wound when
+// `ask_when_forced` (D-051's preview, which follows each step).
+[[nodiscard]] MortalWoundsResult inflict_mortal_wounds(Unit& unit, int count, const ModelChooser& choose,
+                                                       bool ask_when_forced = false);
 
 // ---- 06.03 Hazard Rolls ----
 

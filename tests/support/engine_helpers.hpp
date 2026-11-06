@@ -88,6 +88,18 @@ inline std::vector<core::ModelId> model_ids(const core::Unit& u) {
     return out;
 }
 
+// D-051: answers a pending casualty decision (05.04 / 06.02) in unit order and returns its events. The
+// decision is raised whenever damage is inflicted, even when the casualty is forced.
+inline std::vector<core::GameEvent> answer_casualties(core::GameState& gs) {
+    EXPECT_TRUE(gs.pending && std::holds_alternative<core::decision::OrderCasualties>(gs.pending->kind));
+    if (!gs.pending) return {};
+    const auto* d = std::get_if<core::decision::OrderCasualties>(&gs.pending->kind);
+    if (d == nullptr) return {};
+    const core::UnitId target = d->target;
+    return core::apply_action(gs, gs.pending->side,
+                              core::action::OrderCasualties{target, model_ids(*gs.find_unit(target))});
+}
+
 // Fills a template (D-004/D-013) with a random valid parameter, or, when `corrupt`, a random invalid
 // one (missing, duplicated, foreign or empty entries).
 inline core::GameAction fill_template(const core::GameState& gs, const core::GameAction& tmpl, TestRng& rng,

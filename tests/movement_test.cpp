@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/dice/dice.hpp"
+#include "core/engine/casualties.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
@@ -400,6 +401,34 @@ TEST(R06_03_HazardRolls, DesperateEscapeCasualtiesAreChosenByTheOwner) {
     ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::MoveModels{unit}}));
 }
 
+TEST(D051_CasualtyPreview, MortalWoundsFromHazardsArePickedOneModelAtATime) {
+    GameState gs = movement_state();
+    engage_first_marine(gs);
+    gs.units[kMarines].battle_shocked = true;
+    gs.pending = compute_decision(gs);
+    ScriptedDice dice{1, 1, 6, 6, 6};  // two failed hazard rolls: 2 mortal wounds (06.02)
+    apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::DesperateEscape), dice);
+    const UnitId unit = gs.units[kMarines].id;
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::OrderCasualties{unit}}));
+    const auto none = preview_casualties(gs, {});
+    ASSERT_TRUE(none.has_value());
+    EXPECT_EQ(none->options, wh40k::test::model_ids(gs.units[kMarines]));
+    EXPECT_EQ(none->next_damage, 1);
+    // The picked model takes the second mortal wound too (06.02: wounded models first).
+    const ModelId picked = gs.units[kMarines].models[3].id;
+    const auto p = preview_casualties(gs, std::vector<ModelId>{picked});
+    ASSERT_TRUE(p.has_value());
+    EXPECT_TRUE(p->done());
+    EXPECT_EQ(p->results, (std::vector<DamageResult>{{picked, 1, 1, false}, {picked, 1, 1, true}}));
+    std::vector<ModelId> priority{picked};
+    for (const Model& m : gs.units[kMarines].models) {
+        if (m.id != picked) priority.push_back(m.id);
+    }
+    apply_action(gs, Side::A, action::OrderCasualties{unit, priority});
+    EXPECT_EQ(gs.units[kMarines].models.size(), 4u);
+    EXPECT_EQ(find_model(gs, picked), nullptr);
+}
+
 TEST(D005_RevertedMoveDice, DesperateEscapeHazardsAreNotRerolledAndWoundsStand) {
     GameState gs = movement_state();
     engage_first_marine(gs);
@@ -409,6 +438,9 @@ TEST(D005_RevertedMoveDice, DesperateEscapeHazardsAreNotRerolledAndWoundsStand) 
     gs.pending = compute_decision(gs);
     ScriptedDice dice{2, 5};
     apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::DesperateEscape), dice);
+    const UnitId unit = gs.units[kMarines].id;
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::OrderCasualties{unit}}));  // D-051: still asked
+    apply_action(gs, Side::A, action::OrderCasualties{unit, wh40k::test::model_ids(gs.units[kMarines])});
     ASSERT_EQ(gs.units[kMarines].models.size(), 1u);  // the wounded model was destroyed
     apply_action(gs, Side::A, action::ResetUnitMove{});
 
@@ -428,6 +460,9 @@ TEST(D007_GameEnd, HazardsDestroyingTheLastModelEndTheGame) {
     gs.pending = compute_decision(gs);
     ScriptedDice dice{1};
     apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::DesperateEscape), dice);
+    const UnitId unit = gs.units[kMarines].id;
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::OrderCasualties{unit}}));  // D-051: still asked
+    apply_action(gs, Side::A, action::OrderCasualties{unit, wh40k::test::model_ids(gs.units[kMarines])});
     EXPECT_EQ(gs.flow.stage, Stage::GameOver);
     ASSERT_TRUE(gs.result.has_value());
     EXPECT_EQ(gs.result->winner, Side::B);

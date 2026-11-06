@@ -142,7 +142,6 @@ void DecisionPanel::sync(const GameSession& session) {
     shots_.clear();
     melee_.reset();
     casualties_.reset();
-    casualty_custom_ = false;
     auto_move_message_.clear();
     for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
@@ -174,9 +173,15 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
     const core::GameState& gs = session.state();
     std::optional<core::GameAction> chosen;
     const DecisionView& view = view_;
-    // D-032: the casualty order has its own bar (the default order, or Custom order...).
-    for (const core::GameAction& t : view.templates) {
-        if (const auto* c = std::get_if<core::action::OrderCasualties>(&t)) return draw_casualty_bar(session, *c);
+    // D-051: casualties are picked on the board; without the board only the default order is offered.
+    if (casualties_) {
+        if (!begin_bar("Use default order")) return std::nullopt;
+        headline(gs, session.pending()->side, core::describe(*session.pending()));
+        ImGui::TextWrapped("Pick the casualties on the board, or use the default order (unit order).");
+        ImGui::TableNextColumn();
+        if (primary_button("Use default order", false)) chosen = casualties_->action();
+        ImGui::EndTable();
+        return chosen;
     }
     // D-030: a lone button with no editor is the bar's main action, drawn large on the right.
     const bool lone = view.buttons.size() == 1 && view.templates.empty();
@@ -196,7 +201,7 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
                 if (auto a = draw_melee_editor(session, std::get<core::action::Fight>(t), selected_model)) chosen = a;
                 break;
             case EditorKind::Casualties:
-                break;  // drawn by draw_casualty_bar above
+                break;  // handled above (D-051)
         }
     }
     if (path_hint) {
@@ -245,9 +250,24 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         }
     }
     if (!auto_move_message_.empty()) ImGui::TextColored(kWarning, "%s", auto_move_message_.c_str());  // D-050
+    // D-051: what the casualty picks so far do.
+    if (const CasualtyPicks* picks = board.casualty_picks(); picks != nullptr && !picks->marks().empty()) {
+        std::string line = "So far:";
+        bool first = true;
+        for (const CasualtyMark& m : picks->marks()) {
+            line += (first ? " " : ", ") + std::string("model ") + std::to_string(m.model.v) + " -" +
+                    std::to_string(m.wounds_lost) + (m.destroyed ? " (destroyed)" : "");
+            first = false;
+        }
+        if (picks->done() && picks->preview() && picks->preview()->attacks_lost > 0) {
+            line += "; " + std::to_string(picks->preview()->attacks_lost) + " lost (the unit is destroyed)";
+        }
+        ImGui::TextDisabled("%s", line.c_str());
+    }
 
     ImGui::TableNextColumn();
     bool back = false;
+    bool undo_pick = false;
     {
         ButtonRow row;
         if ((custom != nullptr || custom_fight != nullptr) && row.button("Back")) back = true;
@@ -257,15 +277,19 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
             cancel_requested_ = true;
         }
         if (const auto confirm = board.confirm()) {
-            // D-042: a clicked model's removal for coherency is confirmed here.
-            const bool removal = std::holds_alternative<core::action::RemoveModelForCoherency>(*confirm);
-            const std::string label = removal ? "Confirm: " + action_label(gs, *confirm) : action_label(gs, *confirm);
+            // D-042: a clicked model's removal for coherency is confirmed here; D-051: the picked casualties.
+            std::string label = action_label(gs, *confirm);
+            if (std::holds_alternative<core::action::RemoveModelForCoherency>(*confirm)) label = "Confirm: " + label;
+            if (std::holds_alternative<core::action::OrderCasualties>(*confirm)) label = "Confirm casualties";
             if (row.button(label)) chosen = *confirm;
         }
+        // D-051: take back the last casualty pick.
+        if (board.can_undo_pick() && row.button("Undo pick")) undo_pick = true;
         const std::vector<core::GameAction> steps = board.step_buttons();
         for (std::size_t i = 0; i < steps.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
-            if (row.button(action_label(gs, steps[i]))) chosen = steps[i];
+            const bool default_order = std::holds_alternative<core::action::OrderCasualties>(steps[i]);
+            if (row.button(default_order ? "Use default order" : action_label(gs, steps[i]))) chosen = steps[i];
             ImGui::PopID();
         }
         // D-050: place the pile-in / consolidation automatically; the player reviews it, then commits.
@@ -287,6 +311,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     if (custom_fight != nullptr && primary_button("Fight", true)) chosen = custom_fight->expand();
     ImGui::EndTable();
     if (back) board.cancel();  // after drawing: the plans being edited belong to the board
+    if (undo_pick) board.undo_pick(gs);
     if (!end_actions.empty()) return end_actions;
     if (chosen) return {*chosen};
     return {};
@@ -426,61 +451,6 @@ void DecisionPanel::draw_melee_grid(const core::GameState& gs, MeleePlan& plan,
         ImGui::EndTable();
     }
     ImGui::PopID();
-}
-
-std::optional<core::GameAction> DecisionPanel::draw_casualty_bar(const GameSession& session,
-                                                                 const core::action::OrderCasualties& tmpl) {
-    if (!casualties_ || casualties_->target() != tmpl.target) return std::nullopt;
-    const core::GameState& gs = session.state();
-    std::optional<core::GameAction> chosen;
-    const auto& order = casualties_->priority();
-    const std::string confirm = casualty_custom_ ? "Use custom order" : "Use this order";
-    if (!begin_bar(confirm)) return std::nullopt;
-    headline(gs, session.pending()->side, core::describe(*session.pending()));
-    bool back = false;
-    if (!casualty_custom_) {
-        // D-032: the default order, confirmed with one click, or "Custom order..." to change it.
-        std::string summary = "As the " + unit_name(gs, tmpl.target) +
-                              " lose models, they are taken off in this order (D-013): models ";
-        constexpr std::size_t kShown = 10;
-        for (std::size_t i = 0; i < order.size() && i < kShown; ++i) {
-            summary += (i > 0 ? ", " : "") + std::to_string(order[i].v);
-        }
-        if (order.size() > kShown) summary += ", ...";
-        ImGui::TextWrapped("%s", summary.c_str());
-        if (ImGui::Button("Custom order...")) casualty_custom_ = true;
-    } else {
-        ImGui::TextWrapped("The first model is taken off first. Move models earlier or later, then use the "
-                           "order. Back restores the default order.");
-        const float cell = ImGui::GetFontSize() * 11.0f;
-        const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
-        if (ImGui::BeginTable("##casualty_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
-            for (std::size_t i = 0; i < order.size(); ++i) {
-                ImGui::TableNextColumn();
-                ImGui::PushID(static_cast<int>(i));
-                if (ImGui::ArrowButton("earlier", ImGuiDir_Left)) casualties_->move_up(i);
-                ImGui::SameLine();
-                if (ImGui::ArrowButton("later", ImGuiDir_Right)) casualties_->move_down(i);
-                ImGui::SameLine();
-                ImGui::Text("%zu. model %u", i + 1, order[i].v);
-                ImGui::PopID();
-            }
-            ImGui::EndTable();
-        }
-    }
-
-    ImGui::TableNextColumn();
-    if (casualty_custom_) {
-        ButtonRow row;
-        back = row.button("Back");
-    }
-    if (primary_button(confirm, casualty_custom_)) chosen = casualties_->action();
-    ImGui::EndTable();
-    if (back) {
-        casualties_.emplace(gs, tmpl.target);  // the default order again
-        casualty_custom_ = false;
-    }
-    return chosen;
 }
 
 }  // namespace wh40k::client

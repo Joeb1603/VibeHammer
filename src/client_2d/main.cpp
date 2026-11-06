@@ -320,8 +320,8 @@ public:
             }
         }
         draw_board(
-            state(), camera_, [this](core::UnitId id) { return board_.greyed(id); },
-            emphasised, ui_scale());
+            state(), camera_, [this](core::UnitId id) { return board_.greyed(id); }, emphasised, ui_scale(),
+            [this](core::UnitId unit, core::ModelId model) { return board_.model_dimmed(unit, model); });
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
         // Rings stop at the battlefield edge (no model can be beyond it).
         const Rectangle field = camera_.to_screen(core::Rect{0.0f, 0.0f, state().battlefield.width_mm,
@@ -924,6 +924,29 @@ private:
                            3.0f * ui_scale(), Color{255, 90, 90, 230});
             }
         }
+        // D-051: what the casualty picks so far do: a red ring and cross for a model that dies, an orange ring
+        // for one that only loses wounds, with the wounds lost beside it.
+        if (const CasualtyPicks* picks = board_.casualty_picks()) {
+            const float s = ui_scale();
+            for (const CasualtyMark& mark : picks->marks()) {
+                const core::Model* m = core::find_model(gs, mark.model);
+                if (m == nullptr) continue;
+                const Color colour = mark.destroyed ? Color{255, 90, 90, 255} : Color{255, 170, 60, 255};
+                const Vector2 c = camera_.to_screen(m->position);
+                const float r = camera_.to_px(m->base.diameter_mm * 0.5f) + 3.0f * s;
+                DrawRing(c, r - s, r + 2.5f * s, 0.0f, 360.0f, 48, colour);
+                if (mark.destroyed) {
+                    const float k = m->base.diameter_mm * 0.35f;
+                    DrawLineEx(camera_.to_screen(m->position.x - k, m->position.y - k),
+                               camera_.to_screen(m->position.x + k, m->position.y + k), 3.0f * s, colour);
+                    DrawLineEx(camera_.to_screen(m->position.x - k, m->position.y + k),
+                               camera_.to_screen(m->position.x + k, m->position.y - k), 3.0f * s, colour);
+                }
+                const std::string text = "-" + std::to_string(mark.wounds_lost);
+                DrawText(text.c_str(), static_cast<int>(c.x + r + 2.0f * s), static_cast<int>(c.y - r),
+                         static_cast<int>(kRulerText * s), colour);
+            }
+        }
         // Selection.
         if (selected_unit_) {
             if (const core::Unit* u = gs.find_unit(*selected_unit_)) {
@@ -1076,10 +1099,10 @@ private:
                 fit_pending_ = true;
             }
             ImGui::SetNextWindowPos(ImVec2(0.0f, bar_height_));
-            const bool grows = mode_ == Mode::Play && (board_.custom_editor() || panel_.custom_editor());
+            const bool grows = mode_ == Mode::Play && board_.custom_editor();
             ImGuiWindowFlags action_flags = kFixed;
             if (grows) {
-                // D-031, D-032: a custom shot, fight or casualty order may need more rows; the bar then overlays the board's top
+                // D-031, D-032: a custom shot or fight may need more rows; the bar then overlays the board's top
                 // instead of resizing it, so the board doesn't refit.
                 ImGui::SetNextWindowSizeConstraints(ImVec2(w - panel_width(), action_height_),
                                                     ImVec2(w - panel_width(), h * 0.45f));

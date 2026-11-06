@@ -86,19 +86,17 @@ const BatchInProgress& current_batch(const AttackFlow& f) {
     return *f.current;
 }
 
-// D-013: does any 05.04 Select Model step have more than one legal model? inflict_damage calls its
-// chooser only in that case, so run it on a copy of the target with a probe chooser.
-bool casualty_choice_needed(const GameState& state, const AttackFlow& f) {
+// D-013 / D-051: does any 05.04 save roll inflict damage, so that a model must be selected? The defender is
+// asked whenever one does, even when the selection is forced (D-051: no model takes damage without the
+// player picking it). Run 05.04 on a copy of the target to find out.
+bool casualty_decision_needed(const GameState& state, const AttackFlow& f) {
     const BatchInProgress& b = current_batch(f);
     const AttackBatch& batch = f.batches[b.batch];
     Unit copy = unit_ref(state, batch.target);
-    bool asked = false;
-    const ModelChooser probe = [&asked](const Unit&, std::span<const ModelId> options) {
-        asked = true;
-        return options.front();
-    };
-    (void)inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, probe);
-    return asked;
+    const ModelChooser first = [](const Unit&, std::span<const ModelId> options) { return options.front(); };
+    const InflictDamageResult r =
+        inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, first);
+    return std::any_of(r.steps.begin(), r.steps.end(), [](const SaveStep& s) { return s.damage.has_value(); });
 }
 
 // 04.03 Gather Attack Dice + 05.01 + 05.02 for batch `index`.
@@ -191,8 +189,8 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
         if (!b.save_rolls) {
             return std::nullopt;
         }
-        if (casualty_choice_needed(state, f)) {
-            return PendingDecision{target.side, decision::OrderCasualties{batch.target}};  // 05.04, D-013
+        if (casualty_decision_needed(state, f)) {
+            return PendingDecision{target.side, decision::OrderCasualties{batch.target}};  // 05.04, D-013, D-051
         }
         return std::nullopt;
     }
@@ -220,7 +218,7 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
             events.push_back(event::SaveRollsMade{batch.target, *b.save_rolls});
             return;
         }
-        // No Select Model step has a real choice (D-013): any priority gives the same result.
+        // No save roll inflicts damage (D-051): nothing to select, any priority gives the same result.
         resolve_casualties(state, model_ids(unit_ref(state, batch.target)), events);
         return;
     }

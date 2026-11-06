@@ -28,7 +28,7 @@ std::vector<ModelId> mortal_wound_candidates(const Unit& unit) {
     return character;
 }
 
-MortalWoundsResult inflict_mortal_wounds(Unit& unit, int count, const ModelChooser& choose) {
+MortalWoundsResult inflict_mortal_wounds(Unit& unit, int count, const ModelChooser& choose, bool ask_when_forced) {
     MortalWoundsResult out;
     for (int i = 0; i < count; ++i) {
         const std::vector<ModelId> options = mortal_wound_candidates(unit);
@@ -37,7 +37,7 @@ MortalWoundsResult inflict_mortal_wounds(Unit& unit, int count, const ModelChoos
             break;
         }
         ModelId chosen = options.front();
-        if (options.size() > 1) {
+        if (options.size() > 1 || ask_when_forced) {
             chosen = choose(unit, options);
             if (std::find(options.begin(), options.end(), chosen) == options.end()) {
                 throw std::logic_error("06.02: selected model " + std::to_string(chosen.v) +

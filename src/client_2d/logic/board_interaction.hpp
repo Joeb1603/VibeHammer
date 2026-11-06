@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "casualty_picks.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "melee_plan.hpp"
@@ -54,8 +55,18 @@ public:
     [[nodiscard]] std::optional<core::UnitId> actor() const noexcept { return actor_; }
     [[nodiscard]] const std::vector<core::UnitId>& chosen_targets() const noexcept { return targets_; }
     // D-042: removing a model to restore coherency: models are clicked one at a time, then confirmed.
-    [[nodiscard]] bool picking_model() const noexcept { return mode_ == Mode::RemoveModel; }
+    // D-051: picking casualties: the models that take the damage are clicked one at a time, then confirmed.
+    [[nodiscard]] bool picking_model() const noexcept {
+        return mode_ == Mode::RemoveModel || mode_ == Mode::PickCasualties;
+    }
     [[nodiscard]] std::optional<core::ModelId> chosen_model() const noexcept { return chosen_model_; }
+    // D-051: the casualty picks so far (nullptr unless picking casualties).
+    [[nodiscard]] const CasualtyPicks* casualty_picks() const noexcept { return picks_ ? &*picks_ : nullptr; }
+    // D-051: a model of a clickable unit that can't be picked now is drawn grey too.
+    [[nodiscard]] bool model_dimmed(core::UnitId unit, core::ModelId model) const;
+    // D-051: "Undo pick" takes back the last casualty pick (board-local, not a game action).
+    [[nodiscard]] bool can_undo_pick() const noexcept { return picks_ && !picks_->picks().empty(); }
+    void undo_pick(const core::GameState& state);
     // D-041: a Cancel button while a shooter is picked and its target is being chosen.
     [[nodiscard]] bool can_cancel() const noexcept { return mode_ == Mode::Shoot; }
     [[nodiscard]] bool clickable(core::UnitId unit) const;
@@ -120,6 +131,7 @@ private:
         Melee,      // DeclareMeleeAttacks: click an engaged enemy unit, then a melee weapon (D-032)
         CustomMelee, // "Custom..." was picked on a fight target: each model's choice is edited in the panel
         RemoveModel, // RestoreCoherency: click a model of the unit, then confirm its removal (D-042)
+        PickCasualties, // OrderCasualties: click the models that take the damage, then confirm (D-051)
     };
 
     [[nodiscard]] std::vector<core::GameAction> actions_of(core::UnitId unit) const;
@@ -135,6 +147,8 @@ private:
     bool actor_fixed_ = false;  // given by the decision (charge targets, overrun pile-in)
     std::vector<core::UnitId> targets_;
     std::optional<core::ModelId> chosen_model_;  // RemoveModel: the model clicked
+    std::optional<CasualtyPicks> picks_;         // PickCasualties: the models picked so far (D-051)
+    std::optional<core::GameAction> default_order_;  // PickCasualties: "Use default order" (unit order)
     std::optional<ShotPlan> shot_;
     std::optional<ShotPlan> custom_;             // CustomShot: the plan being edited (a copy of shot_)
     std::optional<core::UnitId> custom_target_;  // a custom editor: the target "Custom..." was picked on

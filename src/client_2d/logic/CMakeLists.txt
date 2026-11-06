@@ -5,6 +5,7 @@ add_library(wh40k_client_logic STATIC
     auto_actions.cpp
     auto_fight_move.cpp
     board_interaction.cpp
+    casualty_picks.cpp
     casualty_plan.cpp
     decision_view.cpp
     dice_cards.cpp

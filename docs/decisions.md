@@ -200,7 +200,8 @@ models is therefore exactly as expressive as answering each Select Model step se
   Model step the engine selects the first model in that order that is legal (05.04 still forces a
   wounded model when there is one).
 - The decision is **skipped** when no Select Model step has more than one legal model (the engine
-  checks by simulating `inflict_damage` on a copy of the unit).
+  checks by simulating `inflict_damage` on a copy of the unit). **Amended by D-051 (M35):** it is now
+  skipped only when no save roll inflicts damage; a forced casualty is still asked for.
 - The same approach applies to mortal wounds (06.02) when they are wired into the engine.
 - D-004 extension: a permutation is too large to enumerate, so `legal_actions` returns
   `OrderCasualties` as a **template** with an empty `priority`; any permutation of the target unit's
@@ -606,7 +607,8 @@ logic).
   its melee weapons and targets (no "doesn't fight"). A **Split...** button opens the per-target attack
   counts (04.02) when the model's weapon reaches more than one engaged unit. Back and a large green Fight
   sit on the right. Esc, Back and empty-board clicks behave as in D-031.
-- **Casualty order** (`OrderCasualties`, D-013) stays a sidebar-mode decision. The bar shows the default
+- **Casualty order** (`OrderCasualties`, D-013) stays a sidebar-mode decision. **Replaced by D-051 (M35):**
+  casualties are picked on the board; the Custom order grid is gone, "Use default order" stays. The bar shows the default
   order (unit order: "As the <unit> lose models, they are taken off in this order: models 4, 5, ...") and a
   large "Use this order" button, plus **Custom order...**. That opens a grid of "n. model m" with
   earlier/later arrows, Back (restores the default order) and a large "Use custom order".
@@ -960,4 +962,33 @@ change.
 - **Not attempted:** a global optimum; re-planning a model after others have moved; "engaged with it if
   possible" for every model (`TODO(if-possible)` stays with the player); auto move after a manual drag
   (Undo or Reset first).
+
+## D-051: Casualties are picked on the board, one model at a time (M35)
+**Decided:** 2026-11-06 (agreed with the user). Amends D-013 (engine) and D-032 (client).
+- **Engine (amends D-013):** the casualty decision (`OrderCasualties`, 05.04 / 06.02) is raised whenever a
+  save roll inflicts damage (or a mortal wound is to be inflicted), even when every selection is forced.
+  So no model takes damage, and no model is removed, without the player picking it. It is skipped only
+  when nothing would be damaged. With "Allocate damage automatically" on, the client still answers it at
+  once (D-038), so play is unchanged. The answer is still one priority over every model (D-013), and the
+  resolver is unchanged. No saved replay had a forced-only casualty: the regenerated replays came out
+  byte-identical.
+- **Preview (core, read-only):** `preview_casualties(state, picks)` replays the pending decision's steps
+  with the models picked so far. A damaging step goes to the first model already picked that is a legal
+  choice for it. That is how a picked model keeps taking the damage forced onto it (05.04 "a model that
+  has lost one or more wounds if possible"; 06.02 wounded first). Otherwise the step goes to the next
+  pick, which must be legal **even when it is the only choice**. The preview stops at the first step
+  that needs a pick not yet made, and gives its options and damage. `inflict_damage` /
+  `inflict_mortal_wounds` gained an opt-in `ask_when_forced` so the preview can follow every step;
+  their default behaviour is unchanged. Applying `OrderCasualties(picks + the rest in unit order)` gives
+  exactly the preview's result, and that is tested.
+- **Client:** with automatic allocation off, the board handles the decision (`Mode::PickCasualties`).
+  - Only the unit losing models can be clicked. Its models that can't be picked next are grey, and the hint
+    says how much damage the next pick takes.
+  - Each click shows its result on the board: a red ring, cross and "-2" for a model that dies, or an
+    orange ring and "-1" for one that only loses wounds. The panel lists the same results ("So far: ...").
+  - "Undo pick" takes back the last pick (board-local, not a game action). "Confirm casualties" appears
+    once nothing is left to pick, and submits the one `OrderCasualties`. "Use default order" (unit order)
+    skips the picking.
+- **Replaces D-032's casualty bar:** the "Custom order..." grid is gone. Without the board (no board
+  interaction), the sidebar offers only "Use default order".
 

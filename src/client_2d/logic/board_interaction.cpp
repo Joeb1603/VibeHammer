@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "action_text.hpp"
+#include "casualty_plan.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
@@ -169,6 +170,12 @@ BoardInteraction::BoardInteraction(const core::GameState& state, std::vector<cor
         mode_ = Mode::RemoveModel;  // D-042
         actor_ = rc->unit;
         actor_fixed_ = true;
+    } else if (const auto* oc = std::get_if<d::OrderCasualties>(&kind)) {
+        mode_ = Mode::PickCasualties;  // D-051 (reached only with automatic allocation off, D-038)
+        actor_ = oc->target;
+        actor_fixed_ = true;
+        picks_.emplace(state, oc->target);
+        default_order_ = CasualtyPlan(state, oc->target).action();
     } else if (const auto* m = std::get_if<d::MoveModels>(&kind)) {
         mode_ = Mode::Moving;
         actor_ = m->unit;
@@ -222,6 +229,8 @@ bool BoardInteraction::clickable(core::UnitId unit) const {
         case Mode::CustomMelee:
         case Mode::RemoveModel:
             return unit == actor_;
+        case Mode::PickCasualties:
+            return unit == actor_ && picks_ && !picks_->done();
         case Mode::Melee: {
             const auto choices = melee_->choices();
             return std::any_of(choices.begin(), choices.end(), [&](const MeleeChoice& c) { return c.target == unit; });
@@ -240,6 +249,8 @@ bool BoardInteraction::waiting_for_click() const {
         case Mode::Melee:
         case Mode::RemoveModel:
             return true;
+        case Mode::PickCasualties:
+            return picks_ && !picks_->done();
         case Mode::Inactive:
         case Mode::Moving:
         case Mode::CustomShot:
@@ -307,8 +318,31 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
             return "The " + name + " is out of coherency (03.03 Regaining Coherency): click a model to remove, "
                    "then confirm.";
         }
+        case Mode::PickCasualties: {
+            const std::string name = unit_name(state, *actor_);
+            if (!picks_ || !picks_->preview()) return "";
+            if (picks_->done()) {
+                return "Every casualty of the " + name + " is picked. Confirm them, or Undo pick to change.";
+            }
+            const core::CasualtyPreview& p = *picks_->preview();
+            const int d = p.next_damage.value_or(1);
+            std::string text = "Click the model of the " + name + " that takes the next " +
+                               (d == 1 ? std::string("damage") : std::to_string(d) + " damage") +
+                               " (05.04 / 06.02). A picked model keeps taking the damage forced onto it.";
+            if (p.options.size() == 1) text += " Only one model can take it.";
+            return text;
+        }
     }
     return "";
+}
+
+bool BoardInteraction::model_dimmed(core::UnitId unit, core::ModelId model) const {
+    if (mode_ != Mode::PickCasualties || unit != actor_ || !picks_ || picks_->done()) return false;
+    return !picks_->can_pick(model);
+}
+
+void BoardInteraction::undo_pick(const core::GameState& state) {
+    if (picks_) picks_->undo_pick(state);
 }
 
 bool keep_selection(std::optional<core::UnitId> selected, std::optional<core::UnitId> actor,
@@ -318,6 +352,10 @@ bool keep_selection(std::optional<core::UnitId> selected, std::optional<core::Un
 }
 
 ClickResult BoardInteraction::click_model(const core::GameState& state, core::UnitId unit, core::ModelId model) {
+    if (mode_ == Mode::PickCasualties) {
+        if (unit == actor_ && picks_) picks_->pick(state, model);  // D-051: ignored unless it may be picked
+        return {};
+    }
     if (mode_ != Mode::RemoveModel) return click(state, unit);
     if (!clickable(unit)) return {};
     for (const core::GameAction& action : legal_) {
@@ -335,6 +373,7 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
         case Mode::CustomShot:
         case Mode::CustomMelee:
         case Mode::RemoveModel:  // models are clicked one at a time (click_model)
+        case Mode::PickCasualties:
             return {};
         case Mode::Melee:
             return melee_menu(state, unit);
@@ -578,6 +617,10 @@ std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
     if (custom_editor()) return out;  // the panel's Back and Shoot / Fight only (D-031, D-032)
     if (mode_ == Mode::RemoveModel) return out;  // D-042: a model is clicked, then confirmed
+    if (mode_ == Mode::PickCasualties) {         // D-051: or skip the picking with the unit order
+        if (default_order_) out.push_back(*default_order_);
+        return out;
+    }
     for (const core::GameAction& action : legal_) {
         if (core::is_template(action) || board_unit(action)) continue;
         if (!end_label_.empty() && is_end_action(action)) continue;  // the end-phase button covers it
@@ -590,6 +633,10 @@ std::optional<core::GameAction> BoardInteraction::confirm() const {
     if (mode_ == Mode::RemoveModel) {
         if (!chosen_model_ || !actor_) return std::nullopt;
         return a::RemoveModelForCoherency{*actor_, *chosen_model_};  // D-042
+    }
+    if (mode_ == Mode::PickCasualties) {
+        if (!picks_ || !picks_->done()) return std::nullopt;
+        return picks_->action();  // D-051: the picks, then the rest of the unit
     }
     if (mode_ != Mode::Targets || targets_.empty() || !actor_) return std::nullopt;
     for (const core::GameAction& action : actions_of(*actor_)) {

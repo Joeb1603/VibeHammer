@@ -6,6 +6,7 @@ add_library(wh40k_core STATIC
     engine/actions.cpp
     engine/advance.cpp
     engine/attack_flow.cpp
+    engine/casualties.cpp
     engine/charge.cpp
     engine/command.cpp
     engine/engine.cpp
