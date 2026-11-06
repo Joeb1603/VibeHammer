@@ -17,6 +17,7 @@
 //   M39 (D-054): --bot: the sides the bot plays in the first game (default none: hotseat); --bot-level and
 //   --bot-speed set its level and pacing; --bot-steps n: after --steps, run up to n bot decisions at once
 //   before the first frame (it stops at a human's decision; their dice pop-ups are dropped unless --dice).
+//   M45: --bot-steps prints "bot-steps: <taken> of <n> bot actions taken" to stdout (package.ps1 checks it).
 
 #include <imgui.h>
 #include <raylib.h>
@@ -41,6 +42,7 @@
 #include "board_view.hpp"
 #include "bot.hpp"
 #include "bot_driver.hpp"
+#include "bot_log.hpp"
 #include "camera.hpp"
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/engine.hpp"
@@ -68,6 +70,7 @@
 #include "start_screen.hpp"
 #include "timeline.hpp"
 #include "undo_groups.hpp"
+#include "watch_controls.hpp"
 
 namespace wh40k::client {
 namespace {
@@ -279,6 +282,8 @@ public:
         clear_selection();
         bot_sides_ = {false, false};
         driver_.invalidate();  // M39: any bot decision in progress is dropped
+        bot_log_.clear();      // M45
+        watch_.reset();
         status_.clear();  // the start screen shows only what goes wrong there
         start_screen_.refresh(kRepoRoot);
     }
@@ -330,9 +335,9 @@ public:
         // M39 (D-054): the bot starts afresh on the new game, at this game's level.
         driver_.set_config(ai::BotConfig{game_bot_level_});
         driver_.invalidate();
-        bot_paused_ = false;
-        bot_step_ = false;
+        watch_.reset();  // M45
         bot_reason_.clear();
+        bot_log_.clear();
     }
 
     // --dice: keep (1) or also reveal (2) the pop-ups the --steps rolls made; otherwise drop them.
@@ -417,10 +422,14 @@ public:
     // --bot-steps (M39): up to `n` bot decisions now, at once, before the first frame. Stops at a human's
     // decision.
     void bot_steps(int n) {
+        int taken = 0;
         for (int i = 0; i < n && mode_ == Mode::Play && session_ && bot_deciding(); ++i) {
             const ai::BotChoice c = driver_.decide_now(session_->state(), session_->pending()->side);
             if (!submit_bot(c)) break;
+            ++taken;
         }
+        // M45: package.ps1's second smoke test checks the bot really acted.
+        if (n > 0) std::printf("bot-steps: %d of %d bot actions taken\n", taken, n);
     }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
@@ -550,7 +559,11 @@ private:
         }
         bot_reason_ = c.reason;
         undo_groups_.begin(session_->history().size(), InputOwner::Bot);
+        const std::size_t log_index = session_->log().size();  // M45: the log entry this action becomes
+        const core::Side side = session_->pending()->side;
+        const std::string army = session_->state().side(side).name;
         const bool ok = submit_one(c.action);
+        if (ok) bot_log_.record(log_index, side, army, c);
         if (ok) run_auto_actions_now();
         undo_groups_.end(session_->history().size());
         if (!ok) {
@@ -567,17 +580,19 @@ private:
         driver_.set_speed(settings_.bot_speed);
         const bool instant = settings_.bot_speed == BotSpeed::Instant;
         driver_.set_threading(instant ? ai::BotDriver::Threading::Synchronous : ai::BotDriver::Threading::Worker);
+        // M45: Step while a dice pop-up shows reveals or closes that card.
+        if (watch_.step_closes_popup(dice_.active())) dice_.advance();
         for (int i = 0; i < (instant ? 20 : 1) && bot_deciding(); ++i) {
             ai::DriverInputs in;
             in.state = &session_->state();
             in.step = session_->history().size();
             in.bot_sides = bot_sides_;
             in.popup_open = dice_.active() || end_warning_.has_value();
-            in.paused = bot_paused_;
-            in.step_once = bot_step_;
+            in.paused = watch_.paused();
+            in.step_once = watch_.step_requested();
             const std::optional<ai::BotChoice> c = driver_.tick(GetTime(), in);
             if (!c) return;
-            bot_step_ = false;
+            watch_.delivered();
             if (!submit_bot(*c)) return;
         }
     }
@@ -710,6 +725,7 @@ private:
             undo_groups_.undo(*session_);
         }
         driver_.invalidate();
+        bot_log_.truncate(session_->log().size());  // M45: the undone actions' notes go too
         panel_.reset();  // the rebuilt state may have the same step count as the editors' old one
         ++generation_;
         reasons_.clear();
@@ -998,6 +1014,13 @@ private:
         if (mode_ == Mode::Play && !board_waits() && IsKeyPressed(KEY_ESCAPE)) {
             board_.cancel();
             if (!moving_unit()) clear_selection();  // D-041: as Cancel
+        }
+        if (mode_ == Mode::Play && session_ && (bot_sides_[0] || bot_sides_[1])) {  // M45: the watch keys
+            BotSpeed& speed = settings_.bot_speed;
+            if (IsKeyPressed(KEY_P)) watch_.apply(WatchCommand::TogglePause, speed);
+            if (IsKeyPressed(KEY_N)) watch_.apply(WatchCommand::Step, speed);
+            if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) watch_.apply(WatchCommand::Faster, speed);
+            if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) watch_.apply(WatchCommand::Slower, speed);
         }
         if (mode_ != Mode::Replay) return;
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) go_to(frame_ + 1);
@@ -1433,6 +1456,7 @@ private:
                 ImGui::PopStyleColor();
             }
             if (mode_ == Mode::Play) {
+                if (watching()) draw_watch_bar();  // M45: always there in bot vs bot
                 if (const DiceCard* card = dice_.current()) {
                     draw_rolling(*card);  // D-033: the next decision waits for the dice pop-ups
                 } else if (bot_deciding()) {
@@ -1669,11 +1693,59 @@ private:
     // paced by the bot speed (a click or Enter skips the wait). A human's dice wait for the human as before.
     std::optional<DicePace> bot_dice_pace() const {
         const DiceCard* card = dice_.current();
-        if (card == nullptr || !settings_.bot_auto_dice || !bot_sides_[core::side_index(card->roller)]) {
+        if (card == nullptr || !watch_.bot_dice_run(settings_.bot_auto_dice) ||
+            !bot_sides_[core::side_index(card->roller)]) {
             return std::nullopt;
         }
         return DicePace{ai::bot_dice_roll_pause_seconds(settings_.bot_speed),
                         ai::bot_dice_dwell_seconds(settings_.bot_speed)};
+    }
+
+    // M45: Watch bot vs bot (both sides are bots).
+    bool watching() const { return mode_ == Mode::Play && session_ && bot_sides_[0] && bot_sides_[1]; }
+
+    // M45 (D-054): Pause / Resume, Step and the bot speed; in the watch bar and, against one bot, while it thinks.
+    void draw_watch_buttons() {
+        BotSpeed& speed = settings_.bot_speed;
+        if (ImGui::Button(watch_.paused() ? "Resume" : "Pause")) watch_.apply(WatchCommand::TogglePause, speed);
+        ImGui::SetItemTooltip("Pause or resume the bot (key P). Paused, its dice wait for a click too.");
+        ImGui::SameLine();
+        if (ImGui::Button("Step")) watch_.apply(WatchCommand::Step, speed);
+        ImGui::SetItemTooltip("The bot's next action now, also while paused; with dice showing, the next roll (key N).");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+        int index = static_cast<int>(speed);
+        if (ImGui::Combo("Bot speed", &index, "Slow\0Normal\0Fast\0Instant\0")) speed = static_cast<BotSpeed>(index);
+        ImGui::SetItemTooltip("Changes the bot's pace at once (keys + and -).");
+    }
+
+    // M45: the watch bar on top of the action bar in bot vs bot: what is playing, and the controls.
+    void draw_watch_bar() {
+        const std::string tag = std::string("Watching bot vs bot (") + bot_level_name(game_bot_level_) + ")";
+        chip(tag.c_str(), ImVec4(0.30f, 0.33f, 0.40f, 1.0f));
+        ImGui::SameLine();
+        draw_watch_buttons();
+        ImGui::SameLine();
+        const std::string status =
+            session_->state().result ? std::string("Game over") : watch_status(watch_, settings_.bot_speed);
+        if (watch_.paused()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", status.c_str());
+        } else {
+            ImGui::TextDisabled("%s", status.c_str());
+        }
+        ImGui::Separator();
+    }
+
+    // M45: a bot reason, short (the action, the main reason, Hard's odds), with the full reason as its tooltip.
+    static void bot_reason_text(const char* prefix, const std::string& reason) {
+        const std::string text = std::string(prefix) + ai::short_reason(reason);
+        ImGui::TextWrapped("%s", text.c_str());
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+            ImGui::TextUnformatted(reason.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
     }
 
     // D-054: the action bar while the bot decides: who, what it is about to do, Pause / Resume and Step.
@@ -1687,27 +1759,20 @@ private:
         if (driver_.stopped()) {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "has stopped: it found no legal action");
         } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", bot_paused_ ? "is paused" : "is thinking...");
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", watch_.paused() ? "is paused" : "is thinking...");
         }
         ImGui::PopFont();
-        if (ImGui::Button(bot_paused_ ? "Resume" : "Pause")) bot_paused_ = !bot_paused_;
-        ImGui::SameLine();
-        if (ImGui::Button("Step")) bot_step_ = true;
-        ImGui::SetItemTooltip("Let the bot take its next action now (also while paused).");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
-        int speed = static_cast<int>(settings_.bot_speed);
-        if (ImGui::Combo("Bot speed", &speed, "Slow\0Normal\0Fast\0Instant\0")) settings_.bot_speed = static_cast<BotSpeed>(speed);
+        if (!watching()) draw_watch_buttons();  // in bot vs bot they are on the watch bar
         const std::optional<std::string> next = driver_.pending_reason();
-        std::string text;
         if (driver_.stopped()) {
+            std::string text;
             for (const std::string& r : driver_.stop_reasons()) text += (text.empty() ? "" : "; ") + r;
+            if (!text.empty()) ImGui::TextWrapped("%s", text.c_str());
         } else if (next) {
-            text = "Next: " + *next;
+            bot_reason_text("Next: ", *next);  // M45: short, the full reason as a tooltip
         } else if (!bot_reason_.empty()) {
-            text = "Last: " + bot_reason_;
+            bot_reason_text("Last: ", bot_reason_);
         }
-        if (!text.empty()) ImGui::TextWrapped("%s", text.c_str());
     }
 
     // D-033: the action bar while a dice pop-up is open: who is rolling and what for, matching the pop-up.
@@ -1877,13 +1942,22 @@ private:
         std::string text;
         bool label = false;  // a step header (drawn dimmed)
         bool roll = false;   // shown on the Dice tab
+        const ai::BotLogNote* bot = nullptr;  // M45: a line of the bot's note (its side's colour, the reason's tooltip)
     };
+
+    // M45: about how many characters fit on a log line (the bot's notes are wrapped to it).
+    std::size_t log_line_chars() const {
+        const float avg = ImGui::CalcTextSize("abcdefghijklmnopqrstuvwxyz").x / 26.0f;
+        const float width =
+            panel_width() - 3.0f * ImGui::GetStyle().WindowPadding.x - ImGui::GetStyle().ScrollbarSize;
+        return static_cast<std::size_t>(std::max(20.0f, width / std::max(1.0f, avg)));
+    }
 
     void refresh_log_cache() {
         // D-033: while dice show, the log stops before the roll's action, so it doesn't give the results away.
         std::size_t count = frame_ + 1;
         if (mode_ == Mode::Play) count = before_dice_ && dice_.active() ? log_before_dice_ : session_->log().size();
-        const LogKey key{generation_, mode_, count};
+        const LogKey key{generation_, mode_, count, bot_log_.notes().size(), log_line_chars()};
         if (log_key_ == key) return;
         log_key_ = key;
         log_lines_.clear();
@@ -1892,8 +1966,20 @@ private:
             for (const auto& e : events) log_lines_.push_back(LogLine{format_event(e), false, is_roll_event(e)});
         };
         if (mode_ == Mode::Play) {
+            const std::size_t chars = log_line_chars();
             for (std::size_t i = 0; i < count; ++i) {
-                add_entry(session_->log()[i].label, false, session_->log()[i].events);
+                log_lines_.push_back(LogLine{"-- " + session_->log()[i].label, true, false});
+                // M45: the bot's note for this action (a move's placements and commit share its start's note).
+                if (const ai::BotLogNote* note = bot_log_.at(i)) {
+                    bool first = true;
+                    for (std::string& part : ai::wrap_words(note->line, chars)) {
+                        log_lines_.push_back(LogLine{(first ? "" : "    ") + part, false, false, note});
+                        first = false;
+                    }
+                }
+                for (const auto& e : session_->log()[i].events) {
+                    log_lines_.push_back(LogLine{format_event(e), false, is_roll_event(e)});
+                }
             }
         } else {
             for (std::size_t f = 0; f <= frame_; ++f) {
@@ -1916,10 +2002,25 @@ private:
                                                            : static_cast<std::size_t>(i)];
                 if (line.label) {
                     ImGui::TextDisabled("%s", line.text.c_str());
+                } else if (line.bot != nullptr) {
+                    draw_bot_log_line(line);
                 } else {
                     ImGui::TextUnformatted(line.text.c_str());
                 }
             }
+        }
+    }
+
+    // M45: a line of the bot's note, in its side's colour; the tooltip has the full reason.
+    static void draw_bot_log_line(const LogLine& line) {
+        const ai::BotLogNote& note = *line.bot;
+        ImGui::TextColored(to_imvec(side_color(note.side)), "%s", line.text.c_str());
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+            ImGui::TextUnformatted(note.reason.c_str());
+            if (note.entries.size() > 1) ImGui::TextDisabled("%zu actions of one plan.", note.entries.size());
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
         }
     }
 
@@ -1944,6 +2045,8 @@ private:
         std::uint64_t generation = 0;
         Mode mode = Mode::Play;
         std::size_t count = 0;
+        std::size_t bot_notes = 0;   // M45
+        std::size_t line_chars = 0;  // M45: the bot's notes are wrapped to the panel
         friend bool operator==(const LogKey&, const LogKey&) = default;
     };
 
@@ -2016,9 +2119,9 @@ private:
     BotSides bot_sides_{false, false};  // M38: which sides the bot plays (client state, not GameState; D-054)
     BotLevel game_bot_level_ = BotLevel::Easy;  // M39: this game's bot level (from the settings, or the save)
     ai::BotDriver driver_;              // M39 (D-054): paces the bot's decisions
-    bool bot_paused_ = false;           // the action bar's Pause
-    bool bot_step_ = false;             // the action bar's Step (until the next action is handed over)
+    WatchControls watch_;               // M45: Pause / Resume, Step and the speed (the watch bar)
     std::string bot_reason_;            // why the bot did its last action
+    ai::BotLog bot_log_;                // M45: the bot's reasons in the log (client state only, never saved)
     StartScreen start_screen_;
     bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
     bool quit_ = false;            // the start screen's Quit

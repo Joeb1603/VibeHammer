@@ -2,7 +2,7 @@
 
 A deterministic C++20 rules engine for Warhammer 40k 11th Edition, with a 2D top-down Windows client.
 V1 goal: one Space Marine Intercessor Squad vs one Tyranid Termagant unit, played hotseat on a 24"x24" board,
-following the real core rules.
+following the real core rules. Since M38-M45 the client also plays against a bot (or watches bot vs bot, D-054).
 
 The milestone plan is in `PLAN.md`. Before starting work, check which milestone is current and stay inside its scope.
 V1 (M0–M13) is complete. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance
@@ -51,7 +51,12 @@ cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/linux && (cd build/linux && ctest)
 # Regenerate tests/replays/ on purpose only, then check the diff:
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=Replay.DISABLED_RegenerateReplays
+# The bot-game replay m45_bot_game.json (Hard vs Hard, seed 9) comes from the ai tests instead (M45):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M45_Replay.DISABLED_RegenerateBotGameReplay
 ```
+
+On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` and
+`build/default/tests/ai/Debug/wh40k_ai_tests.exe` with the same flags.
 
 - To send the game to someone: `powershell -ExecutionPolicy Bypass -File tools\package.ps1`. It builds Release,
   stages the exe, VC++ runtime DLLs, `data/` and `tests/replays/` with a README, smoke-tests the staged exe, and
@@ -142,14 +147,14 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Geometry tests use explicit coordinates in inches, converted with a helper, so the numbers read like the rulebook.
 - Tests that check a decision rather than a numbered rule are named after it (`TEST(D020_FightSequence, ...)`), Rules Appendix tests use `Appendix_...`, and client tests (`wh40k_client_tests`) use the milestone (`M12_...`, `M13_...`).
 - At the end of each milestone, add at least one replay file under `tests/replays/` covering that milestone's flow. Stop the replay before any phase a later milestone will change (as `m9_charge.json` and `m10_fight.json` do), so it stays valid.
-- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`.
+- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, and `M45_Replay.DISABLED_RegenerateBotGameReplay` in the ai tests for `m45_bot_game.json`; see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`.
 
 ## Working style for Claude in this repo
 
 - One milestone per session. Run `/clear` between milestones (except where `PLAN.md` records a batch the user pre-approved, such as M38–M45). Re-read `PLAN.md` and the relevant `docs/rules/` files at the start.
 - For milestones marked "plan mode" in `PLAN.md`, propose the design (types, files, decision flow) and wait for approval before writing code.
 - Commit at the end of each green milestone with a message naming the milestone and rule numbers covered, then push. In cloud sessions the environment's stop hook requires uncommitted work to be committed and pushed. Open a pull request and merge it (rebase merge, to keep `main` linear) only when the user asks.
-- The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests (`wh40k_client_tests`) and screenshots under `xvfb-run`. The client's flags for this are `--screenshot <file.png>`, `--steps <n>` (click the first decision button n times), `--select <unit id>`, `--select-model <model id>`, `--seed <n>` (fixes the seed; without it each game's seed is random, D-038), `--scenario <file>`, `--replay <file>`, `--frame <n>`, `--zoom <px per mm>`, `--dice <n>` (1 keeps the dice pop-ups that the `--steps` rolls made, 2 also reveals the first; they're dropped otherwise, D-033) `--menu 1` (shows the start screen, which any other flag skips; D-055), `--bot A|B|both|none` (the sides the bot plays), `--bot-level easy|normal|hard`, `--bot-speed slow|normal|fast|instant` and `--bot-steps <n>` (after `--steps`, runs up to n bot decisions at once before the first frame, stopping at a human's decision; `--steps` itself stops at a bot's decision; D-054). A run with any flag uses the default settings and never reads or writes `vibehammer_settings.json`. `--steps` only clicks panel buttons, so it can't reach decisions made by clicking the board (picking shooters, targets, charges), or the rolls they lead to. A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows. Bot strength is measured with the Release arena: `cmake --build --preset release --target wh40k_bot_arena`, then `.\build\default\src\ai\Release\wh40k_bot_arena.exe --games 200 --a easy --b easy` (flags `--games`, `--a`, `--b`, `--scenario`, `--seed`, `--step-cap`, `--trace <seed>` (one game's bot decisions with their reasons and times) and `--weights key=value,...` (overrides level Hard's `BotWeights` for tuning, M44); it exits 1 on any rejected action, reverted move or unfinished game). The bot scenarios are `data/scenarios/bot_termagants_first.json` and `bot_20_termagants.json` (M44).
+- The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests (`wh40k_client_tests`) and screenshots under `xvfb-run`. The client's flags for this are `--screenshot <file.png>`, `--steps <n>` (click the first decision button n times), `--select <unit id>`, `--select-model <model id>`, `--seed <n>` (fixes the seed; without it each game's seed is random, D-038), `--scenario <file>`, `--replay <file>`, `--frame <n>`, `--zoom <px per mm>`, `--dice <n>` (1 keeps the dice pop-ups that the `--steps` rolls made, 2 also reveals the first; they're dropped otherwise, D-033) `--menu 1` (shows the start screen, which any other flag skips; D-055), `--bot A|B|both|none` (the sides the bot plays), `--bot-level easy|normal|hard`, `--bot-speed slow|normal|fast|instant` and `--bot-steps <n>` (after `--steps`, runs up to n bot decisions at once before the first frame, stopping at a human's decision; `--steps` itself stops at a bot's decision; D-054; it prints `bot-steps: <taken> of <n> bot actions taken` to stdout, which `package.ps1`'s second smoke test checks, M45). A run with any flag uses the default settings and never reads or writes `vibehammer_settings.json`. `--steps` only clicks panel buttons, so it can't reach decisions made by clicking the board (picking shooters, targets, charges), or the rolls they lead to. A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows. Bot strength is measured with the Release arena: `cmake --build --preset release --target wh40k_bot_arena`, then `.\build\default\src\ai\Release\wh40k_bot_arena.exe --games 200 --a easy --b easy` (flags `--games`, `--a`, `--b`, `--scenario`, `--seed`, `--step-cap`, `--trace <seed>` (one game's bot decisions with their reasons and times) and `--weights key=value,...` (overrides level Hard's `BotWeights` for tuning, M44); it exits 1 on any rejected action, reverted move or unfinished game). The bot scenarios are `data/scenarios/bot_termagants_first.json` and `bot_20_termagants.json` (M44).
 - Don't add dependencies beyond those listed without asking.
 - Don't edit `data/units/*.json` by hand. Re-run the fetch tool, or put overrides in the scenario file.
 - Never commit the PDF or `rules-summary.txt`. They are gitignored on purpose (Games Workshop copyright).

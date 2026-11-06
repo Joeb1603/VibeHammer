@@ -1057,7 +1057,7 @@ compared with `--a normal --b normal` on the same scenario and seeds 1–200.
 
 ---
 
-## M45: Bot polish, packaging, docs
+## M45: Bot polish, packaging, docs ✅ (done)
 **Effort:** `medium` · **Plan mode:** pre-approved (2026-11-06)
 
 > **Watching the bot:**
@@ -1073,6 +1073,24 @@ compared with `--a normal --b normal` on the same scenario and seeds 1–200.
 **Acceptance**
 - Both package smoke tests pass; the zip is built.
 - The new replay replays cleanly and is byte-stable; the existing replays are unchanged.
+
+**Results (2026-11-06):** both acceptance items met (details in D-054, M45 notes).
+- **Reasons in the log:** each bot action the client accepts gets a short line under its log entry, in the
+  side's colour: `Bot (<army>): <action and main reason>`, with ` | win W% / draw D% / loss L%` for Hard; the
+  full reason is the line's tooltip. A plan's placements and commit share one line. The shortening
+  (`src/ai/bot_log.*`) is tested on every reason kind and on every reason of a whole Hard vs Hard game
+  (ai tests `M45_BotLog`, `M45_Replay`).
+- **Watch controls:** in Watch bot vs bot a watch bar (level, Pause / Resume, Step, bot speed, status) sits on
+  top of the action bar, also while dice show; keys P, N, + and -. The speed applies at once, paused bot dice
+  wait for a click, and Step with dice showing reveals or closes the card (`WatchControls`,
+  `src/client_2d/logic/watch_controls.*`; client tests `M45_Watch`, ai test `M45_Watch`).
+- **package.ps1:** the README covers the start screen, the bot and the settings file; smoke test 2
+  (`--seed 1 --bot B --steps 40 --bot-steps 5`) checks the exe's "bot-steps: 5 of 5 bot actions taken" line.
+  Both smoke tests pass and `VibeHammer.zip` is built.
+- **Replay:** `tests/replays/m45_bot_game.json`, Hard vs Hard, V1 scenario, seed 9: 33 steps, Space Marines win in
+  battle round 2. Two regenerations are byte-identical; `Replay.SavedReplayFilesPass` replays it with core only;
+  the existing replays are unchanged.
+- No core change. Hard's "no charge" reason now lists the holding odds first (text only).
 
 ---
 

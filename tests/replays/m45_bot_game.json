@@ -1,0 +1,526 @@
+{
+  "description": "M45: a whole game played by the bot on both sides, level Hard vs Hard, from the V1 scenario with dice seed 9 (D-054). Replaying it needs only the engine.",
+  "expect": {
+    "battle_round": 2,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 1,
+        "x_mm": 299.1209411621094,
+        "y_mm": 429.5992126464844
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 331.1209411621094,
+        "y_mm": 429.5992126464844
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 363.1209411621094,
+        "y_mm": 429.5992126464844
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 395.1209411621094,
+        "y_mm": 429.5992126464844
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 427.1209411621094,
+        "y_mm": 429.5992126464844
+      }
+    ],
+    "result": {
+      "reason": "D-007: Side B has no models on the battlefield; Side A wins",
+      "winner": "A"
+    },
+    "stage": "GameOver"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "data/scenarios/v1_skirmish.json",
+    "seed": 9
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 240.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 272.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 304.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 336.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 368.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 1,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 2,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 3,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 4,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          8,
+          7,
+          9,
+          6,
+          10,
+          13,
+          12,
+          14,
+          11,
+          15
+        ],
+        "target": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 572.9988403320313,
+            "y": 587.431396484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 572.9988403320313,
+            "y": 558.931396484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 544.4988403320313,
+            "y": 587.431396484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 515.9988403320313,
+            "y": 587.431396484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 487.49884033203125,
+            "y": 587.431396484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 458.99884033203125,
+            "y": 587.431396484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 10,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 11,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 12,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 13,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Assault",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 427.1209411621094,
+            "y": 429.5992126464844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 395.1209411621094,
+            "y": 429.5992126464844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 363.1209411621094,
+            "y": 429.5992126464844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 331.1209411621094,
+            "y": 429.5992126464844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 299.1209411621094,
+            "y": 429.5992126464844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 1,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 2,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 3,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 4,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          11,
+          12,
+          13,
+          10,
+          14,
+          15
+        ],
+        "target": 2
+      },
+      "side": "B"
+    }
+  ]
+}

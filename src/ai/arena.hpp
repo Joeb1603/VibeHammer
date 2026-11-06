@@ -14,6 +14,7 @@
 
 #include "bot.hpp"
 #include "core/state/game_state.hpp"
+#include "session.hpp"
 
 namespace wh40k::ai {
 
@@ -39,6 +40,11 @@ struct GameRecord {
 [[nodiscard]] GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
                                        std::size_t step_cap = 5000, std::vector<double>* decision_ms = nullptr,
                                        std::vector<std::string>* trace = nullptr);
+
+// M45: the same, on a session the caller owns (the bot-game replay is built from its history).
+[[nodiscard]] GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig b,
+                                          std::size_t step_cap = 5000, std::vector<double>* decision_ms = nullptr,
+                                          std::vector<std::string>* trace = nullptr);
 
 struct ArenaResult {
     std::vector<GameRecord> games;

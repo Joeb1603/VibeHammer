@@ -508,11 +508,12 @@ std::optional<PolicyResult> decide_charge(HardContext& hc, analysis::OddsCache& 
             declare = normal_declares ? !deviates(hc, cv.hold.score, cv.charge.score)
                                       : deviates(hc, cv.charge.score, cv.hold.score);
         }
-        const std::string values = percent(p) + " charge odds against " + e->name + "; the fight " +
-                                   signed_value(cv.fight.score) + " (" + odds_text(cv.fight) + "), holding " +
-                                   signed_value(cv.hold.score) + " (" + odds_text(cv.hold) + ")";
-        if (declare) return single(a, u->name + ": declare a charge (Hard: " + values + ")");
-        return single(end, u->name + ": no charge (Hard: " + values + ")");
+        // The chosen option's odds come first (M45: the combat log shows the first odds of a Hard reason).
+        const std::string fight = "the fight " + signed_value(cv.fight.score) + " (" + odds_text(cv.fight) + ")";
+        const std::string hold = "holding " + signed_value(cv.hold.score) + " (" + odds_text(cv.hold) + ")";
+        const std::string odds = percent(p) + " charge odds against " + e->name + "; ";
+        if (declare) return single(a, u->name + ": declare a charge (Hard: " + odds + fight + ", " + hold + ")");
+        return single(end, u->name + ": no charge (Hard: " + odds + hold + ", " + fight + ")");
     }
     return std::nullopt;
 }

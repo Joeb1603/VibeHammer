@@ -107,6 +107,16 @@ void DicePopup::clear() {
     revealed_at_.reset();
 }
 
+void DicePopup::advance() {
+    if (queue_.empty()) return;
+    if (!revealed_) {
+        revealed_ = true;
+        rolling_since_.reset();
+        return;
+    }
+    next();
+}
+
 void DicePopup::next() {
     queue_.pop_front();
     ++shown_;

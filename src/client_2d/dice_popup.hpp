@@ -27,6 +27,8 @@ public:
     [[nodiscard]] bool active() const noexcept { return !queue_.empty(); }
     // Show the current card's faces at once (the --dice 2 screenshot flag).
     void reveal() { revealed_ = true; }
+    // M45: the watch bar's Step while a card shows: reveal its faces, or close it once they show.
+    void advance();
 
     // The card being shown, if any (the action bar follows its roller while dice show, D-033).
     [[nodiscard]] const DiceCard* current() const noexcept { return queue_.empty() ? nullptr : &queue_.front(); }

@@ -39,9 +39,14 @@ double percentile(std::vector<double> v, double p) {
 
 GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
                          std::size_t step_cap, std::vector<double>* decision_ms, std::vector<std::string>* trace) {
-    GameRecord rec;
-    rec.seed = seed;
     client::GameSession session = client::GameSession::new_game(scenario, seed);
+    return play_bot_session(session, a, b, step_cap, decision_ms, trace);
+}
+
+GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig b, std::size_t step_cap,
+                            std::vector<double>* decision_ms, std::vector<std::string>* trace) {
+    GameRecord rec;
+    rec.seed = session.seed();
     const std::array<int, 2> wounds_at_start = wounds_left(session.state());
     std::array<Bot, 2> bots{Bot(a), Bot(b)};
     // As the client runs a bot game: skip steps with nothing to do, never auto-allocate for a bot (D-054).
