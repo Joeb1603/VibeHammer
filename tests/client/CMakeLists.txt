@@ -7,6 +7,7 @@ add_executable(wh40k_client_tests
     m28_test.cpp
     m29_test.cpp
     m30_test.cpp
+    m31_test.cpp
     rules_help_test.cpp
     client_logic_test.cpp)
 

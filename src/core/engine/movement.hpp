@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "core/engine/actions.hpp"
 #include "core/geometry/primitives.hpp"
 #include "core/state/game_state.hpp"
 
@@ -59,6 +60,13 @@ struct MoveReach {
     friend bool operator==(const MoveReach&, const MoveReach&) = default;
 };
 [[nodiscard]] std::optional<MoveReach> move_reach(const GameState& state, ModelId model);
+
+// D-047: the state just after `side` starts the pile-in (12.03) or consolidation (12.08) `start`, with the
+// move in progress, so move_reach can be asked about a move before it is made. nullopt if `start` is not a
+// StartPileIn or StartConsolidation, or is not valid now. Starting these moves rolls no dice. Read-only:
+// `state` is not changed.
+[[nodiscard]] std::optional<GameState> preview_fight_move(const GameState& state, Side side,
+                                                          const GameAction& start);
 
 // What would make CommitUnitMove return the models to their start positions right now (03.01 Ending a
 // Move, 03.03 coherency, the move type's After Moving conditions). Rule-cited; empty means the move

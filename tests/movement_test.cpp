@@ -686,3 +686,48 @@ TEST(D044_MoveReach, EnemyBasesBlockTheNextLineExceptForADesperateEscape) {
     ASSERT_TRUE(escape.has_value());
     EXPECT_TRUE(escape->blocking.empty());  // 09.07 While Moving: it may move through enemy models
 }
+
+// ---- D-047: preview_fight_move, a pile-in or consolidation before it is made ----
+
+TEST(R12_03_PileInMove, PreviewStartsThePileInOnACopy) {
+    GameState gs = wh40k::test::after_successful_charge();
+    apply_action(gs, Side::A, action::EndChargeStep{});
+    ASSERT_EQ(gs.flow.stage, Stage::PileIn);
+    const GameState before = gs;
+    const action::StartPileIn start{gs.units[kMarines].id, {gs.units[kGants].id}};
+    const auto preview = preview_fight_move(gs, Side::A, start);
+    ASSERT_TRUE(preview.has_value());
+    EXPECT_EQ(gs, before);  // read-only
+    ASSERT_TRUE(preview->flow.move.has_value());
+    EXPECT_EQ(preview->flow.move->type, MoveType::PileIn);
+    EXPECT_TRUE(move_reach(*preview, gs.units[kMarines].models[0].id).has_value());
+    // Same as starting it for real.
+    apply_action(gs, Side::A, start);
+    EXPECT_EQ(*preview, gs);
+}
+
+TEST(R12_03_PileInMove, PreviewOfAnInvalidOrOtherActionIsNullopt) {
+    GameState gs = wh40k::test::after_successful_charge();
+    apply_action(gs, Side::A, action::EndChargeStep{});
+    // The wrong side, a unit that isn't its own, and an action that isn't a pile-in or consolidation.
+    EXPECT_FALSE(preview_fight_move(gs, Side::B, action::StartPileIn{gs.units[kMarines].id, {gs.units[kGants].id}}));
+    EXPECT_FALSE(preview_fight_move(gs, Side::A, action::StartPileIn{gs.units[kGants].id, {gs.units[kMarines].id}}));
+    EXPECT_FALSE(preview_fight_move(gs, Side::A, action::EndPileIns{}));
+}
+
+TEST(R12_08_ConsolidationMove, PreviewStartsTheConsolidationOnACopy) {
+    GameState gs = wh40k::test::consolidate_step_state();
+    ASSERT_EQ(gs.flow.stage, Stage::Consolidate);
+    const Side s = decider(gs);
+    std::optional<action::StartConsolidation> start;
+    for (const GameAction& a : legal_actions(gs, s)) {
+        if (const auto* c = std::get_if<action::StartConsolidation>(&a)) start = *c;
+    }
+    ASSERT_TRUE(start.has_value());
+    const GameState before = gs;
+    const auto preview = preview_fight_move(gs, s, *start);
+    ASSERT_TRUE(preview.has_value());
+    EXPECT_EQ(gs, before);
+    ASSERT_TRUE(preview->flow.move.has_value());
+    EXPECT_EQ(preview->flow.move->type, MoveType::Consolidation);
+}

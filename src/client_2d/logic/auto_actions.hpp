@@ -2,7 +2,8 @@
 
 // Decisions the client answers by itself (client only: every action still goes through
 // GameSession::submit, so it is validated and recorded like any other step):
-// - "Skip steps with nothing to do" (D-036, M23): the only legal action is to end a step or pass.
+// - "Skip steps with nothing to do" (D-036, M23): the only legal action is to end a step or pass, or
+//   (D-047, M31) every pile-in or consolidation left is too small to matter (fight_move_skip).
 // - "Allocate damage automatically" (D-038, M25): the defender's allocation order (05.03) and casualty
 //   order (05.04) take their defaults.
 
@@ -18,7 +19,7 @@
 namespace wh40k::client {
 
 struct AutoSettings {
-    bool skip_empty_steps = true;  // D-036
+    bool skip_empty_steps = true;  // D-036, D-047
     bool auto_allocate = true;     // D-038
 };
 
@@ -29,7 +30,8 @@ struct AutoSettings {
 [[nodiscard]] std::optional<core::GameAction> lone_skip(const std::vector<core::GameAction>& legal);
 
 // The action the client takes by itself for this decision under `settings`, if any: a lone skip, the
-// first (default) allocation order, or the default casualty order (CasualtyPlan's).
+// first (default) allocation order, or the default casualty order (CasualtyPlan's). Under
+// skip_empty_steps, also the step's skip when every pile-in or consolidation left is pointless (D-047).
 [[nodiscard]] std::optional<core::GameAction> next_auto_action(const core::GameState& state,
                                                                const std::vector<core::GameAction>& legal,
                                                                AutoSettings settings);

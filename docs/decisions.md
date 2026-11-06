@@ -682,6 +682,7 @@ logic).
 - **Undo:** the client remembers which history steps were skipped automatically; one Undo removes those that
   follow the player's last action and then that action, so it does not land on a skip-only decision.
   (Since M26 this is part of the Undo groups, D-039.)
+- **Extended by D-047 (M31):** pile-ins and consolidations too small to matter are skipped too.
 
 ## D-037: Explaining weapon abilities and keywords (M24)
 **Decided:** 2026-11-05 (agreed with the user). Display only; no state, event or replay change.
@@ -859,3 +860,25 @@ is unchanged.
   - "within 1" / engaged if it can" (TODO(if-possible), left to the player).
 - The charge-distance ring is still drawn.
 
+
+## D-047: Skipping pile-ins and consolidations too small to matter (M31)
+**Decided:** 2026-11-06 (agreed with the user). Client only, plus a read-only core query; no state, event or
+replay-format change.
+- **Extends D-036.** Under "Skip steps with nothing to do", in a Pile In or Consolidate step (12.02, 12.07)
+  the client submits `EndPileIns` / `EndConsolidations` when every unit's offered move (every target
+  choice) is not worth making; in an overrun pile-in (12.06) it submits `SkipPileIn`. Moving is the
+  player's choice ("units they choose to move"), so this changes no rule.
+- **Not worth making:** for every model of the unit, `move_reach` (D-041) on a preview of the move's start
+  (`preview_fight_move`) says it is immobile (base contact, 12.03 / 12.08 Ongoing While Moving), or no point
+  of its area is more than **2 mm** (fixed) from its start (sampled every 5° and 0.5 mm), **and** no model's
+  move could reach the engagement range of a model of an enemy unit it isn't engaged with at its start
+  (centre distance − both base radii − 2" − EPS ≤ the distance it may move; deliberately generous, other
+  limits ignored). A small move that makes new contact can let the unit fight, or force an enemy unit to
+  fight (12.08 Engaging Consolidation), so it is always offered.
+- **Errs towards offering the move.** The area is per model and ignores coherency (03.03) and the unit-wide
+  After Moving conditions, so it can only show more room than a real move has: a move is never skipped
+  because of those, only kept.
+- The skip joins the player's last input for Undo (D-039) and is named on the status line, like D-036
+  ("Skipped (nothing worth doing): ...").
+- **Not tested end to end:** the overrun pile-in case (12.06) uses the same check but has no logic test of
+  its own.

@@ -7,7 +7,9 @@
 #include <cstdio>
 #include <stdexcept>
 #include <string>
+#include <variant>
 
+#include "core/dice/dice.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
 #include "core/geometry/closest.hpp"
@@ -507,6 +509,29 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
         }
     }
     return reach;
+}
+
+namespace {
+
+// D-047: starting a pile-in or consolidation rolls nothing, so a roll here is a programmer error.
+class NoDice final : public DiceSource {
+public:
+    int roll_d6() override { throw std::logic_error("preview_fight_move: starting the move rolled a die"); }
+};
+
+}  // namespace
+
+std::optional<GameState> preview_fight_move(const GameState& state, Side side, const GameAction& start) {
+    if (!std::holds_alternative<action::StartPileIn>(start) &&
+        !std::holds_alternative<action::StartConsolidation>(start)) {
+        return std::nullopt;
+    }
+    if (!validate_action(state, side, start).ok()) return std::nullopt;
+    GameState copy = state;
+    NoDice dice;
+    (void)apply_action(copy, side, start, dice);
+    if (!copy.flow.move) return std::nullopt;
+    return copy;
 }
 
 std::optional<Position> move_start_position(const GameState& state, ModelId model) {

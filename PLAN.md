@@ -444,6 +444,20 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M31: Skip pile-ins and consolidations too small to matter ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-06)
+
+> "Skip steps with nothing to do" (D-036) also covers the Pile In and Consolidate steps (12.02, 12.03, 12.06, 12.07, 12.08) when no unit's move is worth making (D-047): every model is in base contact or can end at most 2 mm from where it started, and no model could end engaged with an enemy unit it isn't engaged with now. The client then ends the step (or skips the overrun pile-in) itself, as for D-036. Moving is the player's choice (12.02 / 12.07: "units they choose to move"), so no rule changes. A read-only core query previews the move's start so `move_reach` (D-041) gives each model's area.
+
+**Acceptance**
+- `preview_fight_move` returns the state with the pile-in or consolidation in progress, nullopt for an invalid start, and leaves the input unchanged (core tests).
+- Every model in base contact, or boxed in to 2 mm or less: the step ends by itself; with room for 3 mm it doesn't (logic tests).
+- A move under 2 mm that could bring a model into engagement with a new enemy unit is not skipped; nor is an Engaging Consolidation that can reach its target (logic tests).
+- A pointless overrun pile-in is skipped with `SkipPileIn`; with the setting off nothing is skipped; one Undo removes the skip with the player's last action (logic tests).
+- No new replay: a skip is an ordinary `EndPileIns` / `EndConsolidations` / `SkipPileIn` step, which the existing replays already cover; they stay byte-identical. (Logic test: the history with the skip rebuilds to the same state.)
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

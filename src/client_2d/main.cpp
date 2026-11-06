@@ -495,7 +495,7 @@ private:
         std::string text;
         for (const core::GameAction& a : done) {
             if (!is_skip(a)) continue;  // allocation shows in the dice pop-ups and the log
-            text += (text.empty() ? "Skipped (nothing to do): " : ", ") + action_label(session_->state(), a);
+            text += (text.empty() ? "Skipped (nothing worth doing): " : ", ") + action_label(session_->state(), a);
         }
         if (!text.empty()) status_ = std::move(text);
     }

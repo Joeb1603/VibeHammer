@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "casualty_plan.hpp"
+#include "fight_move_skip.hpp"
 
 namespace wh40k::client {
 
@@ -24,6 +25,7 @@ std::optional<core::GameAction> next_auto_action(const core::GameState& state,
                                                  AutoSettings settings) {
     if (settings.skip_empty_steps) {
         if (auto skip = lone_skip(legal)) return skip;
+        if (auto skip = pointless_fight_step_skip(state, legal)) return skip;  // D-047
     }
     if (settings.auto_allocate && state.pending) {
         if (std::holds_alternative<core::decision::DeclareAllocationOrder>(state.pending->kind) && !legal.empty()) {

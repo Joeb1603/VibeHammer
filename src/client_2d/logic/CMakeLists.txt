@@ -8,6 +8,7 @@ add_library(wh40k_client_logic STATIC
     decision_view.cpp
     dice_cards.cpp
     event_text.cpp
+    fight_move_skip.cpp
     melee_plan.cpp
     move_plan.cpp
     ring_outline.cpp

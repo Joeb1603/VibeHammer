@@ -266,6 +266,21 @@ inline core::action::Fight first_melee_options(const core::GameState& gs, core::
     return a;
 }
 
+// D-047: the Consolidate step after after_successful_charge's fight (as R12 FullFightPhase): no pile-ins,
+// every melee attack misses on both sides, so the units are still engaged. Side A consolidates first.
+inline core::GameState consolidate_step_state() {
+    core::GameState gs = after_successful_charge();
+    core::apply_action(gs, core::Side::A, core::action::EndChargeStep{});
+    while (gs.flow.stage == core::Stage::PileIn) core::apply_action(gs, decider(gs), core::action::EndPileIns{});
+    for (const core::UnitId unit : {gs.units[0].id, gs.units[1].id}) {
+        core::apply_action(gs, decider(gs), core::action::SelectToFight{unit, core::FightType::Normal});
+        core::ScriptedDice misses(std::vector<int>(64, 1));
+        core::apply_action(gs, decider(gs), first_melee_options(gs, unit), misses);
+    }
+    EXPECT_EQ(gs.flow.stage, core::Stage::Consolidate);
+    return gs;
+}
+
 inline core::WeaponSelection select(const core::GameState& gs, std::size_t unit_index, std::size_t model_index,
                                     std::size_t weapon, std::size_t profile, core::UnitId target) {
     return core::select_weapon_target(gs, gs.units[unit_index].models[model_index].id, weapon, profile, target);
