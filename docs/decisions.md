@@ -1154,6 +1154,71 @@ change.
     decision (A moves first); `--seed 1 --bot B --steps 6 --bot-steps 4 --bot-speed slow` shows the bot mid-move.
   - **Build:** `src/client_2d/logic` is now added from the root CMakeLists (before `src/ai`, which links it, and
     `src/client_2d`, whose exe links `wh40k_ai`).
+- **M40 notes (odds and threat analysis, `src/ai/analysis/`, namespace `wh40k::ai::analysis`):**
+  - **Per-die chances from the engine:** `OddsCache` derives P(hit), P(critical hit), P(wound | hit) and P(critical
+    wound) by calling `make_hit_rolls` / `make_wound_rolls` with a `ScriptedDice` face 1-6 and one die, and P(the save
+    roll inflicts damage) from `check_save_roll` per face. No threshold or S-vs-T row is typed in ai code (tests
+    check them against the rulebook and `required_wound_roll` for S, T 1-12). Profiles come from
+    `make_attack_profile` (so [HEAVY]'s +1 is in `hit_modifier`) and dice from `gather_attack_dice` ([RAPID FIRE],
+    [BLAST] per five target models, rounded down). `profile_supported` = fixed A and D (D-002) and no
+    `unimplemented_ability_problem` (D-026): the Thunder Hammer, spinefist, Shardlauncher and Strangleweb are out.
+  - **Cache keys:** hit/wound by (BS/WS or -1, torrent, S, hit modifier, wound modifier, T); saves by (AP, Sv or -1,
+    InSv or -1), in `std::map`s. Damage and the attack-time abilities don't change per-die chances ([HAZARDOUS] hurts
+    the attacker, not the odds). A cache belongs to its caller, not a global; a value never depends on what else is
+    cached (tested).
+  - **Criticals:** reported, but in V1 they add nothing beyond succeeding (an unmodified 6 always hits and wounds;
+    [DEVASTATING WOUNDS] and [TWIN-LINKED], the abilities that would use them, are rejected by D-026).
+  - **The exact outcome:** a volley (batches in resolution order) against a `TargetSnapshot` (T, allocation groups in
+    the first legal order, models in damage order: within a group a wounded model first). A dynamic programme over
+    (models destroyed, wounds left on the front model), one attack die at a time, with P(inflicts damage) =
+    hit x wound x unsaved for the group of the model next in line. Excess damage is lost with the model, and attacks
+    after the unit is wiped are lost (05.04, Appendix: Destroyed). It is exact for a single allocation group (every
+    V1 unit); with several groups it ignores 05.04's lowest-save-roll-first order across groups.
+  - **Value unit:** `model_equivalents` = models destroyed plus the change in the front model's lost-wound fraction,
+    so it adds up across volleys and a W2 model left on 1 wound counts half. `damage` is wounds lost (D2 into W1
+    counts 1). Every outcome carries the pmf of models destroyed (for M44's chain).
+  - **Sampling:** `sample_outcome` runs `resolve_attack_batch` on a stripped copy of the target (keywords reduced to
+    CHARACTER, no weapons or names) with the bot's own `SeededDice` (its own `DiceState`, D-054), the first legal
+    allocation order and model. Acceptance: all 66 cases (22 profile / [HEAVY] / half-range variants x Intercessors,
+    Termagants and a wounded Intercessor squad; attack dice from `gather_attack_dice` x enough models to strip about
+    60% of the target's wounds) are within 2% for expected damage and models destroyed, and within 0.015 per pmf
+    entry, of 20,000 engine batches each: `M40_ExpectedDamage.DISABLED_FullGrid...` (about 6 min in Debug, 18 s in
+    Release; passed in both). ctest runs an 8-case subset at 20,000 batches each (about 23 s in Debug).
+  - **From a state:** `shooting_batches` / `melee_batches` are exactly the engine's batches
+    (`make_weapon_selections` / `make_melee_selections` + `gather_attack_batches` with `shooting_context` / the
+    Fighting context), empty when `shot_problems` / `melee_problems` object. `best_shooting` picks, for each shooting
+    type the unit is eligible for, each model's best profile per weapon from `shot_options` and the better of its
+    [CLOSE-QUARTERS] and other sets (24.07), each valued alone against the fresh target (no overkill: M41's job).
+    `PositionProbe` is M43's seam: one `GameState` copy whose unit positions and turn flags are rewritten per
+    candidate (it also clears `selected_to_shoot`, so the shooting queries answer for "after this move").
+  - **Charges:** `charge_odds` scripts each 2D6 total (a face pair found through `roll_2d6`) into `DeclareCharge` on a
+    `Simulator` copy (new `Simulator::step(side, action, DiceSource&)`; `apply_action(` stays in simulator.cpp) and
+    counts the totals where `legal_actions` offers `StartChargeMove` with exactly the targets: 11 copies at most.
+    A model within the roll of a target can reach its engagement range, so target eligibility is the quick bound;
+    M42 plugs its placement check in through the `PlacementCheck` hook. `p_charge_roll_covers(gap)` is the same bound
+    without a state (as `eligible_charge_targets`: within the roll and within 12"); both equal a brute force over the
+    36 pairs at 3", 6", 9", 11.5" and 13" (35/36, 26/36, 10/36, 1/36, none). `advance_odds` does the same with each D6
+    face through `StartMove{Advance}` and `max_move_distance_mm` (a reused roll, D-005, gives one distance).
+    `distance_after_casualties(from, enemy, kills)` is the gap to the (floor(kills) + 1)-th closest enemy model: the
+    defender is assumed to remove the front models (the worst case for a charger).
+  - **Strategic knowledge (hypothetical turns):** `allowance_after(MovePlan)`: Remain Stationary or a Normal move up
+    to 3" keeps [HEAVY]; a Normal move over 3" loses it; an Advance allows Assault shooting only and no charge; a Fall
+    Back allows neither. Tested against `eligible_shooting_types`, `shooting_context` and `declare_charge_problem` on
+    states with those turn flags. The live state always uses `current_options` (the engine's queries). Threat ranges:
+    M (the slowest model), M + D6 (09.06), the longest usable ranged / [ASSAULT] / [CLOSE-QUARTERS] range, and
+    P(charge after a Normal move) = the charge bound on max(gap - M, engagement range), since the move must end
+    unengaged. `within_half_range` is core's own test (`within(gap, range * 0.5)`), checked against
+    `select_weapon_target`.
+  - **Roles:** ranged = the best shooting (unengaged, [HEAVY], at half the longest range), melee = every model with
+    its best melee weapon, both in model equivalents against the actual enemy. `ranged_share` = ranged / (ranged +
+    melee); the lean is Ranged above 0.55 and Melee below 0.45; strong = at least 25% of the enemy unit's models.
+    Termagants vs Intercessors: ranged 0.417, melee 0.278 (share 0.60, Ranged, neither strong). Intercessors vs
+    Termagants: ranged 5.79, melee 4.44 (strong at both).
+  - **Matchup table per range band** (`direction_table`, both directions in `matchup`): Engaged (close-quarters
+    shooting, then the fight; `turn` resolves both in sequence), HalfRange (at half the attacker's longest range),
+    InRange (at its longest range), OutOfRange (nothing). Each unengaged band has stationary, moved and advanced
+    shooting. Intercessors -> Termagants: engaged 6.26 (pistols 1.85, melee 4.44), half range 5.79 (moved 5.55), 24"
+    3.70 (Saturation). Termagants -> Intercessors: engaged 0.28, in range 0.42 (0.83 wounds).
 
 ## D-055: Start screen and saved settings (M38)
 **Decided:** 2026-11-06 (M38, pre-approved batch). Client only; no rule, state or replay change.

@@ -13,9 +13,14 @@ Simulator::Simulator(core::GameState state, std::uint64_t dice_seed)
 
 core::ValidationResult Simulator::step(core::Side side, const core::GameAction& action,
                                        std::vector<core::GameEvent>* events) {
+    core::SeededDice dice(dice_);  // D-054: the bot's own dice, never SeededDice(state_.dice)
+    return step(side, action, dice, events);
+}
+
+core::ValidationResult Simulator::step(core::Side side, const core::GameAction& action, core::DiceSource& dice,
+                                       std::vector<core::GameEvent>* events) {
     core::ValidationResult v = core::validate_action(state_, side, action);
     if (!v.ok()) return v;
-    core::SeededDice dice(dice_);  // D-054: the bot's own dice, never SeededDice(state_.dice)
     try {
         std::vector<core::GameEvent> out = core::apply_action(state_, side, action, dice);
         ++steps_;

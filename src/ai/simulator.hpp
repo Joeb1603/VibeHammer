@@ -26,6 +26,10 @@ public:
     // accepted step are appended to `events` when given. Nothing changes when the action is invalid.
     core::ValidationResult step(core::Side side, const core::GameAction& action,
                                 std::vector<core::GameEvent>* events = nullptr);
+    // The same with dice the caller supplies (M40: a ScriptedDice face or 2D6 pair, to enumerate a roll's
+    // outcomes exactly). The bot's own dice are not advanced.
+    core::ValidationResult step(core::Side side, const core::GameAction& action, core::DiceSource& dice,
+                                std::vector<core::GameEvent>* events = nullptr);
     // The same for the side that owns the pending decision (a failure when nothing is pending).
     core::ValidationResult step(const core::GameAction& action, std::vector<core::GameEvent>* events = nullptr);
 

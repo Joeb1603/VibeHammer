@@ -673,7 +673,7 @@ Every earlier level stays selectable as a regression opponent.
 
 ---
 
-## M40: Odds and threat analysis
+## M40: Odds and threat analysis ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-06)
 
 > `src/ai/analysis/`. All numbers come from core's own functions (D-054); thresholds are never re-typed.
@@ -704,6 +704,15 @@ Every earlier level stays selectable as a regression opponent.
   damage is within 2% of the mean of 20,000 sampled engine batches (ai tests, fixed seed).
 - Charge P(success) equals a brute-force enumeration over all 36 dice pairs, for several distances (ai tests).
 - Against each other, the Termagants rate as ranged-leaning and the Intercessors as strong at both (ai tests).
+
+**Results (2026-11-06):**
+- Expected damage: all 66 cases (every accepted V1 profile, with and without [HEAVY], in and out of [RAPID FIRE]
+  half range, against Intercessors, Termagants and a wounded Intercessor squad) are within 2% of 20,000 engine
+  batches each, in `M40_ExpectedDamage.DISABLED_FullGrid...` (Release 18 s, Debug about 6 min; run on purpose).
+  ctest runs an 8-case subset at 20,000 batches each (about 23 s in Debug); the M40 tests add about 27 s in Debug.
+- Charge odds equal the 36-pair brute force at 3", 6", 9", 11.5" and 13" (`M40_ChargeOdds`).
+- Roles (`M40_Role`): Termagants vs Intercessors ranged 0.42 / melee 0.28 model equivalents (Ranged lean);
+  Intercessors vs Termagants ranged 5.79 / melee 4.44 (strong at both). Details in D-054, M40 notes.
 
 ---
 

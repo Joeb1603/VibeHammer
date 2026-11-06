@@ -1,6 +1,9 @@
 # wh40k_ai (M39, D-054): the bot opponent. Headless: it links wh40k_client_logic (ai -> logic -> core) and,
 # like core and logic, must not include raylib, ImGui or OS headers (checked on every build).
 add_library(wh40k_ai STATIC
+    analysis/charge_odds.cpp
+    analysis/odds.cpp
+    analysis/threat.cpp
     arena.cpp
     baseline_bot.cpp
     bot.cpp
