@@ -16,6 +16,10 @@ constexpr float MM_PER_INCH = 25.4f;
 // All "within X" checks use dist <= X + EPS_MM; all "more than X" checks use dist > X + EPS_MM.
 constexpr float EPS_MM = 0.01f;
 
+// D-048 (house rule, to review): bases up to 0.05" apart count as in base contact. Models can't be
+// dragged into exact contact with a mouse the way they are pushed together on a table.
+constexpr float kBaseContactToleranceMm = 0.05f * MM_PER_INCH;
+
 [[nodiscard]] constexpr float inches_to_mm(float inches) noexcept {
     return inches * MM_PER_INCH;
 }

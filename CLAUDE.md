@@ -112,7 +112,7 @@ Side                    active_side(const GameState&);                          
 - Positions are 2D (x, y) on the battlefield plane. Vertical rules ("5\" vertically") are trivially satisfied in V1 (no terrain). Keep a `z` field defaulting to 0 so terrain can be added later.
 - Distances are measured edge-to-edge between bases (01.04): `center_distance - r1 - r2`, clamped at 0.
 - Bases are `struct Base { BaseShape shape; float diameter_mm; float length_mm; }`. V1 is round only, but don't assume circles outside `geometry/`.
-- **Tolerance policy:** all "within X" checks use `dist <= X + EPS` and all "more than X" checks use `dist > X + EPS`, with `constexpr float EPS_MM = 0.01f;`. Base contact means `dist <= EPS_MM`. Use the helpers in `geometry/`. Never compare raw floats in rules code.
+- **Tolerance policy:** all "within X" checks use `dist <= X + EPS` and all "more than X" checks use `dist > X + EPS`, with `constexpr float EPS_MM = 0.01f;`. Base contact means `dist <= kBaseContactToleranceMm` (0.05", a house rule: D-048). Use the helpers in `geometry/`. Never compare raw floats in rules code.
 - Moves are lists of straight-line segments (03.01). Distance moved is the sum of segment lengths, and rotation is free. Validate the path against enemy bases and battlefield edges, not only the end point.
 
 ### "If possible" rules

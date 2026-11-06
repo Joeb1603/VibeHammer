@@ -501,6 +501,88 @@ TEST(R12_08_ConsolidationMove, AnEngagedUnitMustMakeAnOngoingConsolidation) {
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::B, decision::Consolidate{}}));
 }
 
+// ---- D-048: bases up to 0.05" apart are in base contact (house rule) ----
+
+namespace {
+
+// Puts the centre Intercessor `gap_in` inches south of the Termagant in front of it; returns its id.
+ModelId put_centre_marine_near_a_gant(GameState& gs, float gap_in) {
+    Model& centre = gs.units[kMarines].models[2];
+    const Model& gant = *std::min_element(gs.units[kGants].models.begin(), gs.units[kGants].models.end(),
+                                          [&](const Model& a, const Model& b) {
+                                              return std::abs(a.position.x - centre.position.x) + a.position.y <
+                                                     std::abs(b.position.x - centre.position.x) + b.position.y;
+                                          });
+    centre.position = Position{gant.position.x, gant.position.y - kGantRadius - kMarineRadius - in(gap_in), 0.0f};
+    return centre.id;
+}
+
+// After R12_08's fight: Side A's Ongoing Consolidation, with the centre Intercessor `gap_in` from a Termagant.
+std::pair<GameState, ModelId> ongoing_consolidation_with_gap(float gap_in) {
+    GameState gs = after_successful_charge();
+    to_fight_step(gs);
+    act(gs, action::SelectToFight{id_of(gs, kMarines), FightType::Normal});
+    ScriptedDice misses = rolls(15, 1);
+    act(gs, first_melee_options(gs, id_of(gs, kMarines)), misses);
+    act(gs, action::SelectToFight{id_of(gs, kGants), FightType::Normal});
+    ScriptedDice gant_misses = rolls(5, 1);
+    act(gs, first_melee_options(gs, id_of(gs, kGants)), gant_misses);
+    const ModelId centre = put_centre_marine_near_a_gant(gs, gap_in);
+    act(gs, action::StartConsolidation{id_of(gs, kMarines), {id_of(gs, kGants)}});
+    return {gs, centre};
+}
+
+}  // namespace
+
+TEST(D048_BaseContact, BasesUpTo005InchApartAreInContact) {
+    EXPECT_TRUE(in_base_contact(0.0f));
+    EXPECT_TRUE(in_base_contact(1.2f));
+    EXPECT_TRUE(in_base_contact(in(0.05f)));
+    EXPECT_FALSE(in_base_contact(1.3f));
+}
+
+TEST(D048_BaseContact, AModel004InchFromAnEnemyCannotPileIn) {
+    GameState gs = after_successful_charge();
+    const ModelId centre = put_centre_marine_near_a_gant(gs, 0.04f);
+    act(gs, action::EndChargeStep{});
+    act(gs, action::StartPileIn{id_of(gs, kMarines), {id_of(gs, kGants)}});
+    const Position c = find_model(gs, centre)->position;
+    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.02f), 0}}}).at(0),
+              "12.03: model 3 is in base contact with an enemy model and cannot be moved");
+    const auto reach = move_reach(gs, centre);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_TRUE(reach->immobile);
+}
+
+TEST(D048_BaseContact, AModel006InchFromAnEnemyCanStillPileInCloser) {
+    GameState gs = after_successful_charge();
+    const ModelId centre = put_centre_marine_near_a_gant(gs, 0.06f);
+    act(gs, action::EndChargeStep{});
+    act(gs, action::StartPileIn{id_of(gs, kMarines), {id_of(gs, kGants)}});
+    const Position c = find_model(gs, centre)->position;
+    expect_valid(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.03f), 0}}});
+    const auto reach = move_reach(gs, centre);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_FALSE(reach->immobile);
+}
+
+TEST(D048_BaseContact, AModel004InchFromAnEnemyCannotMoveInAnOngoingConsolidation) {
+    auto [gs, centre] = ongoing_consolidation_with_gap(0.04f);
+    ASSERT_EQ(gs.flow.move->consolidation_mode, ConsolidationMode::Ongoing);
+    const Position c = find_model(gs, centre)->position;
+    EXPECT_EQ(rejection(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.02f), 0}}}).at(0),
+              "12.08: model 3 is in base contact with an enemy model and cannot be moved");
+    const auto reach = move_reach(gs, centre);
+    ASSERT_TRUE(reach.has_value());
+    EXPECT_TRUE(reach->immobile);
+}
+
+TEST(D048_BaseContact, AModel006InchFromAnEnemyCanStillConsolidateCloser) {
+    auto [gs, centre] = ongoing_consolidation_with_gap(0.06f);
+    const Position c = find_model(gs, centre)->position;
+    expect_valid(gs, Side::A, action::ProposeModelMove{centre, {Position{c.x, c.y + in(0.03f), 0}}});
+}
+
 TEST(R12_08_ConsolidationMove, EngagingConsolidationForcesAnEnemyThatHasNotFoughtToFight) {
     GameState gs = after_successful_charge();
     const Model& east = gs.units[kMarines].models[4];

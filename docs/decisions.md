@@ -360,6 +360,7 @@ of the charge for that reason.
   charges).
 - **Base contact.** A model is in base contact with an enemy model if it is within `EPS_MM` of it at the
   start of the move. Such a model cannot be moved in a pile-in move or an Ongoing Consolidation.
+  **Extended by D-048 (M32):** the tolerance is now 0.05" (house rule).
 - **If possible.** "And engaged with it if possible" is left to the player in V1 (`TODO(if-possible)`).
 - **Reverted moves.** A pile-in or consolidation move that fails its end conditions (03.01), or is
   reset, returns the models and goes back to the same decision: the Pile In step, the Consolidate step,
@@ -882,3 +883,21 @@ replay-format change.
   ("Skipped (nothing worth doing): ...").
 - **Not tested end to end:** the overrun pile-in case (12.06) uses the same check but has no logic test of
   its own.
+
+## D-048: Base contact within 0.05" (M32) — house rule, review later
+**Decided:** 2026-11-06, chosen by the user. **This is not rules text: review it** (e.g. if the client ever
+snaps dragged models into base contact, this leeway may no longer be needed).
+- **The rules:** base contact means the bases touch. Until M32 the engine used `dist <= EPS_MM` (0.01 mm).
+- **The change:** two models whose bases are **0.05" (1.27 mm) or less** apart are in base contact
+  (`kBaseContactToleranceMm`, `in_base_contact` in `geometry/distance.hpp`).
+- **Why:** on a table you push models into tactile base contact. Dragging with a mouse can't be that exact,
+  so a model dropped "touching" often ends a fraction of a millimetre short. Seen in play: a Termagant
+  about 1.2 mm from an Intercessor made an Ongoing Consolidation 0.57" sideways that ended only ~0.7 mm
+  closer. Under the strict reading that was legal; with this leeway the model is in base contact and can't move.
+- **Effects:** 12.03 pile-in and 12.08 Ongoing Consolidation: such a model cannot be moved (validation and
+  the `move_reach` shaded area, so D-047's skip follows too). Any later rule that asks "in base contact"
+  inherits the leeway.
+- **Unchanged:** bases still can't overlap (`bases_overlap`, path blocking keep `EPS_MM`); a model further
+  than 0.05" away can still move, up to its full distance; engagement range, coherency and all
+  "within"/"more than" checks keep `EPS_MM`.
+- **Extends D-022** (its "Base contact" bullet).

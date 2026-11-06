@@ -458,6 +458,18 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
+## M32: Base contact within 0.05" ✅ (done)
+**Effort:** `low` · **Plan mode:** yes (agreed 2026-11-06)
+
+> House rule (D-048, to review later): bases up to 0.05" apart count as in base contact, because a mouse drag can't reach the exact contact you get by pushing models together on a table. A model that close to an enemy can't be moved in a pile-in (12.03) or an Ongoing Consolidation (12.08). Overlap, engagement, coherency and other distance checks are unchanged.
+
+**Acceptance**
+- `in_base_contact`: 0, 1.2 mm and 0.05" are contact; 1.3 mm is not (core test).
+- A model 0.04" from an enemy can't pile in or make an Ongoing Consolidation, and `move_reach` marks it immobile; at 0.06" it can move closer (core tests).
+- Existing tests and replays pass unchanged.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
