@@ -1048,3 +1048,20 @@ change.
   and "the unit must be engaged" (12.03) are checked at Commit, as before, with the existing warning.
   Pulling a model towards its friends would put it somewhere the player didn't drag it.
 - **With the setting off,** drops are submitted exactly as they were made, as before M36.
+
+## D-053: Engagement Range in the shaded area; no Roll click when there is nothing to roll (M37)
+**Decided:** 2026-11-06 (asked for by the user). Client only; no rule, state or replay change.
+- **Engagement Range part of the area:** since D-052 a drop within Engagement Range is accepted and left
+  for Commit to check. So the shaded area (D-040) also shows that part, faintly in the Engagement Range
+  ring's red: "you may go here, but can't end the move here". It is `fix_region(region)` less `region`
+  (`engaged_spans`):
+  - within 2" of an enemy (Normal, Advance, Fall Back);
+  - within 2" of a non-target (charge);
+  - out of range of a unit the model started engaged with (pile-in, consolidation).
+
+  It is drawn with the blue fill under the "Movement range" toggle, whether or not "Fix illegal moves" is
+  on. The movement ring's tooltip says what the red part means.
+- **Dice pop-ups (D-033) with no dice:** a card with nothing to roll, such as a wound roll after no hits
+  ("No hits to roll for"), or a save roll with no wounds ("No wounds to roll saves for"), is shown with its
+  result straight away. Its button is OK, or Continue if more cards follow. There is no face-down tray and
+  no Roll click (`needs_roll`).

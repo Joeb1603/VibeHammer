@@ -185,6 +185,7 @@ DiceCard save_card(const core::GameState& state, const AttackContext& c, core::U
     }
     const int failed = static_cast<int>(rolls.size()) - saved;
     card.result = plural(saved, "save", "saves") + " made, " + std::to_string(failed) + " failed";
+    if (rolls.empty()) card.result = "No wounds to roll saves for";
     return card;
 }
 

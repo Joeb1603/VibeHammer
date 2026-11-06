@@ -35,6 +35,10 @@ struct DiceCard {
     std::vector<EffectLine> notes{};
 };
 
+// D-053 (M37): whether the card has dice to roll. A card with none ("No hits to roll for") is shown with its
+// result at once and an OK button, without a Roll click.
+[[nodiscard]] inline bool needs_roll(const DiceCard& card) { return !card.dice.empty(); }
+
 // The cards for the roll events in log entries [from, log.size()), in order. Earlier entries give context
 // (which batch and weapon is attacking, the target's allocation groups). `state` is the state after the
 // last entry, for unit names and sides.

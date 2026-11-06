@@ -562,11 +562,18 @@ private:
         const float step_mm = 1.0f / px;  // one screen pixel
         Color fill = ring_color(RingKind::MoveRange);
         fill.a = 46;
-        for (const ReachSpan& s : reach_spans(*region, step_mm)) {
-            const Vector2 a = camera_.to_screen(s.x0, s.y);
-            const Vector2 b = camera_.to_screen(s.x1, s.y);
-            DrawRectangleRec(Rectangle{std::min(a.x, b.x), std::min(a.y, b.y), std::fabs(b.x - a.x), 1.0f}, fill);
-        }
+        const auto draw_spans = [&](const std::vector<ReachSpan>& spans, Color colour) {
+            for (const ReachSpan& s : spans) {
+                const Vector2 a = camera_.to_screen(s.x0, s.y);
+                const Vector2 b = camera_.to_screen(s.x1, s.y);
+                DrawRectangleRec(Rectangle{std::min(a.x, b.x), std::min(a.y, b.y), std::fabs(b.x - a.x), 1.0f}, colour);
+            }
+        };
+        draw_spans(reach_spans(*region, step_mm), fill);
+        // D-053: where it may go but can't end (within Engagement Range), faintly in the engagement colour.
+        Color engaged = ring_color(RingKind::Engagement);
+        engaged.a = 40;
+        draw_spans(engaged_spans(*region, step_mm), engaged);
     }
 
     // The unit being moved model by model, if it is this player's MoveModels decision.

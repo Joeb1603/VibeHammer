@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/geometry/primitives.hpp"
 #include "core/geometry/units.hpp"
@@ -54,6 +55,11 @@ struct FixedDrop {
 // Exact and deterministic: projections onto the region's circles and lines and their crossings.
 [[nodiscard]] std::optional<FixedDrop> fix_drop(const ReachRegion& region, const core::Position& from,
                                                 const core::Position& drop);
+
+// D-053 (M37): the part of the shaded area within Engagement Range: where a drop is accepted but would end
+// engaged (fix_region(region) less region), as spans on the same rows as reach_spans(region, y_step_mm).
+// Nothing when the two are the same (no enemy near, or a move that may end engaged).
+[[nodiscard]] std::vector<ReachSpan> engaged_spans(const ReachRegion& region, float y_step_mm);
 
 // What was wrong, for the status line: "it was further than the model can move".
 [[nodiscard]] std::string drop_problem_text(DropProblem problem);

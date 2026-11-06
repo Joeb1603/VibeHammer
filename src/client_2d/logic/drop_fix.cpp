@@ -272,6 +272,28 @@ std::optional<FixedDrop> fix_drop(const ReachRegion& region, const core::Positio
     return FixedDrop{position(*spot), *problem, how};
 }
 
+std::vector<ReachSpan> engaged_spans(const ReachRegion& region, float y_step_mm) {
+    std::vector<ReachSpan> out;
+    const std::vector<ReachSpan> outer = reach_spans(fix_region(region), y_step_mm);
+    const std::vector<ReachSpan> inner = reach_spans(region, y_step_mm);
+    // Both lists walk the same rows (fix_region keeps the bounds and the distance circles), bottom to top,
+    // left to right; a row is matched within half a step.
+    const float half = y_step_mm * 0.5f;
+    std::size_t j = 0;
+    for (const ReachSpan& s : outer) {
+        while (j < inner.size() && inner[j].y < s.y - half) ++j;
+        float x0 = s.x0;
+        for (std::size_t k = j; k < inner.size() && inner[k].y <= s.y + half; ++k) {
+            const ReachSpan& c = inner[k];
+            if (c.x1 <= x0 || c.x0 >= s.x1) continue;
+            if (c.x0 > x0) out.push_back(ReachSpan{s.y, x0, c.x0});
+            x0 = std::max(x0, c.x1);
+        }
+        if (x0 < s.x1) out.push_back(ReachSpan{s.y, x0, s.x1});
+    }
+    return out;
+}
+
 std::string drop_problem_text(DropProblem problem) {
     switch (problem) {
         case DropProblem::CannotMove: return "the model can't move any further";

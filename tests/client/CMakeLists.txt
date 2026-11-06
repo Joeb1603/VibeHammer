@@ -11,6 +11,7 @@ add_executable(wh40k_client_tests
     m34_test.cpp
     m35_test.cpp
     m36_test.cpp
+    m37_test.cpp
     rules_help_test.cpp
     client_logic_test.cpp)
 

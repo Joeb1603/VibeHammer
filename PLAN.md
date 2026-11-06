@@ -507,7 +507,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ---
 
-## M36: Fix illegal moves
+## M36: Fix illegal moves ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** yes (agreed 2026-11-06)
 
 > A new setting, **Fix illegal moves** (on by default, D-052), client only. A drag the engine would refuse goes to the nearest spot it can go, shown while dragging:
@@ -526,6 +526,20 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 - Nearest spot: off the edge stays at the edge; a glancing drop on a friend touches it beside the drop; a pile-in that isn't closer goes to the nearest closer spot, and onto the target gives base contact (logic tests).
 - A legal drop is untouched; no legal spot gives no fix; a whole-unit drag too far or off the edge is accepted for every model (logic tests).
 - Over grids of drops (Normal, charge, pile-in), every fix is accepted by the engine and is within 1" of the drop or on the drag line, and the same input gives the same output (logic tests). Replays unchanged.
+
+---
+
+## M37: Engagement Range in the movement area; no Roll for rolls with no dice ✅ (done)
+**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-06)
+
+> Two follow-ups from playing M36 (D-053), client only.
+> - **Engagement Range in the shaded area:** the area now reaches into Engagement Range, faintly in the engagement red. A model may go there or be dropped there, but the move can't end there, and Commit checks that.
+> - **Dice pop-ups with no dice:** a card with nothing to roll (e.g. "No hits to roll for") shows its result at once with an OK button, with no Roll click.
+
+**Acceptance**
+- In a Normal move near the Termagants, a spot within 2" of one is red and not blue, a spot past 2" is blue and not red, and a Termagant's base is neither. Red spots are accepted by the engine and then end engaged at Commit (logic tests).
+- No red with no enemy near (logic test).
+- An attack whose hit rolls all fail gives a wound card that needs no roll, reading "No hits to roll for"; the hit card needs one (logic test).
 
 ---
 

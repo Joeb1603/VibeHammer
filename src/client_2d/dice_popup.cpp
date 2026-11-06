@@ -121,6 +121,7 @@ void DicePopup::draw(Rectangle area, float ui_scale) {
         rolling_since_.reset();
         revealed_ = true;
     }
+    if (!needs_roll(card)) revealed_ = true;  // D-053: nothing to roll, so no Roll click
 
     const Color side = side_color(card.roller);
     const ImVec4 side_colour(side.r / 255.0f, side.g / 255.0f, side.b / 255.0f, 1.0f);
@@ -190,7 +191,8 @@ void DicePopup::draw(Rectangle area, float ui_scale) {
         ImGui::TextUnformatted(card.result.c_str());
         ImGui::PopFont();
         const bool last = queue_.size() == 1;
-        if (big_button(last ? "Done" : "Continue", true) || enter_or_space()) advance = true;
+        const char* label = last ? (needs_roll(card) ? "Done" : "OK") : "Continue";
+        if (big_button(label, true) || enter_or_space()) advance = true;
     } else {
         ImGui::BeginDisabled(rolling_since_.has_value());
         if ((big_button("Roll", true) || enter_or_space()) && !rolling_since_) rolling_since_ = now;
