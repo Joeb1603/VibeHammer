@@ -14,9 +14,13 @@
 //   the default order (D-058), whichever leaves the position worth most (the engine's preview_casualties says who
 //   dies; coherency losses at the end of the turn are counted, 03.03); Normal's is kept unless beaten by margin.
 // - The model removed to regain coherency (03.03), and the consolidation (12.07, 12.08), by the same measure.
-// Every other decision is Normal's. Hard needs a duel (one unit per side, as in every V1 scenario); otherwise it
-// plays as Normal. Like every level it is a pure function of the state (D-054): the chain tables it keeps are a
-// cache of a pure function, and every random number is the bot's own, seeded from the dice-free state hash.
+// Every other decision is Normal's. With one unit per side (every V1 scenario) the evaluator is M44's duel; with
+// several (M57, D-067) it values the army (per-unit-pair duels combined into P(win) - P(loss) over every unit,
+// D-007), the unit moving is the one Normal moves (D-066), a move's plans also include the one ending furthest from
+// every enemy model, the Monte Carlo's rollouts play every unit of both sides, and the Charge decision weighs each
+// unit's charge at its closest eligible target. Like every level it is a pure function of the state (D-054): the
+// chain tables it keeps are a cache of a pure function, and every random number is the bot's own, seeded from the
+// dice-free state hash.
 
 #include <cstdint>
 #include <optional>

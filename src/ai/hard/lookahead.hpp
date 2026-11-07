@@ -50,10 +50,17 @@ struct MonteCarloResult {
 // the state just after the move was started, so every option of one decision meets the same rollout dice.
 [[nodiscard]] std::uint64_t rollout_seed(const core::GameState& state);
 
+// Diagnostics (tests, probes): each rollout's actions in order and the state it ended in.
+struct RolloutTrace {
+    std::vector<core::GameAction> actions;
+    core::GameState end;
+};
+
 // `weights.rollouts` rollouts from `start` (a state in `side`'s turn), each to the start of `side`'s next turn.
-// Deterministic: a pure function of its arguments.
+// Deterministic: a pure function of its arguments. `traces`, if given, gets every rollout (diagnostics only).
 [[nodiscard]] MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds,
                                            const core::GameState& start, core::Side side, std::uint64_t seed,
-                                           const LookaheadWeights& weights, const Opening& opening = {});
+                                           const LookaheadWeights& weights, const Opening& opening = {},
+                                           std::vector<RolloutTrace>* traces = nullptr);
 
 }  // namespace wh40k::ai::hard

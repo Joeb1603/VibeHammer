@@ -22,6 +22,7 @@
 #include "core/engine/movement.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/rules/charge.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/state/queries.hpp"
 #include "normal/charge.hpp"
@@ -236,9 +237,20 @@ std::optional<HardMovePlan> hard_plan_unit_move(HardContext& hc, analysis::OddsC
         if (have_default && pm.candidate.ends == plans.front().candidate.ends) continue;
         plans.push_back(std::move(pm));
     }
-    if (plans.empty()) return std::nullopt;
+    if (plans.empty() && duel_of(origin)) return std::nullopt;  // M44's order (no table looked up)
     const Evaluator eval(cache, origin, u->side, hc.weights.chain, &hc.chains);
     if (!eval.ok()) return std::nullopt;
+    if (eval.army()) {
+        // D-067: also the move that keeps furthest from every enemy model (playing for the draw, D-007: with several
+        // enemy units M43's cheap score rarely ranks it among the best few).
+        if (std::optional<normal::PlannedMove> far = normal::furthest_standing_move(origin)) {
+            const bool known = std::any_of(plans.begin(), plans.end(), [&](const normal::PlannedMove& pm) {
+                return pm.candidate.ends == far->candidate.ends;
+            });
+            if (!known) plans.push_back(std::move(*far));
+        }
+    }
+    if (plans.empty()) return std::nullopt;
     std::vector<Evaluation> values;
     values.reserve(plans.size());
     for (const normal::PlannedMove& pm : plans) values.push_back(eval.evaluate(pm.after));
@@ -274,11 +286,17 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
                                             core::Side side, const std::vector<GameAction>& legal, std::uint64_t seed,
                                             HardTypeValues* values) {
     std::optional<core::UnitId> unit;
-    for (const GameAction& a : legal) {
-        if (const auto* m = std::get_if<core::action::StartMove>(&a)) {
-            unit = m->unit;
-            break;
+    if (duel_of(gs)) {
+        for (const GameAction& a : legal) {
+            if (const auto* m = std::get_if<core::action::StartMove>(&a)) {
+                unit = m->unit;
+                break;
+            }
         }
+    } else {
+        // D-067: Normal's activation order (D-066: the unit closest to an enemy unit first), so Normal's own answer
+        // (the default) is for the same unit.
+        unit = normal::unit_to_move(gs, legal);
     }
     if (!unit) return std::nullopt;
     const core::Unit& u = *gs.find_unit(*unit);
@@ -488,10 +506,78 @@ bool deviates(const HardContext& hc, double hard_value, double normal_value) {
     return hc.weights.margin < 0.0 || hard_value > normal_value + hc.weights.margin + kBetter;
 }
 
+// D-067: the Charge decision with several units. Each unit offered a DeclareCharge is valued at its closest eligible
+// target (P = the 2D6 roll covering the gap, 11.02): P x the army value with the two engaged and the charger
+// striking first (11.04) + (1 - P) x the army value with it holding; ending the step, by the army value after
+// EndChargeStep. Normal's answer (M42, D-066) is the default, kept unless another is worth more than the margin
+// more.
+std::optional<PolicyResult> decide_charge_army(HardContext& hc, analysis::OddsCache& cache, const GameState& gs,
+                                               core::Side side, const std::vector<GameAction>& legal,
+                                               std::uint64_t seed, const Evaluator& eval) {
+    const GameAction end = core::action::EndChargeStep{};
+    if (!offered(legal, end)) return std::nullopt;
+    struct Option {
+        GameAction action;
+        Evaluation value;
+        std::string text;
+    };
+    std::vector<Option> options;
+    {
+        Simulator held(gs, seed);
+        if (!held.step(side, end).ok()) return std::nullopt;
+        const Evaluation v = eval.evaluate(held.state());
+        options.push_back(Option{end, v, "no charge " + signed_value(v.score) + " (" + odds_text(v) + ")"});
+    }
+    for (const GameAction& a : legal) {
+        const auto* d = std::get_if<core::action::DeclareCharge>(&a);
+        const core::Unit* u = d != nullptr ? gs.find_unit(d->unit) : nullptr;
+        if (u == nullptr || u->side != side) continue;
+        const core::Unit* t = closest_charge_target(gs, *u);
+        if (t == nullptr) continue;
+        const double p = analysis::p_charge_roll_covers(core::unit_distance(*u, *t).value_or(0.0f));
+        const Evaluator::ChargeValues cv = eval.charge_values(gs, u->id, t->id, p);
+        options.push_back(Option{a, cv.charge,
+                                 name_of(gs, u->id) + " at " + name_of(gs, t->id) + " " + signed_value(cv.charge.score) +
+                                     " (" + percent(p) + " charge odds; the fight " + signed_value(cv.fight.score) +
+                                     ", holding " + signed_value(cv.hold.score) + ")"});
+    }
+    // Normal's answer (M42, D-066) is the default.
+    std::optional<std::size_t> normal_index;
+    if (hc.weights.margin >= 0.0) {
+        if (const std::optional<PolicyResult> n = normal::decide_charge(cache, gs, side, legal, seed)) {
+            for (std::size_t i = 0; i < options.size(); ++i) {
+                if (options[i].action == n->action) normal_index = i;
+            }
+        }
+    }
+    std::size_t best = normal_index.value_or(0);
+    for (std::size_t i = 0; i < options.size(); ++i) {
+        if (i == best) continue;
+        const double bar = normal_index ? std::max(options[best].value.score,
+                                                   options[*normal_index].value.score + hc.weights.margin)
+                                        : options[best].value.score;
+        if (options[i].value.score > bar + kBetter) best = i;
+    }
+    std::string others;
+    for (std::size_t i = 0; i < options.size(); ++i) {
+        if (i != best) others += (others.empty() ? "" : "; ") + options[i].text;
+    }
+    const Option& chosen = options[best];
+    const bool as_normal = normal_index && best == *normal_index;
+    const std::string head = std::holds_alternative<core::action::DeclareCharge>(chosen.action)
+                                 ? name_of(gs, std::get<core::action::DeclareCharge>(chosen.action).unit) +
+                                       ": declare a charge"
+                                 : "End the Charge step";
+    return single(chosen.action, head + " (Hard: " + odds_text(chosen.value) + ", value " +
+                                     signed_value(chosen.value.score) + (as_normal ? ", as Normal" : "") + "; " +
+                                     chosen.text + (others.empty() ? "" : "; " + others) + ")");
+}
+
 std::optional<PolicyResult> decide_charge(HardContext& hc, analysis::OddsCache& cache, const GameState& gs,
                                           core::Side side, const std::vector<GameAction>& legal, std::uint64_t seed) {
     const Evaluator eval(cache, gs, side, hc.weights.chain, &hc.chains);
     if (!eval.ok()) return std::nullopt;
+    if (eval.army()) return decide_charge_army(hc, cache, gs, side, legal, seed, eval);
     for (const GameAction& a : legal) {
         const auto* d = std::get_if<core::action::DeclareCharge>(&a);
         const core::Unit* u = d != nullptr ? gs.find_unit(d->unit) : nullptr;
@@ -608,8 +694,10 @@ std::optional<PolicyResult> decide_casualties(HardContext& hc, analysis::OddsCac
         normal_reason = o->reason;
     }
     const bool have_normal = !cands.empty();
-    // The front models first (a charge against us gets longer) and the rear ones first (ours gets shorter).
-    const core::Unit* enemy = normal::closest_enemy(gs, *unit);
+    // The front models first (a charge against us gets longer) and the rear ones first (ours gets shorter). D-067:
+    // with several units, measured against the attacker (D-066's attacking_enemy; M44: the closest enemy unit, the
+    // duel's only one).
+    const core::Unit* enemy = eval.army() ? normal::attacking_enemy(gs, *unit) : normal::closest_enemy(gs, *unit);
     if (enemy != nullptr) {
         std::vector<std::pair<float, core::ModelId>> by_gap;
         for (const core::Model& m : unit->models) {
@@ -774,9 +862,21 @@ bool is_unit_move(const GameState& gs) {
                             gs.flow.move->type == core::MoveType::FallBack);
 }
 
+// D-067: Hard's own answers apply to a duel (M44) and to several units a side (the army), while both sides have a
+// unit with models and the game isn't over.
+bool hard_applies(const GameState& gs) {
+    if (gs.result) return false;
+    if (duel_of(gs)) return true;
+    std::array<bool, 2> alive{};
+    for (const core::Unit& u : gs.units) {
+        if (!u.models.empty()) alive[core::side_index(u.side)] = true;
+    }
+    return alive[0] && alive[1];
+}
+
 std::optional<PolicyResult> hard_answer(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
                                         std::uint64_t seed, HardContext& hc) {
-    if (!duel_of(gs)) return std::nullopt;
+    if (!hard_applies(gs)) return std::nullopt;
     analysis::OddsCache cache;  // per decision (D-054)
     const core::DecisionKind& kind = gs.pending->kind;
     if (std::holds_alternative<core::decision::MoveUnits>(kind)) {

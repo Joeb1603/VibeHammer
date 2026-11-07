@@ -74,6 +74,12 @@ struct PlannedMove {
                                                       const MoveWeights& weights, std::size_t count,
                                                       std::size_t attempts);
 
+// D-067 (M57, the Hard level's army path): the candidate of the move just started in `origin` whose end is furthest
+// from the closest enemy model (the most edge-to-edge room left to every enemy unit; a tie to the earlier
+// candidate), simulated in full as standing_moves simulates (nullopt if it doesn't stand). Its score is not set.
+// A pure function of `origin`; Normal doesn't use it.
+[[nodiscard]] std::optional<PlannedMove> furthest_standing_move(const core::GameState& origin);
+
 // The value of each move type for `unit` at `side`'s MoveUnits decision (for tests and reasons): nullopt where the
 // type isn't offered. Advance is the mean over the six advance results.
 struct MoveTypeValues {

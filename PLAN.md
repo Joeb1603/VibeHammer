@@ -1705,7 +1705,7 @@ level; Normal's Termagants now draw almost every game against Easy, and play lev
 
 ---
 
-## M57: Hard across several units
+## M57: Hard across several units ✅ (done)
 **Effort:** `max` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-067
 
 > The design is written into D-067 before the code.
@@ -1723,6 +1723,97 @@ level; Normal's Termagants now draw almost every game against Easy, and play lev
   decision.
 - V1 and the two bot scenarios: Hard's results unchanged. Zero rejections, reverts and fallbacks.
 - A seeded ctest subset (`M57_...`). Replays unchanged.
+
+**Results (2026-11-07):** design in D-067. Met: the Space Marine seat (Hard wins 200 of 200 against Normal, sooner
+than Normal does), decision times, V1 and both bot scenarios unchanged (per-game hashes), zero rejections / reverts
+/ fallbacks / unfinished games, the ctest subset, replays unchanged. **Open:** the Tyranid seat's 60% (no Tyranid side
+wins a Strike game at any level); Hard's Tyranids are measurably better than Normal's there (more draws, longer
+games), not lowered.
+- **What changed** (bot only, D-067): with several units a side Hard values the army: M44's duel chain per pair of
+  units (one table per pair of unit types, on a line as long as the board's diagonal: `kMaxLine` 24 → 38 buckets,
+  76"), each unit's duels with every enemy unit started when that unit is free of the ones in front (a timeline of
+  shared work, each attacker on its closest target in reach at its volley's pace), a unit's fate the product of its
+  duels, and D-007 over the army (P(A wins) = the product of side B's units' P(wiped out), and so on; V = P(win) −
+  P(loss); tempo and material from each side's longest-lasting unit). The lookahead's rollouts play every unit of
+  both sides (moves relative to a real target, the most models in reach, a tie to the closest; Normal's shooting;
+  charges at the closest eligible target), from each move plan through the rest of the Movement phase and the
+  enemy's whole turn; the plans add the move ending furthest from every enemy model. The unit Normal would move
+  moves; a charge is weighed for every unit that may declare; casualties, coherency removals, consolidations and
+  charge moves use the army value (front and rear models measured against the attacker). One unit per side keeps
+  M44's duel, unchanged. Budgets and `BotWeights{}` unchanged.
+- **1v1 unchanged:** the arena's `--per-game 1` report of a Release build of 3afc2f0 (worktree, removed after) and of
+  this build, on V1, Termagants first and 20 Termagants, seeds 1–200, pairings hard/hard, hard/normal, normal/hard,
+  hard/easy and easy/hard, with normal/normal and easy/easy as controls (21 runs, 4200 games): every line identical
+  (result, counts, hashes of the actions, the final state and the decision trace with its reasons), every game
+  finished and clean. On the Strike scenario normal/normal and easy/easy are identical too (400 games: Normal and
+  Easy are untouched), and the 3afc2f0 build's hard/normal and normal/hard give Normal's own results there (Hard
+  played as Normal). The four replay regenerations (`Replay.DISABLED_RegenerateReplays`, `M45_` / `M46_` /
+  `M47_Replay`) leave `tests/replays` unchanged (`git status --short tests/replays` empty).
+- **Strike 44x60, Release, seeds 1–200** (one process per run, four runs at a time on four cores; every run clean:
+  0 rejected, 0 `UnitMoveReverted`, 0 fallbacks, 0 unfinished; the longest game in all of M57's Strike runs took 294
+  steps, so the 5000-step cap stays):
+
+  | A (Marines) vs B (Tyranids) | A wins | B wins | Draws | Mean result A | End round | Survivors A / B | Wounds lost A / B | Coherency removals A / B | p50 / p95 / max ms |
+  |---|---|---|---|---|---|---|---|---|---|
+  | normal vs normal | 200 | 0 | 0 | +1.000 | 3.625 | 14.41 / 0.00 | 2.21 / 40.00 | 0 / 0 | 0.005 / 5.5 / 68 |
+  | **hard vs normal** | **200** | 0 | 0 | +1.000 | **3.575** | 14.38 / 0.00 | 2.29 / 40.00 | 0 / 0 | 0.005 / 76.6 / 1164 |
+  | **normal vs hard** | 197 | **0** | **3** | +0.985 | **3.670** | 14.44 / 0.05 | 2.12 / 39.95 | 0 / 1 | 0.005 / 64.7 / 482 |
+  | hard vs hard | 200 | 0 | 0 | +1.000 | 3.600 | 14.44 / 0.00 | 2.12 / 40.00 | 0 / 3 | 0.005 / 116.2 / 1137 |
+
+- **The Tyranid seat over seeds 1–1000** (Release, against Normal's Space Marines):
+
+  | B (Tyranids) | A wins | Draws | Mean result B | End round (s.e.) | Games reaching round 5 | Termagants left | Marine wounds lost |
+  |---|---|---|---|---|---|---|---|
+  | Normal | 998 | 2 | −0.998 | 3.610 (0.019) | 54 | 0.003 | 2.184 |
+  | **Hard** | 989 | **11** | **−0.989** | **3.692** (0.019) | **78** | **0.023** | 2.141 |
+
+  Their losses are almost all to shooting (Normal against Normal, 60 games: about 14.5 Termagants in battle round 1,
+  before they can act, then 13.4 and 9.8; under 0.6 a game in melee), and they deal about 2 wounds a game, so the
+  draw (D-007) is all they can play for. A probe that only kept every unit as far away as it could (always an
+  Advance) lasted longer than Normal's Termagants (round-3 endings 22% against 40%), which is where the keep-away
+  plan and the attention model come from.
+- **How it got there** (seeds 1–200 per seat; draws as the Tyranids, mean end round as the Tyranids / as the Space
+  Marines): Hard as Normal (3afc2f0): 0, 3.625 / 3.625; the army value without attention and first rollouts (50
+  seeds): 0, 3.54 / 3.68; the rollouts shooting and aiming as Normal does (the first try shot nearly-wiped units with
+  full volleys and walked every squad at a 1-model unit, so its lookahead was far too hopeful for the Tyranids): 1
+  of 50, 3.58 / 3.64; the keep-away plan: 2 of 50, 3.62 / 3.64; attention per attacker: 3, 3.625 / 3.63; the last
+  unit's tempo (a unit kept back a round longer had moved the mean over all units by 0.006, below the 0.01 margin): 2,
+  3.695 / 3.555; the shared timeline: 3, 3.675 / 3.560; with reach (final): 3, 3.670 / 3.575. Weights swept at the
+  0.005 / 0.02 margin, 10 rollouts, share 0.7, 6 static plans and 5 plans: all level within the noise, so
+  `BotWeights{}` stays (D-067).
+- **Against the literal targets:**
+  - Hard beats Normal in at least 60% of games, Space Marine seat: **met** (200 of 200 wins, 100%); it also ends
+    games sooner than Normal does (3.575 against 3.625), with slightly more wounds lost (2.29 against 2.21).
+  - Tyranid seat: **open** (0 wins of 200; no Tyranid side has won a Strike game at any level). Seat-relative:
+    3 draws of 200 against Normal-as-Tyranids' 0, mean result −0.985 against −1.000, end round 3.670 against
+    3.625; over 1000 seeds 11 draws against 2, −0.989 against −0.998, end round 3.692 against 3.610 (about three
+    standard errors), 78 games reaching battle round 5 against 54, wounds dealt level (2.14 against 2.18).
+  - Hard p95 ≤ 500 ms and max ≤ 3 s per decision: **met** (p95 at most 116 ms, max 1.16 s over 200 seeds; 1.15 s
+    over 1000 seeds of Normal against Hard).
+  - V1 and the two bot scenarios: Hard's results unchanged: **met** (above). Zero rejections, reverts and fallbacks:
+    **met** in every run (sweeps included).
+  - Seeded ctest subset `M57_...`: **met** (12 tests). Replays unchanged: **met**.
+- **Decision times** (Release, Strike, every bot decision of the run): Hard against Normal p50 0.005 ms, p95 76.6 ms,
+  max 1164 ms; Normal against Hard 0.005 / 64.7 / 482; Hard against Hard 0.005 / 116.2 / 1137 (Normal against Normal
+  0.005 / 5.5 / 68). The army's table (38 buckets) costs about 80 ms once per game and bot; the slowest decisions are
+  a Termagant unit's MoveUnits. `ChainTable::build_half_turn` is unchanged (not needed).
+- **Tests (new, ai, `tests/ai/m57_test.cpp`):** `M57_Evaluator.*` (3: the army value of one unit each is the duel's,
+  term by term along a V1 game; each unit's fate is its duel with its main enemy, the closest unit and not the first,
+  and V is the same game for both sides; a unit the enemy is busy in front of lasts longer than the enemy's first
+  target, a draw chance), `M57_Line.TheChainLineCoversA60InchBoard` (38 buckets cover the 74.4" diagonal; a duel
+  57" across the board has a line over 48" and tells 50" from 56"; the army's line is 38),
+  `M57_Lookahead.*` (2: a rollout's move aims at the real target, not side B's first unit; every enemy unit gets its
+  move in the rollouts, within the action budget, deterministically), `M57_Casualties.FrontAndRearAreMeasuredAgainstTheAttacker`,
+  `M57_Charge.TheCloseSquadDeclaresAndTheChargeIsWorthMoreThanHolding`,
+  `M57_Consolidation.ConsolidatesBackIntoTheFightByTheArmyValue`, `M57_StrikeGames.*` (3: a clean Strike game with
+  Hard in each seat, seed 12, over in battle round 2; a fresh Hard bot (memo forgotten) gives the played answer at
+  every decision of Hard against Hard through side A's first turn and side B's first move, and the same with only the
+  game dice changed at every MoveUnits, Charge and casualty decision, on a lighter lookahead to keep Debug quick).
+  No existing test changed. ctest (Debug): 775 → 787 tests, all pass (21.8 s with `-j4`).
+- **Open for M58:** the Tyranid seat (above); Hard's Tyranids lose a model to coherency in 1 of 200 games against
+  Normal (3 in Hard against Hard; Normal's in none), from a casualty order the army value preferred to Normal's in a
+  unit about to be wiped out anyway; the army value's attention timeline ignores the attackers' losses and the
+  defenders' kiting before a delayed duel starts; tuning `BotWeights` for several units.
 
 ---
 
