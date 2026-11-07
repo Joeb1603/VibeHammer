@@ -12,6 +12,7 @@ criteria (see "Later (post-V1)"), agree it with the user, then work inside it.
 
 ```
 CLAUDE.md                 this file
+README.md                 overview for people visiting the repo (play, build, layout)
 PLAN.md                   milestone plan with acceptance criteria
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
