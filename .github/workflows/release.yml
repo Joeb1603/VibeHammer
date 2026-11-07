@@ -1,0 +1,103 @@
+# M52 (D-063): builds VibeHammer for Windows, runs every test, and publishes a GitHub release with the zip.
+# Start it by pushing a tag vX.Y.Z, or from the Actions tab (Run workflow, with the tag to create): a manual
+# run builds the commit it runs on and creates the tag there when the release is published.
+# The tag must match the version in CMakeLists.txt and src/core/version.cpp, and docs/releases/<tag>.md holds
+# the release notes. The zip never holds docs/rules/ or the PDF (Games Workshop copyright).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create, e.g. v0.1.0 (must match the CMake project version)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || github.sha }}
+
+      - name: Check the tag, the version and the release notes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag '$env:TAG' is not of the form vX.Y.Z" }
+          $cmake = Get-Content CMakeLists.txt -Raw
+          if ($cmake -notmatch 'project\(VibeHammer\s+VERSION\s+(\d+\.\d+\.\d+)') { throw "No project VERSION in CMakeLists.txt" }
+          $version = $Matches[1]
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match CMakeLists.txt version $version" }
+          if (-not (Select-String -Path src/core/version.cpp -SimpleMatch "`"$version`"")) {
+            throw "src/core/version.cpp does not return $version"
+          }
+          if (-not (Test-Path "docs/releases/$env:TAG.md")) { throw "Missing release notes docs/releases/$env:TAG.md" }
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $remote = git ls-remote --tags origin "refs/tags/$env:TAG"
+            if ($remote -and -not $remote.StartsWith('${{ github.sha }}')) {
+              throw "Tag $env:TAG already exists at another commit ($remote); run the workflow on that commit"
+            }
+          }
+          Write-Host "Releasing $env:TAG (version $version) from ${{ github.sha }}"
+
+      - name: Pick the Visual Studio generator
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $major = (& $vswhere -latest -property installationVersion).Split('.')[0]
+          $generator = switch ($major) {
+            '18' { 'Visual Studio 18 2026' }
+            '17' { 'Visual Studio 17 2022' }
+            default { throw "Unsupported Visual Studio major version '$major'" }
+          }
+          Write-Host "Using $generator"
+          "GENERATOR=$generator" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Build (Release)
+        run: |
+          cmake -S . -B build/default -G "$env:GENERATOR" -A x64
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cmake --build build/default --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Test (Release)
+        run: ctest --test-dir build/default -C Release --output-on-failure --parallel 4
+
+      - name: Package
+        run: |
+          powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Generator "$env:GENERATOR" -SkipSmokeTests
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $zip = "VibeHammer-$env:TAG-windows-x64.zip"
+          Move-Item VibeHammer.zip $zip
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $entries = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip)).Entries.FullName
+          $bad = $entries | Where-Object { $_ -match '(^|[/\\])docs[/\\]' -or $_ -match '\.pdf$' -or $_ -match 'rules-summary' }
+          if ($bad) { throw "The zip holds files that must never ship: $($bad -join ', ')" }
+          if (-not ($entries -match 'VibeHammer\.exe$')) { throw "The zip has no VibeHammer.exe" }
+          Write-Host "$zip holds $($entries.Count) entries"
+          "ZIP=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Publish the release
+        run: |
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TAG $env:ZIP --clobber
+          } else {
+            gh release create $env:TAG $env:ZIP --target ${{ github.sha }} --title "VibeHammer $env:TAG" --notes-file "docs/releases/$env:TAG.md"
+          }
+          if ($LASTEXITCODE -ne 0) { exit 1 }

@@ -1406,6 +1406,27 @@ went with it. New client tests `M51_BotDice.*` (2); all of ctest passes (727); r
 
 ---
 
+## M52: Release workflow, first GitHub release v0.1.0
+**Effort:** `medium` · **Plan mode:** approved (2026-11-07) · **Decision:** D-063
+
+> User request: "Could you make a release on GitHub for me?" The zip only builds on Windows, so a GitHub Actions
+> workflow (`.github/workflows/release.yml`, `windows-latest`) builds it and publishes the release.
+> - Triggers: a pushed tag `vX.Y.Z`, or a manual run with a `tag` input (builds the commit it runs on and creates
+>   the tag there with the release).
+> - Checks the tag against the version in `CMakeLists.txt` and `src/core/version.cpp`, and that
+>   `docs/releases/<tag>.md` (the release notes) exists. Picks the VS generator with vswhere (2026 or 2022).
+> - Builds everything in Release, runs all of ctest, then `tools/package.ps1 -Generator ... -SkipSmokeTests`
+>   (the runner has no OpenGL 3.3, so the exe isn't launched). Uploads `VibeHammer-<tag>-windows-x64.zip`,
+>   after checking it holds `VibeHammer.exe` and nothing from `docs/` and no PDF.
+> - `package.ps1` with no arguments behaves exactly as before.
+
+**Acceptance**
+- The workflow run is green; release v0.1.0 exists with the zip attached and the notes.
+- Linux build + ctest pass; replays unchanged.
+- Manual check on Windows: download the zip, unzip, run VibeHammer.exe.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

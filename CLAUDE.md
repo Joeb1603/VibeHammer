@@ -66,6 +66,10 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   stages the exe, VC++ runtime DLLs, `data/` and `tests/replays/` with a README, smoke-tests the staged exe, and
   writes `VibeHammer.zip` in the repo root (gitignored). The exe looks for `data/` next to itself first, then the
   source tree. Never add `docs/rules/` or the PDF to the package.
+- To publish a GitHub release (M52, D-063): set the version in `CMakeLists.txt` and `src/core/version.cpp`, write
+  `docs/releases/vX.Y.Z.md`, then push tag `vX.Y.Z` (or run the Release workflow by hand with that tag).
+  `.github/workflows/release.yml` builds on Windows, runs ctest, packages and attaches
+  `VibeHammer-vX.Y.Z-windows-x64.zip`.
 - Dependencies come from CMake `FetchContent` pinned to exact tags: raylib, Dear ImGui, rlImGui, nlohmann_json, GoogleTest.
 - Treat warnings as errors in `wh40k_core` (`/W4 /WX /permissive-`). Don't silence a warning to get a build through.
 - A change is not done until it builds and `ctest` passes. Report test failures as they are; never skip, delete or weaken a test to get to green.

@@ -3,11 +3,21 @@
 # finds data/ next to itself (main.cpp find_data_root). Never add docs/rules/ or the PDF (GW copyright).
 #
 # Usage (from the repo root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1
+# M52 (D-063), for the release workflow only: -Generator "Visual Studio 17 2022" configures build/default with
+# that generator instead of the preset (CI runners may not have VS 2026), and -SkipSmokeTests skips launching
+# the exe (CI runners have no OpenGL 3.3; the workflow runs ctest instead).
+param([string]$Generator, [switch]$SkipSmokeTests)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
-cmake --preset default | Out-Null
-cmake --build --preset release --target wh40k_client_2d
+if ($Generator) {
+    cmake -S $root -B "$root\build\default" -G $Generator -A x64 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Configure failed" }
+    cmake --build "$root\build\default" --config Release --target wh40k_client_2d
+} else {
+    cmake --preset default | Out-Null
+    cmake --build --preset release --target wh40k_client_2d
+}
 if ($LASTEXITCODE -ne 0) { throw "Release build failed" }
 
 # The VC++ runtime from the newest installed Visual Studio redist (app-local deployment).
@@ -61,28 +71,32 @@ Saved games go in a "saves" folder created next to the exe.
 If Windows SmartScreen warns about an unknown app, click "More info" -> "Run anyway".
 '@ | Out-File -Encoding utf8 "$stage\README.txt"
 
-# Smoke test 1: run the staged exe from another folder and check it renders a game.
-$shot = Join-Path (Split-Path $stage) "smoke.png"
-if (Test-Path $shot) { Remove-Item -Force $shot -Confirm:$false }
-$p = Start-Process "$stage\VibeHammer.exe" -ArgumentList "--screenshot", $shot, "--steps", "3", "--seed", "1" `
-    -WorkingDirectory $env:TEMP -PassThru -Wait
-if ($p.ExitCode -ne 0 -or -not (Test-Path $shot)) { throw "Smoke test failed (exit $($p.ExitCode))" }
-Write-Host "Smoke test 1 passed: $shot"
+if ($SkipSmokeTests) {
+    Write-Host "Smoke tests skipped (-SkipSmokeTests)"
+} else {
+    # Smoke test 1: run the staged exe from another folder and check it renders a game.
+    $shot = Join-Path (Split-Path $stage) "smoke.png"
+    if (Test-Path $shot) { Remove-Item -Force $shot -Confirm:$false }
+    $p = Start-Process "$stage\VibeHammer.exe" -ArgumentList "--screenshot", $shot, "--steps", "3", "--seed", "1" `
+        -WorkingDirectory $env:TEMP -PassThru -Wait
+    if ($p.ExitCode -ne 0 -or -not (Test-Path $shot)) { throw "Smoke test failed (exit $($p.ExitCode))" }
+    Write-Host "Smoke test 1 passed: $shot"
 
-# Smoke test 2 (M45): the bot plays side B. --steps passes side A's turn (it stops at the bot's first
-# decision), then --bot-steps makes 5 bot decisions; the exe prints how many it took, and all 5 must run.
-$botShot = Join-Path (Split-Path $stage) "smoke_bot.png"
-$botOut = Join-Path (Split-Path $stage) "smoke_bot.txt"
-foreach ($f in $botShot, $botOut) { if (Test-Path $f) { Remove-Item -Force $f -Confirm:$false } }
-$p = Start-Process "$stage\VibeHammer.exe" `
-    -ArgumentList "--seed", "1", "--bot", "B", "--steps", "40", "--bot-steps", "5", "--screenshot", $botShot `
-    -WorkingDirectory $env:TEMP -RedirectStandardOutput $botOut -PassThru -Wait
-if ($p.ExitCode -ne 0 -or -not (Test-Path $botShot)) { throw "Bot smoke test failed (exit $($p.ExitCode))" }
-$taken = Select-String -Path $botOut -Pattern "bot-steps: (\d+) of 5 bot actions taken"
-if (-not $taken -or $taken.Matches[0].Groups[1].Value -ne "5") {
-    throw "Bot smoke test failed: the bot did not take 5 actions ($(if ($taken) { $taken.Line } else { 'no bot-steps line' }))"
+    # Smoke test 2 (M45): the bot plays side B. --steps passes side A's turn (it stops at the bot's first
+    # decision), then --bot-steps makes 5 bot decisions; the exe prints how many it took, and all 5 must run.
+    $botShot = Join-Path (Split-Path $stage) "smoke_bot.png"
+    $botOut = Join-Path (Split-Path $stage) "smoke_bot.txt"
+    foreach ($f in $botShot, $botOut) { if (Test-Path $f) { Remove-Item -Force $f -Confirm:$false } }
+    $p = Start-Process "$stage\VibeHammer.exe" `
+        -ArgumentList "--seed", "1", "--bot", "B", "--steps", "40", "--bot-steps", "5", "--screenshot", $botShot `
+        -WorkingDirectory $env:TEMP -RedirectStandardOutput $botOut -PassThru -Wait
+    if ($p.ExitCode -ne 0 -or -not (Test-Path $botShot)) { throw "Bot smoke test failed (exit $($p.ExitCode))" }
+    $taken = Select-String -Path $botOut -Pattern "bot-steps: (\d+) of 5 bot actions taken"
+    if (-not $taken -or $taken.Matches[0].Groups[1].Value -ne "5") {
+        throw "Bot smoke test failed: the bot did not take 5 actions ($(if ($taken) { $taken.Line } else { 'no bot-steps line' }))"
+    }
+    Write-Host "Smoke test 2 passed: $($taken.Line) ($botShot)"
 }
-Write-Host "Smoke test 2 passed: $($taken.Line) ($botShot)"
 
 Compress-Archive -Path $stage -DestinationPath "$root\VibeHammer.zip" -Force
-Write-Host "Wrote $root\VibeHammer.zip (smoke screenshots: $shot, $botShot)"
+if ($SkipSmokeTests) { Write-Host "Wrote $root\VibeHammer.zip" } else { Write-Host "Wrote $root\VibeHammer.zip (smoke screenshots: $shot, $botShot)" }

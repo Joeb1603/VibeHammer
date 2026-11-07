@@ -1841,3 +1841,18 @@ Amends D-054, D-059 and D-060.
   start screen, the sidebar and `vibehammer_settings.json`. An older file with `bot_auto_dice` still loads; the key
   is ignored and not written back. The Pause checkbox's tooltip says what unpaused means for the dice.
 - **Tests:** client `M51_BotDice.*`; `M49_DiceButtons.*`, `M48_Watch` and `M45_Watch` use the new signatures.
+
+## D-063: Releases are built and published by GitHub Actions (M52)
+User request (2026-11-07): "Could you make a release on GitHub for me?" The game only packages on Windows, so
+`.github/workflows/release.yml` does it on a `windows-latest` runner.
+- **Version and tag:** a release tag is `vX.Y.Z` and must equal `project(VibeHammer VERSION X.Y.Z)` in
+  `CMakeLists.txt` and the string in `src/core/version.cpp`; the workflow refuses a mismatch. The release notes are
+  `docs/releases/vX.Y.Z.md` (written for players), required.
+- **Starting it:** push the tag, or run the workflow by hand with the tag (it builds the commit it runs on and
+  `gh release create --target` makes the tag there, so a failed attempt never leaves a tag behind; a manual run
+  refuses a tag that already exists at another commit). A re-run for an existing release replaces the zip.
+- **What it checks:** a Release build of every target and all of ctest. The GUI smoke tests in `package.ps1`
+  are skipped (`-SkipSmokeTests`): CI runners have no OpenGL 3.3, so raylib can't open a window. `-Generator`
+  replaces the VS 2026 preset when the runner has VS 2022. Without arguments `package.ps1` is unchanged.
+- **The asset:** `VibeHammer-vX.Y.Z-windows-x64.zip`, the same contents as `VibeHammer.zip`. The workflow fails if
+  it holds anything under `docs/`, a PDF or `rules-summary`, or no `VibeHammer.exe` (Games Workshop copyright).
