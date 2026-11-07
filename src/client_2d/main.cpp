@@ -1707,11 +1707,12 @@ private:
 
     // D-054: a bot's own dice roll and continue by themselves when "Bot rolls its own dice automatically" is on,
     // paced by the bot speed (Enter, or a click on the pop-up or the bare board, skips the wait; M48). A human's
-    // dice wait for the human as before.
+    // dice wait for the human as before. M49 (D-060): a paced card shows no Roll / Continue button (the pop-up
+    // draws them exactly when this returns nullopt, dice_buttons_shown).
     std::optional<DicePace> bot_dice_pace() const {
         const DiceCard* card = dice_.current();
-        if (card == nullptr || !watch_.bot_dice_run(settings_.bot_auto_dice) ||
-            !bot_sides_[core::side_index(card->roller)]) {
+        if (card == nullptr ||
+            !watch_.card_paced(bot_sides_[core::side_index(card->roller)], settings_.bot_auto_dice)) {
             return std::nullopt;
         }
         return DicePace{ai::bot_dice_roll_pause_seconds(settings_.bot_speed),
@@ -1816,7 +1817,9 @@ private:
         // M48 (D-059): against one bot, its Step / speed row stays while its dice show (the same row as in
         // draw_bot_thinking), so it doesn't vanish and come back. In bot vs bot it is on the watch bar.
         if (!watching() && shown_card() == ShownCard::Bots) draw_watch_buttons();
-        const std::string hint = (card.purpose.empty() ? std::string() : card.purpose + ". ") + "Roll the dice in the pop-up.";
+        // M49 (D-060): a bot's card that rolls by itself has no Roll button to point at.
+        const char* how = bot_dice_pace() ? "The bot rolls its own dice." : "Roll the dice in the pop-up.";
+        const std::string hint = (card.purpose.empty() ? std::string() : card.purpose + ". ") + how;
         ImGui::TextWrapped("%s", hint.c_str());
     }
 

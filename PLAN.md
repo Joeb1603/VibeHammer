@@ -1334,7 +1334,7 @@ at `ec71730`, measured before any M47 edit) and after, `wh40k_bot_arena --games 
 
 ---
 
-## M49: The Roll button only when the bot's dice wait for a click
+## M49: The Roll button only when the bot's dice wait for a click ✅ (done)
 **Effort:** `medium` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-060
 
 > User feedback: only show the button to roll the bot's dice if the bot is paused.
@@ -1349,6 +1349,16 @@ at `ec71730`, measured before any M47 edit) and after, `wh40k_bot_arena --games 
 - Clean build; all of ctest passes; new client tests `M49_DiceButtons` cover every combination. Replays
   unchanged.
 - A screenshot of a bot's card without Roll, if the flags can reach one.
+
+**Results (2026-11-07):** done. `bot_dice_paced` / `dice_buttons_shown` (and `WatchControls::card_paced`) in
+`watch_controls` hold the one condition; main.cpp's `bot_dice_pace()` uses it and `DicePopup::draw` draws Roll /
+Continue exactly when it gets no pace, else a dim line of the button's height ("The bot rolls its own dice. Pause
+the bots to roll them yourself.", then "Continuing..."); Enter / Space and a click on the pop-up or the board still
+skip. The rolling bar's hint reads "The bot rolls its own dice." on such a card. New client tests
+`M49_DiceButtons` (7); all 723 ctest tests pass; replays unchanged. Screenshots (`--seed 1 --bot A --bot-steps 10
+--dice 1` / `--dice 2`) show the bot's Hit-rolls card with the placeholder line before and after the reveal. No flag
+pauses the bots, so the paused card (Roll back at once) is covered by the logic tests; a manual Windows check
+remains: pause mid-card and see Roll / Continue appear, click on the dim line skips. D-060; D-033 / D-054 amended.
 
 ---
 

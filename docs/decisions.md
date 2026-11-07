@@ -635,6 +635,8 @@ logic).
   big green Roll (or Enter/Space), then tumble for about 0.45 s (faces cycled by time, display only). After
   that, passes are green and fails grey, with the result and Continue (Done on the last card). The pop-up
   has nothing else: no skip, no setting. "Show dice pop-ups" in the sidebar's Game section turns them off.
+  **Amended by D-053** (no Roll on a card with nothing to roll) **and D-060 (M49):** a bot's card that rolls by
+  itself shows neither Roll nor Continue / Done; every card that waits for a click (a human's always) does.
   Criticals are not highlighted yet (PLAN.md Later).
 - **The screen stays at the roll:** while cards show, the board, rings, phase bar and log show the game as it
   was just before the action that made the rolls (no casualties removed, no results in the log yet). The
@@ -1155,7 +1157,9 @@ change.
     is always off in bot vs bot). "Undo last step" is never offered for the bot's placements. A bot's dice pop-ups
     roll after 0.35 s and continue after 1.2 s (times the speed factor; at Instant, at once, with no tumble) when "Bot
     rolls its own dice automatically" is on (a sidebar toggle in a game with a bot); a click or Enter skips the wait
-    (**since M48, D-059:** only a click on the pop-up or the bare board, not on another window).
+    (**since M48, D-059:** only a click on the pop-up or the bare board, not on another window). **Since M49
+    (D-060):** such a card has no Roll and no Continue / Done button, only a dim line; paused, or with the setting
+    off, it waits with Roll and Continue as a human's does.
   - **Save players block (extends D-025):** `saved_game.{hpp,cpp}` writes
     `"players": {"A": "human"|"bot", "B": ..., "bot_level": "easy"|"normal"|"hard"}`. Loading restores the bot sides
     and that game's level (kept apart from the settings' level, so loading doesn't change the user's setting). A save
@@ -1776,3 +1780,31 @@ and the bot speed stay in the bar above the board. Presentation only: no bot dec
 - **Tests:** client `M48_Watch.*` (set_paused and the toggle, Step on a human's card, the dice run, the click
   targets); ai `M48_Pacing.*` (the factors and a Slow delivery at 2.4 s); M39 / M45 expectations updated to ×3.
   Mouse input can't be scripted: the clicks while dice show are a manual check on Windows (PLAN.md M48).
+
+## D-060: The Roll button only when the bot's dice wait for a click (M49)
+User feedback (2026-11-07): "Only show the button to roll bot dice rolls if the bot is paused". Presentation only:
+no engine, bot or replay change. Amends D-033 and D-054.
+- **The rule:** a dice card is *paced* (rolls and continues by itself, `DicePopup::draw` gets a `DicePace`) when it
+  is a bot's card (its roller is a bot side), "Bot rolls its own dice automatically" is on and the bots aren't
+  paused: `bot_dice_paced(bot_card, auto_dice_setting, paused)` in `watch_controls` (also
+  `WatchControls::card_paced(bot_card, setting)` with the current pause). A paced card shows **no Roll and no
+  Continue / Done / OK button**. `dice_buttons_shown(...)` is exactly `!bot_dice_paced(...)`; main.cpp's
+  `bot_dice_pace()` uses `card_paced` and the pop-up draws the buttons exactly when it gets no pace, so the
+  condition lives in one place and the two always agree.
+- **The placeholder:** in the buttons' place, a dim (TextDisabled) line in a row of the big button's height (the
+  pop-up auto-resizes, so it doesn't jump when the bots are paused or resumed mid-card): "The bot rolls its own
+  dice. Pause the bots to roll them yourself." before the reveal, "Continuing..." after it.
+- **Skipping the wait:** Enter / Space still roll at once (before the reveal) or continue (after it), and a left
+  click on the pop-up or the bare board still skips (D-059). With no button on the card, `DiceClickTarget` is
+  `PopUp` anywhere on the pop-up, its dim line included (`PopUpButton` only arises when a button is drawn, and a
+  button is only drawn on an unpaced card, where clicks don't skip anyway). Step and key N on a bot's card reveal
+  or close it as before.
+- **Pausing mid-card** (the sidebar's "Pause the bots (P)" or key P): the next frame the card is no longer paced,
+  so Roll (or Continue, if its faces already show) appears at once and the card waits for it; un-pausing hides
+  them again and the pacing carries on from the card's own timers. Turning the setting off mid-card is the same.
+  A human's card always has both buttons.
+- **The action bar:** while a paced bot card shows, the rolling bar's hint ends "The bot rolls its own dice."
+  instead of "Roll the dice in the pop-up." (which is kept for every card that waits for a click).
+- **Tests:** client `M49_DiceButtons.*` (all eight combinations of bot card / setting / paused; a human's card
+  always shows the buttons; pausing and resuming mid-card; a click on a paced card's pop-up still skips). The
+  paused card's buttons and clicks on it are a manual check on Windows (no flag pauses the bots).

@@ -36,7 +36,8 @@ public:
     [[nodiscard]] const DiceCard* current() const noexcept { return queue_.empty() ? nullptr : &queue_.front(); }
 
     // Draws the current card centred in `area` (screen pixels): Roll, then the result and Continue. With
-    // `pace` (the current card is a bot's), it rolls and continues by itself.
+    // `pace` (the current card is a bot's), it rolls and continues by itself and shows no Roll / Continue button,
+    // only a dim line (M49, D-060: pace is given exactly when dice_buttons_shown is false).
     void draw(Rectangle area, float ui_scale, std::optional<DicePace> pace = std::nullopt);
 
 private:

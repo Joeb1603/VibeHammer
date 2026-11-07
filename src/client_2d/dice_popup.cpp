@@ -86,6 +86,23 @@ bool big_button(const char* label, bool green) {
     return pressed;
 }
 
+// M49 (D-060): in place of big_button on a bot's card that rolls by itself: a dim line in a row of the same
+// height, so the auto-resizing pop-up doesn't jump when the bots are paused or resumed mid-card.
+void dim_button_row(const char* text) {
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.4f);
+    const float row_h = ImGui::GetFrameHeight() * 1.3f;
+    ImGui::PopFont();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float text_h = ImGui::CalcTextSize(text, nullptr, false, avail).y;
+    const ImVec2 start = ImGui::GetCursorPos();
+    ImGui::SetCursorPos(ImVec2(start.x, start.y + std::max(0.0f, (row_h - text_h) * 0.5f)));
+    ImGui::PushTextWrapPos(start.x + avail);
+    ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled), "%s", text);
+    ImGui::PopTextWrapPos();
+    ImGui::SetCursorPos(start);
+    ImGui::Dummy(ImVec2(avail, std::max(row_h, text_h)));
+}
+
 bool enter_or_space() {
     return ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) ||
            ImGui::IsKeyPressed(ImGuiKey_Space, false);
@@ -231,22 +248,36 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     ImGui::Spacing();
 
     bool advance = false;
+    // M49 (D-060): the buttons show exactly when the card isn't paced (dice_buttons_shown: a human's card, or a
+    // bot's while the bots are paused or the setting is off). A paced card has a dim line instead; Enter / Space
+    // and a click on the pop-up or the bare board still skip its wait.
+    const bool buttons = !pace.has_value();
     if (revealed_) {
         ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.3f);
         ImGui::TextUnformatted(card.result.c_str());
         ImGui::PopFont();
         const bool last = queue_.size() == 1;
         const char* label = last ? (needs_roll(card) ? "Done" : "OK") : "Continue";
-        if (big_button(label, true) || enter_or_space()) advance = true;
-    } else {
+        if (buttons) {
+            if (big_button(label, true) || enter_or_space()) advance = true;
+        } else {
+            dim_button_row("Continuing...");
+            if (enter_or_space()) auto_advance = true;
+        }
+    } else if (buttons) {
         ImGui::BeginDisabled(rolling_since_.has_value());
         if ((big_button("Roll", true) || enter_or_space()) && !rolling_since_) rolling_since_ = now;
         ImGui::EndDisabled();
+    } else {
+        dim_button_row("The bot rolls its own dice. Pause the bots to roll them yourself.");
+        if (enter_or_space() && !rolling_since_) rolling_since_ = now;
     }
-    // M48: a click on the pop-up itself skips; on its button, the button acts on its release instead.
+    // M48: a click on the pop-up itself skips; on its button, the button acts on its release instead. M49: with
+    // no button (a paced card), a click anywhere on the pop-up, its dim line included, skips.
     if (ImGui::IsWindowHovered()) {
-        click_target = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) ? DiceClickTarget::PopUpButton
-                                                                                 : DiceClickTarget::PopUp;
+        click_target = buttons && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)
+                           ? DiceClickTarget::PopUpButton
+                           : DiceClickTarget::PopUp;
     }
     ImGui::End();
     if (click_skips_bot_dice_wait(clicked, click_target) && !advance) {

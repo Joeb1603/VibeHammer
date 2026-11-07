@@ -24,6 +24,14 @@ enum class ShownCard { None, Bots, Humans };
 enum class DiceClickTarget { BareBoard, PopUp, PopUpButton, OtherWindow };
 [[nodiscard]] bool click_skips_bot_dice_wait(bool clicked, DiceClickTarget target) noexcept;
 
+// M49 (D-060): a dice card rolls and continues by itself (it is paced: DicePopup::draw gets a DicePace) when it is
+// a bot's card, "Bot rolls its own dice automatically" is on and the bots aren't paused. Such a card shows no Roll
+// and no Continue / Done button (a dim line takes their place); every other card, and a human's card always,
+// waits for its Roll and Continue clicks. dice_buttons_shown is exactly !bot_dice_paced, so the pacing (main.cpp)
+// and the buttons (dice_popup.cpp) always agree.
+[[nodiscard]] bool bot_dice_paced(bool bot_card, bool auto_dice_setting, bool paused) noexcept;
+[[nodiscard]] bool dice_buttons_shown(bool bot_card, bool auto_dice_setting, bool paused) noexcept;
+
 // One speed faster / slower (Slow, Normal, Fast, Instant), stopping at the ends.
 [[nodiscard]] BotSpeed faster(BotSpeed speed);
 [[nodiscard]] BotSpeed slower(BotSpeed speed);
@@ -50,6 +58,10 @@ public:
     // The bot's own dice roll and continue by themselves when the setting is on and the game isn't paused
     // (paused, they wait for a click or Step like a human's).
     [[nodiscard]] bool bot_dice_run(bool auto_dice_setting) const noexcept { return auto_dice_setting && !paused_; }
+    // M49 (D-060): the current card, given whether it is a bot's, rolls by itself (bot_dice_paced).
+    [[nodiscard]] bool card_paced(bool bot_card, bool auto_dice_setting) const noexcept {
+        return bot_dice_paced(bot_card, auto_dice_setting, paused_);
+    }
 
     // A new game, a load or the start screen: playing, no step waiting.
     void reset() noexcept {

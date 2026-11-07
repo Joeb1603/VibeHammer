@@ -41,6 +41,14 @@ bool click_skips_bot_dice_wait(bool clicked, DiceClickTarget target) noexcept {
     return clicked && (target == DiceClickTarget::BareBoard || target == DiceClickTarget::PopUp);
 }
 
+bool bot_dice_paced(bool bot_card, bool auto_dice_setting, bool paused) noexcept {
+    return bot_card && auto_dice_setting && !paused;
+}
+
+bool dice_buttons_shown(bool bot_card, bool auto_dice_setting, bool paused) noexcept {
+    return !bot_dice_paced(bot_card, auto_dice_setting, paused);
+}
+
 std::string watch_status(const WatchControls& controls, BotSpeed speed) {
     if (controls.paused()) return "Paused";
     return std::string("Playing at ") + bot_speed_name(speed) + " speed";
