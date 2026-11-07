@@ -1580,7 +1580,7 @@ A's first Move Units of round 2); every older replay byte-identical. Release are
 
 ---
 
-## M55: Per-unit tint and board labels
+## M55: Per-unit tint and board labels ✅ (done)
 **Effort:** `medium` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-065
 
 > - Each unit gets its own shade of its side's colour, chosen from its index among the side's units. The side stays
@@ -1596,6 +1596,16 @@ A's first Move Units of round 2); every older replay byte-identical. Release are
 - Client tests `M55_UnitTint`: distinct, deterministic, unchanged for one unit per side.
 - Screenshots under `xvfb-run`: the new scenario at the start of round 1 and after `--bot both --bot-steps 60`;
   V1 unchanged. ctest green; replays unchanged.
+
+**Results (2026-11-07):** all acceptance items met (D-065). `unit_style.{hpp,cpp}` in `wh40k_client_logic` gives
+each unit its shade (six per side, shade 1 = the old side colour), per-side number and display name
+("Termagants 2"). The board draws the number, outlined, at each unit's centroid (20 px at the fitted Strike zoom,
+hidden for one unit per side or bases under 4 px); the sidebar list and the tooltip show a numbered swatch; action
+text, prompts, dice cards, datasheet titles and the bots' reasons use the numbered name. Six `M55_UnitTint` tests
+(delta E checks within and between sides, against the board, the greyed look and the outline; one unit per side
+unchanged; index order; Strike names; determinism). The V1 start screenshot (`--seed 1`) is pixel-identical to
+M54's; the Strike start and `--bot both --bot-steps 60` screenshots show 1-3 and 1-4 in distinct shades. No
+existing test expectation changed; ctest green (763); replays unchanged.
 
 ---
 

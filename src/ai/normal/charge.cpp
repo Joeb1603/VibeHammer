@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "normal/charge.hpp"
 
 #include <algorithm>
@@ -33,8 +34,7 @@ constexpr int kMaxAdvanceSteps = 64;      // steps to reach the Charge step from
 constexpr float kFightReachMm = core::inches_to_mm(core::kPileInDistanceInches) + core::kEngagementRangeMm;
 
 std::string name_of(const core::GameState& state, core::UnitId id) {
-    const core::Unit* u = state.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return client::unit_display_name(state, id);  // D-065
 }
 
 std::string names_of(const core::GameState& state, std::span<const core::UnitId> ids) {
@@ -401,7 +401,7 @@ std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core
         why = "no charge roll gives a charge move that stands";
     } else if (const core::Unit* e = closest_enemy(state, *state.find_unit(best->unit)); e != nullptr &&
                                                                                          best->success_mean < 0.0) {
-        why = percent(best->p_success) + " charge odds; the " + e->name + " would win the fight: a charge move " +
+        why = percent(best->p_success) + " charge odds; the " + client::unit_display_name(state, e->id) + " would win the fight: a charge move " +
               signed_value(best->success_mean) + ", holding " + signed_value(best->hold);
     } else {
         why = percent(best->p_success) + " charge odds; holding is worth more: a charge move " +
@@ -435,7 +435,7 @@ std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, co
         const double v = charged_value(cache, plan->after, d.unit, s->targets, turns);
         if (!best || v > best_value + kBetter) {
             best_value = v;
-            best_reason = u->name + ": charge move into " + names_of(state, s->targets) + " (roll " +
+            best_reason = client::unit_display_name(state, u->id) + ": charge move into " + names_of(state, s->targets) + " (roll " +
                           std::to_string(roll) + "): " + std::to_string(plan->score.engaged) + " of " +
                           std::to_string(u->models.size()) + " models engaged, " +
                           std::to_string(plan->score.contacts) + " in base contact (" + signed_value(v) +
@@ -450,10 +450,10 @@ std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, co
     const core::GameAction skip = core::action::SkipChargeMove{d.unit};
     if (!offered(legal, skip)) return std::nullopt;
     if (!best) {
-        return single(skip, u->name + ": no charge move stands for a roll of " + std::to_string(roll) +
+        return single(skip, client::unit_display_name(state, u->id) + ": no charge move stands for a roll of " + std::to_string(roll) +
                                 (first_problems.empty() ? std::string() : " (" + first_problems.front() + ")"));
     }
-    return single(skip, u->name + ": no charge move, it is worth less than holding (" + signed_value(best_value) +
+    return single(skip, client::unit_display_name(state, u->id) + ": no charge move, it is worth less than holding (" + signed_value(best_value) +
                             " against " + signed_value(hold) + ")");
 }
 

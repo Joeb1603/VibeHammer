@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "normal/defense.hpp"
 
 #include <algorithm>
@@ -141,8 +142,8 @@ StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& st
     const bool they_may_charge = analysis::threat_ranges(*enemy).p_charge_after_move(gap) > 0.0;
     out.stance = theirs > ours ? CasualtyStance::AvoidContact : CasualtyStance::SeekContact;
     out.position_weight = they_may_charge ? 1.0 : kUnthreatenedPosition;
-    out.why = theirs > ours ? (they_may_charge ? enemy->name + " may charge" : "keeping away from " + enemy->name)
-                            : "keeping close to " + enemy->name;
+    out.why = theirs > ours ? (they_may_charge ? client::unit_display_name(state, enemy->id) + " may charge" : "keeping away from " + client::unit_display_name(state, enemy->id))
+                            : "keeping close to " + client::unit_display_name(state, enemy->id);
     return out;
 }
 
@@ -274,7 +275,7 @@ std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const co
                removal_score(*unit, b, 0, stance.position_weight, position, worth, mean);
     });
     out.priority.insert(out.priority.end(), rest.begin(), rest.end());
-    out.reason = unit->name + ": casualties " + stance_name(stance.stance);
+    out.reason = client::unit_display_name(state, unit->id) + ": casualties " + stance_name(stance.stance);
     if (!stance.why.empty()) out.reason += " (" + stance.why + ")";
     if (extra_total == 0) {
         out.reason += ", keeping coherency";
@@ -306,7 +307,7 @@ std::optional<core::ModelId> coherency_removal(analysis::OddsCache& cache, const
         }
     }
     if (reason != nullptr && best) {
-        *reason = unit->name + ": remove model " + std::to_string(best->v) + " to regain coherency (03.03)";
+        *reason = client::unit_display_name(state, unit->id) + ": remove model " + std::to_string(best->v) + " to regain coherency (03.03)";
         if (best_more > 0) *reason += ", " + std::to_string(best_more) + " more to go";
     }
     return best;

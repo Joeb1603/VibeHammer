@@ -10,6 +10,7 @@
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/state/queries.hpp"
+#include "unit_style.hpp"
 
 namespace wh40k::client {
 
@@ -102,8 +103,7 @@ bool is_end_action(const core::GameAction& action) {
 }
 
 std::string unit_name(const core::GameState& state, core::UnitId id) {
-    const core::Unit* u = state.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return unit_display_name(state, id);  // D-065: "Termagants 2" when its side has several units
 }
 
 }  // namespace

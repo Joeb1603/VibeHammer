@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "normal/shooting.hpp"
 
 #include <algorithm>
@@ -261,7 +262,7 @@ std::string describe_shooting(const core::GameState& state, const ShootingChoice
         const core::Model* m = u != nullptr ? core::find_model(*u, d.model) : nullptr;
         const core::Unit* t = state.find_unit(d.target);
         const std::string key = (m != nullptr ? profile_of(*m, d).name : std::string("?")) + " at " +
-                                (t != nullptr ? t->name : std::string("?"));
+                                (t != nullptr ? client::unit_display_name(state, t->id) : std::string("?"));
         auto it = std::find_if(counts.begin(), counts.end(), [&](const auto& c) { return c.first == key; });
         if (it == counts.end()) {
             counts.emplace_back(key, 1);
@@ -269,7 +270,7 @@ std::string describe_shooting(const core::GameState& state, const ShootingChoice
             ++it->second;
         }
     }
-    std::string text = (u != nullptr ? u->name : std::string("?")) + ": ";
+    std::string text = (u != nullptr ? client::unit_display_name(state, u->id) : std::string("?")) + ": ";
     for (std::size_t i = 0; i < counts.size(); ++i) {
         if (i > 0) text += ", ";
         text += std::to_string(counts[i].second) + "x " + counts[i].first;

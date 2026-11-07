@@ -11,6 +11,7 @@
 #include "auto_charge_move.hpp"
 #include "auto_fight_move.hpp"
 #include "board_view.hpp"
+#include "unit_style.hpp"
 #include "casualty_order.hpp"
 #include "core/engine/movement.hpp"
 #include "decision_view.hpp"
@@ -23,8 +24,8 @@ const ImVec4 kHighlight{1.0f, 0.85f, 0.3f, 1.0f};
 const ImVec4 kWarning{1.0f, 0.75f, 0.3f, 1.0f};
 
 std::string unit_name(const core::GameState& gs, core::UnitId id) {
-    const core::Unit* u = gs.find_unit(id);
-    return (u != nullptr ? u->name : std::string("unit")) + " (" + std::to_string(id.v) + ")";
+    const core::Unit* u = gs.find_unit(id);  // D-065: the same numbered name as the board label
+    return (u != nullptr ? unit_display_name(gs, id) : std::string("unit")) + " (" + std::to_string(id.v) + ")";
 }
 
 std::string shot_text(const core::GameState& gs, const ShotOption& o) {

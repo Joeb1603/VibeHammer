@@ -26,6 +26,7 @@ add_library(wh40k_client_logic STATIC
     saved_game.cpp
     session.cpp
     undo_groups.cpp
+    unit_style.cpp
     watch_controls.cpp
     shot_plan.cpp
     settings.cpp

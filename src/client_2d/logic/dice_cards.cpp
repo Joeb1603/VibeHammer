@@ -9,6 +9,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/state/queries.hpp"
+#include "unit_style.hpp"
 
 namespace wh40k::client {
 
@@ -17,8 +18,7 @@ namespace {
 namespace ev = core::event;
 
 std::string unit_name(const core::GameState& state, core::UnitId id) {
-    const core::Unit* u = state.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return unit_display_name(state, id);  // D-065: "Termagants 2" when its side has several units
 }
 
 core::Side side_of(const core::GameState& state, core::UnitId id, core::Side fallback) {

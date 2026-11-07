@@ -6,14 +6,16 @@
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
+#include "unit_style.hpp"
 
 namespace wh40k::client {
 
 namespace {
 
 std::string unit_name(const core::GameState& state, core::UnitId id) {
+    // D-065: "Termagants 2 (5)" when a side has several units; "Termagants (5)" otherwise, as before.
     const core::Unit* u = state.find_unit(id);
-    return (u != nullptr ? u->name : std::string("Unit")) + " (" + std::to_string(id.v) + ")";
+    return (u != nullptr ? unit_display_name(state, id) : std::string("Unit")) + " (" + std::to_string(id.v) + ")";
 }
 
 std::string units(const core::GameState& state, const std::vector<core::UnitId>& ids) {

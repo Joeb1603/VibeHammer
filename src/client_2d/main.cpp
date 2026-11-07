@@ -71,6 +71,7 @@
 #include "start_screen.hpp"
 #include "timeline.hpp"
 #include "undo_groups.hpp"
+#include "unit_style.hpp"
 #include "watch_controls.hpp"
 
 namespace wh40k::client {
@@ -1062,7 +1063,9 @@ private:
     void draw_tooltip(const HoveredModel& h) {
         const core::Model& m = *h.model;
         ImGui::BeginTooltip();
-        ImGui::Text("%s (unit %u, %s)", h.unit->name.c_str(), h.unit->id.v, side_name(h.unit->side).c_str());
+        unit_swatch(h.unit->id);  // D-065
+        ImGui::Text("%s (unit %u, %s)", unit_display_name(state(), h.unit->id).c_str(), h.unit->id.v,
+                    side_name(h.unit->side).c_str());
         ImGui::Text("Model %u: %s", m.id.v, m.type_name.c_str());
         ImGui::Text("Wounds %d/%d, base %.1f mm", m.wounds_remaining, m.characteristics.wounds, m.base.diameter_mm);
         ImGui::TextUnformatted(stat_line(m.characteristics).c_str());  // D-034
@@ -1082,7 +1085,7 @@ private:
 
     std::string sheet_title(core::UnitId id) const {
         const core::Unit* u = state().find_unit(id);
-        return "Datasheet: " + (u ? u->name : std::string("unit")) + "##sheet" + std::to_string(id.v);
+        return "Datasheet: " + (u ? unit_display_name(state(), id) : std::string("unit")) + "##sheet" + std::to_string(id.v);
     }
 
     void draw_datasheets() {
@@ -1501,6 +1504,23 @@ private:
         return ImVec4(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, alpha);
     }
 
+    // D-065: a square of the unit's shade with its number, as drawn on the board, followed by SameLine. Draws
+    // nothing when its side has one unit (no number there, and the sidebar stays as it was).
+    void unit_swatch(core::UnitId id) {
+        const auto style = unit_style(state(), id);
+        if (!style || style->label.empty()) return;
+        const float em = ImGui::GetTextLineHeight();
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(p, ImVec2(p.x + em, p.y + em), ImGui::GetColorU32(to_imvec(to_color(style->tint))), 2.0f);
+        const ImVec2 t = ImGui::CalcTextSize(style->label.c_str());
+        const ImVec2 at(p.x + (em - t.x) * 0.5f, p.y + (em - t.y) * 0.5f);
+        dl->AddText(ImVec2(at.x + 1.0f, at.y + 1.0f), IM_COL32(0, 0, 0, 255), style->label.c_str());
+        dl->AddText(at, IM_COL32(255, 255, 255, 255), style->label.c_str());
+        ImGui::Dummy(ImVec2(em, em));
+        ImGui::SameLine();
+    }
+
     // A label on a coloured background that does nothing when clicked.
     static void chip(const char* label, ImVec4 colour) {
         ImGui::PushStyleColor(ImGuiCol_Button, colour);
@@ -1609,8 +1629,9 @@ private:
                 ImGui::SetItemTooltip("The bot plays this side (D-054).");
             }
             ImGui::SameLine();
-            ImGui::Text("%s (unit %u): %zu/%d models%s", u.name.c_str(), u.id.v, u.models.size(), u.starting_strength,
-                        u.battle_shocked ? ", battle-shocked" : "");
+            unit_swatch(u.id);  // D-065: the board's shade and number
+            ImGui::Text("%s (unit %u): %zu/%d models%s", unit_display_name(s, u.id).c_str(), u.id.v, u.models.size(),
+                        u.starting_strength, u.battle_shocked ? ", battle-shocked" : "");
         }
         if (mode_ == Mode::Play && (bot_sides_[0] || bot_sides_[1])) {  // M48 (D-059): the bot block, near the top
             ImGui::Spacing();
