@@ -44,6 +44,7 @@
 #include "bot_driver.hpp"
 #include "bot_log.hpp"
 #include "camera.hpp"
+#include "casualty_order.hpp"
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
@@ -1616,12 +1617,14 @@ private:
                               "enemy model, not closer) goes to the nearest spot it can, shown while dragging. "
                               "Ending within Engagement Range is left for Commit to check.");
         if (ImGui::Checkbox("Allocate damage automatically", &settings_.auto_allocate) && settings_.auto_allocate) auto_actions_as_group();
+        // M47: on its own checkbox (it followed the bot block, so with a bot it was on "Bot rolls its own dice").
+        ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
+                              "05.04) instead of asking. The default casualty order: %s",
+                              kDefaultCasualtyOrderText);
         if (bot_sides_[0] || bot_sides_[1]) {  // M39 (D-054)
             ImGui::Checkbox("Bot rolls its own dice automatically", &settings_.bot_auto_dice);
             ImGui::SetItemTooltip("The bot's dice pop-ups roll and continue by themselves (a click skips the wait).");
         }
-        ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
-                              "05.04) instead of asking.");
         ImGui::Checkbox("Warn before ending shooting with shots left", &settings_.warn_end_shooting);
         ImGui::SetItemTooltip("Ask before ending the Shooting phase while a unit still has a target it can shoot.");
         ImGui::Spacing();

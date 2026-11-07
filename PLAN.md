@@ -1134,7 +1134,8 @@ after, `wh40k_bot_arena --games 200`:
 - **Seen, not fixed (open):** Easy's Termagants, which aren't weighed, now lose models to coherency after
   casualties (Auto move strings a big unit round the enemy). 20 Termagants: Easy/Easy 0 → 37 models, Normal/Easy
   0 → 128; Termagants-first Normal/Easy 0 → 10. Normal's and Hard's Termagants are not affected (Hard/Normal
-  3 → 1); their Intercessors lose slightly more (5 → 9, 8 → 9).
+  3 → 1); their Intercessors lose slightly more (5 → 9, 8 → 9). **Addressed by D-058 (M47):** the default
+  casualty order keeps Easy's Termagants in coherency (37 → 2, 128 → 5, 10 → 2).
 - **Decision time:** p95 at most 46 ms (budget 500 ms). Hard's slowest single decision on 20 Termagants went from
   0.20 s to 1.46 s.
 - Replays: existing files unchanged; `m46_bot_fight_moves.json` (Normal vs Normal, 20 Termagants, seed 1; both
@@ -1161,7 +1162,7 @@ changes), marked ✅, committed and pushed. A missed acceptance number is record
 
 ---
 
-## M47: Default casualty order: furthest from the action first, keeping coherency
+## M47: Default casualty order: furthest from the action first, keeping coherency ✅ (done, with an open item)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07) · **Rules:** 03.03, 05.04, 06.02 · **Decision:** D-058
 
 > User feedback: "when choosing which units to kill, the auto mode should prefer models furthest away from the
@@ -1223,6 +1224,53 @@ changes), marked ✅, committed and pushed. A missed acceptance number is record
   - Normal's and Hard's coherency removals at most before + max(3, 20%).
   - No seat's wins + draws drops by more than 3 points; Hard seats at most 2 games lower.
   - p95 decision time ≤ 500 ms; Hard's slowest decision on 20 Termagants ≤ 1.2 × before.
+
+**Results (2026-11-07):** every acceptance item met except one coherency bound (open item below). Arena before (code
+at `ec71730`, measured before any M47 edit) and after, `wh40k_bot_arena --games 200`, seeds 1-200:
+
+| Scenario, A vs B | Space Marines wins / Tyranid wins / draws | Removed for coherency, A (Space Marines) | B (Tyranids) |
+|---|---|---|---|
+| V1, Easy vs Easy | 200/0/0 both | 0 → 0 | 0 → 1 |
+| V1, Normal vs Easy | 200/0/0 both | 0 → 0 | 2 → 0 |
+| V1, Easy vs Normal | 200/0/0 both | 0 → 0 | 0 → 0 |
+| V1, Hard vs Normal | 200/0/0 both | 0 → 0 | 0 → 0 |
+| V1, Normal vs Hard | 200/0/0 both | 0 → 0 | 0 → 0 |
+| Termagants first, Easy vs Easy | 200/0/0 both | 0 → 0 | 2 → 2 |
+| Termagants first, Normal vs Easy | 200/0/0 both | 0 → 0 | **10 → 2** |
+| Termagants first, Easy vs Normal | 199/0/1 both | 0 → 0 | 0 → 0 |
+| Termagants first, Hard vs Normal | 200/0/0 both | 0 → 0 | 0 → 0 |
+| Termagants first, Normal vs Hard | 200/0/0 both | 0 → 0 | 0 → 0 |
+| 20 Termagants, Easy vs Easy | 196/1/3 → 197/1/2 | 1 → 0 | **37 → 2** |
+| 20 Termagants, Normal vs Easy | 200/0/0 both | **1 → 15 (missed)** | **128 → 5** |
+| 20 Termagants, Easy vs Normal | 186/1/13 → 188/2/10 | 0 → 0 | 0 → 0 |
+| 20 Termagants, Hard vs Normal | 194/0/6 both | 9 → 9 | 1 → 1 |
+| 20 Termagants, Normal vs Hard | 196/3/1 → 195/3/2 | 9 → 10 | 1 → 1 |
+
+- **Easy's Termagants keep coherency:** D-057's open item 37 / 128 / 10 → 2 / 5 / 2 (bound: half). The few left are
+  thin lines wrapped round the Intercessors with three or four models left, where the greedy order ends with two
+  pairs and the next casualty must isolate one (D-058, accepted).
+- **Wins + draws:** the largest drop is 1 point (20 Termagants, Easy vs Normal, the Tyranids 14 → 12). Hard's seats:
+  Hard vs Normal unchanged, Normal vs Hard Tyranids 4 → 5. Hard never chose its new candidate in the 240 games
+  checked (seeds 1-40 of each Hard pairing): Normal's order is kept unless beaten by the margin, so Hard's games
+  change only through its rollouts (Easy's answers) and its opponents.
+- Clean everywhere: 0 rejected actions, 0 `UnitMoveReverted`, 0 unfinished games, 0 fallbacks.
+- **Decision time:** p95 at most 27.9 ms (budget 500 ms). Hard's slowest decision on 20 Termagants 0.92 s → 0.82 s
+  (Hard vs Normal) and 0.97 s → 0.83 s (Normal vs Hard), both runs three arenas at a time (bound 1.2 ×).
+- **Replays:** the core replays and `m46_bot_fight_moves.json` (Normal vs Normal) regenerate byte-identical.
+  `m45_bot_game.json` (Hard vs Hard, seed 9) regenerates byte-identical too: no step differs (the default order is
+  never Hard's pick there; only Hard's printed values move by a few hundredths, through its rollouts, which use
+  Easy's answers). New `tests/replays/m47_default_casualties.json`: Easy vs Easy, 20 Termagants, seed 121, 99 steps,
+  Space Marines win in battle round 2; 6 casualty orders (1 by the Space Marines) and 1 Regaining Coherency removal,
+  each the default at its step; identical over two regenerations; replays with core only.
+- **Open (missed bound):** 20 Termagants, Normal vs Easy: Normal's Intercessors lose 15 models to coherency (before
+  1; bound 4). Normal's code is unchanged (m46 is byte-identical). Easy's Termagants now keep their engaged models, so
+  they fight back more (557 → 608 Termagant fights over the 200 games), and Normal's casualty order wounds a model
+  without weighing that 05.04 then forces that model to take the next damage: when it is the link of a line the
+  charge strung out (the wounded Sergeant in seeds 16, 20, 27), its death isolates a neighbour. Normal's casualty
+  decisions that can't keep coherency: 4 → 18 of about 230. Fixing it means changing Normal's casualty order, which
+  this batch keeps unchanged; left for a later milestone.
+- Also seen: V1 Easy vs Easy 0 → 1 and Termagants first Easy vs Easy 2 → 2 Termagants removed for coherency (the
+  same thin-line case; not D-057's numbers).
 
 ---
 

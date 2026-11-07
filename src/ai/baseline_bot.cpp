@@ -9,6 +9,7 @@
 #include <variant>
 
 #include "action_text.hpp"
+#include "casualty_order.hpp"
 #include "casualty_plan.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
@@ -236,6 +237,15 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
             if (auto plan = normal::simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
         }
         if (end) return single(gs, *end, pile_in ? "no pile-in worth making" : "no consolidation worth making");
+    }
+    if (const auto* d = std::get_if<decision::RestoreCoherency>(&kind)) {
+        // D-058 (M47): the model the default casualty order would lose first (03.03 Regaining Coherency).
+        if (const std::optional<core::ModelId> m = client::default_coherency_removal(gs, d->unit)) {
+            const GameAction remove = action::RemoveModelForCoherency{d->unit, *m};
+            if (std::find(legal.begin(), legal.end(), remove) != legal.end()) {
+                return single(gs, remove, "default order");
+            }
+        }
     }
     for (const GameAction& t : view.templates) {
         switch (*client::editor_kind(t)) {

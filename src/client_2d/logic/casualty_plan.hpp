@@ -1,7 +1,9 @@
 #pragma once
 
 // The casualty editor's model (D-013): a priority over every model of the target unit, most-preferred
-// casualty first. Starts in unit order; the player reorders it.
+// casualty first. Starts in the default order (D-058, default_casualty_order: furthest from the action first,
+// keeping coherency); move_up / move_down reorder it. Its action() is the default answer wherever one is used:
+// "Allocate damage automatically", "Use default order", level Easy and the bots' fallback.
 
 #include <cstddef>
 #include <vector>

@@ -11,6 +11,7 @@
 #include "auto_charge_move.hpp"
 #include "auto_fight_move.hpp"
 #include "board_view.hpp"
+#include "casualty_order.hpp"
 #include "core/engine/movement.hpp"
 #include "decision_view.hpp"
 
@@ -178,9 +179,10 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
     if (casualties_) {
         if (!begin_bar("Use default order")) return std::nullopt;
         headline(gs, session.pending()->side, core::describe(*session.pending()));
-        ImGui::TextWrapped("Pick the casualties on the board, or use the default order (unit order).");
+        ImGui::TextWrapped("Pick the casualties on the board, or use the default order.");
         ImGui::TableNextColumn();
         if (primary_button("Use default order", false)) chosen = casualties_->action();
+        ImGui::SetItemTooltip("%s", kDefaultCasualtyOrderText);  // D-058
         ImGui::EndTable();
         return chosen;
     }
@@ -289,7 +291,9 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         for (std::size_t i = 0; i < steps.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
             const bool default_order = std::holds_alternative<core::action::OrderCasualties>(steps[i]);
-            if (row.button(default_order ? "Use default order" : action_label(gs, steps[i]))) chosen = steps[i];
+            // D-058 (M47): "Use default order", or "Default order for the rest" after picks (it keeps them).
+            if (row.button(default_order ? board.default_order_label() : action_label(gs, steps[i]))) chosen = steps[i];
+            if (default_order) ImGui::SetItemTooltip("%s", kDefaultCasualtyOrderText);
             ImGui::PopID();
         }
         // D-050: place the pile-in / consolidation automatically; D-056: the charge move too. The player

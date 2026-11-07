@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "casualty_order.hpp"
+
 namespace wh40k::client {
 namespace {
 
@@ -187,7 +189,8 @@ void StartScreen::draw_options(AppSettings& s, const StartContext& /*ctx*/) {
     ImGui::Checkbox("Fix illegal moves", &s.fix_moves);
     ImGui::SetItemTooltip("A model dropped where it can't go goes to the nearest spot it can, shown while dragging.");
     ImGui::Checkbox("Allocate damage automatically", &s.auto_allocate);
-    ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults.");
+    ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults. The default "
+                          "casualty order: %s", kDefaultCasualtyOrderText);
     ImGui::Checkbox("Warn before ending shooting with shots left", &s.warn_end_shooting);
     // D-038: the scale changes only when the slider is let go, so the slider doesn't resize under the mouse.
     if (!scale_active_) scale_percent_ = static_cast<int>(std::lround(s.ui_scale * 100.0f));

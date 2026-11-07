@@ -2,13 +2,12 @@
 
 #include <utility>
 
+#include "casualty_order.hpp"
+
 namespace wh40k::client {
 
-CasualtyPlan::CasualtyPlan(const core::GameState& state, core::UnitId target) : target_(target) {
-    if (const core::Unit* u = state.find_unit(target)) {
-        for (const core::Model& m : u->models) priority_.push_back(m.id);
-    }
-}
+CasualtyPlan::CasualtyPlan(const core::GameState& state, core::UnitId target)
+    : target_(target), priority_(default_casualty_order(state, target)) {}
 
 void CasualtyPlan::move_up(std::size_t index) {
     if (index > 0 && index < priority_.size()) std::swap(priority_[index - 1], priority_[index]);

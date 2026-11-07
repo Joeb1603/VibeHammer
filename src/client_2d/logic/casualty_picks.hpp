@@ -3,7 +3,8 @@
 // D-051 (M35): picking casualties on the board, one model at a time. Each pick is the model that takes the
 // next attack (05.04) or mortal wound (06.02); a picked model keeps taking the damage forced onto it. Core's
 // preview_casualties says who may be picked next and what each pick does, so there are no rules here
-// (D-024). The answer is still one OrderCasualties (D-013): the picks, then the rest of the unit.
+// (D-024). The answer is still one OrderCasualties (D-013): the picks, then the rest of the unit in the default
+// order (D-058, M47: default_casualty_order continues from the picks).
 
 #include <optional>
 #include <vector>
@@ -43,13 +44,13 @@ public:
 
     // Per model, in the order first hit: the wounds the picks so far take off, and whether it dies.
     [[nodiscard]] std::vector<CasualtyMark> marks() const;
-    // The answer: the picks, then the unit's other models in unit order (D-013: every model once).
+    // The answer: the picks, then the unit's other models in the default order (D-058; D-013: every model once).
     [[nodiscard]] core::action::OrderCasualties action() const;
 
 private:
     core::UnitId target_;
-    std::vector<core::ModelId> unit_order_;
     std::vector<core::ModelId> picks_;
+    std::vector<core::ModelId> order_;  // default_casualty_order(state, target_, picks_), kept with the picks
     std::optional<core::CasualtyPreview> preview_;
 };
 

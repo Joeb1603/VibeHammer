@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "analysis/odds.hpp"
+#include "casualty_order.hpp"
 #include "core/engine/actions.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/state/game_state.hpp"
@@ -46,7 +47,9 @@ struct StanceInfo {
 
 // 03.03 Regaining Coherency, estimated: how many models would have to be removed from `models` for them to be
 // in coherency (greedy: each time the model whose removal leaves the fewest coherency problems). 0 if they are.
-[[nodiscard]] int coherency_losses(std::vector<core::PlacedModel> models);
+// M47: moved to the client logic (casualty_order.hpp) unchanged in behaviour, where the default casualty order
+// (D-058) uses it too.
+using client::coherency_losses;
 
 struct CasualtyOrder {
     std::vector<core::ModelId> priority;  // every model of the unit, most-preferred casualty first (D-013)

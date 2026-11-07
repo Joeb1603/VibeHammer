@@ -7,6 +7,7 @@
 
 #include "auto_actions.hpp"
 #include "board_interaction.hpp"
+#include "casualty_order.hpp"
 #include "casualty_picks.hpp"
 #include "casualty_plan.hpp"
 #include "core/engine/attack_flow.hpp"
@@ -57,7 +58,7 @@ TEST(M35_CasualtyPicks, TheBoardHandlesCasualtiesAndGreysModelsThatCantBePicked)
     EXPECT_FALSE(board.model_dimmed(marines, mid(gs, 2)));  // still needs its click (D-051)
     EXPECT_FALSE(board.confirm().has_value());
     EXPECT_NE(board.hint(gs).find("Only one model"), std::string::npos);
-    // "Use default order" is the unit order, as before.
+    // "Use default order" is CasualtyPlan's default order (D-058 since M47).
     EXPECT_EQ(board.step_buttons(), (std::vector<GameAction>{CasualtyPlan(gs, marines).action()}));
 }
 
@@ -129,7 +130,11 @@ TEST(M35_CasualtyPicks, TheActionListsThePicksThenTheRestOfTheUnit) {
     ASSERT_TRUE(picks.pick(gs, mid(gs, 4)));
     EXPECT_FALSE(picks.pick(gs, mid(gs, 0)));  // nothing left to pick
     const auto a = picks.action();
-    EXPECT_EQ(a.priority, (std::vector<ModelId>{mid(gs, 4), mid(gs, 0), mid(gs, 1), mid(gs, 2), mid(gs, 3)}));
+    // M47 (D-058): the rest of the unit in the default order (it was unit order): the two models furthest from
+    // the Termagants tie, so the later one first, then the Sergeant (the unit's odd one out) last.
+    EXPECT_EQ(a.priority, (std::vector<ModelId>{mid(gs, 4), mid(gs, 3), mid(gs, 1), mid(gs, 2), mid(gs, 0)}));
+    const std::vector<ModelId> picked{mid(gs, 4)};
+    EXPECT_EQ(a.priority, default_casualty_order(gs, gs.units[kMarines].id, picked));
     EXPECT_TRUE(validate_action(gs, Side::A, a).ok());
 }
 

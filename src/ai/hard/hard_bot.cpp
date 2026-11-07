@@ -13,6 +13,7 @@
 
 #include "analysis/charge_odds.hpp"
 #include "auto_fight_move.hpp"
+#include "casualty_order.hpp"
 #include "fight_move_skip.hpp"
 #include "core/dice/dice.hpp"
 #include "core/engine/casualties.hpp"
@@ -175,7 +176,7 @@ double hazard_wounds_per_model(const core::Unit& unit) {
 }
 
 std::optional<PolicyResult> decide_casualties(HardContext& hc, analysis::OddsCache& cache, const GameState& gs,
-                                              core::Side side);
+                                              core::Side side, std::vector<HardCasualtyCandidate>* out = nullptr);
 
 // D-054 (no reverted moves): a Desperate Escape is only started when every likely outcome of its hazard rolls
 // (06.03: one to three failures, our casualties chosen as Hard chooses them) still leaves a fall-back move that
@@ -589,7 +590,7 @@ std::optional<std::vector<core::DamageResult>> preview(const GameState& gs, cons
 }
 
 std::optional<PolicyResult> decide_casualties(HardContext& hc, analysis::OddsCache& cache, const GameState& gs,
-                                              core::Side side) {
+                                              core::Side side, std::vector<HardCasualtyCandidate>* out) {
     const auto* d = std::get_if<core::decision::OrderCasualties>(&gs.pending->kind);
     if (d == nullptr) return std::nullopt;
     const core::Unit* unit = gs.find_unit(d->target);
@@ -624,16 +625,39 @@ std::optional<PolicyResult> decide_casualties(HardContext& hc, analysis::OddsCac
         cands.push_back(std::move(front));
         cands.push_back(std::move(rear));
     }
+    // D-058 (M47): the default order (the players' default and Easy's), last so that a tie changes nothing.
+    cands.push_back(
+        Cand{client::default_casualty_order(gs, d->target), "the default order, furthest from the enemy first"});
     std::optional<std::size_t> best;
     Evaluation best_value;
     std::optional<double> normal_value;
+    // Each candidate's preview (who dies, wounds lost) and value; a candidate with the same results as an earlier
+    // one leaves the same position, so it takes that value without evaluating it again (never better, so never
+    // chosen over it).
+    std::vector<std::optional<std::vector<core::DamageResult>>> seen;
+    std::vector<std::optional<Evaluation>> values;
     for (std::size_t i = 0; i < cands.size(); ++i) {
-        const std::optional<std::vector<core::DamageResult>> results = preview(gs, cands[i].priority);
-        if (!results) continue;
-        GameState after = gs;
-        apply_results(after, d->target, *results);
-        restore_coherency(after, d->target);
-        const Evaluation v = eval.evaluate(after);
+        std::optional<std::vector<core::DamageResult>> results = preview(gs, cands[i].priority);
+        std::optional<Evaluation> value;
+        if (results) {
+            for (std::size_t j = 0; j < i && !value; ++j) {
+                if (seen[j] && *seen[j] == *results) value = values[j];
+            }
+            if (!value) {
+                GameState after = gs;
+                apply_results(after, d->target, *results);
+                restore_coherency(after, d->target);
+                value = eval.evaluate(after);
+            }
+        }
+        seen.push_back(std::move(results));
+        values.push_back(value);
+        if (out != nullptr) {
+            out->push_back(HardCasualtyCandidate{cands[i].priority, cands[i].text,
+                                                 value ? std::optional<double>(value->score) : std::nullopt});
+        }
+        if (!value) continue;
+        const Evaluation& v = *value;
         if (have_normal && i == 0) normal_value = v.score;
         const bool better = !best || v.score > best_value.score + kBetter;
         if (better && (!normal_value || i == 0 || deviates(hc, v.score, *normal_value))) {
@@ -781,6 +805,12 @@ PolicyResult hard_policy(const GameState& gs, core::Side side, const std::vector
                          std::uint64_t seed, HardContext& context) {
     if (std::optional<PolicyResult> r = hard_answer(gs, side, legal, seed, context)) return std::move(*r);
     return normal_policy(gs, side, legal, seed);
+}
+
+std::optional<PolicyResult> hard_casualties(HardContext& context, analysis::OddsCache& cache, const GameState& gs,
+                                            core::Side side, std::vector<HardCasualtyCandidate>* candidates) {
+    if (!gs.pending) return std::nullopt;
+    return decide_casualties(context, cache, gs, side, candidates);
 }
 
 }  // namespace wh40k::ai::hard

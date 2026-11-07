@@ -32,7 +32,7 @@ std::optional<core::GameAction> next_auto_action(const core::GameState& state,
             return legal.front();  // 05.03: the first legal order, as the panel offers first
         }
         if (const auto* d = std::get_if<core::decision::OrderCasualties>(&state.pending->kind)) {
-            return CasualtyPlan(state, d->target).action();  // 05.04: the default casualty order
+            return CasualtyPlan(state, d->target).action();  // 05.04: the default casualty order (D-058)
         }
     }
     return std::nullopt;

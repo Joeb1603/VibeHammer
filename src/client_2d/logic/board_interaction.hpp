@@ -105,7 +105,12 @@ public:
     // Ending the phase (or step): every remaining unit remains stationary, End Shooting phase, Pass, ...
     [[nodiscard]] std::optional<EndPhase> end_phase() const;
     // The other legal actions that don't belong to a unit on the board: Commit move, Make no charge move, ...
+    // Picking casualties (D-051, D-058): "Use default order", which finishes from the picks so far (the picks,
+    // then the default order for the rest); none once every casualty is picked (Confirm covers it).
     [[nodiscard]] std::vector<core::GameAction> step_buttons() const;
+    // D-058 (M47): the label of the casualty step button: "Use default order", or "Default order for the rest"
+    // once a model is picked.
+    [[nodiscard]] std::string default_order_label() const;
     // In target selection: the option whose targets are exactly the chosen ones, if any. Removing a model
     // for coherency (D-042): the chosen model's removal.
     [[nodiscard]] std::optional<core::GameAction> confirm() const;
@@ -148,7 +153,7 @@ private:
     std::vector<core::UnitId> targets_;
     std::optional<core::ModelId> chosen_model_;  // RemoveModel: the model clicked
     std::optional<CasualtyPicks> picks_;         // PickCasualties: the models picked so far (D-051)
-    std::optional<core::GameAction> default_order_;  // PickCasualties: "Use default order" (unit order)
+    std::optional<core::GameAction> default_order_;  // PickCasualties: "Use default order" (D-058's order)
     std::optional<ShotPlan> shot_;
     std::optional<ShotPlan> custom_;             // CustomShot: the plan being edited (a copy of shot_)
     std::optional<core::UnitId> custom_target_;  // a custom editor: the target "Custom..." was picked on

@@ -5,7 +5,8 @@
 // - "Skip steps with nothing to do" (D-036, M23): the only legal action is to end a step or pass, or
 //   (D-047, M31) every pile-in or consolidation left is too small to matter (fight_move_skip).
 // - "Allocate damage automatically" (D-038, M25): the defender's allocation order (05.03) and casualty
-//   order (05.04) take their defaults, unless a bot plays the defender (D-054: the bot answers its own).
+//   order (05.04) take their defaults, unless a bot plays the defender (D-054: the bot answers its own). The
+//   default casualty order is D-058's (M47): furthest from the action first, keeping coherency.
 
 #include <array>
 #include <cstddef>
@@ -34,7 +35,7 @@ struct AutoSettings {
 [[nodiscard]] std::optional<core::GameAction> lone_skip(const std::vector<core::GameAction>& legal);
 
 // The action the client takes by itself for this decision under `settings`, if any: a lone skip, the
-// first (default) allocation order, or the default casualty order (CasualtyPlan's). Under
+// first (default) allocation order, or the default casualty order (CasualtyPlan's, D-058). Under
 // skip_empty_steps, also the step's skip when every pile-in or consolidation left is pointless (D-047).
 [[nodiscard]] std::optional<core::GameAction> next_auto_action(const core::GameState& state,
                                                                const std::vector<core::GameAction>& legal,

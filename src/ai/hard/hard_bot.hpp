@@ -10,9 +10,9 @@
 //   the draw (it keeps out of charge range and kites when that keeps it alive), the winning side for the wipe-out.
 // - The charge (11.02, 11.04): declare when the chain prefers the fight (it strikes first) to holding; after the
 //   roll, the planned charge move (D-056) if the position after it is worth more than not moving.
-// - The casualty order (05.04, 06.02): Normal's choice, the front models first, or the rear models first,
-//   whichever leaves the position worth most (the engine's preview_casualties says who dies; coherency losses at
-//   the end of the turn are counted, 03.03).
+// - The casualty order (05.04, 06.02): Normal's choice, the front models first, the rear models first, or (M47)
+//   the default order (D-058), whichever leaves the position worth most (the engine's preview_casualties says who
+//   dies; coherency losses at the end of the turn are counted, 03.03); Normal's is kept unless beaten by margin.
 // - The model removed to regain coherency (03.03), and the consolidation (12.07, 12.08), by the same measure.
 // Every other decision is Normal's. Hard needs a duel (one unit per side, as in every V1 scenario); otherwise it
 // plays as Normal. Like every level it is a pure function of the state (D-054): the chain tables it keeps are a
@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "analysis/odds.hpp"
@@ -70,5 +71,17 @@ struct HardTypeValues {
                                                           const core::GameState& state, core::Side side,
                                                           const std::vector<core::GameAction>& legal,
                                                           std::uint64_t seed, HardTypeValues* values = nullptr);
+
+// The candidates of the pending casualty decision (tests, diagnostics, M47), as hard_policy weighs them: Normal's
+// order, the front models first, the rear models first and the default order (D-058), in that order; `value` is
+// nullopt for a candidate the preview refused.
+struct HardCasualtyCandidate {
+    std::vector<core::ModelId> priority;
+    std::string text;
+    std::optional<double> value;
+};
+[[nodiscard]] std::optional<PolicyResult> hard_casualties(HardContext& context, analysis::OddsCache& cache,
+                                                          const core::GameState& state, core::Side side,
+                                                          std::vector<HardCasualtyCandidate>* candidates = nullptr);
 
 }  // namespace wh40k::ai::hard

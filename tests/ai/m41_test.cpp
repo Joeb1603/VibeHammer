@@ -260,10 +260,10 @@ TEST(M41_AttackBatch, TheBotSelectsTheFocusedFireBatchFirstAgainstIntercessors) 
 
 // ==== Defense: casualty order keeps coherency, and the front goes first when a charge threatens ====
 
-TEST(M41_Casualties, KeepsCoherencyWhereTheDefaultOrderWouldLoseAModel) {
+TEST(M41_Casualties, KeepsCoherencyWhereUnitOrderWouldLoseAModel) {
     // The closest Termagant is the only link of the one beside it to the rest of the unit (03.03: every model
     // within 2" of another). One casualty: front-first would isolate that model, and the End of Turn step would
-    // remove it too. The bot removes the side model instead; the default order (unit order) removes the link.
+    // remove it too. The bot removes the side model instead; unit order (the default before M47) removes the link.
     GameState gs = wh40k::test::shoot_step_state(Side::A);
     float front_y = 0.0f;
     for (const Model& m : gs.units[kMarines].models) front_y = std::max(front_y, m.position.y);
@@ -291,13 +291,21 @@ TEST(M41_Casualties, KeepsCoherencyWhereTheDefaultOrderWouldLoseAModel) {
     GameState after = decision;
     (void)apply_action(after, Side::B, c.action);
     EXPECT_TRUE(unit_coherency(after.units[kGants]).ok());
-    // The default order removes the link and leaves the side model isolated.
-    const GameAction fallback = client::CasualtyPlan(decision, decision.units[kGants].id).action();
-    EXPECT_EQ(removed_by(decision, fallback), (std::set<ModelId>{link}));
+    // Unit order removes the link and leaves the side model isolated.
+    const GameAction unit_order =
+        action::OrderCasualties{decision.units[kGants].id, wh40k::test::model_ids(decision.units[kGants])};
+    EXPECT_EQ(removed_by(decision, unit_order), (std::set<ModelId>{link}));
+    GameState by_unit_order = decision;
+    (void)apply_action(by_unit_order, Side::B, unit_order);
+    EXPECT_FALSE(unit_coherency(by_unit_order.units[kGants]).ok());
+    EXPECT_EQ(normal::coherency_losses(placed_models(by_unit_order.units[kGants])), 1);
+    // M47 (D-058): the default order (CasualtyPlan's) keeps coherency here too.
+    const GameAction by_plan = client::CasualtyPlan(decision, decision.units[kGants].id).action();
+    EXPECT_EQ(removed_by(decision, by_plan), (std::set<ModelId>{side_model}));  // the straggler, at risk
     GameState by_default = decision;
-    (void)apply_action(by_default, Side::B, fallback);
-    EXPECT_FALSE(unit_coherency(by_default.units[kGants]).ok());
-    EXPECT_EQ(normal::coherency_losses(placed_models(by_default.units[kGants])), 1);
+    (void)apply_action(by_default, Side::B, by_plan);
+    EXPECT_TRUE(unit_coherency(by_default.units[kGants]).ok());
+    EXPECT_EQ(normal::coherency_losses(placed_models(by_default.units[kGants])), 0);
 }
 
 TEST(M41_Casualties, TheFrontModelsGoFirstWhenAnEnemyChargeThreatens) {
@@ -326,9 +334,11 @@ TEST(M41_Casualties, TheFrontModelsGoFirstWhenAnEnemyChargeThreatens) {
         }
     }
     EXPECT_LE(worst_removed, best_kept + EPS_MM);
-    // The default (unit order) would have removed rear models instead.
+    // Unit order (the default before M47) would have removed rear models instead, and so does the default order
+    // (D-058, M47: furthest from the enemy first).
     GameState after = decision;
     (void)apply_action(after, Side::B, c.action);
+    EXPECT_NE(removed_by(decision, action::OrderCasualties{gants.id, wh40k::test::model_ids(gants)}), gone);
     EXPECT_NE(removed_by(decision, client::CasualtyPlan(decision, gants.id).action()), gone);
     EXPECT_TRUE(unit_coherency(after.units[kGants]).ok());
 }

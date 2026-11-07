@@ -24,11 +24,6 @@ constexpr double kUnthreatenedPosition = 0.3;  // position weight when no enemy 
 
 using Worth = std::map<core::ModelId, double>;
 
-int coherency_problems(const std::vector<core::PlacedModel>& models) {
-    const core::CoherencyResult r = core::check_coherency(models);
-    return static_cast<int>(r.isolated.size() + r.too_far.size());
-}
-
 std::vector<core::PlacedModel> without(const std::vector<core::PlacedModel>& models, const std::set<core::ModelId>& gone) {
     std::vector<core::PlacedModel> out;
     for (const core::PlacedModel& p : models) {
@@ -149,26 +144,6 @@ StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& st
     out.why = theirs > ours ? (they_may_charge ? enemy->name + " may charge" : "keeping away from " + enemy->name)
                             : "keeping close to " + enemy->name;
     return out;
-}
-
-int coherency_losses(std::vector<core::PlacedModel> models) {
-    int removed = 0;
-    while (models.size() > 1 && coherency_problems(models) > 0) {
-        std::size_t best = 0;
-        int best_problems = -1;
-        for (std::size_t i = 0; i < models.size(); ++i) {
-            std::vector<core::PlacedModel> rest = models;
-            rest.erase(rest.begin() + static_cast<std::ptrdiff_t>(i));
-            const int p = coherency_problems(rest);
-            if (best_problems < 0 || p < best_problems) {
-                best = i;
-                best_problems = p;
-            }
-        }
-        models.erase(models.begin() + static_cast<std::ptrdiff_t>(best));
-        ++removed;
-    }
-    return removed;
 }
 
 std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const core::GameState& state) {

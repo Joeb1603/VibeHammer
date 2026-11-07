@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "casualty_order.hpp"
+
 namespace wh40k::client {
 
 namespace {
@@ -13,10 +15,8 @@ bool contains(const std::vector<core::ModelId>& v, core::ModelId id) {
 }  // namespace
 
 CasualtyPicks::CasualtyPicks(const core::GameState& state, core::UnitId target) : target_(target) {
-    if (const core::Unit* u = state.find_unit(target)) {
-        for (const core::Model& m : u->models) unit_order_.push_back(m.id);
-    }
     preview_ = core::preview_casualties(state, picks_);
+    order_ = default_casualty_order(state, target_, picks_);
 }
 
 std::vector<core::ModelId> CasualtyPicks::options() const {
@@ -34,6 +34,7 @@ bool CasualtyPicks::pick(const core::GameState& state, core::ModelId model) {
         return false;
     }
     preview_ = std::move(next);
+    order_ = default_casualty_order(state, target_, picks_);
     return true;
 }
 
@@ -41,6 +42,7 @@ bool CasualtyPicks::undo_pick(const core::GameState& state) {
     if (picks_.empty()) return false;
     picks_.pop_back();
     preview_ = core::preview_casualties(state, picks_);
+    order_ = default_casualty_order(state, target_, picks_);
     return true;
 }
 
@@ -59,12 +61,6 @@ std::vector<CasualtyMark> CasualtyPicks::marks() const {
     return out;
 }
 
-core::action::OrderCasualties CasualtyPicks::action() const {
-    std::vector<core::ModelId> priority = picks_;
-    for (const core::ModelId id : unit_order_) {
-        if (!contains(priority, id)) priority.push_back(id);
-    }
-    return core::action::OrderCasualties{target_, priority};
-}
+core::action::OrderCasualties CasualtyPicks::action() const { return core::action::OrderCasualties{target_, order_}; }
 
 }  // namespace wh40k::client

@@ -2,6 +2,7 @@
 
 #include <variant>
 
+#include "casualty_order.hpp"
 #include "casualty_plan.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
@@ -50,7 +51,13 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
         return client::MeleePlan(state, d->unit).expand();
     }
     if (std::holds_alternative<decision::Consolidate>(kind)) return action::EndConsolidations{};
-    if (std::holds_alternative<decision::RestoreCoherency>(kind)) return first_of<action::RemoveModelForCoherency>(legal);
+    if (const auto* d = std::get_if<decision::RestoreCoherency>(&kind)) {
+        // D-058 (M47): the default order's first model, else the first offered.
+        if (const std::optional<ModelId> m = client::default_coherency_removal(state, d->unit)) {
+            return action::RemoveModelForCoherency{d->unit, *m};
+        }
+        return first_of<action::RemoveModelForCoherency>(legal);
+    }
     if (std::holds_alternative<decision::SelectAttackBatch>(kind)) return first_of<action::SelectAttackBatch>(legal);
     if (std::holds_alternative<decision::DeclareAllocationOrder>(kind)) {
         return first_of<action::DeclareAllocationOrder>(legal);

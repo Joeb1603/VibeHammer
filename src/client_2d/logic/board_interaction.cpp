@@ -326,9 +326,12 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
             }
             const core::CasualtyPreview& p = *picks_->preview();
             const int d = p.next_damage.value_or(1);
+            // D-058 (M47): or the default order, which keeps the picks so far.
             std::string text = "Click the model of the " + name + " that takes the next " +
                                (d == 1 ? std::string("damage") : std::to_string(d) + " damage") +
-                               " (05.04 / 06.02). A picked model keeps taking the damage forced onto it.";
+                               " (05.04 / 06.02), or use the default order" +
+                               (picks_->picks().empty() ? "" : " for the rest") +
+                               ". A picked model keeps taking the damage forced onto it.";
             if (p.options.size() == 1) text += " Only one model can take it.";
             return text;
         }
@@ -617,8 +620,13 @@ std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
     if (custom_editor()) return out;  // the panel's Back and Shoot / Fight only (D-031, D-032)
     if (mode_ == Mode::RemoveModel) return out;  // D-042: a model is clicked, then confirmed
-    if (mode_ == Mode::PickCasualties) {         // D-051: or skip the picking with the unit order
-        if (default_order_) out.push_back(*default_order_);
+    if (mode_ == Mode::PickCasualties) {  // D-051: or skip the picking with the default order (D-058)
+        if (picks_ && !picks_->picks().empty()) {
+            // M47: finish from the picks so far: the picks, then the default order for the rest.
+            if (!picks_->done()) out.push_back(picks_->action());
+        } else if (default_order_) {
+            out.push_back(*default_order_);
+        }
         return out;
     }
     for (const core::GameAction& action : legal_) {
@@ -627,6 +635,10 @@ std::vector<core::GameAction> BoardInteraction::step_buttons() const {
         out.push_back(action);
     }
     return out;
+}
+
+std::string BoardInteraction::default_order_label() const {
+    return picks_ && !picks_->picks().empty() ? "Default order for the rest" : "Use default order";
 }
 
 std::optional<core::GameAction> BoardInteraction::confirm() const {

@@ -55,6 +55,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M45_Replay.DISABLED_RegenerateBotGameReplay
 # and m46_bot_fight_moves.json (Normal vs Normal, 20 Termagants, seed 1) likewise (M46):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M46_Replay.DISABLED_RegenerateFightMoveReplay
+# and m47_default_casualties.json (Easy vs Easy, 20 Termagants, seed 121) likewise (M47):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M47_Replay.DISABLED_RegenerateDefaultCasualtiesReplay
 ```
 
 On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` and
@@ -149,7 +151,7 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Geometry tests use explicit coordinates in inches, converted with a helper, so the numbers read like the rulebook.
 - Tests that check a decision rather than a numbered rule are named after it (`TEST(D020_FightSequence, ...)`), Rules Appendix tests use `Appendix_...`, and client tests (`wh40k_client_tests`) use the milestone (`M12_...`, `M13_...`).
 - At the end of each milestone, add at least one replay file under `tests/replays/` covering that milestone's flow. Stop the replay before any phase a later milestone will change (as `m9_charge.json` and `m10_fight.json` do), so it stays valid.
-- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, and `M45_Replay.DISABLED_RegenerateBotGameReplay` / `M46_Replay.DISABLED_RegenerateFightMoveReplay` in the ai tests for `m45_bot_game.json` / `m46_bot_fight_moves.json`; see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`.
+- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, and `M45_Replay.DISABLED_RegenerateBotGameReplay` / `M46_Replay.DISABLED_RegenerateFightMoveReplay` / `M47_Replay.DISABLED_RegenerateDefaultCasualtiesReplay` in the ai tests for `m45_bot_game.json` / `m46_bot_fight_moves.json` / `m47_default_casualties.json`; see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`. `M47_Replay.TheSavedFileMatchesTheGame` also checks that `m47_default_casualties.json` is what Easy plays now.
 
 ## Working style for Claude in this repo
 

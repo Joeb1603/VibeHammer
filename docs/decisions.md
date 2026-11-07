@@ -419,7 +419,8 @@ of the charge for that reason.
   - **Weapons.** The shooting and melee editors set one weapon profile and target for the whole unit,
     and each model's row can override it (D-001). The client expands this into a per-model
     `GameAction`.
-  - **Casualties.** The casualty editor starts in unit order (D-013).
+  - **Casualties.** The casualty editor starts in unit order (D-013). **Changed by D-058 (M47):** it starts in
+    the default order, furthest from the action first, keeping coherency.
   - **Decision panel.** It is generated from `legal_actions`: one button per fully specified action,
     and one editor per template.
 
@@ -726,7 +727,8 @@ logic).
   can shoot.
 - **Allocate damage automatically** (setting, on by default; **off by default since D-051**, so casualties
   are picked on the board): the defender's `DeclareAllocationOrder`
-  takes the first legal order, and `OrderCasualties` takes `CasualtyPlan`'s default order. These are the
+  takes the first legal order, and `OrderCasualties` takes `CasualtyPlan`'s default order (since M47 D-058's order,
+  not unit order). These are the
   defaults the panel offers. They go through `GameSession::submit` like the D-036 skips (`run_auto_actions`)
   and count with them for Undo. The attacker's choice of batch (04.03) is not damage allocation and is
   still asked.
@@ -1002,7 +1004,10 @@ change.
     out isn't counted. At 0 it reads "All damage allocated: confirm the casualties".
   - "Undo pick" takes back the last pick (board-local, not a game action). "Confirm casualties" appears
     once nothing is left to pick, and submits the one `OrderCasualties`. "Use default order" (unit order)
-    skips the picking.
+    skips the picking. **Changed by D-058 (M47):** the default order is no longer unit order, and after one or
+    more picks the button reads "Default order for the rest" and keeps them (the picks, then the default order
+    for the rest); it goes once every casualty is picked (Confirm covers it). Its tooltip says what the order
+    does.
 - **Default (user, 2026-11-06):** "Allocate damage automatically" is now **off** by default, so casualties
   are picked by hand unless the player ticks it. (The allocation-group order, 05.03, is then asked too, but
   only when a unit has more than one legal order.) A destroyed model's red cross and its "-N" have a black
@@ -1097,7 +1102,8 @@ change.
   `fix_drop` (D-052) handles neither Engagement Range nor coherency, so the bot checks both. Arena acceptance is zero
   rejected actions and zero `UnitMoveReverted` events.
 - **Fallback and loop guard:** every decision kind has an always-legal fallback (lone skip / End step, Remain
-  Stationary, SkipChargeMove, PassFight, the `MeleePlan` default, the `CasualtyPlan` default). The same state hash
+  Stationary, SkipChargeMove, PassFight, the `MeleePlan` default, the `CasualtyPlan` default; since M47 D-058's
+  order, and for RestoreCoherency D-058's pick instead of the first model offered). The same state hash
   and decision three times means the fallback is used. If the fallback is rejected, the bot stops and shows the
   reasons instead of looping.
 - **Client:** which sides are bots is client state (`std::array<bool,2>`), plus an optional `"players"` block in the
@@ -1129,7 +1135,9 @@ change.
     leaves that model where it is; the commit must pass `move_end_problems` and not be reverted), and a move that
     wouldn't stand is never started (Remain Stationary, SkipChargeMove, SkipPileIn instead). So Easy never resets a
     move, and the arena sees no `UnitMoveReverted` at all. **Changed by D-057 (M46):** Easy's pile-ins (an Overrun's
-    too) and consolidations are now made by Auto move whenever one is worth making.
+    too) and consolidations are now made by Auto move whenever one is worth making. **Changed by D-058 (M47):** the
+    casualty editor's default is D-058's order (furthest from the action first, keeping coherency), and Easy answers
+    RestoreCoherency with D-058's pick (`default_coherency_removal`) instead of the first model offered.
   - **Loop guard:** `LoopGuard` counts visits per state hash; the third visit uses the fallback. `Bot::forget()` (an
     undo, a new game, a load) clears it and the memo, so replaying a position after an undo is not a "loop".
   - **Driver:** `BotDriver::tick(now, inputs)` keys each decision on (state hash, history size, generation). A new key
@@ -1487,10 +1495,11 @@ change.
   - **The other decisions:** Charge: the chain's fight (we strike first) against holding, with P from the 2D6
     roll covering the gap (declaring costs nothing). SelectChargeTargets: Normal's planned charge move against
     `SkipChargeMove`, both valued after the fact. OrderCasualties: Normal's order, the front models first, the rear
-    models first, each previewed with the engine's `preview_casualties` (who dies, wounds lost), the coherency
-    losses of 03.03 estimated greedily, and valued. RestoreCoherency: each model's removal (and the further
-    removals it needs), valued. Consolidate: each worthwhile consolidation simulated (Normal's `simulate_fight_move`)
-    and not moving, valued.
+    models first and (M47, D-058) the default order, each previewed with the engine's `preview_casualties` (who
+    dies, wounds lost), the coherency losses of 03.03 estimated greedily, and valued; a candidate with the same
+    preview as an earlier one takes its value (the same position, so never chosen over it). RestoreCoherency: each
+    model's removal (and the further removals it needs), valued. Consolidate: each worthwhile consolidation
+    simulated (Normal's `simulate_fight_move`) and not moving, valued.
   - **Normal as the default (`BotWeights::margin`):** every Hard decision starts from Normal's answer (its move
     type, its plan, its charge and charge move, its casualty order, its coherency pick, its consolidation) and
     plays something else only when the evaluator (with the lookahead, for moves) values it more than `margin`
@@ -1651,4 +1660,74 @@ replay-format change. Extends D-054 (pile-in and consolidation weighing, Easy) a
   (+0.000)". The combat log's short form (M45) keeps the head and the first clause after " - ".
 - **Seen in the arena (PLAN.md M46):** results unchanged within noise, and the bots now make nearly every
   pile-in and consolidation that reaches them. Easy's Termagants, unweighted, now lose models to coherency after
-  casualties (Auto move strings them round the enemy): left as found and reported, not fixed here.
+  casualties (Auto move strings them round the enemy): left as found and reported, not fixed here. **Addressed by
+  D-058 (M47):** with the default order they keep coherency (20 Termagants Easy/Easy 37 → 2, Normal/Easy 128 → 5;
+  Termagants-first Normal/Easy 10 → 2).
+
+## D-058: The default casualty order: furthest from the action first, keeping coherency (M47)
+**Decided:** 2026-11-07 (asked for by the user; M47 is pre-approved with M48-M50). Client logic and bots only; no
+rule, core, state or replay-format change. Amends D-024, D-038, D-051, D-054 and closes D-057's open item.
+- **Why (the user):** "when choosing which units to kill, the auto mode should prefer models furthest away from the
+  'action' ... so that could be models at the back, or models at risk of being split off and losing coherency. so
+  the least coherent ones I guess. this is important". The default was plain unit order, and V1 lists the front rank
+  first (D-008), so it removed the Sergeant and the front rank first, and broke coherency where a link went.
+- **Where:** `src/client_2d/logic/casualty_order.{hpp,cpp}`, read-only core queries and geometry only (D-024): the
+  engine still decides 05.04, 06.02 and 03.03; this only ranks the models.
+  - `default_casualty_order(state, target, picks = {})`: every model of the unit once, most-preferred casualty first
+    (an `OrderCasualties` priority, D-013), the picks first, unchanged.
+  - `default_coherency_removal(state, unit)`: the 03.03 Regaining Coherency pick (the default order's first model).
+  - `coherency_losses(models)`: the 03.03 estimate, moved unchanged from the Normal bot (M41), on a pairwise table
+    built with exactly `check_coherency`'s `within` tests (tested equal to the old function on every subset of
+    several layouts).
+- **Keys**, for each candidate m of the models S not yet ordered; the first difference decides:
+  1. Fewest extra 03.03 losses after removing m (`coherency_losses` of S without m). So a model already out of
+     coherency goes first, and a model whose removal would split the unit goes late.
+  2. The odd one out last: the only model of its `type_name` in a unit with more than one type (the Sergeant),
+     fixed at the decision. Key 1 comes first, so it goes earlier only when that is what keeps coherency (an
+     isolated Sergeant goes first). Two such models (a Sergeant and one Intercessor left): the later one first.
+  3. At risk first: not engaged (03.04) and within 2" of at most one other model of S: a leaf of the unit's chain, a
+     straggler, one of a pair, or already isolated. Engaged models are the action and are never at risk.
+  4. Furthest from the closest enemy model first (01.04 edge to edge, any enemy unit; `more_than`, so a difference
+     within `EPS_MM` is a tie). Skipped when there is no enemy model.
+  5. Later in unit order first (the back rank, D-008), so the first-listed model is kept longest.
+  Candidates are scanned in unit order and the best replaced only by a strictly better one (no unordered
+  containers).
+- **Two phases.** A: only while `OrderCasualties` for the unit is pending, step through `preview_casualties(state,
+  order so far)` and take the best of the models it offers next, so a wounded model the engine forces (05.04,
+  06.02), a picked W2 model that keeps taking the damage, the allocation groups (05.03) and the 06.02 tiers are
+  followed. B: the best of the rest, repeatedly, so every prefix is a good set of models to lose.
+- **Examples (tests `M47_CasualtyOrder`):** V1 Termagants: 9, 5, 8, 6, 7, 4, 0, 3, 1, 2 (rear rank first; every
+  prefix in coherency). A bent line A..E with its tip furthest from the enemy: E, D, C, B, A (by distance alone C and
+  B would go first and leave A isolated). A side straggler within 2" of one model only goes first; an isolated
+  model goes first even at the front. In melee (Intercessors 3 and 4 engaged): 1, 3, 4, 2, 0. The Sergeant last
+  (also behind the line), 1 then 0 with two left.
+- **Where it is used:**
+  - `CasualtyPlan` starts in it (`move_up` / `move_down` stay): "Allocate damage automatically" (D-038), the panel's
+    "Use default order", level Easy's casualties and every level's fallback.
+  - `CasualtyPicks` fills the rest after the board picks with it (`default_casualty_order(state, target, picks)`,
+    kept with the picks). On the board, "Use default order" finishes from the picks so far ("Default order for the
+    rest" once a model is picked) and goes once every casualty is picked (Confirm covers it). The hint and a tooltip
+    on the button (and the auto-allocate tooltips) say what the order does.
+  - Easy and the fallback answer RestoreCoherency with `default_coherency_removal` (before: the first model
+    offered, usually the Sergeant). A human's pick stays a click (D-042).
+  - Normal: unchanged (it uses the moved `coherency_losses`); `m46_bot_fight_moves.json` (Normal vs Normal)
+    regenerates byte-identical.
+  - Hard: the default order is a fourth casualty candidate ("the default order, furthest from the enemy first"),
+    after Normal's order, front-first and rear-first, so ties change nothing; Normal's order is still kept unless
+    beaten by the margin. A candidate whose preview equals an earlier one's takes that value without being
+    evaluated again. Hard's lookahead rollouts use Easy's answers (D-054), so they see the new order too. In the
+    arena Hard never chose the new candidate (0 in 240 games checked, PLAN.md M47).
+    `hard::hard_casualties` exposes the candidates for tests. `m45_bot_game.json` (Hard vs Hard, seed 9)
+    regenerates byte-identical: only Hard's reported values move, by a few hundredths.
+- **Accepted consequences:**
+  - The default has no stance: it never removes the front models to lengthen an enemy charge, or the engaged models
+    to break a combat, as Normal's stances do (D-054). M40's `distance_after_casualties` and Hard's evaluator still
+    assume the defender removes its front models: now a worst-case bound for a charger, not the default.
+  - It is greedy, one model at a time. A thin line wrapped round the enemy can end as two pairs, and the next
+    casualty must then isolate one: 1-5 coherency removals per 200 Release games remain for Easy's Termagants.
+  - With Easy's Termagants keeping their engaged models, they fight back more (20 Termagants, Normal vs Easy: 557 →
+    608 Termagant fights over 200 games), and Normal's Intercessors, whose casualty order is unchanged, lose more
+    models to coherency there (1 → 15): Normal wounds a model without weighing that 05.04 forces that model to take
+    the next damage, and when it is the link of a line strung out by the charge its death isolates a neighbour
+    (casualty decisions that can't keep coherency: 4 → 18 of about 230). Open: fixing it means changing Normal,
+    which this batch keeps unchanged (PLAN.md M47).
