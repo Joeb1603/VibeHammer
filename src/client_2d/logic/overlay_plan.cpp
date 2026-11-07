@@ -148,4 +148,17 @@ std::string_view ring_meaning(RingKind kind) {
     return "";
 }
 
+// M50 (D-061): one short sentence each, for the sidebar legend under each checkbox.
+std::string_view ring_summary(RingKind kind) {
+    switch (kind) {
+        case RingKind::MoveRange:
+            return "how far the moving unit's models can go; the shaded area is where the dragged model can end";
+        case RingKind::Engagement: return "2\" around the enemy models: a model inside it is engaged (03.04)";
+        case RingKind::Coherency: return "2\" around each model of the moving unit, for unit coherency (03.03)";
+        case RingKind::WeaponRange: return "the selected model's weapon ranges, while choosing shots";
+        case RingKind::ChargeDistance: return "the charge roll: how far a unit that rolled to charge can move";
+    }
+    return "";
+}
+
 }  // namespace wh40k::client

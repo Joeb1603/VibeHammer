@@ -1362,7 +1362,7 @@ remains: pause mid-card and see Roll / Continue appear, click on the dim line sk
 
 ---
 
-## M50: Short ring legend, full text on hover
+## M50: Short ring legend, full text on hover ✅ (done)
 **Effort:** `medium` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-061
 
 > User feedback: the movement range description paragraph is too big; put the detail in a tooltip.
@@ -1374,6 +1374,12 @@ remains: pause mid-card and see Roll / Continue appear, click on the dim line sk
 - Clean build; all of ctest passes; new client test `M50_RingText` (every summary non-empty, short, one sentence;
   the full meanings unchanged). Replays unchanged.
 - A sidebar screenshot shows the short legend.
+
+**Results (2026-11-07):** `ring_summary` added (overlay_plan); the sidebar legend shows one short line per ring
+and the full `ring_meaning` in a wrapped, titled tooltip when any part of a legend row is hovered; the caption
+reads "Rings, shown when relevant (hover for details):". The board's ring tooltip is unchanged. New client tests
+`M50_RingText.*` (3); all of ctest passes; replays unchanged. The sidebar screenshot (seed 1) shows the short
+legend; the hover tooltip is a manual check on Windows. Decision D-061 (amends D-028).
 
 ---
 

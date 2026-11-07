@@ -518,7 +518,8 @@ of the charge for that reason.
   positions (`ring_circles` with overrides), and each dragged model shows its path from its start
   position to the preview.
 - **Explanations.** Hovering the board inside a ring (not over a model) shows what each ring there
-  means; the sidebar legend uses the same text (`ring_name`, `ring_meaning`). Engagement range stays
+  means; the sidebar legend uses the same names (`ring_name`) with a short line each (`ring_summary`) and
+  shows the full `ring_meaning` on hover (D-061, M50). Engagement range stays
   around the enemy only: it is the zone a moving model must not end in.
 
 ## D-029: Click-on-the-board interaction (M16)
@@ -1808,3 +1809,22 @@ no engine, bot or replay change. Amends D-033 and D-054.
 - **Tests:** client `M49_DiceButtons.*` (all eight combinations of bot card / setting / paused; a human's card
   always shows the buttons; pausing and resuming mid-card; a click on a paced card's pop-up still skips). The
   paused card's buttons and clicks on it are a manual check on Windows (no flag pauses the bots).
+
+## D-061: Short ring legend, full text on hover (M50)
+User feedback (2026-11-07): "the movement range description paragraph is too big, if you want that much info have
+a tooltip when you hover over it." Presentation only: no engine, bot or replay change. Amends D-028.
+- **The legend:** under each ring's checkbox the sidebar shows `ring_summary(kind)` (overlay_plan), one short
+  sentence (at most 100 characters), in the same dim colour and indent as before:
+  - Movement range: "how far the moving unit's models can go; the shaded area is where the dragged model can end"
+  - Engagement range: "2\" around the enemy models: a model inside it is engaged (03.04)"
+  - Coherency: "2\" around each model of the moving unit, for unit coherency (03.03)"
+  - Weapon ranges: "the selected model's weapon ranges, while choosing shots" (the old meaning, already short)
+  - Charge distance: "the charge roll: how far a unit that rolled to charge can move"
+- **Hover:** each legend row (swatch, checkbox and summary) is one ImGui group; hovering any part of it shows a
+  tooltip with the ring's name in its colour and the full `ring_meaning`, wrapped at 24 em, like the board's ring
+  tooltip (ImGui's usual tooltip delay for items applies, not D-029's 0.6 s board rest). The caption reads
+  "Rings, shown when relevant (hover for details):" (shortened so it fits the sidebar's width).
+- **The board:** the ring tooltip on the board (D-028) keeps the full `ring_meaning`, unchanged.
+- **Tests:** client `M50_RingText.*` (every summary non-empty, at most 100 characters, one sentence; the full
+  meanings unchanged; no summary longer than its meaning). The hover itself is a manual check on Windows (mouse
+  hover can't be scripted).

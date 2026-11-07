@@ -44,8 +44,10 @@ using PositionOverrides = std::vector<std::pair<core::ModelId, core::Position>>;
 [[nodiscard]] std::vector<Circle> ring_circles(const core::GameState& state, const std::vector<Ring>& rings,
                                                const PositionOverrides& overrides = {});
 
-// The ring's name and what it means, for the legend and the board tooltip.
+// The ring's name and what it means in full, for the board tooltip and the legend's hover tooltip.
 [[nodiscard]] std::string_view ring_name(RingKind kind);
 [[nodiscard]] std::string_view ring_meaning(RingKind kind);
+// M50 (D-061): one short line per ring for the sidebar legend; the full ring_meaning shows on hover.
+[[nodiscard]] std::string_view ring_summary(RingKind kind);
 
 }  // namespace wh40k::client

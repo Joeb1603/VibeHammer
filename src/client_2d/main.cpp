@@ -1619,7 +1619,7 @@ private:
                                   "or the board skips the wait).");
         }
         ImGui::Spacing();
-        ImGui::TextDisabled("Rings, each shown only when it is relevant:");
+        ImGui::TextDisabled("Rings, shown when relevant (hover for details):");
         overlay_toggle(RingKind::MoveRange, &overlays_.move_range);
         overlay_toggle(RingKind::Engagement, &overlays_.engagement);
         overlay_toggle(RingKind::Coherency, &overlays_.coherency);
@@ -1657,6 +1657,9 @@ private:
     static void overlay_toggle(RingKind kind, bool* value) {
         const std::string label(ring_name(kind));
         ImGui::PushID(label.c_str());
+        // M50 (D-061): the row (swatch, checkbox, summary) is one group, so hovering any part of it shows the
+        // full meaning, wrapped like the board's ring tooltip (SetItemTooltip doesn't wrap).
+        ImGui::BeginGroup();
         const float size = ImGui::GetFrameHeight();
         ImGui::ColorButton("##swatch", to_imvec(ring_color(kind)),
                            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(size, size));
@@ -1664,9 +1667,17 @@ private:
         ImGui::Checkbox(label.c_str(), value);
         ImGui::Indent(size + ImGui::GetStyle().ItemSpacing.x);
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("%s", std::string(ring_meaning(kind)).c_str());
+        ImGui::TextWrapped("%s", std::string(ring_summary(kind)).c_str());
         ImGui::PopStyleColor();
         ImGui::Unindent(size + ImGui::GetStyle().ItemSpacing.x);
+        ImGui::EndGroup();
+        if (ImGui::BeginItemTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+            ImGui::TextColored(to_imvec(ring_color(kind)), "%s", label.c_str());
+            ImGui::TextUnformatted(std::string(ring_meaning(kind)).c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
         ImGui::PopID();
     }
 
