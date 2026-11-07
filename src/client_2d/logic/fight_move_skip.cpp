@@ -1,6 +1,7 @@
 #include "fight_move_skip.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <variant>
@@ -29,12 +30,25 @@ std::optional<core::UnitId> moving_unit(const core::GameAction& a) {
 // D-047: some point of the model's area is more than kWorthwhileMoveMm from its start.
 bool can_move_far_enough(const core::MoveReach& reach) {
     if (reach.immobile || reach.remaining_mm <= kWorthwhileMoveMm + core::EPS_MM) return false;
-    const ReachRegion region = model_region(reach);
+    const ReachRegion region = trimmed_region(model_region(reach));  // M54: the same test, fewer circles
     if (region.empty) return false;
-    for (float r = kWorthwhileMoveMm + core::EPS_MM; r <= reach.remaining_mm; r += kRadiusStepMm) {
-        for (int i = 0; i < kAngleSteps; ++i) {
-            const float a = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kAngleSteps;
-            const core::Position p{reach.start.x + r * std::cos(a), reach.start.y + r * std::sin(a), 0.0f};
+    // M54: the same spots in the same order, each angle's cosine and sine worked out once (from the same
+    // expressions), and the spots in_region certainly refuses skipped (RayRefusals).
+    std::array<float, kAngleSteps> cosines{};
+    std::array<float, kAngleSteps> sines{};
+    for (int i = 0; i < kAngleSteps; ++i) {
+        const float a = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kAngleSteps;
+        cosines[static_cast<std::size_t>(i)] = std::cos(a);
+        sines[static_cast<std::size_t>(i)] = std::sin(a);
+    }
+    std::vector<float> radii;
+    for (float r = kWorthwhileMoveMm + core::EPS_MM; r <= reach.remaining_mm; r += kRadiusStepMm) radii.push_back(r);
+    const RayRefusals refusals(region, reach.start, cosines, sines, radii);
+    for (std::size_t j = 0; j < radii.size(); ++j) {
+        const float r = radii[j];
+        for (std::size_t i = 0; i < cosines.size(); ++i) {
+            if (refusals.refused(i, j)) continue;  // in_region would refuse it
+            const core::Position p{reach.start.x + r * cosines[i], reach.start.y + r * sines[i], 0.0f};
             if (in_region(region, p)) return true;
         }
     }

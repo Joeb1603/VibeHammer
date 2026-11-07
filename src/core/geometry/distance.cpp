@@ -6,26 +6,7 @@
 
 namespace wh40k::core {
 
-float base_radius(const Base& base) {
-    if (base.shape != BaseShape::Round) {
-        throw std::logic_error("geometry: only round bases are supported in V1");
-    }
-    return base.diameter_mm * 0.5f;
-}
-
-float centre_distance(const Position& a, const Position& b) {
-    const float dx = b.x - a.x;
-    const float dy = b.y - a.y;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
-float base_distance(const Position& a, const Base& base_a, const Position& b, const Base& base_b) {
-    return std::max(0.0f, centre_distance(a, b) - base_radius(base_a) - base_radius(base_b));
-}
-
-bool bases_overlap(const Position& a, const Base& base_a, const Position& b, const Base& base_b) {
-    return centre_distance(a, b) < base_radius(base_a) + base_radius(base_b) - EPS_MM;
-}
+void throw_unsupported_base_shape() { throw std::logic_error("geometry: only round bases are supported in V1"); }
 
 bool within_area(const Rect& area, const Position& pos, const Base& base) {
     // Distance from the base centre to the nearest point of the rectangle.

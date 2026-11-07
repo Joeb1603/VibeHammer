@@ -418,9 +418,8 @@ struct Simulated {
 
 // D-054: the whole move made on a scratch copy first: every proposal valid, move_end_problems empty, the commit not
 // reverted.
-std::optional<Simulated> simulate(const GameState& origin, core::Side side, const MoveCandidate& c,
-                                  std::uint64_t seed) {
-    Simulator sim(origin, seed);
+// (`sim` holds the origin, fresh.)
+std::optional<Simulated> simulate_on(Simulator& sim, core::Side side, const MoveCandidate& c) {
     Simulated out;
     for (const core::action::ProposeModelMove& p : c.proposals) {
         out.steps.push_back(PlannedStep{state_hash(sim.state()), p, {}});
@@ -435,6 +434,12 @@ std::optional<Simulated> simulate(const GameState& origin, core::Side side, cons
     }
     out.after = sim.state();
     return out;
+}
+
+std::optional<Simulated> simulate(const GameState& origin, core::Side side, const MoveCandidate& c,
+                                  std::uint64_t seed) {
+    Simulator sim(origin, seed);
+    return simulate_on(sim, side, c);
 }
 
 // Every model's path fits the move's maximum distance in `origin` (an Advance's candidates are made once for the
@@ -473,12 +478,18 @@ std::optional<PlannedMove> choose(MoveScoreContext& ctx, const GameState& origin
     std::size_t attempts = 0;
     std::size_t refined = 0;
     std::size_t prospected = 0;
+    std::optional<Simulator> scratch;  // M54: one simulator, reset for each candidate (simulate's result)
     for (const Ranked& r : ranked) {
         if (refined >= precise || attempts >= kMaxSimulatedMoves) break;
         const MoveCandidate& c = cands[r.index];
         if (!fits(origin, c)) continue;
         ++attempts;
-        std::optional<Simulated> sim = simulate(origin, side, c, seed);
+        if (scratch) {
+            scratch->reset(origin, seed);
+        } else {
+            scratch.emplace(origin, seed);
+        }
+        std::optional<Simulated> sim = simulate_on(*scratch, side, c);
         if (!sim) continue;
         ++refined;
         const bool cp = prospects && prospected < kChargeProspects && r.score.p_charge > 0.0;

@@ -142,6 +142,16 @@ std::optional<BotChoice> BotDriver::tick(double now, const DriverInputs& in) {
     return job.result;
 }
 
+bool BotDriver::wait_for_decision(double seconds) {
+    if (!job_ || job_->generation != generation_ || job_->delivered) return false;
+    if (job_->result) return true;
+    if (!job_->future.valid()) return false;
+    const auto wait = std::chrono::duration<double>(seconds > 0.0 ? seconds : 0.0);
+    if (job_->future.wait_for(wait) != std::future_status::ready) return false;
+    job_->result = job_->future.get();
+    return true;
+}
+
 std::optional<std::string> BotDriver::pending_reason() const {
     if (!job_ || !job_->result || job_->delivered || job_->generation != generation_) return std::nullopt;
     return job_->result->reason;

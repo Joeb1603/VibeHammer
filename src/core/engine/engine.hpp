@@ -32,6 +32,11 @@ std::vector<GameEvent> start_game(GameState& state, DiceSource& dice);
 // SeededDice(state.dice); the second lets tests script them.
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action);
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice);
+// M54: the same as the DiceSource overload, with the copy kept for the rollback (D-026) made in `backup` by
+// copy assignment, so a caller applying many actions (the bot's simulator) reuses its allocations instead
+// of copying the whole state each time. `backup` is scratch: afterwards it holds no particular state.
+std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice,
+                                    GameState& backup);
 
 // 01.03: the active player. Between turns, the player who takes the first turn; while a unit is
 // selected to move, shoot or fight, that unit's controlling player; otherwise the player whose turn

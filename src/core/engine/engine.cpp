@@ -107,6 +107,18 @@ std::vector<GameEvent> with_rollback(GameState& state, Work work) {
     }
 }
 
+// M54: the same with the caller's scratch copy (copy assignment reuses its strings and vectors).
+template <typename Work>
+std::vector<GameEvent> with_rollback(GameState& state, GameState& backup, Work work) {
+    backup = state;
+    try {
+        return work();
+    } catch (...) {
+        state = std::move(backup);
+        throw;
+    }
+}
+
 std::vector<GameEvent> start_game(GameState& state) {
     SeededDice dice(state.dice);  // the backup restores the dice position too
     return with_rollback(state, [&] { return start_game_impl(state, dice); });
@@ -194,6 +206,12 @@ ValidationResult validate_action(const GameState& state, Side side, const GameAc
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
     require_valid(state, side, action);
     return with_rollback(state, [&] { return apply_in_place(state, side, action, dice); });
+}
+
+std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice,
+                                    GameState& backup) {
+    require_valid(state, side, action);
+    return with_rollback(state, backup, [&] { return apply_in_place(state, side, action, dice); });
 }
 
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action) {

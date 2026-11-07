@@ -21,7 +21,7 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::Shoot&
         }
         for (const ShootingType type : eligible_shooting_types(state, u)) {
             // D-004 / D-016: a template per unit and shooting type that has at least one valid shot.
-            if (!shot_options(state, u, type).empty()) {
+            if (has_shot_option(state, u, type)) {
                 out.push_back(action::Shoot{u.id, type, {}});
             }
         }

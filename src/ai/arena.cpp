@@ -7,7 +7,9 @@
 
 #include "auto_actions.hpp"
 #include "core/engine/actions.hpp"
+#include "core/serialization/json.hpp"
 #include "session.hpp"
+#include "state_hash.hpp"
 
 namespace wh40k::ai {
 
@@ -158,6 +160,46 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
     r.p95_ms = percentile(ms, 0.95);
     r.max_ms = ms.empty() ? 0.0 : *std::max_element(ms.begin(), ms.end());
     return r;
+}
+
+PerGameReport run_per_game(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a,
+                           BotConfig b, std::size_t step_cap) {
+    const auto hash_text = [](const std::string& text) {
+        Fnv1a h;
+        h.bytes(text.data(), text.size());
+        return static_cast<unsigned long long>(h.value());
+    };
+    PerGameReport out;
+    std::vector<double> ms;
+    char buf[1024];
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < games; ++i) {
+        const std::uint64_t s = first_seed + static_cast<std::uint64_t>(i);
+        client::GameSession session = client::GameSession::new_game(scenario, s);
+        std::vector<std::string> lines;
+        const GameRecord g = play_bot_session(session, a, b, step_cap, &ms, &lines);
+        std::string trace;
+        for (const std::string& l : lines) trace += l + "\n";
+        std::snprintf(buf, sizeof buf,
+                      "game %llu: finished %d winner %s round %d steps %zu surviving %d/%d wounds lost %d/%d coherency "
+                      "%d/%d fight steps %d/%d fight moves %d/%d rejected %zu reverted %zu fallbacks %zu "
+                      "actions %016llx state %016llx trace %016llx\n",
+                      static_cast<unsigned long long>(s), g.finished ? 1 : 0,
+                      g.winner ? (*g.winner == core::Side::A ? "A" : "B") : "none", g.end_round, g.steps,
+                      g.surviving_models[0], g.surviving_models[1], g.wounds_lost[0], g.wounds_lost[1],
+                      g.coherency_removed[0], g.coherency_removed[1], g.fight_move_steps[0], g.fight_move_steps[1],
+                      g.fight_moves[0], g.fight_moves[1], g.rejected, g.reverted, g.fallbacks,
+                      hash_text(nlohmann::json(session.history()).dump()),
+                      hash_text(nlohmann::json(session.state()).dump()), hash_text(trace));
+        out.text += buf;
+        out.clean = out.clean && g.finished && g.rejected == 0 && g.reverted == 0;
+    }
+    const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    const double max_ms = ms.empty() ? 0.0 : *std::max_element(ms.begin(), ms.end());
+    std::snprintf(buf, sizeof buf, "decisions %zu: p50 %.3f ms, p95 %.3f ms, max %.3f ms; wall %.2f s\n", ms.size(),
+                  percentile(ms, 0.50), percentile(ms, 0.95), max_ms, wall);
+    out.text += buf;
+    return out;
 }
 
 std::string format_arena(const ArenaResult& r, const core::GameState& scenario) {

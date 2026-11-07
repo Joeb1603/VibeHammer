@@ -48,6 +48,10 @@ namespace wh40k::core {
 [[nodiscard]] std::vector<ShotDeclaration> shot_options(const GameState& state, const Unit& unit,
                                                         ShootingType type);
 
+// M54: !shot_options(state, unit, type).empty(), stopping at the first valid declaration (D-004 / D-016:
+// legal_actions offers a Shoot template only for a unit and type with one).
+[[nodiscard]] bool has_shot_option(const GameState& state, const Unit& unit, ShootingType type);
+
 // 24.16 [HEAVY] and the other attack facts for `unit` shooting now.
 [[nodiscard]] AttackContext shooting_context(const GameState& state, const Unit& unit);
 

@@ -32,4 +32,20 @@ struct CoherencyResult {
 // trivially satisfied in V1 (no terrain).
 [[nodiscard]] CoherencyResult check_coherency(std::span<const PlacedModel> models);
 
+// M54: 03.03 for a unit with one model tried at many spots while the others stay put. ok_at(p) is
+// check_coherency(models with models[moved] at p).ok(), from the same distances and tests, with the
+// other models' distances to each other worked out once (so each spot costs one pass over the unit).
+class CoherencyWithOneMoved {
+public:
+    CoherencyWithOneMoved(std::span<const PlacedModel> models, std::size_t moved);
+    [[nodiscard]] bool ok_at(const Position& p) const;
+
+private:
+    std::vector<PlacedModel> models_;
+    std::size_t moved_ = 0;
+    std::vector<char> near_without_moved_;  // within 2" of another model that isn't the moved one
+    std::vector<char> far_without_moved_;   // within 9" of every other model that isn't the moved one
+    bool others_too_far_ = false;           // some other model fails the 9" clause whatever the moved one does
+};
+
 }  // namespace wh40k::core

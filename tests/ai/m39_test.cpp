@@ -213,11 +213,12 @@ TEST(M39_NoRulesInTheBot, OnlyTheSimulatorAppliesActionsAndNoDeviceHeadersOrCloc
         if (name != "arena.cpp") EXPECT_FALSE(std::regex_search(src, clock)) << name << " reads a clock";
     }
     EXPECT_GE(files, 14);
-    // simulator.cpp does call it (with the 4-argument overload).
+    // simulator.cpp does call it (with the bot's own dice; since M54 the overload that also takes the simulator's
+    // reused rollback copy).
     std::ifstream sim(ai_dir / "simulator.cpp");
     std::stringstream text;
     text << sim.rdbuf();
-    EXPECT_TRUE(std::regex_search(text.str(), std::regex(R"(apply_action\(state_, side, action, dice\))")));
+    EXPECT_TRUE(std::regex_search(text.str(), std::regex(R"(apply_action\(state_, side, action, dice, backup_\))")));
 }
 
 // ==== Fallback and loop guard ====
