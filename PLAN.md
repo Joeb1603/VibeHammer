@@ -1406,7 +1406,7 @@ went with it. New client tests `M51_BotDice.*` (2); all of ctest passes (727); r
 
 ---
 
-## M52: Release workflow, first GitHub release v0.1.0
+## M52: Release workflow, first GitHub release v0.1.0 ✅ (done)
 **Effort:** `medium` · **Plan mode:** approved (2026-11-07) · **Decision:** D-063
 
 > User request: "Could you make a release on GitHub for me?" The zip only builds on Windows, so a GitHub Actions
@@ -1424,6 +1424,12 @@ went with it. New client tests `M51_BotDice.*` (2); all of ctest passes (727); r
 - The workflow run is green; release v0.1.0 exists with the zip attached and the notes.
 - Linux build + ctest pass; replays unchanged.
 - Manual check on Windows: download the zip, unzip, run VibeHammer.exe.
+
+**Results (2026-11-07):** workflow run 42367178346 (manual run, tag v0.1.0) is green on a runner with VS 2026
+("Visual Studio 18 2026"): Release build, 727 of 727 tests passed (13 disabled diagnostics and regenerators not
+run), the zip packaged with 22 entries and nothing from `docs/`, and the release published at
+https://github.com/Joeb1603/VibeHammer/releases/tag/v0.1.0 with `VibeHammer-v0.1.0-windows-x64.zip` (1.8 MB).
+Decision D-063. Still open: the manual check on Windows (download, unzip, run VibeHammer.exe).
 
 ---
 
