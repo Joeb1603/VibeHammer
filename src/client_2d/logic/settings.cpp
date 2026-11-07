@@ -41,7 +41,6 @@ json settings_to_json(const AppSettings& s) {
         {"human_side", s.human_side == core::Side::A ? "A" : "B"},
         {"bot_level", kLevelKeys[static_cast<std::size_t>(s.bot_level)]},
         {"bot_speed", kSpeedKeys[static_cast<std::size_t>(s.bot_speed)]},
-        {"bot_auto_dice", s.bot_auto_dice},
         {"scenario", s.scenario},
         {"fixed_seed", s.fixed_seed},
         {"seed", s.seed},
@@ -64,7 +63,7 @@ AppSettings settings_from_json(const json& j) {
     }
     read_enum(j, "bot_level", kLevelKeys, s.bot_level);
     read_enum(j, "bot_speed", kSpeedKeys, s.bot_speed);
-    read_bool(j, "bot_auto_dice", s.bot_auto_dice);
+    // M51 (D-062): "bot_auto_dice" (the removed auto-dice setting) in an older file is ignored.
     read_string(j, "scenario", s.scenario);
     if (s.scenario.empty()) s.scenario = AppSettings{}.scenario;
     read_bool(j, "fixed_seed", s.fixed_seed);

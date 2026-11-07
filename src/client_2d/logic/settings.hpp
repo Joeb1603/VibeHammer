@@ -28,7 +28,6 @@ struct AppSettings {
     core::Side human_side = core::Side::A;  // "You play" in a game against the bot
     BotLevel bot_level = BotLevel::Hard;
     BotSpeed bot_speed = BotSpeed::Normal;
-    bool bot_auto_dice = true;  // "Bot rolls its own dice automatically"
     std::string scenario = "data/scenarios/v1_skirmish.json";  // relative to the data root
     bool fixed_seed = false;    // D-038
     std::uint64_t seed = 0;

@@ -1383,6 +1383,29 @@ legend; the hover tooltip is a manual check on Windows. Decision D-061 (amends D
 
 ---
 
+## M51: Bot dice follow Pause; no auto-dice setting ✅ (done)
+**Effort:** `low` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-062
+
+> User feedback: "I don't think there needs to be an option for bot to roll its own dice. Either they do when
+> they are unpaused or they don't when they are paused."
+> - Remove "Bot rolls its own dice automatically" (`AppSettings::bot_auto_dice`) from the start screen, the
+>   sidebar and the settings file. A bot's dice card rolls and continues by itself exactly when the bots aren't
+>   paused: `bot_dice_paced(bot_card, paused)`, `WatchControls::card_paced(bot_card)`, `bot_dice_run()`.
+> - An older `vibehammer_settings.json` with the key still loads (the key is ignored, and not written back).
+
+**Acceptance**
+- Clean build; all of ctest passes; M45/M48/M49 client tests use the new signatures; new client test
+  `M51_BotDice` (paced exactly when unpaused; an old settings file still loads). Replays unchanged.
+- Screenshots of the sidebar and start screen without the checkbox.
+
+**Results (2026-11-07):** the setting is gone from `AppSettings`, the start screen and the sidebar; the Pause
+checkbox's tooltip now says that unpaused the bot's dice roll by themselves. `bot_dice_paced`,
+`dice_buttons_shown`, `card_paced` and `bot_dice_run` lose the setting parameter; M49's "setting off" test case
+went with it. New client tests `M51_BotDice.*` (2); all of ctest passes (727); replays unchanged. Screenshots
+(sidebar with a bot, seed 1; start screen) show no checkbox. Decision D-062 (amends D-054, D-059, D-060).
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.

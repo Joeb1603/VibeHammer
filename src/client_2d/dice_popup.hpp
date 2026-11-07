@@ -14,7 +14,7 @@
 
 namespace wh40k::client {
 
-// D-054 (M39): a bot's own dice, rolled and continued by themselves ("Bot rolls its own dice automatically"):
+// D-054 (M39): a bot's own dice, rolled and continued by themselves while the bots aren't paused (M51, D-062):
 // the pause before the roll and how long the result stays up. Enter / Space, or a left click on the pop-up or the
 // bare board (not on another window: M48, D-059), skips the wait.
 struct DicePace {

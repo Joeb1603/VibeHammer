@@ -23,7 +23,6 @@ AppSettings changed_settings() {
     s.human_side = Side::B;
     s.bot_level = BotLevel::Easy;
     s.bot_speed = BotSpeed::Instant;
-    s.bot_auto_dice = false;
     s.scenario = "data/scenarios/other.json";
     s.fixed_seed = true;
     s.seed = 123456789012ull;
@@ -62,7 +61,6 @@ TEST(M38_Settings, DefaultsMatchThePlan) {
     EXPECT_EQ(s.human_side, Side::A);
     EXPECT_EQ(s.bot_level, BotLevel::Hard);
     EXPECT_EQ(s.bot_speed, BotSpeed::Normal);
-    EXPECT_TRUE(s.bot_auto_dice);
     EXPECT_EQ(s.scenario, "data/scenarios/v1_skirmish.json");
     EXPECT_FALSE(s.fixed_seed);
     EXPECT_TRUE(s.show_dice);

@@ -53,13 +53,11 @@ TEST(M48_Watch, StepIgnoresAHumansCard) {
 
 TEST(M48_Watch, TheBotDiceRunFollowsThePauseCheckbox) {
     WatchControls w;
-    EXPECT_TRUE(w.bot_dice_run(true));
+    EXPECT_TRUE(w.bot_dice_run());
     w.set_paused(true);
-    EXPECT_FALSE(w.bot_dice_run(true));  // paused: the bot's dice wait for a click or Step
-    EXPECT_FALSE(w.bot_dice_run(false));
+    EXPECT_FALSE(w.bot_dice_run());  // paused: the bot's dice wait for a click or Step
     w.set_paused(false);
-    EXPECT_TRUE(w.bot_dice_run(true));
-    EXPECT_FALSE(w.bot_dice_run(false));  // the setting off: they always wait
+    EXPECT_TRUE(w.bot_dice_run());
 }
 
 TEST(M48_Watch, OnlyAClickOnThePopUpOrTheBareBoardSkipsTheWait) {

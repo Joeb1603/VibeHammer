@@ -1612,11 +1612,10 @@ private:
             ImGui::Spacing();
             bool paused = watch_.paused();
             if (ImGui::Checkbox("Pause the bots (P)", &paused)) watch_.set_paused(paused);  // client state, not saved
-            ImGui::SetItemTooltip("The bots stop before their next action; their dice wait for a click. Step (in "
-                                  "the bar above the board, key N) still does one action. Not kept between games.");
-            ImGui::Checkbox("Bot rolls its own dice automatically", &settings_.bot_auto_dice);  // M39 (D-054)
-            ImGui::SetItemTooltip("The bot's dice pop-ups roll and continue by themselves (a click on the pop-up "
-                                  "or the board skips the wait).");
+            ImGui::SetItemTooltip("The bots stop before their next action; their dice wait for a click. Unpaused, "
+                                  "the bot's dice pop-ups roll and continue by themselves (a click on the pop-up or "
+                                  "the board skips the wait). Step (in the bar above the board, key N) still does "
+                                  "one action. Not kept between games.");
         }
         ImGui::Spacing();
         ImGui::TextDisabled("Rings, shown when relevant (hover for details):");
@@ -1634,7 +1633,7 @@ private:
                               "enemy model, not closer) goes to the nearest spot it can, shown while dragging. "
                               "Ending within Engagement Range is left for Commit to check.");
         if (ImGui::Checkbox("Allocate damage automatically", &settings_.auto_allocate) && settings_.auto_allocate) auto_actions_as_group();
-        // M47: on its own checkbox (it followed the bot block, so with a bot it was on "Bot rolls its own dice").
+        // M47: on its own checkbox (it followed the bot block, so with a bot it was on the last bot checkbox).
         ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
                               "05.04) instead of asking. The default casualty order: %s",
                               kDefaultCasualtyOrderText);
@@ -1716,14 +1715,14 @@ private:
         }
     }
 
-    // D-054: a bot's own dice roll and continue by themselves when "Bot rolls its own dice automatically" is on,
+    // D-054: a bot's own dice roll and continue by themselves while the bots aren't paused (M51, D-062),
     // paced by the bot speed (Enter, or a click on the pop-up or the bare board, skips the wait; M48). A human's
     // dice wait for the human as before. M49 (D-060): a paced card shows no Roll / Continue button (the pop-up
     // draws them exactly when this returns nullopt, dice_buttons_shown).
     std::optional<DicePace> bot_dice_pace() const {
         const DiceCard* card = dice_.current();
         if (card == nullptr ||
-            !watch_.card_paced(bot_sides_[core::side_index(card->roller)], settings_.bot_auto_dice)) {
+            !watch_.card_paced(bot_sides_[core::side_index(card->roller)])) {
             return std::nullopt;
         }
         return DicePace{ai::bot_dice_roll_pause_seconds(settings_.bot_speed),

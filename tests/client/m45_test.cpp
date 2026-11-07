@@ -63,8 +63,7 @@ TEST(M45_Watch, AStepWithDiceShowingGoesToThePopUp) {
 TEST(M45_Watch, PausedTheBotsDiceWaitForAClick) {
     WatchControls w;
     BotSpeed speed = BotSpeed::Normal;
-    EXPECT_TRUE(w.bot_dice_run(true));
-    EXPECT_FALSE(w.bot_dice_run(false));  // the setting is off: they always wait
+    EXPECT_TRUE(w.bot_dice_run());
     w.apply(WatchCommand::TogglePause, speed);
-    EXPECT_FALSE(w.bot_dice_run(true));
+    EXPECT_FALSE(w.bot_dice_run());
 }

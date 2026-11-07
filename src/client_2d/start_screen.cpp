@@ -180,7 +180,6 @@ void StartScreen::draw_options(AppSettings& s, const StartContext& /*ctx*/) {
     ImGui::SetNextItemWidth(field);
     enum_combo("Speed", s.bot_speed, kSpeeds, &bot_speed_name);
     ImGui::SetItemTooltip("How long the bot pauses between its actions, so you can follow them.");
-    ImGui::Checkbox("Bot rolls its own dice automatically", &s.bot_auto_dice);
 
     ImGui::SeparatorText("Playing");
     ImGui::Checkbox("Show dice pop-ups", &s.show_dice);

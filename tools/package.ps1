@@ -46,9 +46,8 @@ How to play
 
 The bot
   Levels: Easy, Normal and Hard (Hard is the default). Speed: Slow, Normal, Fast or Instant;
-  it can be changed during the game. "Bot rolls its own dice automatically" lets the bot's
-  dice pop-ups roll and continue by themselves, with no Roll button (pause the bots to
-  roll them yourself). The log (Events tab) shows what the bot did
+  it can be changed during the game. The bot's dice pop-ups roll and continue by
+  themselves, with no Roll button (pause the bots, key P, to roll them yourself). The log (Events tab) shows what the bot did
   and why; hover a bot line for its full reasoning.
 
 Settings

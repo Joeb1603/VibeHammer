@@ -32,7 +32,7 @@ using BotSpeed = client::BotSpeed;
 [[nodiscard]] double base_pause_seconds(const core::GameAction& action);
 [[nodiscard]] double pause_seconds(const core::GameAction& action, BotSpeed speed);
 
-// The bot's own dice pop-ups (D-033) when "Bot rolls its own dice automatically" is on: the pause before the
+// The bot's own dice pop-ups (D-033) while the bots aren't paused (M51, D-062): the pause before the
 // roll, and how long the result stays up before it continues (about 1.2 s at Normal speed).
 [[nodiscard]] double bot_dice_roll_pause_seconds(BotSpeed speed);
 [[nodiscard]] double bot_dice_dwell_seconds(BotSpeed speed);
