@@ -38,6 +38,7 @@
 #include "bot.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
+#include "generation.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -59,13 +60,21 @@ struct ChargePlan {
 // battle round when the enemy still has its turn, 0 in the game's last turn (D-007).
 [[nodiscard]] int turns_left(const core::GameState& state);
 
-// The value of not charging with `unit` (also of a failed charge), for its side (see the file comment).
-[[nodiscard]] double hold_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit);
+// The value of not charging with `unit` (also of a failed charge), for its side (see the file comment). D-066
+// (M56): the shooting and charge threat of the other enemy units that have no other target count too (marginal
+// exposure, as the move score's; M55: only the closest enemy unit's).
+[[nodiscard]] double hold_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit,
+                                Generation generation = Generation::Current);
 
 // The value of the position after `unit`'s charge move against `targets` (`after_commit`: the charge resolved,
-// Fights First set), for its side; `turns` as turns_left of the state the charge was planned from.
+// Fights First set), for its side; `turns` as turns_left of the state the charge was planned from. D-066 (M56):
+// several targets share our unit's strength (each of our models fights the target closest to it, and our losses
+// add up), and the enemy units outside the charge with no other target may charge us next turn; one target with
+// no other enemy unit is M42's value. M55 valued each target from our full strength and summed them (double
+// counting).
 [[nodiscard]] double charged_value(analysis::OddsCache& cache, const core::GameState& after_commit, core::UnitId unit,
-                                   std::span<const core::UnitId> targets, int turns);
+                                   std::span<const core::UnitId> targets, int turns,
+                                   Generation generation = Generation::Current);
 
 // M43's seam: what declaring a charge with `unit` is worth from `state`.
 // - `state`: `unit`'s side to act, at its Charge decision, or earlier in the same turn (a Shoot or MoveUnits
@@ -88,18 +97,24 @@ struct ChargeProspect {
     std::array<double, 13> value_by_roll{};     // [n]: its value (the best set), hold where it fails
     std::array<int, 13> engaged_by_roll{};      // [n]: models it ends engaged
 };
+// D-066 (M56): `losses_from`, the enemy unit our shooting is at (the losses come off its front); nullopt: the
+// closest one (M55 always).
 [[nodiscard]] std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const core::GameState& state,
                                                             core::UnitId unit, std::uint64_t seed,
-                                                            double enemy_losses = 0.0);
+                                                            double enemy_losses = 0.0,
+                                                            std::optional<core::UnitId> losses_from = std::nullopt,
+                                                            Generation generation = Generation::Current);
 
 // The decisions (nullopt: no answer of the Normal level's own; the caller uses the baseline's).
 [[nodiscard]] std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core::GameState& state,
                                                         core::Side side, const std::vector<core::GameAction>& legal,
-                                                        std::uint64_t seed);
+                                                        std::uint64_t seed,
+                                                        Generation generation = Generation::Current);
 [[nodiscard]] std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache,
                                                                 const core::GameState& state, core::Side side,
                                                                 const std::vector<core::GameAction>& legal,
-                                                                std::uint64_t seed);
+                                                                std::uint64_t seed,
+                                                                Generation generation = Generation::Current);
 // A charge move in progress (MoveModels): the rest of the auto_charge_move arrangement planned from the move's
 // start, so a replan gives the memo's steps.
 [[nodiscard]] std::optional<PolicyResult> continue_charge_move(const core::GameState& state, core::Side side,

@@ -2,6 +2,9 @@
 
 // Level Easy (M39, D-054): the M12 test policy (tests/client/client_logic_test.cpp, choose()), as a bot.
 // - Normal move 2" towards the enemy while it is more than 8" away, otherwise Remain Stationary.
+// - D-066 (M56): "the enemy" is the closest enemy unit (D-010), not the first; while it is more than 12" + M away
+//   the move is the unit's full Move (then the 2" steps). A charge move aims at the closest of its targets, and
+//   the charge targets are the closest eligible unit alone when that is offered. One enemy unit: as before.
 // - Shoot with the shooting editor's defaults; charge whenever a charge can be declared; fight with the melee
 //   editor's defaults; casualties and allocation in their default order (casualties: D-058's order, M47); the
 //   model removed to regain coherency (03.03) is the default order's first (default_coherency_removal, M47).
@@ -21,7 +24,9 @@
 
 namespace wh40k::ai {
 
+// `generation` (D-066): Current, or M55 (the regression switch: Easy exactly as at M55).
 [[nodiscard]] PolicyResult easy_policy(const core::GameState& state, core::Side side,
-                                       const std::vector<core::GameAction>& legal, std::uint64_t seed);
+                                       const std::vector<core::GameAction>& legal, std::uint64_t seed,
+                                       Generation generation = Generation::Current);
 
 }  // namespace wh40k::ai

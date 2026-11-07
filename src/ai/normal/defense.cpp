@@ -33,9 +33,11 @@ std::vector<core::PlacedModel> without(const std::vector<core::PlacedModel>& mod
     return out;
 }
 
-// The unit's models' worth against the closest enemy (every model 1 if there is no enemy).
-Worth worth_of(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& unit) {
-    if (const core::Unit* e = closest_enemy(state, unit)) return model_worth(cache, unit, *e);
+// The unit's models' worth against the enemy attacking it (D-066, M56: the attack in progress's attacker, else the
+// closest enemy; M55: always the closest), every model 1 if there is no enemy.
+Worth worth_of(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& unit, Generation gen) {
+    const core::Unit* e = gen == Generation::M55 ? closest_enemy(state, unit) : attacking_enemy(state, unit);
+    if (e != nullptr) return model_worth(cache, unit, *e);
     Worth w;
     for (const core::Model& m : unit.models) w[m.id] = 1.0;
     return w;
@@ -51,17 +53,32 @@ bool falling_back(const core::GameState& state, const core::Unit& unit) {
     return state.flow.move && state.flow.move->unit == unit.id && state.flow.move->type == core::MoveType::FallBack;
 }
 
-// The position term per model, in [0, 1]: 0 is the first to remove under the stance.
+// The gap from `m` to the closest of `front` (D-066: the relevant enemy units, StanceInfo::front), 0 if none.
+float front_gap(const core::GameState& state, const core::Model& m, const std::vector<core::UnitId>& front) {
+    float g = 0.0f;
+    bool any = false;
+    for (const core::UnitId id : front) {
+        const core::Unit* e = state.find_unit(id);
+        if (e == nullptr) continue;
+        const float d = core::model_distance_to_unit(m, m.position, *e).value_or(0.0f);
+        g = any ? std::min(g, d) : d;
+        any = true;
+    }
+    return g;
+}
+
+// The position term per model, in [0, 1]: 0 is the first to remove under the stance. "Close" is measured to the
+// stance's front units (M55: the closest enemy unit).
 std::map<core::ModelId, double> position_rank(const core::GameState& state, const core::Unit& unit,
-                                              CasualtyStance stance) {
+                                              const StanceInfo& info) {
+    const CasualtyStance stance = info.stance;
     std::map<core::ModelId, double> out;
-    const core::Unit* enemy = closest_enemy(state, unit);
     std::map<core::ModelId, float> gap;
     float lo = 0.0f;
     float hi = 0.0f;
     bool first = true;
     for (const core::Model& m : unit.models) {
-        const float g = enemy != nullptr ? core::model_distance_to_unit(m, m.position, *enemy).value_or(0.0f) : 0.0f;
+        const float g = front_gap(state, m, info.front);
         gap[m.id] = g;
         lo = first ? g : std::min(lo, g);
         hi = first ? g : std::max(hi, g);
@@ -105,22 +122,32 @@ const char* stance_name(CasualtyStance s) {
 
 }  // namespace
 
-StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& unit) {
+StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& unit,
+                           Generation gen) {
     StanceInfo out;
+    const bool m55 = gen == Generation::M55;
+    const core::Unit* closest = closest_enemy(state, unit);
+    if (closest != nullptr) out.front = {closest->id};
     if (falling_back(state, unit)) {
         out.stance = CasualtyStance::BreakCombat;  // 09.07: the engaged models are the ones that must get away
         out.why = "falling back";
+        if (!m55) {  // D-066: the front is the units it is getting away from
+            const std::vector<core::UnitId> engaged = core::engaged_enemy_units(state, unit);
+            if (!engaged.empty()) out.front = engaged;
+        }
         return out;
     }
     if (core::is_engaged(state, unit)) {
         double ours = 0.0;
         double theirs = 0.0;
-        for (const core::UnitId e : core::engaged_enemy_units(state, unit)) {
+        const std::vector<core::UnitId> engaged = core::engaged_enemy_units(state, unit);
+        for (const core::UnitId e : engaged) {
             const core::Unit* enemy = state.find_unit(e);
             if (enemy == nullptr) continue;
             ours += melee_share(cache, unit, *enemy);
             theirs += melee_share(cache, *enemy, unit);
         }
+        if (!m55 && !engaged.empty()) out.front = engaged;  // D-066: the units it is fighting
         if (will_fight(state, unit)) {
             // Its engaged models still fight back this phase (12.04): keep them, whoever is winning.
             out.stance = CasualtyStance::HoldCombat;
@@ -131,32 +158,67 @@ StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& st
         }
         return out;
     }
-    const core::Unit* enemy = closest_enemy(state, unit);
+    const core::Unit* enemy = closest;
     if (enemy == nullptr) {
         out.position_weight = 0.0;
         return out;
     }
-    const float gap = core::unit_distance(unit, *enemy).value_or(0.0f);
-    const double ours = melee_share(cache, unit, *enemy);
-    const double theirs = melee_share(cache, *enemy, unit);
-    const bool they_may_charge = analysis::threat_ranges(*enemy).p_charge_after_move(gap) > 0.0;
-    out.stance = theirs > ours ? CasualtyStance::AvoidContact : CasualtyStance::SeekContact;
+    if (m55) {
+        const float gap = core::unit_distance(unit, *enemy).value_or(0.0f);
+        const double ours = melee_share(cache, unit, *enemy);
+        const double theirs = melee_share(cache, *enemy, unit);
+        const bool they_may_charge = analysis::threat_ranges(*enemy).p_charge_after_move(gap) > 0.0;
+        out.stance = theirs > ours ? CasualtyStance::AvoidContact : CasualtyStance::SeekContact;
+        out.position_weight = they_may_charge ? 1.0 : kUnthreatenedPosition;
+        out.why = theirs > ours ? (they_may_charge ? client::unit_display_name(state, enemy->id) + " may charge" : "keeping away from " + client::unit_display_name(state, enemy->id))
+                                : "keeping close to " + client::unit_display_name(state, enemy->id);
+        return out;
+    }
+    // D-066 (M56): the enemy units that may charge us next turn (not engaged, 11.02), closest first; if none, the
+    // closest one. We avoid contact if any of them gains more from a combat with us than we do; the front is them.
+    std::vector<std::pair<float, const core::Unit*>> chargers;
+    for (const core::Unit* e : enemy_units(state, unit.side)) {
+        if (core::is_engaged(state, *e)) continue;
+        const float gap = core::unit_distance(unit, *e).value_or(0.0f);
+        if (analysis::threat_ranges(*e).p_charge_after_move(gap) > 0.0) chargers.emplace_back(gap, e);
+    }
+    std::stable_sort(chargers.begin(), chargers.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; });
+    const bool they_may_charge = !chargers.empty();
+    if (!they_may_charge) chargers.emplace_back(0.0f, enemy);
+    const core::Unit* named = chargers.front().second;
+    bool avoid = false;
+    for (const auto& [gap, e] : chargers) {
+        if (melee_share(cache, *e, unit) > melee_share(cache, unit, *e)) {
+            if (!avoid) named = e;
+            avoid = true;
+        }
+    }
+    out.front.clear();
+    for (const auto& [gap, e] : chargers) out.front.push_back(e->id);
+    out.stance = avoid ? CasualtyStance::AvoidContact : CasualtyStance::SeekContact;
     out.position_weight = they_may_charge ? 1.0 : kUnthreatenedPosition;
-    out.why = theirs > ours ? (they_may_charge ? client::unit_display_name(state, enemy->id) + " may charge" : "keeping away from " + client::unit_display_name(state, enemy->id))
-                            : "keeping close to " + client::unit_display_name(state, enemy->id);
+    const std::string name = client::unit_display_name(state, named->id);
+    out.why = avoid ? (they_may_charge ? name + " may charge" : "keeping away from " + name) : "keeping close to " + name;
     return out;
 }
 
-std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const core::GameState& state) {
+std::map<core::ModelId, double> casualty_worth(analysis::OddsCache& cache, const core::GameState& state,
+                                               const core::Unit& unit, Generation gen) {
+    return worth_of(cache, state, unit, gen);
+}
+
+std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const core::GameState& state,
+                                            Generation gen) {
     if (!state.pending) return std::nullopt;
     const auto* d = std::get_if<core::decision::OrderCasualties>(&state.pending->kind);
     if (d == nullptr) return std::nullopt;
     const core::Unit* unit = state.find_unit(d->target);
     if (unit == nullptr || unit->models.empty()) return std::nullopt;
 
-    const StanceInfo stance = casualty_stance(cache, state, *unit);
-    const std::map<core::ModelId, double> position = position_rank(state, *unit, stance.stance);
-    const Worth worth = worth_of(cache, state, *unit);
+    const StanceInfo stance = casualty_stance(cache, state, *unit, gen);
+    const std::map<core::ModelId, double> position = position_rank(state, *unit, stance);
+    const Worth worth = worth_of(cache, state, *unit, gen);
     const double mean = mean_worth(worth);
     const std::vector<core::PlacedModel> placed = core::placed_models(*unit);
 
@@ -286,12 +348,12 @@ std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const co
 }
 
 std::optional<core::ModelId> coherency_removal(analysis::OddsCache& cache, const core::GameState& state,
-                                               core::UnitId unit_id, std::string* reason) {
+                                               core::UnitId unit_id, std::string* reason, Generation gen) {
     const core::Unit* unit = state.find_unit(unit_id);
     if (unit == nullptr || unit->models.empty()) return std::nullopt;
-    const StanceInfo stance = casualty_stance(cache, state, *unit);
-    const std::map<core::ModelId, double> position = position_rank(state, *unit, stance.stance);
-    const Worth worth = worth_of(cache, state, *unit);
+    const StanceInfo stance = casualty_stance(cache, state, *unit, gen);
+    const std::map<core::ModelId, double> position = position_rank(state, *unit, stance);
+    const Worth worth = worth_of(cache, state, *unit, gen);
     const double mean = mean_worth(worth);
     const std::vector<core::PlacedModel> placed = core::placed_models(*unit);
     std::optional<core::ModelId> best;
@@ -315,7 +377,8 @@ std::optional<core::ModelId> coherency_removal(analysis::OddsCache& cache, const
 
 std::optional<core::action::DeclareAllocationOrder> allocation_order(analysis::OddsCache& cache,
                                                                      const core::GameState& state,
-                                                                     const std::vector<core::GameAction>& legal) {
+                                                                     const std::vector<core::GameAction>& legal,
+                                                                     Generation gen) {
     std::vector<const core::action::DeclareAllocationOrder*> orders;
     for (const core::GameAction& a : legal) {
         if (const auto* o = std::get_if<core::action::DeclareAllocationOrder>(&a)) orders.push_back(o);
@@ -324,7 +387,7 @@ std::optional<core::action::DeclareAllocationOrder> allocation_order(analysis::O
     if (orders.size() == 1 || !state.flow.attack || !state.flow.attack->current) return *orders.front();
     const core::Unit* unit = state.find_unit(orders.front()->target);
     if (unit == nullptr) return *orders.front();
-    const Worth worth = worth_of(cache, state, *unit);
+    const Worth worth = worth_of(cache, state, *unit, gen);
     const std::vector<core::AllocationGroup>& groups = state.flow.attack->current->groups;
     // A group's value per wound: the damage goes to the cheapest first.
     std::vector<double> per_wound;

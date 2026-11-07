@@ -2,6 +2,7 @@
 #include "normal/charge.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <iterator>
@@ -104,11 +105,90 @@ struct ChargedValue {
     double now = 0.0;  // this Fight phase alone
 };
 
+// D-066 (M56): what the enemy units outside `involved` can do to `u` in their next turn: with `engaged`, their
+// charges only (they can't shoot an engaged unit, 04.02); otherwise their shooting at the gap and their charge
+// after a Normal move. Units engaged with anything are busy (04.02, 11.02), and so is one that can reach another
+// of our units anyway (marginal exposure, as the move score's). Shares of `u`.
+double others_threat(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& u,
+                     std::span<const core::UnitId> involved, bool engaged) {
+    double loss = 0.0;
+    for (const core::Unit* y : enemy_units(state, u.side)) {
+        if (std::find(involved.begin(), involved.end(), y->id) != involved.end()) continue;
+        if (core::is_engaged(state, *y) || reaches_another(state, *y, u)) continue;
+        const float gap = core::unit_distance(u, *y).value_or(0.0f);
+        const double melee = melee_share(cache, *y, u);
+        loss += analysis::threat_ranges(*y).p_charge_after_move(gap) * melee;
+        if (!engaged) loss += ranged_share(cache, *y, u, gap);
+    }
+    return loss;
+}
+
+// The enemy units other than `involved`, alive (D-066: none with one enemy unit).
+bool has_other_enemies(const core::GameState& state, const core::Unit& u, std::span<const core::UnitId> involved) {
+    for (const core::Unit* y : enemy_units(state, u.side)) {
+        if (std::find(involved.begin(), involved.end(), y->id) == involved.end()) return true;
+    }
+    return false;
+}
+
+// D-066: several charge targets share our unit's strength. Each of our models fights the target closest to it
+// (a tie goes to the first target), and our losses add up over all of them (MultiExchange).
+ChargedValue charged_parts_shared(analysis::OddsCache& cache, const core::Unit& u,
+                                  const std::vector<const core::Unit*>& ts, int turns, double others_loss) {
+    ChargedValue out;
+    std::vector<core::Unit> mine(ts.size(), u);
+    for (core::Unit& m : mine) m.models.clear();
+    for (const core::Model& m : u.models) {
+        std::size_t best = 0;
+        float best_gap = 0.0f;
+        for (std::size_t t = 0; t < ts.size(); ++t) {
+            const float g = core::model_distance_to_unit(m, m.position, *ts[t]).value_or(0.0f);
+            if (t == 0 || g < best_gap) {
+                best = t;
+                best_gap = g;
+            }
+        }
+        mine[best].models.push_back(m);
+    }
+    std::vector<double> them;
+    for (const core::Unit* t : ts) them.push_back(alive(*t));
+    MultiExchange x(alive(u), them);
+    // This Fight phase: Fights First (11.04 After Moving, 24.13): ours strike first, theirs reply.
+    for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, fighters(mine[t], *ts[t]), *ts[t]));
+    for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, fighters(*ts[t], u), u));
+    out.now = x.value();
+    if (turns >= 1) {  // their turn, engaged: close-quarters shooting, then they fight first
+        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, ranged_share(cache, *ts[t], u, 0.0f, true));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, *ts[t], u));
+        x.we_lose(others_loss);
+        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, mine[t], *ts[t]));
+    }
+    if (turns >= 2) {  // our turn, engaged
+        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, ranged_share(cache, mine[t], *ts[t], 0.0f, true));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, mine[t], *ts[t]));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, *ts[t], u));
+    }
+    out.total = x.value();
+    return out;
+}
+
 ChargedValue charged_parts(analysis::OddsCache& cache, const core::GameState& after, core::UnitId unit,
-                           std::span<const core::UnitId> targets, int turns) {
+                           std::span<const core::UnitId> targets, int turns, Generation gen) {
     ChargedValue out;
     const core::Unit* u = after.find_unit(unit);
     if (u == nullptr || u->models.empty()) return out;
+    // D-066 (M56): the enemy units outside the charge may still charge us next turn (M55: not counted).
+    const bool others = gen != Generation::M55 && has_other_enemies(after, *u, targets);
+    const double others_loss = others && turns >= 1 ? others_threat(cache, after, *u, targets, true) : 0.0;
+    if (gen != Generation::M55) {
+        std::vector<const core::Unit*> ts;
+        for (const core::UnitId id : targets) {
+            const core::Unit* e = after.find_unit(id);
+            if (e != nullptr && !e->models.empty()) ts.push_back(e);
+        }
+        if (ts.size() > 1) return charged_parts_shared(cache, *u, ts, turns, others_loss);
+    }
+    // One target (M55: each target on its own, from our unit's full strength, summed).
     for (const core::UnitId id : targets) {
         const core::Unit* e = after.find_unit(id);
         if (e == nullptr || e->models.empty()) continue;
@@ -122,6 +202,7 @@ ChargedValue charged_parts(analysis::OddsCache& cache, const core::GameState& af
         if (turns >= 1) {  // their turn, engaged: close-quarters shooting, then they fight first
             x.they_hit(theirs.cq);
             x.they_hit(theirs.melee);
+            if (others) x.we_lose(others_loss);  // D-066
             x.we_hit(ours.melee);
         }
         if (turns >= 2) {  // our turn, engaged
@@ -162,12 +243,13 @@ std::optional<core::GameState> at_charge_step(const core::GameState& state, core
     return std::nullopt;
 }
 
-// Our shooting's expected kills taken from the enemy unit closest to `unit`, its models closest to us first.
-void remove_front_models(core::GameState& state, core::UnitId unit, double losses) {
+// Our shooting's expected kills taken from the enemy unit closest to `unit` (D-066: from `from`, the unit our
+// shooting is at, when given), its models closest to us first.
+void remove_front_models(core::GameState& state, core::UnitId unit, double losses, std::optional<core::UnitId> from) {
     const core::Unit* u = state.find_unit(unit);
     if (u == nullptr || !(losses >= 1.0)) return;
-    const core::Unit* closest = closest_enemy(state, *u);
-    if (closest == nullptr) return;
+    const core::Unit* closest = from ? state.find_unit(*from) : closest_enemy(state, *u);
+    if (closest == nullptr || closest->models.empty() || closest->side == u->side) return;
     core::Unit& e = *state.find_unit(closest->id);
     std::vector<std::pair<float, core::ModelId>> by_gap;
     for (const core::Model& m : e.models) {
@@ -227,12 +309,15 @@ int turns_left(const core::GameState& state) {
     return state.flow.turn_in_round == 0 ? 1 : 0;
 }
 
-double hold_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit) {
+double hold_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit, Generation gen) {
     const core::Unit* u = state.find_unit(unit);
     if (u == nullptr || u->models.empty()) return 0.0;
     const core::Unit* e = closest_enemy(state, *u);
     const int turns = turns_left(state);
     if (e == nullptr || turns == 0) return 0.0;
+    // D-066 (M56): the other enemy units shoot us and may charge us too (M55: only the closest one counted).
+    const std::array<core::UnitId, 1> closest{e->id};
+    const bool others = gen != Generation::M55 && has_other_enemies(state, *u, closest);
     const float gap = core::unit_distance(*u, *e).value_or(0.0f);
     Rates ours = rates_of(cache, *u, *e, gap);
     const Rates theirs = rates_of(cache, *e, *u, gap);
@@ -251,6 +336,7 @@ double hold_value(analysis::OddsCache& cache, const core::GameState& state, core
     }
     Exchange x(alive(*u), alive(*e));
     if (!enemy_engaged) x.they_hit(theirs.ranged);  // their turn: they shoot us
+    if (others) x.we_lose(others_threat(cache, state, *u, closest, false));
     double p_charged = 0.0;
     if (!enemy_engaged) {
         // Would they charge us? Their own view: they strike first and we reply, then our turn engaged; against our
@@ -281,26 +367,27 @@ double hold_value(analysis::OddsCache& cache, const core::GameState& state, core
 }
 
 double charged_value(analysis::OddsCache& cache, const core::GameState& after_commit, core::UnitId unit,
-                     std::span<const core::UnitId> targets, int turns) {
-    return charged_parts(cache, after_commit, unit, targets, turns).total;
+                     std::span<const core::UnitId> targets, int turns, Generation gen) {
+    return charged_parts(cache, after_commit, unit, targets, turns, gen).total;
 }
 
 std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const core::GameState& state,
-                                              core::UnitId unit, std::uint64_t seed, double enemy_losses) {
+                                              core::UnitId unit, std::uint64_t seed, double enemy_losses,
+                                              std::optional<core::UnitId> losses_from, Generation gen) {
     const core::Unit* u0 = state.find_unit(unit);
     if (u0 == nullptr || u0->models.empty()) return std::nullopt;
     const core::Side side = u0->side;
     std::optional<core::GameState> at = at_charge_step(state, side, seed);
     if (!at) return std::nullopt;
     core::GameState& gs = *at;
-    remove_front_models(gs, unit, enemy_losses);
+    remove_front_models(gs, unit, enemy_losses, gen == Generation::M55 ? std::nullopt : losses_from);
     if (!core::validate_action(gs, side, core::action::DeclareCharge{unit}).ok()) return std::nullopt;
     const core::Unit& u = *gs.find_unit(unit);
     const int turns = turns_left(gs);
 
     ChargeProspect out;
     out.unit = unit;
-    out.hold = hold_value(cache, gs, unit);
+    out.hold = hold_value(cache, gs, unit, gen);
     // Target sets: the enemy units a charge could reach at all (within 12", 11.04 Before Moving), closest first.
     std::vector<core::UnitId> enemies =
         core::eligible_charge_targets(gs, u, static_cast<int>(core::kChargeRangeInches));
@@ -337,7 +424,7 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
             const std::optional<ChargePlan> plan =
                 plan_charge_move(after_roll, side, id, std::vector<core::UnitId>(t.begin(), t.end()), seed, {});
             if (!plan) return false;
-            value[r] = charged_value(cache, plan->after, id, t, turns);
+            value[r] = charged_value(cache, plan->after, id, t, turns, gen);
             eng[r] = plan->score.engaged;
             if (plan->score.engaged == static_cast<int>(u.models.size())) full_roll = *roll;
             return true;
@@ -377,13 +464,14 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
 }
 
 std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                                          const std::vector<core::GameAction>& legal, std::uint64_t seed) {
+                                          const std::vector<core::GameAction>& legal, std::uint64_t seed,
+                                          Generation gen) {
     std::optional<ChargeProspect> best;  // the largest expected gain; ties keep the engine's order
     for (const core::GameAction& a : legal) {
         const auto* d = std::get_if<core::action::DeclareCharge>(&a);
         const core::Unit* u = d != nullptr ? state.find_unit(d->unit) : nullptr;
         if (u == nullptr || u->side != side) continue;
-        std::optional<ChargeProspect> p = charge_prospect(cache, state, d->unit, seed);
+        std::optional<ChargeProspect> p = charge_prospect(cache, state, d->unit, seed, 0.0, std::nullopt, gen);
         if (!p) continue;
         if (!best || p->gain > best->gain + kBetter) best = std::move(p);
     }
@@ -412,13 +500,13 @@ std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core
 
 std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, const core::GameState& state,
                                                   core::Side side, const std::vector<core::GameAction>& legal,
-                                                  std::uint64_t seed) {
+                                                  std::uint64_t seed, Generation gen) {
     const auto& d = std::get<core::decision::SelectChargeTargets>(state.pending->kind);
     const core::Unit* u = state.find_unit(d.unit);
     if (u == nullptr) return std::nullopt;
     const int roll = u->phase_flags.charge_roll.value_or(0);
     const int turns = turns_left(state);
-    const double hold = hold_value(cache, state, d.unit);
+    const double hold = hold_value(cache, state, d.unit, gen);
     std::optional<ChargePlan> best;
     double best_value = 0.0;
     std::string best_reason;
@@ -432,7 +520,7 @@ std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, co
             if (first_problems.empty()) first_problems = std::move(problems);
             continue;
         }
-        const double v = charged_value(cache, plan->after, d.unit, s->targets, turns);
+        const double v = charged_value(cache, plan->after, d.unit, s->targets, turns, gen);
         if (!best || v > best_value + kBetter) {
             best_value = v;
             best_reason = client::unit_display_name(state, u->id) + ": charge move into " + names_of(state, s->targets) + " (roll " +

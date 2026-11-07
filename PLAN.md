@@ -1609,7 +1609,7 @@ existing test expectation changed; ctest green (763); replays unchanged.
 
 ---
 
-## M56: Easy and Normal across several units
+## M56: Easy and Normal across several units ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07) · **Rules:** 01.04, 09.02, 10.02, 11.02, 12.02–12.08 · **Decision:** D-066
 
 > - **Easy:** aims at the closest enemy unit (D-010) instead of the first one, for moves and charge moves. It walks
@@ -1631,6 +1631,77 @@ existing test expectation changed; ctest green (763); replays unchanged.
   commit in a scratch worktree) in at least 55% of games in both seats.
 - V1 and bot scenarios: Normal vs Easy no worse than recorded in M41. Zero rejected actions and reverts.
 - A seeded ctest subset on the new scenario (`M56_...`). Decision times within M54's targets. Replays as above.
+
+**Results (2026-11-07):** design in D-066. Met: V1 and both bot scenarios play exactly as before, replays
+byte-identical, the M55 regression switch reproduces M55, the Marine-seat targets, zero rejections / reverts /
+fallbacks, decision times. **Open:** both Tyranid-seat targets (no Tyranid side has won a game on any scenario at any
+level; Normal's Termagants now draw almost every game against Easy, and play level with M55 against Normal).
+- **What changed** (bot only, D-066): Easy aims at the closest enemy unit, walks its full Move while it is more than
+  12" + M away (then the old 2" steps), and charges the closest eligible target, its charge move aimed at that
+  target. Normal: the move score adds every other enemy unit as a shooting target and its next-turn reply
+  (shooting and charge threat; a winning side counts only units that can reach no other of its units, a losing
+  side every unit it would be the closest target of); the unit closest to the enemy moves first; a charge with
+  several targets shares the charger's strength (no double counting), holding and charging add the other units'
+  threat, and our shooting's kills come off the unit actually shot; casualty worth against the attacker, the
+  "front" against the units engaged with it or that may charge it, consolidation against every enemy unit.
+  Regression switch: `BotConfig::generation` = `Generation::M55`, arena levels `easy-m55` / `normal-m55` (arena and
+  tests only).
+- **1v1 unchanged:** the arena's `--per-game 1` report of a Release build of `d76e51b` (M55) and of this build, on
+  V1, Termagants first and 20 Termagants, seeds 1–200, pairings easy/easy, normal/normal, hard/hard, hard/normal,
+  normal/easy, easy/normal, easy/hard and hard/easy (24 runs, 4800 games): every line identical (result, counts,
+  hashes of the actions, the final state and the decision trace with its reasons). So Normal vs Easy there is
+  exactly as recorded in M41 (V1: 200 wins, mean end round 1.92). The four replay regenerations
+  (`Replay.DISABLED_RegenerateReplays`, `M45_` / `M46_` / `M47_Replay`) leave `tests/replays` unchanged.
+- **The switch reproduces M55:** on the Strike scenario, `normal-m55`/`normal-m55`, `normal-m55`/`easy-m55`,
+  `easy-m55`/`easy-m55` and `easy-m55`/`normal-m55` (seeds 1–200) give the same per-game lines as the M55 build's
+  normal/normal, normal/easy, easy/easy and easy/normal (800 games, trace hashes included).
+- **Strike 44x60, Release, seeds 1–200** (every run clean: 0 rejected, 0 `UnitMoveReverted`, 0 fallbacks, 0
+  unfinished; "-m55" = the M55 level through the switch):
+
+  | A (Marines) vs B (Tyranids) | A wins | B wins | Draws | Mean result A | End round | Survivors A / B | Wounds lost A / B | p95 / max ms |
+  |---|---|---|---|---|---|---|---|---|
+  | easy vs easy | 188 | 0 | 12 | +0.940 | 4.24 | 12.72 / 0.17 | 6.00 / 39.83 | 0.14 / 8 |
+  | easy-m55 vs easy-m55 | 93 | 0 | 107 | +0.465 | 5.00 | 13.23 / 2.29 | 4.92 / 37.72 | 0.10 / 4 |
+  | **normal vs easy** | **200** | 0 | 0 | +1.000 | 2.56 | 14.25 / 0.00 | 2.63 / 40.00 | 2.4 / 71 |
+  | normal-m55 vs easy | 200 | 0 | 0 | +1.000 | 2.50 | 14.19 / 0.00 | 2.77 / 40.00 | 2.1 / 75 |
+  | **easy vs normal** | 3 | **0** | 197 | +0.015 | 5.00 | 12.80 / 9.47 | 5.79 / 30.52 | 2.5 / 32 |
+  | easy vs normal-m55 | 1 | 0 | 199 | +0.005 | 5.00 | 12.68 / 9.46 | 6.01 / 30.55 | 2.0 / 19 |
+  | **normal vs normal-m55** | **200** | 0 | 0 | +1.000 | 3.58 | 14.41 / 0.00 | 2.19 / 40.00 | 5.1 / 69 |
+  | **normal-m55 vs normal** | 199 | **0** | 1 | +0.995 | 3.57 | 14.27 / 0.01 | 2.53 / 39.99 | 4.3 / 40 |
+  | normal-m55 vs normal-m55 | 200 | 0 | 0 | +1.000 | 3.60 | 14.19 / 0.00 | 2.67 / 40.00 | 4.1 / 27 |
+  | normal vs normal | 200 | 0 | 0 | +1.000 | 3.62 | 14.41 / 0.00 | 2.21 / 40.00 | 5.2 / 68 |
+  | hard vs hard (plays as Normal) | 200 | 0 | 0 | +1.000 | 3.62 | 14.41 / 0.00 | 2.21 / 40.00 | 5.4 / 91 |
+
+  Seeds 1–1000, the same build: easy vs normal 11 / 0 / 989 (Tyranid survivors 9.33, Marine wounds lost 5.66),
+  easy vs normal-m55 5 / 0 / 995 (9.43, 5.78); normal-m55 vs normal 997 / 0 / 3 (end round 3.58, Marine wounds lost
+  2.51), normal-m55 vs normal-m55 996 / 0 / 4 (3.60, 2.53); normal vs normal-m55 995 / 0 / 5 (3.60, Marine wounds lost
+  2.16).
+- **Against the literal targets:**
+  - Normal beats Easy in at least 75%: **met as Marines** (200 of 200). **Open as Tyranids** (0 of 200: they draw
+    197). Seat-relative: the Tyranid side's mean result is −0.015 against Easy-vs-Easy's −0.940 (−0.465 with
+    the M55 Easy), with 9.47 Termagants left on average against 0.17.
+  - The new Normal beats the M55 Normal in at least 55%: **met as Marines** (200 of 200; against M55's own Marines
+    the same opponent gives 200 wins too, but the new Marines lose fewer wounds, 2.19 against 2.67, and end
+    sooner, 3.58 against 3.60). **Open as Tyranids** (0 of 200). Seat-relative: level with M55 within the noise
+    (200 seeds: 1 draw against 0, the Marines' end round 3.57 against 3.60 and their wounds lost 2.53 against
+    2.67; 1000 seeds: 3 draws against 4, 3.58 against 3.60, 2.51 against 2.53).
+  - Against the same Easy the new Normal Termagants are level to slightly below M55's (1000 seeds: 989 draws
+    against 995, 9.33 survivors against 9.43, 5.66 wounds dealt against 5.78, about one to two standard errors).
+    Shots at other Marine units are what cost them (with marginal exposure on both sides they kept 8.91); the
+    losing side's closest-target rule (D-066) recovered most of it. Open for M57/M58.
+- **Decision times** (Release, Strike, every bot decision): Normal vs Normal p50 0.004 ms, p95 5.2 ms, max 68 ms
+  (M55: 4.1 / 27); Normal vs Easy 2.4 / 71; Easy vs Normal 2.5 / 32; Hard (as Normal) 5.4 / 91. Inside M54's
+  100 ms / 1 s.
+- **Tests (new, ai):** `M56_Easy.*` (4: aims at the closest unit, not the first; walks its full Move while far;
+  a fresh bot replans the full move the same; the charge move goes at its target), `M56_Normal.*` (2: the unit
+  closest to the enemy moves first; another unit's threat changes the move), `M56_Charge.*` (2: two targets
+  share the charger's strength; M42's ringed-target fixture is charged for the most value),
+  `M56_Casualties.WorthIsMeasuredAgainstTheAttacker`, `M56_StrikeGames.*` (2: five Strike games clean; a fresh bot
+  gives the played answer at every decision of a Normal and an Easy Strike game), `M56_Regression.TheM55SwitchPlaysAsM55`
+  (four games' per-game lines from the M55 build). Changed:
+  `M42_ChargeTargets.ChargesBothUnitsWhenTheTargetAloneCannotBeEngaged` now runs with `Generation::M55` (its
+  assertions unchanged; its expectation came from M42's double count, D-066). ctest (Debug): 763 → 775 tests, all
+  pass. Debug and Release builds clean.
 
 ---
 

@@ -20,6 +20,7 @@
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "fallback.hpp"
+#include "generation.hpp"
 #include "hard/weights.hpp"
 #include "settings.hpp"
 
@@ -35,6 +36,7 @@ using BotLevel = client::BotLevel;
 struct BotConfig {
     BotLevel level = BotLevel::Easy;
     hard::BotWeights hard{};  // M44: level Hard's weights (the tuned defaults; the arena can override them)
+    Generation generation = Generation::Current;  // D-066: the M55 regression switch (arena and tests only)
 };
 
 struct BotChoice {
