@@ -23,7 +23,10 @@
 
 namespace wh40k::ai {
 
+// `generation` (D-066): Current, or M55 (the regression switch: Normal, and the baseline it falls back to, exactly
+// as at M55).
 [[nodiscard]] PolicyResult normal_policy(const core::GameState& state, core::Side side,
-                                         const std::vector<core::GameAction>& legal, std::uint64_t seed);
+                                         const std::vector<core::GameAction>& legal, std::uint64_t seed,
+                                         Generation generation = Generation::Current);
 
 }  // namespace wh40k::ai

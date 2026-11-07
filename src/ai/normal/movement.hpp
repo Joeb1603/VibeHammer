@@ -30,6 +30,7 @@
 #include "bot.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
+#include "generation.hpp"
 #include "normal/move_score.hpp"
 
 namespace wh40k::ai::normal {
@@ -63,7 +64,8 @@ struct PlannedMove {
 
 // The best move for the move just started in `origin`. A pure function of `origin` (its seed is
 // decision_seed(origin)). nullopt if no candidate stands.
-[[nodiscard]] std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const core::GameState& origin);
+[[nodiscard]] std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const core::GameState& origin,
+                                                        Generation generation = Generation::Current);
 
 // M44's seam (the Hard level): the candidates of the move just started in `origin` that stand when simulated in full,
 // in the cheap score's order (with `weights`), up to `count` of them after at most `attempts` simulations. Each
@@ -81,13 +83,24 @@ struct MoveTypeValues {
     std::optional<double> fall_back;  // Ordered Retreat, or Desperate Escape less its hazard losses
 };
 
-// MoveUnits: the move type and (for moves without dice) the whole planned move. nullopt: no answer of its own.
+// D-066 (M56): which of the units offered a StartMove at MoveUnits moves next: the one closest to an enemy unit
+// (edge to edge, 01.04; so an engaged unit, which chooses between holding and falling back, goes first): its move
+// matters most, and the units further back then move round where it ended. A tie keeps the engine's (unit)
+// order. M55: the first unit offered. nullopt if none is offered.
+[[nodiscard]] std::optional<core::UnitId> unit_to_move(const core::GameState& state,
+                                                       const std::vector<core::GameAction>& legal,
+                                                       Generation generation = Generation::Current);
+
+// MoveUnits: the move type and (for moves without dice) the whole planned move, for unit_to_move's unit. nullopt:
+// no answer of its own.
 [[nodiscard]] std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const core::GameState& state,
                                                             core::Side side, const std::vector<core::GameAction>& legal,
-                                                            std::uint64_t seed, MoveTypeValues* values = nullptr);
+                                                            std::uint64_t seed, MoveTypeValues* values = nullptr,
+                                                            Generation generation = Generation::Current);
 
 // MoveModels of a Normal, Advance or Fall-back move: the rest of plan_unit_move planned from the move's start.
 [[nodiscard]] std::optional<PolicyResult> continue_unit_move(analysis::OddsCache& cache, const core::GameState& state,
-                                                             core::Side side);
+                                                             core::Side side,
+                                                             Generation generation = Generation::Current);
 
 }  // namespace wh40k::ai::normal

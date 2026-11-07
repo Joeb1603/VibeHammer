@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <map>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "analysis/odds.hpp"
@@ -35,6 +36,9 @@ public:
     void they_hit(double rate) {
         if (them0_ > 0.0) us_ -= std::min(us_, rate * them_ / them0_);
     }
+    // D-066 (M56): a loss of `share` of us from a unit this exchange doesn't follow (another enemy unit), already
+    // scaled by that unit's own strength; capped at what is left of us.
+    void we_lose(double share) { us_ -= std::min(us_, std::max(0.0, share)); }
     [[nodiscard]] double us() const noexcept { return us_; }
     [[nodiscard]] double them() const noexcept { return them_; }
     [[nodiscard]] double us0() const noexcept { return us0_; }
@@ -52,11 +56,48 @@ private:
 // The sum of unit_share over the outcomes (each against its own target unit in `state`).
 [[nodiscard]] double share_value(const core::GameState& state, std::span<const analysis::TargetOutcome> outcomes);
 
+// D-066 (M56): several opposing units sharing one attacker: our unit's strength (`us`) is used once, whichever
+// target it hits, and every target's losses and attacks are its own. With one target it is Exchange, term by term.
+class MultiExchange {
+public:
+    MultiExchange(double us, std::vector<double> them) : us0_(us), us_(us), them0_(them), them_(std::move(them)) {}
+    void we_hit(std::size_t t, double rate) {
+        if (us0_ > 0.0) them_[t] -= std::min(them_[t], rate * us_ / us0_);
+    }
+    void they_hit(std::size_t t, double rate) {
+        if (them0_[t] > 0.0) us_ -= std::min(us_, rate * them_[t] / them0_[t]);
+    }
+    void we_lose(double share) { us_ -= std::min(us_, std::max(0.0, share)); }
+    // Their losses (all targets) minus ours.
+    [[nodiscard]] double value() const noexcept {
+        double theirs = 0.0;
+        for (std::size_t t = 0; t < them_.size(); ++t) theirs += them0_[t] - them_[t];
+        return theirs - (us0_ - us_);
+    }
+    [[nodiscard]] double us() const noexcept { return us_; }
+    [[nodiscard]] double them(std::size_t t) const noexcept { return them_[t]; }
+
+private:
+    double us0_;
+    double us_;
+    std::vector<double> them0_;
+    std::vector<double> them_;
+};
+
 // Enemy units of `side` still on the battlefield, in unit order.
 [[nodiscard]] std::vector<const core::Unit*> enemy_units(const core::GameState& state, core::Side side);
 
 // The enemy unit closest to `unit` (edge to edge), nullptr if there is none.
 [[nodiscard]] const core::Unit* closest_enemy(const core::GameState& state, const core::Unit& unit);
+
+// D-066 (M56): whether enemy unit `enemy` can reach one of `unit`'s friendly units other than `unit` next turn (a
+// Normal move and its longest usable range): then its attacks go to one of them whatever `unit` does, and `unit`'s
+// choices don't add to its side's exposure (marginal exposure).
+[[nodiscard]] bool reaches_another(const core::GameState& state, const core::Unit& enemy, const core::Unit& unit);
+
+// D-066 (M56): the enemy unit whose attacks are being resolved against `unit` (the attacker of the attack in
+// progress, if it is an enemy unit with models), else the closest enemy unit. With one enemy unit it is that unit.
+[[nodiscard]] const core::Unit* attacking_enemy(const core::GameState& state, const core::Unit& unit);
 
 // What each model is worth to its unit: its best ranged weapons (in range, [RAPID FIRE] and [HEAVY] applying)
 // plus its best melee weapon, against `enemy`, in model equivalents of `enemy` (a small floor so a model with

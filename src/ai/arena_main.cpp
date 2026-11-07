@@ -1,6 +1,7 @@
 // wh40k_bot_arena (M39, D-054): bot vs bot games, headless. Run it in Release for strength numbers.
 //
 // Usage: wh40k_bot_arena [--games N] [--a easy|normal|hard] [--b easy|normal|hard] [--scenario <file>]
+//   (--a / --b also take the hidden regression levels easy-m55 and normal-m55, D-066: Easy and Normal as at M55)
 //                        [--seed <first>] [--step-cap N] [--trace <seed>] [--weights key=value,...]
 //   Plays N games (default 200) with seeds first, first + 1, ... (default 1); side A is played at level --a,
 //   side B at --b (default easy). The scenario is relative to the repo root (default
@@ -31,11 +32,28 @@ namespace fs = std::filesystem;
 using wh40k::ai::BotConfig;
 using wh40k::ai::BotLevel;
 
-BotLevel parse_level(const std::string& v) {
-    if (v == "easy") return BotLevel::Easy;
-    if (v == "normal") return BotLevel::Normal;
-    if (v == "hard") return BotLevel::Hard;
-    throw std::invalid_argument("not easy, normal or hard");
+// The level, and (D-066, M56) the hidden regression levels "easy-m55" and "normal-m55": Easy and Normal exactly as
+// they played at M55, for measuring the M56 changes in one binary. Arena and tests only; the client never offers them.
+void parse_level(const std::string& v, BotConfig& config) {
+    using wh40k::ai::Generation;
+    if (v == "easy") {
+        config.level = BotLevel::Easy;
+        config.generation = Generation::Current;
+    } else if (v == "normal") {
+        config.level = BotLevel::Normal;
+        config.generation = Generation::Current;
+    } else if (v == "hard") {
+        config.level = BotLevel::Hard;
+        config.generation = Generation::Current;
+    } else if (v == "easy-m55") {
+        config.level = BotLevel::Easy;
+        config.generation = Generation::M55;
+    } else if (v == "normal-m55") {
+        config.level = BotLevel::Normal;
+        config.generation = Generation::M55;
+    } else {
+        throw std::invalid_argument("not easy, normal or hard");
+    }
 }
 
 // "tempo=0.3,rollouts=8": Hard's weights (M44 tuning).
@@ -84,13 +102,15 @@ void apply_weights(const std::string& text, wh40k::ai::hard::BotWeights& w) {
     }
 }
 
-const char* level_name(BotLevel l) {
-    switch (l) {
-        case BotLevel::Easy: return "easy";
-        case BotLevel::Normal: return "normal";
-        case BotLevel::Hard: return "hard";
+std::string level_name(const BotConfig& c) {
+    std::string name = "?";
+    switch (c.level) {
+        case BotLevel::Easy: name = "easy"; break;
+        case BotLevel::Normal: name = "normal"; break;
+        case BotLevel::Hard: name = "hard"; break;
     }
-    return "?";
+    if (c.generation == wh40k::ai::Generation::M55) name += "-m55";
+    return name;
 }
 
 }  // namespace
@@ -117,9 +137,9 @@ int main(int argc, char** argv) {
                 games = std::stoi(value);
                 if (games < 0) throw std::invalid_argument("negative");
             } else if (key == "--a") {
-                a.level = parse_level(value);
+                parse_level(value, a);
             } else if (key == "--b") {
-                b.level = parse_level(value);
+                parse_level(value, b);
             } else if (key == "--scenario") {
                 scenario = value;
             } else if (key == "--seed") {
@@ -161,8 +181,8 @@ int main(int argc, char** argv) {
             for (const std::string& p : g.problems) std::printf("problem: %s\n", p.c_str());
             return 0;
         }
-        std::printf("arena: %d games, A %s vs B %s, %s, seeds %llu..%llu\n", games, level_name(a.level),
-                    level_name(b.level), scenario.c_str(), static_cast<unsigned long long>(seed),
+        std::printf("arena: %d games, A %s vs B %s, %s, seeds %llu..%llu\n", games, level_name(a).c_str(),
+                    level_name(b).c_str(), scenario.c_str(), static_cast<unsigned long long>(seed),
                     static_cast<unsigned long long>(seed + static_cast<std::uint64_t>(games > 0 ? games - 1 : 0)));
         if (per_game) {
             const wh40k::ai::PerGameReport r = wh40k::ai::run_per_game(initial, games, seed, a, b, step_cap);

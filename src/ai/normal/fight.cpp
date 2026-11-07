@@ -260,7 +260,8 @@ double melee_exchange(analysis::OddsCache& cache, const core::GameState& state, 
     return m.ours - m.theirs;
 }
 
-double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side) {
+double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
+                           Generation gen) {
     double score = 0.0;
     // 12.08 Engaging Consolidation: each enemy unit engaged that hasn't fought must now fight us.
     for (const core::UnitId id : state.flow.forced_fights) {
@@ -283,10 +284,24 @@ double consolidation_score(analysis::OddsCache& cache, const core::GameState& st
             }
             continue;
         }
-        if (const core::Unit* e = closest_enemy(state, u)) {
-            const float gap = core::unit_distance(u, *e).value_or(0.0f);
-            score += ranged_share(cache, u, *e, gap) - ranged_share(cache, *e, u, gap);
+        if (gen == Generation::M55 || enemy_units(state, side).size() <= 1) {
+            if (const core::Unit* e = closest_enemy(state, u)) {
+                const float gap = core::unit_distance(u, *e).value_or(0.0f);
+                score += ranged_share(cache, u, *e, gap) - ranged_share(cache, *e, u, gap);
+            }
+            continue;
         }
+        // D-066 (M56): our best shot at any enemy unit that may be shot (unengaged, 04.02) minus the shooting of
+        // every enemy unit that is free to shoot us (an engaged one can't, 10.04). One enemy unit: as above.
+        double ours = 0.0;
+        double theirs = 0.0;
+        for (const core::Unit* e : enemy_units(state, side)) {
+            if (core::is_engaged(state, *e)) continue;
+            const float gap = core::unit_distance(u, *e).value_or(0.0f);
+            ours = std::max(ours, ranged_share(cache, u, *e, gap));
+            theirs += ranged_share(cache, *e, u, gap);
+        }
+        score += ours - theirs;
     }
     return score;
 }
@@ -421,8 +436,8 @@ std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, c
 
 std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, const core::GameState& state,
                                                  core::Side side, const std::vector<core::GameAction>& legal,
-                                                 std::uint64_t seed) {
-    const double base = consolidation_score(cache, state, side);
+                                                 std::uint64_t seed, Generation gen) {
+    const double base = consolidation_score(cache, state, side, gen);
     FightMoveCand best;  // not moving
     for (const core::GameAction& a : legal) {
         const auto* s = std::get_if<core::action::StartConsolidation>(&a);
@@ -431,7 +446,7 @@ std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, con
         FightMoveCand c;
         c.plan = simulate_fight_move(state, side, a, seed, head);
         if (!c.plan) continue;
-        c.gain = consolidation_score(cache, c.plan->after, side) - base;
+        c.gain = consolidation_score(cache, c.plan->after, side, gen) - base;
         c.change = move_change(state, c.plan->after, s->unit, s->targets);
         c.reason = fight_move_reason(head, c);
         if (beats(c, best)) best = std::move(c);

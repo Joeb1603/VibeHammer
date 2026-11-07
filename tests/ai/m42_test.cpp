@@ -302,9 +302,12 @@ TEST(M42_Declare, NoRollWithAStandingMoveMeansNoCharge) {
 TEST(M42_ChargeTargets, ChargesBothUnitsWhenTheTargetAloneCannotBeEngaged) {
     // The ringed Termagant can't be charged alone (every spot near it is within 2" of the ring, 11.04 After
     // Moving), but both units together can: the bot picks that target set, and the move stands.
+    // D-066 (M56): M42's value summed the targets, each from the charger's full strength, which made the two-target
+    // set worth the most here; that is the M55 generation. With the strength shared (the current Normal) the ring
+    // alone is worth slightly more: M56_Charge.TheRingedTermagantIsChargedForTheMostValue.
     const GameState gs = ringed_target(12);
     const UnitId unit = charger_id(gs, Charger::Intercessors);
-    Bot bot(normal_level());
+    Bot bot(BotConfig{BotLevel::Normal, {}, Generation::M55});
     const BotChoice c = bot.decide(gs, Side::A);
     const auto* start = std::get_if<action::StartChargeMove>(&c.action);
     ASSERT_NE(start, nullptr) << c.reason;

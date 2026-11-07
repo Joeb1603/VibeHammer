@@ -29,7 +29,7 @@ bool is_fight_move(const GameState& gs) {
 
 // The Normal level's own answer, or nullopt for the baseline's.
 std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
-                                          std::uint64_t seed) {
+                                          std::uint64_t seed, Generation gen) {
     using namespace core;
     analysis::OddsCache cache;  // per decision: the bot keeps no state between decisions but its plan memo
     const DecisionKind& kind = gs.pending->kind;
@@ -45,13 +45,13 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
                                                         " next: the order with the most expected damage (04.03)");
     }
     if (std::holds_alternative<decision::DeclareAllocationOrder>(kind)) {
-        if (auto o = normal::allocation_order(cache, gs, legal)) {
+        if (auto o = normal::allocation_order(cache, gs, legal, gen)) {
             return single(*o, "Allocation order: the least valuable models first (05.03)");
         }
         return std::nullopt;
     }
     if (std::holds_alternative<decision::OrderCasualties>(kind)) {
-        if (auto o = normal::casualty_order(cache, gs)) {
+        if (auto o = normal::casualty_order(cache, gs, gen)) {
             const auto& d = std::get<decision::OrderCasualties>(kind);
             return single(action::OrderCasualties{d.target, o->priority}, o->reason);
         }
@@ -59,7 +59,7 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     }
     if (const auto* d = std::get_if<decision::RestoreCoherency>(&kind)) {
         std::string why;
-        if (auto m = normal::coherency_removal(cache, gs, d->unit, &why)) {
+        if (auto m = normal::coherency_removal(cache, gs, d->unit, &why, gen)) {
             return single(action::RemoveModelForCoherency{d->unit, *m}, why);
         }
         return std::nullopt;
@@ -73,15 +73,15 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
         return normal::decide_overrun_pile_in(cache, gs, side, legal, seed);
     }
     if (std::holds_alternative<decision::Consolidate>(kind)) {
-        return normal::decide_consolidation(cache, gs, side, legal, seed);
+        return normal::decide_consolidation(cache, gs, side, legal, seed, gen);
     }
     if (std::holds_alternative<decision::MoveModels>(kind) && is_fight_move(gs)) {
         return normal::continue_fight_move(gs, side, seed);
     }
     // M42: charges (11.02, 11.04).
-    if (std::holds_alternative<decision::Charge>(kind)) return normal::decide_charge(cache, gs, side, legal, seed);
+    if (std::holds_alternative<decision::Charge>(kind)) return normal::decide_charge(cache, gs, side, legal, seed, gen);
     if (std::holds_alternative<decision::SelectChargeTargets>(kind)) {
-        return normal::decide_charge_targets(cache, gs, side, legal, seed);
+        return normal::decide_charge_targets(cache, gs, side, legal, seed, gen);
     }
     if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
         gs.flow.move->type == MoveType::Charge) {
@@ -89,11 +89,13 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     }
     // M43: the Movement phase (09.02-09.07): the move type and the whole planned move, and the MoveModels of
     // Normal, Advance and Fall-back moves (replanned from the move's start).
-    if (std::holds_alternative<decision::MoveUnits>(kind)) return normal::decide_move_units(cache, gs, side, legal, seed);
+    if (std::holds_alternative<decision::MoveUnits>(kind)) {
+        return normal::decide_move_units(cache, gs, side, legal, seed, nullptr, gen);
+    }
     if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
         (gs.flow.move->type == MoveType::Normal || gs.flow.move->type == MoveType::Advance ||
          gs.flow.move->type == MoveType::FallBack)) {
-        return normal::continue_unit_move(cache, gs, side);
+        return normal::continue_unit_move(cache, gs, side, gen);
     }
     return std::nullopt;
 }
@@ -101,9 +103,9 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
 }  // namespace
 
 PolicyResult normal_policy(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
-                           std::uint64_t seed) {
-    if (std::optional<PolicyResult> r = normal_answer(gs, side, legal, seed)) return std::move(*r);
-    return easy_policy(gs, side, legal, seed);
+                           std::uint64_t seed, Generation gen) {
+    if (std::optional<PolicyResult> r = normal_answer(gs, side, legal, seed, gen)) return std::move(*r);
+    return easy_policy(gs, side, legal, seed, gen);
 }
 
 }  // namespace wh40k::ai

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "analysis/threat.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::ai::normal {
@@ -47,6 +49,24 @@ const core::Unit* closest_enemy(const core::GameState& state, const core::Unit& 
         }
     }
     return best;
+}
+
+bool reaches_another(const core::GameState& state, const core::Unit& enemy, const core::Unit& unit) {
+    const float reach = analysis::threat_ranges(enemy).shooting_reach_mm();
+    for (const core::Unit& f : state.units) {
+        if (f.side != unit.side || f.id == unit.id || f.models.empty()) continue;
+        const std::optional<float> gap = core::unit_distance(f, enemy);
+        if (gap && core::within(*gap, reach)) return true;
+    }
+    return false;
+}
+
+const core::Unit* attacking_enemy(const core::GameState& state, const core::Unit& unit) {
+    if (state.flow.attack) {
+        const core::Unit* a = state.find_unit(state.flow.attack->attacker);
+        if (a != nullptr && a->side != unit.side && !a->models.empty()) return a;
+    }
+    return closest_enemy(state, unit);
 }
 
 std::map<core::ModelId, double> model_worth(analysis::OddsCache& cache, const core::Unit& unit,

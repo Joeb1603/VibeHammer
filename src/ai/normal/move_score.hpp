@@ -35,6 +35,17 @@
 // Strategic knowledge (analysis::allowance_after) says what a hypothetical move allows; the live answer is the
 // engine's, through refine_move_score on the simulated state (best_shooting, and charge_prospect's exact odds and
 // engaged models per roll).
+// D-066 (M56), several enemy units: the line above still follows the closest enemy unit ("the enemy"), and every
+// other enemy unit adds (1) a target for our shooting this turn: the best unit to shoot is the one our shooting is
+// worth most against (the closest one keeps a tie), and a unit we shoot replies with what is left of it; (2) its
+// reply in its next turn, the worst for us of: stay and shoot ([HEAVY]), close to its half range and shoot, close by
+// its M, shoot and charge if the roll covers the gap; a direct loss to our unit in the enemy's half-turn, and a
+// factor on P(we survive). While we are engaged it can't shoot us (04.02) but may charge us (or fights us, if it is
+// engaged with us). A unit engaged with another of our units does neither (04.02, 11.02). A side winning the
+// exchange (playing for tempo) counts only an enemy unit that can reach no other of our units (its M plus its
+// longest range: marginal exposure, otherwise its attacks go to one of our units whatever this move does); a side
+// losing it (playing for the draw, D-007) counts one whenever this unit would be its closest target (D-010). With
+// one enemy unit nothing is added: the score is M43's, term by term.
 
 #include <array>
 #include <cstdint>
@@ -50,6 +61,7 @@
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/state/game_state.hpp"
+#include "generation.hpp"
 #include "normal/value.hpp"
 
 namespace wh40k::ai::normal {
@@ -105,6 +117,12 @@ public:
         x_.they_hit(rate);
         value_ -= w_us_ * (before - x_.us());
     }
+    // D-066: a loss of `share` of us from another enemy unit (already scaled by its own strength).
+    void others_hit(double share) {
+        const double before = x_.us();
+        x_.we_lose(share);
+        value_ -= w_us_ * (before - x_.us());
+    }
     // The next half-turn: later losses count less for the side that prefers them later.
     void next_half_turn() {
         w_us_ *= our_discount_;
@@ -123,21 +141,39 @@ private:
     double value_ = 0.0;
 };
 
+// D-066 (M56): what the enemy units other than the closest one can do to our unit in their next turn, from the
+// end of our move, each scaled by its strength left after our shooting this turn.
+struct OtherThreat {
+    double unengaged = 0.0;        // shares of our unit: their shooting and charges while we stand unengaged
+    double engaged = 0.0;          // while we are engaged: their charges (fights, if engaged with us); no shooting
+    double survive = 1.0;          // P(our unit survives them), unengaged
+    double survive_engaged = 1.0;  // the same while engaged
+};
+
+// D-066: our shooting this turn at an enemy unit other than the closest one (index into the context's others).
+struct OtherShot {
+    std::size_t index = 0;
+    double share = 0.0;  // as a share of that unit
+    double models_destroyed = 0.0;
+};
+
 // Everything the score needs about the position before the move: the two units, their threat ranges and rates,
 // the turns left. Rates are cached by what changes them (range and half-range bands, [HEAVY], shooting type), so
 // a candidate costs a few lookups and one exact outcome for our shooting.
 class MoveScoreContext {
 public:
     // `origin`: the state before the move (MoveUnits pending, or the move just started with no model moved). The
-    // enemy is the enemy unit closest to `unit` there. `origin` must outlive the context.
+    // enemy is the enemy unit closest to `unit` there. `origin` must outlive the context. D-066: the other enemy
+    // units are weighed too, unless `generation` is M55 (the regression switch).
     MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                     MoveWeights weights = {});
+                     MoveWeights weights = {}, Generation generation = Generation::Current);
 
     [[nodiscard]] const core::GameState& origin() const noexcept { return origin_; }
     [[nodiscard]] const core::Unit& unit() const noexcept { return us_; }
     [[nodiscard]] const core::Unit* enemy() const noexcept { return enemy_ ? &*enemy_ : nullptr; }
     [[nodiscard]] analysis::OddsCache& cache() noexcept { return cache_; }
     [[nodiscard]] const MoveWeights& weights() const noexcept { return weights_; }
+    [[nodiscard]] Generation generation() const noexcept { return generation_; }
     [[nodiscard]] int turns() const noexcept { return turns_; }
     [[nodiscard]] bool start_engaged() const noexcept { return start_engaged_; }
     [[nodiscard]] const analysis::ThreatRanges& our_threat() const noexcept { return us_threat_; }
@@ -166,13 +202,29 @@ public:
     [[nodiscard]] core::Position enemy_centroid() const noexcept { return enemy_centroid_; }
 
     // The enemy's turn and our next turn from `line` (after our turn), the units `gap_mm` apart and unengaged,
-    // our models' centroid at `our_centroid`. `reply` / `p_enemy_charge` get the enemy's reply.
+    // our models' centroid at `our_centroid`. `reply` / `p_enemy_charge` get the enemy's reply. D-066: `others`, the
+    // other enemy units' threat, if any.
     [[nodiscard]] double hold_line(const ScoreLine& line, float gap_mm, const core::Position& our_centroid,
                                    std::string* reply = nullptr, double* p_enemy_charge = nullptr,
-                                   double* p_survive = nullptr);
+                                   double* p_survive = nullptr, const OtherThreat* others = nullptr);
     // The units engaged after our charge (or a combat we stay in): our fight now (`our_fighters`: the share of
     // our models that fight, we strike first), then their turn (they fight on or fall back) and ours.
-    [[nodiscard]] double engaged_line(const ScoreLine& line, double our_fighters = 1.0, double* p_survive = nullptr);
+    [[nodiscard]] double engaged_line(const ScoreLine& line, double our_fighters = 1.0, double* p_survive = nullptr,
+                                      const OtherThreat* others = nullptr);
+
+    // ---- D-066 (M56): the enemy units other than enemy() ----
+    [[nodiscard]] std::size_t other_count() const noexcept { return others_.size(); }
+    [[nodiscard]] const core::Unit& other(std::size_t i) const { return others_[i].unit; }
+    // Our shooting this turn from `positions` at other(i), each model at its own gap (0 if it is engaged, 04.02).
+    [[nodiscard]] double our_shooting_at_other(std::size_t i, const std::vector<core::Position>& positions,
+                                               core::ShootingType type, bool heavy,
+                                               analysis::AttackOutcome* outcome = nullptr);
+    // The best of our_shooting_at_other over the others, if it is worth more than `closest_share` (ours at enemy()).
+    [[nodiscard]] std::optional<OtherShot> better_other_shot(const std::vector<core::Position>& positions,
+                                                             core::ShootingType type, bool heavy, double closest_share);
+    // Their threat to our unit standing at `positions` after our move; `shot`: the one we shoot this turn, if any.
+    [[nodiscard]] OtherThreat other_threat(const std::vector<core::Position>& positions,
+                                           const std::optional<OtherShot>& shot);
     // The survival weight (0 for a side that isn't losing the exchange).
     [[nodiscard]] double survival_weight() const noexcept { return survival_weight_; }
 
@@ -187,7 +239,7 @@ private:
     [[nodiscard]] std::uint64_t band_of(bool ours, float gap_mm) const;
     [[nodiscard]] double our_next_turn(const ScoreLine& line, float gap_mm);
     [[nodiscard]] double enemy_turn_from(const ScoreLine& line, float from_mm, float to_mm, double* p_charge,
-                                         double* p_survive);
+                                         double* p_survive, const OtherThreat* others = nullptr);
     // P(the enemy's whole-unit shooting / melee / close-quarters shooting wipes out our unit as it is now).
     [[nodiscard]] double enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm);
     [[nodiscard]] double enemy_melee_wipe();
@@ -196,6 +248,7 @@ private:
     analysis::OddsCache& cache_;
     const core::GameState& origin_;
     MoveWeights weights_;
+    Generation generation_ = Generation::Current;
     core::Unit us_;
     std::optional<core::Unit> enemy_;
     std::vector<core::PlacedModel> enemy_models_;
@@ -220,6 +273,30 @@ private:
     std::array<std::optional<double>, 2> cq_;
     // (model index, shooting type, heavy, band) -> that model's best volley alone
     std::map<std::tuple<std::size_t, int, bool, std::uint64_t>, analysis::Volley> model_volleys_;
+
+    // D-066: an enemy unit other than enemy(), with its rates against us and ours against it.
+    struct Other {
+        core::Unit unit;
+        std::vector<core::PlacedModel> models;
+        analysis::TargetSnapshot snap;
+        analysis::ThreatRanges threat;
+        std::vector<float> ranges;  // its distinct usable ranged ranges (bands of its shooting at us)
+        bool locked = false;        // engaged with another of our units: it neither shoots us nor charges (04.02)
+        float other_target_mm = 0.0f;  // its gap to the closest of our other units (its other targets), or far
+        bool engaged = false;       // engaged at all: we can't shoot it (04.02)
+        double melee = 0.0;         // its melee on us, shares of our unit
+        double cq = 0.0;            // its close-quarters shooting on us
+        double melee_wipe = 0.0;    // P(its melee wipes us out)
+        std::map<std::pair<bool, std::uint64_t>, std::pair<double, double>> ranged;  // (heavy, band) -> (rate, wipe)
+        // (model index, shooting type, heavy, our band) -> that model's best volley at it
+        std::map<std::tuple<std::size_t, int, bool, std::uint64_t>, analysis::Volley> our_volleys;
+        // (shooting type, heavy, every model's band) -> (share, models destroyed)
+        std::map<std::tuple<int, bool, std::vector<std::uint64_t>>, std::pair<double, double>> our_shots;
+    };
+    [[nodiscard]] std::uint64_t other_band(const Other& o, float gap_mm) const;
+    [[nodiscard]] std::pair<double, double> other_ranged(Other& o, bool heavy, float gap_mm);
+    [[nodiscard]] float gap_to_other(const Other& o, const std::vector<core::Position>& positions) const;
+    std::vector<Other> others_;
 };
 
 // The whole-turn score of ending the move at `plan` (cheap: every candidate gets one).
@@ -228,7 +305,7 @@ private:
 // The same from the engine's own answers in `after` (the state after the simulated move was committed, D-054):
 // the shooting from best_shooting, and, when `with_charge_prospect` and a charge is possible, charge_prospect's
 // exact odds per roll and the models each roll engages (with our shooting's expected kills taken off the enemy's
-// front).
+// front). D-066: best_shooting at every enemy unit, the best one shot (the kills come off that unit's front).
 [[nodiscard]] MoveScore refine_move_score(MoveScoreContext& ctx, const PlannedEnd& plan, const core::GameState& after,
                                           std::uint64_t seed, bool with_charge_prospect);
 

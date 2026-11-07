@@ -106,8 +106,12 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
         } else {
             memo_.clear();
             switch (effective_level(config_.level)) {
-                case BotLevel::Easy: chosen = easy_policy(state, side, legal, decision_seed(state)); break;
-                case BotLevel::Normal: chosen = normal_policy(state, side, legal, decision_seed(state)); break;
+                case BotLevel::Easy:
+                    chosen = easy_policy(state, side, legal, decision_seed(state), config_.generation);
+                    break;
+                case BotLevel::Normal:
+                    chosen = normal_policy(state, side, legal, decision_seed(state), config_.generation);
+                    break;
                 case BotLevel::Hard:
                     if (!hard_) {
                         hard_ = std::make_unique<hard::HardContext>();
