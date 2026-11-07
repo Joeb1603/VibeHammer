@@ -9,6 +9,8 @@
 
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
+#include "core/serialization/engine_json.hpp"
+#include "core/serialization/json.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 
@@ -180,4 +182,22 @@ TEST(D004_LegalActions, RandomPlayThroughTheFightPhase) {
         fights += stats.template_fills;
     }
     EXPECT_GT(fights, 0);
+}
+
+TEST(D004_LegalActions, RandomPlayFromTheStrikeScenario) {
+    // M53 / D-064: the same D-004 properties with seven units on the 60"x44" field. A few seeds keep the
+    // Debug run short; every game reaches GameOver (about 280-400 random actions).
+    int moves_proposed = 0;
+    for (std::uint64_t seed = 1; seed <= 5; ++seed) {
+        GameState gs = load_scenario(wh40k::test::repo_root() / "data/scenarios/strike_44x60.json",
+                                     wh40k::test::repo_root());
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 1000);
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;  // state round-trips
+        moves_proposed += stats.path_fills;
+    }
+    EXPECT_GT(moves_proposed, 0);
 }

@@ -1456,7 +1456,7 @@ a rebase-merged pull request.
 
 ---
 
-## M53: Scenario format for several units; the 44"x60" scenario
+## M53: Scenario format for several units; the 44"x60" scenario ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-07) · **Rules:** 03.02, 03.03, 01.04 · **Decision:** D-064
 
 > - `formation` gets an optional `depth_in`: how far the front rank stands behind the zone's front line (default 0),
@@ -1478,6 +1478,20 @@ a rebase-merged pull request.
 - 40 seeded Easy-vs-Easy and 10 Normal-vs-Normal Release arena games on the new scenario finish clean (no rejected
   actions, reverts or fallbacks). Step counts, end rounds, results and decision times are recorded as the
   baseline for M54.
+
+**Results (2026-11-07):** all acceptance items met. `formation.depth_in` (0 or more, default 0) and a set-up
+overlap check for every pair of models (03.02, D-064; touching bases allowed) are in the loader; the three old
+scenarios give byte-identical states. `data/scenarios/strike_44x60.json`: Intercessor Squads 1–3 at x = 15, 30,
+45"; Termagants 4–7 in 2 ranks at x = 10, 23, 37 (held back 3") and 50"; enemy front lines 20" apart.
+New tests `R03_02_SetUp.*` (9), `D064_Formation.*` (2), `D004_LegalActions.RandomPlayFromTheStrikeScenario`,
+`Replay.RandomGamesFromTheStrikeScenarioReplayIdentically`, client `M53_Scenarios.*` (2); ctest 742 of 742.
+Replay `tests/replays/m53_strike_round1.json` (seed 53, 48 steps, battle round 1 for both sides, stops at side
+A's first Move Units of round 2); every older replay byte-identical. Release arena on the new scenario, all clean
+(0 rejected, 0 reverts, 0 fallbacks, 0 unfinished):
+- Easy vs Easy, 40 games: A wins 20, draws 20; mean end round 5.00; p95 0.25 ms, max 11 ms; longest game about
+  340 steps.
+- Normal vs Normal, 10 games: A wins 10; mean end round 3.70; p95 6.2 ms, max 36 ms; longest about 250 steps.
+- The 5000-step cap is far away, so it stays. Normal is already inside M54's time targets on this scenario.
 
 ---
 

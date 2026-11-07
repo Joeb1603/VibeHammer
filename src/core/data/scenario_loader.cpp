@@ -59,6 +59,7 @@ struct Formation {
     int ranks = 1;
     float gap_mm = 0.0f;
     float centre_x_mm = 0.0f;
+    float depth_mm = 0.0f;  // D-064: front rank's distance behind the zone's front line
 };
 
 Formation parse_formation(const Json& j, const std::string& where) {
@@ -70,6 +71,15 @@ Formation parse_formation(const Json& j, const std::string& where) {
     f.ranks = r.get<int>();
     f.gap_mm = inches_to_mm(require_inches(j, "gap_in", where));
     f.centre_x_mm = inches_to_mm(require_inches(j, "centre_x_in", where));
+    // D-064: optional; absent means 0 (the D-008 layout, unchanged). Pushing the unit out of the zone
+    // is caught by the D-009 wholly-within check in check_set_up.
+    if (j.contains("depth_in")) {
+        const float depth_in = require_inches(j, "depth_in", where);
+        if (!(depth_in >= 0.0f)) {
+            fail(where + ": D-064: formation.depth_in must be 0 or more inches");
+        }
+        f.depth_mm = inches_to_mm(depth_in);
+    }
     const Json& anchor = require(j, "anchor", where);
     if (anchor != "zone_front") {
         fail(where + ": unsupported formation anchor " + anchor.dump());
@@ -138,6 +148,7 @@ std::vector<Model> build_models(const Datasheet& ds, const Json& groups, const s
 
 // D-008: ranks centred on centre_x, front rank's bases touching the zone's front line, further
 // ranks behind it; models fill each rank left to right (low x to high x) in listed order.
+// D-064: the whole formation stands `depth_mm` further back (towards the owning side's edge).
 void place_formation(std::vector<Model>& models, const Formation& f, const Battlefield& field,
                      const DeploymentZone& zone, const std::string& where) {
     float front_line = 0.0f;
@@ -177,9 +188,11 @@ void place_formation(std::vector<Model>& models, const Formation& f, const Battl
         for (std::size_t i = first; i < last; ++i) {
             width += 2.0f * base_radius(models[i].base);
         }
+        // D-064: depth_mm is added to the D-008 offset; at 0 the sum is that offset exactly, so files
+        // without depth_in place their models bit-for-bit as before.
         const float rank_centre_y =
-            front_line + inward * (max_diameter * 0.5f +
-                                   static_cast<float>(rank) * (max_diameter + f.gap_mm));
+            front_line + inward * (f.depth_mm + (max_diameter * 0.5f +
+                                                 static_cast<float>(rank) * (max_diameter + f.gap_mm)));
         float x = f.centre_x_mm - width * 0.5f;
         for (std::size_t i = first; i < last; ++i) {
             const float r = base_radius(models[i].base);
@@ -206,6 +219,34 @@ void check_set_up(const Unit& unit, const Rect& zone, const std::string& where) 
         if (!wholly_within(zone, m.position, m.base)) {
             fail(where + ": D-009: model " + std::to_string(m.id.v) + " of '" + unit.name +
                  "' is not wholly within its deployment zone");
+        }
+    }
+}
+
+// 03.02 "All other requirements and restrictions are met" / D-064 (as D-027 for moves, 03.01): no
+// model is set up on another model. Bases in contact are fine (the D-008 formations touch); any pair,
+// friendly or enemy, that intersects by more than EPS_MM is corrupt data.
+void check_no_overlap(const GameState& gs) {
+    struct Placed {
+        const Unit* unit;
+        const Model* model;
+    };
+    std::vector<Placed> all;
+    for (const Unit& u : gs.units) {
+        for (const Model& m : u.models) {
+            all.push_back({&u, &m});
+        }
+    }
+    for (std::size_t i = 0; i < all.size(); ++i) {
+        for (std::size_t j = i + 1; j < all.size(); ++j) {
+            const Model& a = *all[i].model;
+            const Model& b = *all[j].model;
+            if (bases_overlap(a.position, a.base, b.position, b.base)) {
+                fail("03.02 / D-064: model " + std::to_string(a.id.v) + " of unit " +
+                     std::to_string(all[i].unit->id.v) + " '" + all[i].unit->name + "' overlaps model " +
+                     std::to_string(b.id.v) + " of unit " + std::to_string(all[j].unit->id.v) + " '" +
+                     all[j].unit->name + "'");
+            }
         }
     }
 }
@@ -289,6 +330,7 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
             gs.units.push_back(std::move(unit));
         }
     }
+    check_no_overlap(gs);
     check_unengaged(gs);
     return gs;
 }

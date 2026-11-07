@@ -15,8 +15,9 @@ namespace wh40k::core {
 using DatasheetResolver = std::function<Datasheet(const std::string& unit_file)>;
 
 // Builds the initial GameState from a scenario (D-003: no deployment step; units start in the
-// scenario's formation, D-008). Validates 02.06 composition and wargear options, 03.02 set-up
-// (coherency 03.03, unengaged) and D-009 wholly within the deployment zone.
+// scenario's formation, D-008, with D-064's optional depth_in). Validates 02.06 composition and
+// wargear options, 03.02 set-up (coherency 03.03, unengaged, no model on another model: D-064) and
+// D-009 wholly within the deployment zone.
 // Throws DataError on any violation.
 [[nodiscard]] GameState build_game_state(const nlohmann::json& scenario,
                                          const DatasheetResolver& resolve);
