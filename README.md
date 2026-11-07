@@ -1,8 +1,11 @@
 # VibeHammer
 
 A Warhammer 40,000 (11th edition) skirmish for Windows. It is a deterministic C++20 rules engine with a 2D
-top-down client. A Space Marine Intercessor Squad fights a Tyranid Termagant unit on a 24" x 24" board,
-following the core rules, either hotseat or against a bot.
+top-down client. Space Marine Intercessor Squads fight Tyranid Termagants following the core rules, either
+hotseat or against a bot. The default scenario is one unit each on a 24" x 24" board. The **Strike**
+scenario (pick `strike_44x60.json` in the start screen's Scenario list) is a full-size 60" x 44" battlefield
+with three Intercessor Squads against four units of Termagants. Each unit has its own shade of its side's
+colour and a number on the board.
 
 ![Bot vs bot: the Termagants advance away from the Intercessors](docs/images/bot_vs_bot.png)
 
@@ -36,8 +39,11 @@ each step.
 - **Replays and saves:** a replay is the starting state plus every action, and it reproduces the game
   exactly. The saved replays in `tests/replays/` double as regression tests.
 
-**Not yet:** terrain, objectives and missions, stratagems, deployment, unit-specific abilities, and other
-units. `PLAN.md` lists what comes next.
+- **Several units per side:** every phase handles any number of units, and all three bot levels plan across
+  their whole army.
+
+**Not yet:** terrain, objectives and missions, stratagems, interactive deployment, unit-specific abilities, and
+other unit types. `PLAN.md` lists what comes next.
 
 ## Building from source
 
