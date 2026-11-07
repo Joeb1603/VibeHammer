@@ -75,6 +75,11 @@ public:
     [[nodiscard]] BotConfig config() const noexcept { return config_; }
     void set_threading(Threading t) noexcept { threading_ = t; }
 
+    // M54: on the worker thread, waits up to `seconds` for the decision in progress (none started: no wait). True
+    // once a decision is ready to be handed over by tick (its pause aside). The client's Instant speed uses it to
+    // take several quick decisions in one frame without ever blocking for long on a slow one.
+    bool wait_for_decision(double seconds);
+
     // What the bot is about to do, once it has decided (for "Bot (Tyranids) is thinking... - <reason>").
     [[nodiscard]] std::optional<std::string> pending_reason() const;
     [[nodiscard]] std::uint64_t generation() const noexcept { return generation_; }

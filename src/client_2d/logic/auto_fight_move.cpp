@@ -1,10 +1,12 @@
 #include "auto_fight_move.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <numbers>
 #include <optional>
+#include <span>
 #include <variant>
 
 #include "core/engine/movement.hpp"
@@ -31,7 +33,12 @@ struct Candidate {
     int links = 0;     // friendly models within 2" (03.03), capped at 2
     float path = 0.0f;  // length of the straight line
     float gap = 0.0f;
+    long tenths = 0;   // the gap to 0.1 mm, std::lround(gap * 10) (M54: once, not in every comparison)
 };
+
+Candidate candidate_at(const core::Position& p, int band, int links, float path, float gap) {
+    return Candidate{p, band, links, path, gap, std::lround(gap * 10.0f)};
+}
 
 // Closeness band, then friendly links, then base contact, then the gap (to 0.1 mm), then the shorter move.
 bool better(const Candidate& a, const Candidate& b) {
@@ -40,9 +47,7 @@ bool better(const Candidate& a, const Candidate& b) {
     const bool a_contact = core::in_base_contact(a.gap);
     const bool b_contact = core::in_base_contact(b.gap);
     if (a_contact != b_contact) return a_contact;
-    const long a_tenths = std::lround(a.gap * 10.0f);
-    const long b_tenths = std::lround(b.gap * 10.0f);
-    if (a_tenths != b_tenths) return a_tenths < b_tenths;
+    if (a.tenths != b.tenths) return a.tenths < b.tenths;
     return a.path < b.path;
 }
 
@@ -82,14 +87,61 @@ std::vector<const core::Model*> target_models(const core::GameState& state) {
     return out;
 }
 
-// The spots one straight line can take `model` to, best first (D-050).
-std::vector<Candidate> candidates(const core::GameState& work, const core::Unit& unit, const core::Model& model,
-                                  const core::MoveReach& reach, bool keep_coherency) {
-    const ReachRegion region = model_region(reach);
-    if (region.empty) return {};
+// M54: gap_to_closest_target(work, model, p) for many spots p: the alive target models, gathered once and grouped
+// by base. The gap is the least base_distance to any of them (a minimum, so the grouping doesn't change it), and
+// for one pair of bases base_distance only grows with the squared centre distance it takes the root of (rounding
+// keeps sqrt and the subtractions in order), so each group's least squared distance gives its least gap exactly.
+class TargetGap {
+public:
+    TargetGap(const core::GameState& work, const core::Model& model) : base_(model.base) {
+        for (const core::Model* t : target_models(work)) {
+            auto g = std::find_if(groups_.begin(), groups_.end(), [&](const Group& x) { return x.base == t->base; });
+            if (g == groups_.end()) g = groups_.insert(groups_.end(), Group{t->base, {}});
+            g->centres.push_back(t->position);
+        }
+    }
+    [[nodiscard]] std::optional<float> at(const core::Position& p) const {
+        std::optional<float> gap;
+        for (const Group& g : groups_) {
+            float least = 0.0f;
+            for (std::size_t i = 0; i < g.centres.size(); ++i) {
+                // centre_distance(p, t) before its sqrt
+                const float dx = g.centres[i].x - p.x;
+                const float dy = g.centres[i].y - p.y;
+                const float q = dx * dx + dy * dy;
+                if (i == 0 || q < least) least = q;
+            }
+            // base_distance(p, base_, t, t.base) for the closest t of the group
+            const float d = std::max(0.0f, std::sqrt(least) - core::base_radius(base_) - core::base_radius(g.base));
+            if (!gap || d < *gap) gap = d;
+        }
+        return gap;
+    }
+
+private:
+    struct Group {
+        core::Base base;
+        std::vector<core::Position> centres;
+    };
+    core::Base base_;
+    std::vector<Group> groups_;
+};
+
+// The spots one straight line can take `model` to, best first (D-050), handed to `accept` in that order until it
+// takes one (returns true).
+template <typename Accept>
+void candidates(const core::GameState& work, const core::Unit& unit, const core::Model& model,
+                const core::MoveReach& reach, bool keep_coherency, Accept accept) {
+    const ReachRegion region = trimmed_region(model_region(reach));  // M54: the same test, fewer circles
+    if (region.empty) return;
     const std::vector<const core::Model*> targets = target_models(work);
     const float r = core::base_radius(model.base);
     std::vector<core::Position> points;
+    std::vector<std::pair<std::size_t, int>> on_ray;  // M54: the coarse spots' (ray, k), parallel to `points`
+    constexpr std::pair<std::size_t, int> kOffRay{0, 0};
+    std::array<float, kAngleSteps> cosines{};
+    std::array<float, kAngleSteps> sines{};
+    int k_max = 0;
 
     // The direct line into base contact with the nearest target model (or as far as it can go).
     const core::Model* nearest = nullptr;
@@ -103,42 +155,87 @@ std::vector<Candidate> candidates(const core::GameState& work, const core::Unit&
     }
     if (nearest != nullptr && nearest_gap > 0.0f) {
         points.push_back(towards(reach.from, nearest->position, std::min(nearest_gap, reach.remaining_mm)));
+        on_ray.push_back(kOffRay);
     }
     // D-049: this close, only the direct line (no sliding round to another model).
     const std::optional<float> start_gap = gap_to_closest_target(work, model, reach.from);
     const bool direct_only = start_gap && *start_gap <= kWorthwhileGainMm + core::EPS_MM;
     if (!direct_only) {
+        // M54: room for every spot at once (the area sample's rings, one per whole millimetre, and the contact rings).
+        const std::size_t rings = reach.remaining_mm > 0.0f ? static_cast<std::size_t>(reach.remaining_mm) + 1 : 0;
+        points.reserve(points.size() + (rings + targets.size()) * static_cast<std::size_t>(kAngleSteps));
+        on_ray.reserve(points.capacity());
+        // M54: each angle's cosine and sine once (the same values as before, from the same expressions).
+        for (int i = 0; i < kAngleSteps; ++i) {
+            const float a = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kAngleSteps;
+            cosines[static_cast<std::size_t>(i)] = std::cos(a);
+            sines[static_cast<std::size_t>(i)] = std::sin(a);
+        }
         // Base contact all round each target model in reach.
         for (const core::Model* t : targets) {
             const float touching = r + core::base_radius(t->base) + kContactNudgeMm;
             if (core::centre_distance(reach.from, t->position) - touching > reach.remaining_mm + core::EPS_MM) continue;
-            for (int i = 0; i < kAngleSteps; ++i) {
-                const float a = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kAngleSteps;
-                points.push_back(core::Position{t->position.x + touching * std::cos(a),
-                                                t->position.y + touching * std::sin(a), 0.0f});
+            for (std::size_t i = 0; i < cosines.size(); ++i) {
+                points.push_back(core::Position{t->position.x + touching * cosines[i],
+                                                t->position.y + touching * sines[i], 0.0f});
+                on_ray.push_back(kOffRay);
             }
         }
-        // A coarse sample of the whole area.
+        // A coarse sample of the whole area (d = 1, 2, ... mm: sums of 1.0f are exact).
+        int k = 0;
         for (float d = kSampleStepMm; d <= reach.remaining_mm; d += kSampleStepMm) {
-            for (int i = 0; i < kAngleSteps; ++i) {
-                const float a = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kAngleSteps;
-                points.push_back(core::Position{reach.from.x + d * std::cos(a), reach.from.y + d * std::sin(a), 0.0f});
+            ++k;
+            for (std::size_t i = 0; i < cosines.size(); ++i) {
+                points.push_back(core::Position{reach.from.x + d * cosines[i], reach.from.y + d * sines[i], 0.0f});
+                on_ray.emplace_back(i, k);
             }
         }
+        k_max = k;
     }
+    // M54: the coarse spots in_region certainly refuses (ray i, distance index k - 1: the k-th ring is at k mm).
+    std::vector<float> rings(static_cast<std::size_t>(k_max));
+    for (int k = 1; k <= k_max; ++k) rings[static_cast<std::size_t>(k - 1)] = static_cast<float>(k) * kSampleStepMm;
+    static_assert(kSampleStepMm == 1.0f, "the rings are at whole millimetres (sums of 1.0f are exact)");
+    const RayRefusals refusals(region, reach.from, cosines, sines, rings);
 
+    // M54: 03.03 with only this model moved, from a table of the others (check_coherency's answer).
+    const std::vector<core::PlacedModel> now = placed(unit);
+    std::size_t moved = now.size();
+    for (std::size_t i = 0; i < now.size(); ++i) {
+        if (now[i].id == model.id) moved = i;
+    }
+    const core::CoherencyWithOneMoved coherency(now, moved);
+    const TargetGap target_gap(work, model);
+    const core::ModelId model_id = model.id;
+    const core::Base base = model.base;
+    const core::Position from = reach.from;
+    // friendly_links(unit, model, p), on the copy.
+    const auto links_at = [&](const core::Position& p) {
+        int links = 0;
+        for (const core::PlacedModel& o : now) {
+            if (o.id == model_id) continue;
+            if (core::within(core::base_distance(p, base, o.position, o.base), core::kCoherencyNearMm)) ++links;
+        }
+        return std::min(links, 2);
+    };
     std::vector<Candidate> out;
-    for (const core::Position& p : points) {
-        if (core::centre_distance(reach.from, p) > reach.remaining_mm + core::EPS_MM) continue;
+    for (std::size_t j = 0; j < points.size(); ++j) {
+        const core::Position& p = points[j];
+        if (core::centre_distance(from, p) > reach.remaining_mm + core::EPS_MM) continue;
+        if (on_ray[j].second > 0 && refusals.refused(on_ray[j].first, static_cast<std::size_t>(on_ray[j].second - 1))) {
+            continue;  // in_region would refuse it
+        }
         if (!in_region(region, p)) continue;
-        if (keep_coherency && !core::check_coherency(placed(unit, model.id, p)).ok()) continue;
-        const std::optional<float> gap = gap_to_closest_target(work, model, p);
+        if (keep_coherency && !coherency.ok_at(p)) continue;
+        const std::optional<float> gap = target_gap.at(p);
         if (!gap) continue;
-        out.push_back(Candidate{p, static_cast<int>(std::floor(*gap / kAutoMoveGapBandMm)),
-                                friendly_links(unit, model, p), core::centre_distance(reach.from, p), *gap});
+        out.push_back(candidate_at(p, static_cast<int>(std::floor(*gap / kAutoMoveGapBandMm)), links_at(p),
+                                   core::centre_distance(from, p), *gap));
     }
     std::stable_sort(out.begin(), out.end(), better);
-    return out;
+    for (const Candidate& c : out) {
+        if (accept(c)) return;
+    }
 }
 
 // How good an arrangement is (D-050): more models in base contact with a target, then less gap in total.
@@ -183,13 +280,12 @@ Pass place_models(const core::GameState& state, const std::vector<core::ModelId>
         if (it == unit.models.end()) continue;
         const std::optional<core::MoveReach> reach = core::move_reach(now, id);
         if (!reach || reach->immobile) continue;
-        const std::vector<Candidate> options = candidates(now, unit, *it, *reach, keep_coherency);
-        for (const Candidate& c : options) {
+        candidates(now, unit, *it, *reach, keep_coherency, [&](const Candidate& c) {
             const core::GameAction move = core::action::ProposeModelMove{id, {c.p}};
-            if (!work.submit(move).ok()) continue;  // the state is unchanged on a rejection
+            if (!work.submit(move).ok()) return false;  // the state is unchanged on a rejection
             result.moves.push_back(move);
-            break;
-        }
+            return true;
+        });
     }
     if (result.moves.empty()) {
         result.problems.push_back("no model can get closer");

@@ -8,7 +8,10 @@
 //   didn't finish within the step cap (default 5000); 2 for a bad flag. --trace plays the one game with that
 //   seed and prints every bot decision, its reason and (M44) its time instead. --weights (M44, for tuning) overrides the Hard
 //   level's weights (hard/weights.hpp) for both sides: tempo, material, share, plans, rollouts, rollout_actions,
-//   budget_actions, static_plans, margin, delay, survival, edge, coherency.
+//   budget_actions, static_plans, margin, delay, survival, edge, coherency. --per-game 1 (M54, to show that an
+//   optimisation changes no play) prints one line per game instead of the totals: its result, its counts and FNV-1a
+//   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
+//   then the decision times and the run's wall time.
 
 #include <cstdio>
 #include <exception>
@@ -101,6 +104,7 @@ int main(int argc, char** argv) {
     std::size_t step_cap = 5000;
     std::optional<std::uint64_t> trace;
     std::string weights_text;
+    bool per_game = false;
     for (int i = 1; i < argc; i += 2) {
         const std::string key = argv[i];
         if (i + 1 >= argc) {
@@ -124,6 +128,8 @@ int main(int argc, char** argv) {
                 trace = std::stoull(value);
             } else if (key == "--step-cap") {
                 step_cap = static_cast<std::size_t>(std::stoul(value));
+            } else if (key == "--per-game") {
+                per_game = std::stoi(value) != 0;
             } else if (key == "--weights") {
                 apply_weights(value, a.hard);
                 apply_weights(value, b.hard);
@@ -158,6 +164,11 @@ int main(int argc, char** argv) {
         std::printf("arena: %d games, A %s vs B %s, %s, seeds %llu..%llu\n", games, level_name(a.level),
                     level_name(b.level), scenario.c_str(), static_cast<unsigned long long>(seed),
                     static_cast<unsigned long long>(seed + static_cast<std::uint64_t>(games > 0 ? games - 1 : 0)));
+        if (per_game) {
+            const wh40k::ai::PerGameReport r = wh40k::ai::run_per_game(initial, games, seed, a, b, step_cap);
+            std::printf("%s", r.text.c_str());
+            return r.clean ? 0 : 1;
+        }
         const wh40k::ai::ArenaResult r = wh40k::ai::run_arena(initial, games, seed, a, b, step_cap);
         std::printf("%s", wh40k::ai::format_arena(r, initial).c_str());
         return r.clean() ? 0 : 1;

@@ -11,6 +11,12 @@ namespace wh40k::ai {
 Simulator::Simulator(core::GameState state, std::uint64_t dice_seed)
     : state_(std::move(state)), dice_{dice_seed, 0} {}
 
+void Simulator::reset(const core::GameState& state, std::uint64_t dice_seed) {
+    state_ = state;
+    dice_ = core::DiceState{dice_seed, 0};
+    steps_ = 0;
+}
+
 core::ValidationResult Simulator::step(core::Side side, const core::GameAction& action,
                                        std::vector<core::GameEvent>* events) {
     core::SeededDice dice(dice_);  // D-054: the bot's own dice, never SeededDice(state_.dice)
@@ -22,7 +28,7 @@ core::ValidationResult Simulator::step(core::Side side, const core::GameAction& 
     core::ValidationResult v = core::validate_action(state_, side, action);
     if (!v.ok()) return v;
     try {
-        std::vector<core::GameEvent> out = core::apply_action(state_, side, action, dice);
+        std::vector<core::GameEvent> out = core::apply_action(state_, side, action, dice, backup_);
         ++steps_;
         if (events != nullptr) events->insert(events->end(), out.begin(), out.end());
     } catch (const std::exception& e) {

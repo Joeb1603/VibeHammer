@@ -83,11 +83,12 @@ std::optional<ChargeOdds> charge_odds(const core::GameState& state, core::UnitId
 
     ChargeOdds odds;
     odds.pmf = two_d6_pmf();
+    Simulator sim(state, 0);  // M54: one simulator, reset for each total
     for (int total = 0; total <= 12; ++total) {
         if (odds.pmf[static_cast<std::size_t>(total)] == 0.0) continue;
         const auto pair = pair_for_total(total);
         if (!pair) continue;
-        Simulator sim(state, 0);  // the scripted roll is the only randomness used
+        sim.reset(state, 0);  // the scripted roll is the only randomness used
         core::ScriptedDice dice{(*pair)[0], (*pair)[1]};
         if (!sim.step(side, declare, dice).ok()) continue;
         const core::GameState& after = sim.state();
@@ -124,8 +125,9 @@ std::optional<AdvanceOdds> advance_odds(const core::GameState& state, core::Unit
     if (!core::validate_action(state, side, start).ok()) return std::nullopt;
     AdvanceOdds odds;
     odds.pmf = d6_pmf();
+    Simulator sim(state, 0);  // M54: one simulator, reset for each face
     for (int face = 1; face <= kFaces; ++face) {
-        Simulator sim(state, 0);
+        sim.reset(state, 0);
         core::ScriptedDice dice{face};  // not consumed when the roll is reused (D-005)
         if (!sim.step(side, start, dice).ok()) return std::nullopt;
         const auto max = core::max_move_distance_mm(sim.state(), u->models.front().id);

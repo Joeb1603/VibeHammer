@@ -180,6 +180,7 @@ Problem set_up(const core::GameState& state) {
                 return std::any_of(unit.models.begin(), unit.models.end(),
                                    [&](const core::Model& o) { return o.id == c.model; });
             });
+            mover.region = trimmed_region(mover.region);  // M54: the same test, fewer circles
         }
         pb.movers.push_back(std::move(mover));
     }

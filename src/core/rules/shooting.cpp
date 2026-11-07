@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cstdio>
+#include <map>
 #include <stdexcept>
+#include <utility>
 
 #include "core/geometry/closest.hpp"
 #include "core/geometry/distance.hpp"
@@ -68,12 +71,82 @@ bool engaged_with(const GameState& state, const Unit& unit, UnitId other) {
     return std::find(engaged.begin(), engaged.end(), other) != engaged.end();
 }
 
+// 06.01: the models that can block a line of sight from a model of `own` to `target`: every model on the
+// battlefield except those in the observing and observed units.
+std::vector<PlacedModel> visibility_blockers(const GameState& state, const Unit* own, const Unit& target) {
+    std::vector<PlacedModel> blockers;
+    for (const Unit& u : state.units) {
+        if (u.id == target.id || (own != nullptr && u.id == own->id)) {
+            continue;  // 06.01: models in the observing and observed units are ignored
+        }
+        for (const Model& m : u.models) blockers.push_back(PlacedModel{m.id, m.position, m.base});
+    }
+    return blockers;
+}
+
+// 06.01 Unit Visible: one or more of the target's models are visible to `observer` past `blockers`.
+bool visible_past(const Model& observer, const Unit& target, std::span<const PlacedModel> blockers) {
+    const PlacedModel from{observer.id, observer.position, observer.base};
+    for (const Model& m : target.models) {
+        if (has_line_of_sight(from, PlacedModel{m.id, m.position, m.base}, blockers)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// M54: the facts the declarations of one unit share, each worked out the first time a declaration needs it
+// (the same queries a declaration made on its own before): the enemy units the shooting unit is engaged with
+// (04.02, 10.06), whether a target unit is engaged (04.02) and whether a target unit is visible to a model
+// (06.01). Only for one state and one shooting unit.
+class TargetFacts {
+public:
+    TargetFacts(const GameState& state, const Unit& unit) : state_(state), unit_(unit) {}
+
+    // engaged_with(state, unit, target)
+    bool engaged_with_us(UnitId target) {
+        if (!engaged_) engaged_ = engaged_enemy_units(state_, unit_);
+        return std::find(engaged_->begin(), engaged_->end(), target) != engaged_->end();
+    }
+    // is_engaged(state, target)
+    bool target_engaged(const Unit& target) {
+        for (const auto& [id, engaged] : target_engaged_) {
+            if (id == target.id) return engaged;
+        }
+        const bool engaged = is_engaged(state_, target);
+        target_engaged_.emplace_back(target.id, engaged);
+        return engaged;
+    }
+    // unit_visible_to_model(state, model, target) (the blockers built once per observing and target unit)
+    bool visible(const Model& model, const Unit& target) {
+        const auto key = std::make_pair(model.id.v, target.id.v);
+        const auto it = visible_.find(key);
+        if (it != visible_.end()) return it->second;
+        const Unit* own = find_unit_of_model(state_, model.id);
+        const auto bkey = std::make_pair(own != nullptr ? std::uint64_t{own->id.v} + 1 : 0, target.id.v);
+        auto b = blockers_.find(bkey);
+        if (b == blockers_.end()) b = blockers_.emplace(bkey, visibility_blockers(state_, own, target)).first;
+        const bool v = visible_past(model, target, b->second);
+        visible_.emplace(key, v);
+        return v;
+    }
+
+private:
+    const GameState& state_;
+    const Unit& unit_;
+    std::optional<std::vector<UnitId>> engaged_;
+    std::vector<std::pair<UnitId, bool>> target_engaged_;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, bool> visible_;  // (model, target unit)
+    // by (observing unit id + 1, or 0 for none; target unit)
+    std::map<std::pair<std::uint64_t, std::uint32_t>, std::vector<PlacedModel>> blockers_;
+};
+
 // 04.02 / 10.06: the target rules for one declaration (the target unit exists and is an enemy).
-std::optional<std::string> target_problem(const GameState& state, const Unit& unit, const Model& model,
-                                          const WeaponProfile& profile, ShootingType type, const Unit& target) {
+std::optional<std::string> target_problem(const Unit& unit, const Model& model, const WeaponProfile& profile,
+                                          ShootingType type, const Unit& target, TargetFacts& facts) {
     const bool close_quarters = type == ShootingType::CloseQuarters;
     const bool monster_vehicle = is_monster_or_vehicle(unit, model);
-    const bool target_engaged_with_us = engaged_with(state, unit, target.id);
+    const bool target_engaged_with_us = facts.engaged_with_us(target.id);
     if (close_quarters && !monster_vehicle) {
         // 10.06 Non-MONSTER/Non-VEHICLE Models: only enemy units engaged with your unit.
         if (!target_engaged_with_us) {
@@ -86,10 +159,10 @@ std::optional<std::string> target_problem(const GameState& state, const Unit& un
             return "10.06: '" + profile.name + "' is a [BLAST] weapon and cannot target " + unit_label(target.id) +
                    ", which " + unit_label(unit.id) + " is engaged with";
         }
-    } else if (is_engaged(state, target)) {
+    } else if (facts.target_engaged(target)) {
         return "04.02: " + unit_label(target.id) + " is engaged; targets must be unengaged";
     }
-    if (!unit_visible_to_model(state, model, target)) {
+    if (!facts.visible(model, target)) {
         return "06.01: " + unit_label(target.id) + " is not visible to " + model_label(model.id);
     }
     if (!target_within_range(model, profile, target)) {
@@ -99,9 +172,63 @@ std::optional<std::string> target_problem(const GameState& state, const Unit& un
     return std::nullopt;
 }
 
+// M54: !target_problem(...), with the same checks, range before visibility (only the answer is needed, not
+// which rule it breaks first, so the cheap test goes first).
+bool target_ok(const Unit& unit, const Model& model, const WeaponProfile& profile, ShootingType type,
+               const Unit& target, TargetFacts& facts) {
+    const bool close_quarters = type == ShootingType::CloseQuarters;
+    const bool monster_vehicle = is_monster_or_vehicle(unit, model);
+    const bool target_engaged_with_us = facts.engaged_with_us(target.id);
+    if (close_quarters && !monster_vehicle) {
+        if (!target_engaged_with_us) return false;  // 10.06
+    } else if (close_quarters && target_engaged_with_us) {
+        if (profile.has<ability::Blast>()) return false;  // 10.06
+    } else if (facts.target_engaged(target)) {
+        return false;  // 04.02
+    }
+    return target_within_range(model, profile, target) && facts.visible(model, target);  // 04.02, 06.01
+}
+
+// M54: the checks of declaration_problem that don't depend on the target, as a yes/no (04.01, D-002, D-026,
+// 10.05, 10.06).
+bool profile_selectable(const Unit& unit, const Model& model, const WeaponProfile& profile, ShootingType type) {
+    if (profile.kind != WeaponKind::Ranged || !profile.range_mm) return false;
+    if (!profile.attacks.is_fixed() || !profile.damage.is_fixed()) return false;
+    if (unimplemented_ability_problem(profile)) return false;
+    if (type == ShootingType::Assault && !profile.has<ability::Assault>()) return false;
+    if (type == ShootingType::CloseQuarters && !is_monster_or_vehicle(unit, model) && !is_close_quarters(profile)) {
+        return false;
+    }
+    return true;
+}
+
+// M54: shot_options' walk (model, weapon, profile, target order), calling `found` with each valid declaration
+// until it returns false. A declaration is valid exactly when declaration_problem finds nothing.
+template <typename Found>
+void for_each_shot_option(const GameState& state, const Unit& unit, ShootingType type, Found found) {
+    TargetFacts facts(state, unit);
+    for (const Model& model : unit.models) {
+        for (std::size_t w = 0; w < model.weapons.size(); ++w) {
+            for (std::size_t p = 0; p < model.weapons[w].profiles.size(); ++p) {
+                const WeaponProfile& profile = model.weapons[w].profiles[p];
+                if (!profile_selectable(unit, model, profile, type)) continue;
+                for (const Unit& target : state.units) {
+                    if (target.side == unit.side || is_destroyed(target)) {
+                        continue;
+                    }
+                    if (target_ok(unit, model, profile, type, target, facts) &&
+                        !found(ShotDeclaration{model.id, w, p, target.id})) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
 // The checks on one declaration on its own (not 24.07 or duplicates, which need all of them).
 std::optional<std::string> declaration_problem(const GameState& state, const Unit& unit, ShootingType type,
-                                               const ShotDeclaration& shot) {
+                                               const ShotDeclaration& shot, TargetFacts& facts) {
     const Model* model = find_model(unit, shot.model);
     if (model == nullptr) {
         return "04.01: " + model_label(shot.model) + " is not a model in " + unit_label(unit.id);
@@ -136,7 +263,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
     if (is_destroyed(*target)) {
         return "04.02: " + unit_label(shot.target) + " is not on the battlefield";
     }
-    return target_problem(state, unit, *model, profile, type, *target);
+    return target_problem(unit, *model, profile, type, *target, facts);
 }
 
 }  // namespace
@@ -206,22 +333,7 @@ std::vector<ShootingType> eligible_shooting_types(const GameState& state, const 
 }
 
 bool unit_visible_to_model(const GameState& state, const Model& observer, const Unit& target) {
-    const Unit* own = find_unit_of_model(state, observer.id);
-    std::vector<PlacedModel> blockers;
-    for (const Unit& u : state.units) {
-        if (u.id == target.id || (own != nullptr && u.id == own->id)) {
-            continue;  // 06.01: models in the observing and observed units are ignored
-        }
-        const auto models = placed_models(u);
-        blockers.insert(blockers.end(), models.begin(), models.end());
-    }
-    const PlacedModel from{observer.id, observer.position, observer.base};
-    for (const PlacedModel& to : placed_models(target)) {
-        if (has_line_of_sight(from, to, blockers)) {
-            return true;  // 06.01 Unit Visible: one or more of its models are visible
-        }
-    }
-    return false;
+    return visible_past(observer, target, visibility_blockers(state, find_unit_of_model(state, observer.id), target));
 }
 
 bool target_within_range(const Model& model, const WeaponProfile& profile, const Unit& target) {
@@ -242,8 +354,9 @@ std::vector<std::string> shot_problems(const GameState& state, const Unit& unit,
                       " (an empty Shoot action is the template legal_actions returns)");
         return out;
     }
+    TargetFacts facts(state, unit);  // M54: shared by the declarations (the same queries, asked once)
     for (std::size_t i = 0; i < shots.size(); ++i) {
-        if (auto p = declaration_problem(state, unit, type, shots[i])) {
+        if (auto p = declaration_problem(state, unit, type, shots[i], facts)) {
             out.push_back(std::move(*p));
             continue;
         }
@@ -283,22 +396,20 @@ std::vector<std::string> shot_problems(const GameState& state, const Unit& unit,
 
 std::vector<ShotDeclaration> shot_options(const GameState& state, const Unit& unit, ShootingType type) {
     std::vector<ShotDeclaration> out;
-    for (const Model& model : unit.models) {
-        for (std::size_t w = 0; w < model.weapons.size(); ++w) {
-            for (std::size_t p = 0; p < model.weapons[w].profiles.size(); ++p) {
-                for (const Unit& target : state.units) {
-                    if (target.side == unit.side || is_destroyed(target)) {
-                        continue;
-                    }
-                    const ShotDeclaration shot{model.id, w, p, target.id};
-                    if (!declaration_problem(state, unit, type, shot)) {
-                        out.push_back(shot);
-                    }
-                }
-            }
-        }
-    }
+    for_each_shot_option(state, unit, type, [&](const ShotDeclaration& shot) {
+        out.push_back(shot);
+        return true;
+    });
     return out;
+}
+
+bool has_shot_option(const GameState& state, const Unit& unit, ShootingType type) {
+    bool any = false;
+    for_each_shot_option(state, unit, type, [&](const ShotDeclaration&) {
+        any = true;
+        return false;  // the first one is enough
+    });
+    return any;
 }
 
 AttackContext shooting_context(const GameState& state, const Unit& unit) {

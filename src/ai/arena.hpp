@@ -79,6 +79,16 @@ struct ArenaResult {
 [[nodiscard]] ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a,
                                     BotConfig b, std::size_t step_cap = 5000);
 
+// M54: `games` games as run_arena plays them, reported one line per game (its result and counts, and FNV-1a hashes
+// of its accepted actions, its final state as JSON and its bot decisions' trace lines, reasons without times), then
+// the decision times and the run's wall time. Two builds that play the same give the same lines.
+struct PerGameReport {
+    std::string text;
+    bool clean = true;  // every game finished, no rejected action, no UnitMoveReverted
+};
+[[nodiscard]] PerGameReport run_per_game(const core::GameState& scenario, int games, std::uint64_t first_seed,
+                                         BotConfig a, BotConfig b, std::size_t step_cap = 5000);
+
 // The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
 // side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time, (M43) the seeds that
 // lost models to coherency and (M46) the Pile In / Consolidate steps the bots answered and the moves they made.

@@ -575,12 +575,15 @@ private:
     }
 
     // D-054: hand the driver the time and what's in the way; submit the bot's action when it is due. At Instant
-    // speed several actions may go in one frame (decided on this thread, so there is no wait for a worker).
+    // speed several actions may go in one frame. M54: always decided on the worker thread, so a slow decision
+    // never freezes the window; at Instant speed the frame waits for the worker up to kInstantFrameSeconds.
     void bot_tick() {
         if (mode_ != Mode::Play || !session_) return;
         driver_.set_speed(settings_.bot_speed);
         const bool instant = settings_.bot_speed == BotSpeed::Instant;
-        driver_.set_threading(instant ? ai::BotDriver::Threading::Synchronous : ai::BotDriver::Threading::Worker);
+        driver_.set_threading(ai::BotDriver::Threading::Worker);
+        constexpr double kInstantFrameSeconds = 0.015;
+        const double frame_end = GetTime() + kInstantFrameSeconds;
         // M45: Step while a dice pop-up shows reveals or closes that card; M48: only a bot's card (D-059).
         if (watch_.step_closes_popup(shown_card())) dice_.advance();
         for (int i = 0; i < (instant ? 20 : 1) && bot_deciding(); ++i) {
@@ -591,7 +594,8 @@ private:
             in.popup_open = dice_.active() || end_warning_.has_value();
             in.paused = watch_.paused();
             in.step_once = watch_.step_requested();
-            const std::optional<ai::BotChoice> c = driver_.tick(GetTime(), in);
+            std::optional<ai::BotChoice> c = driver_.tick(GetTime(), in);
+            if (!c && instant && driver_.wait_for_decision(frame_end - GetTime())) c = driver_.tick(GetTime(), in);
             if (!c) return;
             watch_.delivered();
             if (!submit_bot(*c)) return;

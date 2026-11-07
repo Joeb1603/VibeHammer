@@ -1495,8 +1495,8 @@ A's first Move Units of round 2); every older replay byte-identical. Release are
 
 ---
 
-## M54: Speed for big games, with no change in play
-**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07)
+## M54: Speed for big games, with no change in play ✅ (done)
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-068
 
 > Pure optimisation of core's read-only queries and of `src/ai`. **Every decision and every roll stays identical.**
 > - Measure first (Release arena `--trace` on the new scenario), then fix the worst paths. Candidates:
@@ -1511,6 +1511,72 @@ A's first Move Units of round 2); every older replay byte-identical. Release are
   compared with a Release build of the pre-change commit). All replays byte-identical. ctest green.
 - New scenario, Release: Normal p95 decision time ≤ 100 ms and max ≤ 1 s; Hard (which plays as Normal there until
   M57) the same. Before and after numbers recorded.
+
+**Results (2026-11-07):** all acceptance items met (D-068).
+- **Identical play:** the arena's new `--per-game 1` report (per game: result, end round, steps, survivors, wounds,
+  coherency removals, fight-move counts, rejections, reverts, fallbacks, and FNV-1a hashes of the accepted actions,
+  the final state and the decision trace with every reason) was compared with a Release build of `7536893` (M53)
+  carrying the same arena patch: 4 scenarios × 6 pairings (easy/easy, normal/normal, hard/hard, hard/normal,
+  normal/hard, normal/easy) × seeds 1–200 = 4800 games, every line identical (the 16 required pairings twice).
+  Every replay regenerates byte-identical (`Replay.DISABLED_RegenerateReplays`, `M45_`/`M46_`/`M47_Replay`);
+  `git diff tests/replays` is empty.
+- **Profile first** (callgrind, `-O2 -g`, same games before and after; instructions): Hard vs Hard on 20 Termagants
+  (3 games) 33.9 G → 11.8 G; on V1 (6 games) 8.4 G → 5.3 G; Normal vs Normal on the strike scenario (4 games)
+  7.4 G → 4.5 G; Easy vs Easy there (10 games) 3.1 G → 0.95 G. Before, 72% of the Hard 20-Termagant games went into
+  the rollouts' Easy pile-ins and consolidations (`auto_fight_move`: `in_region` with `hypotf` 33%,
+  `check_coherency` 26%), and the strike games into `shot_options` (19%, `unit_visible_to_model` 15%) and
+  `GameState` copies (17%, mostly `apply_action`'s rollback copy). After: `auto_fight_move` 43% (of a third of the
+  work), the Hard chain table build 18–24% (unchanged, see below), `GameState` copies 3–6%, `shot_options` 4%.
+- **Release arena, base → new (200 games each, run back to back on the same machine):**
+
+  | Scenario | A vs B | 200 games | decisions | p95 ms | max ms | wall s |
+  |---|---|---|---|---|---|---|
+  | V1 | easy vs easy | identical | 6608 | 0.1 → 0.1 | 11 → 5 | 0.8 → 0.4 |
+  | V1 | normal vs normal | identical | 6396 | 3.4 → 2.8 | 7 → 6 | 2.3 → 1.9 |
+  | V1 | hard vs hard | identical | 6266 | 24.7 → 19.9 | 173 → 85 | 20.4 → 15.7 |
+  | V1 | hard vs normal | identical | 6396 | 5.0 → 4.0 | 86 → 59 | 14.4 → 10.4 |
+  | V1 | normal vs hard | identical | 6266 | 5.2 → 5.1 | 139 → 69 | 8.4 → 6.3 |
+  | V1 | normal vs easy | identical | 5842 | 2.1 → 0.9 | 12 → 6 | 1.7 → 1.2 |
+  | Termagants first | easy vs easy | identical | 9572 | 0.1 → 0.1 | 9 → 4 | 1.1 → 0.5 |
+  | Termagants first | normal vs normal | identical | 9211 | 3.6 → 3.2 | 9 → 11 | 4.0 → 3.4 |
+  | Termagants first | hard vs hard | identical | 9244 | 56.7 → 31.2 | 181 → 115 | 52.7 → 35.2 |
+  | Termagants first | hard vs normal | identical | 9211 | 6.9 → 7.3 | 108 → 59 | 16.8 → 13.2 |
+  | Termagants first | normal vs hard | identical | 9244 | 29.6 → 20.8 | 163 → 79 | 39.2 → 24.0 |
+  | Termagants first | normal vs easy | identical | 9217 | 0.5 → 0.4 | 9 → 4 | 1.9 → 1.2 |
+  | 20 Termagants | easy vs easy | identical | 16551 | 0.3 → 0.3 | 22 → 16 | 3.2 → 1.4 |
+  | 20 Termagants | normal vs normal | identical | 16659 | 2.4 → 1.2 | 31 → 28 | 7.4 → 4.5 |
+  | 20 Termagants | hard vs hard | identical | 16258 | 12.7 → 10.7 | 815 → 325 | 157.7 → 74.6 |
+  | 20 Termagants | hard vs normal | identical | 16694 | 6.7 → 3.1 | 819 → 264 | 93.2 → 43.9 |
+  | 20 Termagants | normal vs hard | identical | 16230 | 8.5 → 4.9 | 749 → 339 | 68.6 → 33.7 |
+  | 20 Termagants | normal vs easy | identical | 14011 | 1.8 → 0.8 | 24 → 12 | 5.2 → 2.8 |
+  | Strike 44x60 | easy vs easy | identical | 52721 | 0.2 → 0.1 | 13 → 3 | 4.5 → 1.8 |
+  | Strike 44x60 | normal vs normal | identical | 34481 | 6.2 → 4.1 | 77 → 28 | 35.6 → 20.8 |
+  | Strike 44x60 | hard vs hard | identical | 34481 | 6.0 → 4.1 | 46 → 28 | 34.4 → 20.8 |
+  | Strike 44x60 | hard vs normal | identical | 34481 | 5.9 → 4.1 | 45 → 28 | 34.2 → 21.1 |
+  | Strike 44x60 | normal vs hard | identical | 34481 | 5.9 → 4.1 | 45 → 29 | 33.8 → 21.1 |
+  | Strike 44x60 | normal vs easy | identical | 35582 | 5.4 → 3.0 | 99 → 68 | 31.9 → 18.7 |
+
+  New scenario: Normal p95 4.1 ms, max 28 ms; Hard (playing as Normal) the same: inside the 100 ms / 1 s targets
+  with room to spare. Hard's slowest 1v1 decision (20 Termagants) 0.82 s → 0.34 s. Wall times include the arena's
+  own live game (its `Match` keeps a reused rollback copy too); single-run maxima vary by ±20% between runs.
+- **What changed** (D-068): inline geometry; allocation-free engagement and distance queries; shooting facts shared
+  within one `shot_problems` / `shot_options` call, range before line of sight for the yes/no, `has_shot_option` for
+  `legal_actions`; an `apply_action` overload with a reused rollback copy (the simulator, `Match`);
+  `Simulator::reset`; in the auto moves `trimmed_region`, `hypot_less`, `RayRefusals`, `CoherencyWithOneMoved`,
+  sines and cosines once, the target gap by base group. Instant bot speed now decides on the worker thread too (at
+  most 15 ms of waiting per frame), so a slow decision never freezes the window; `--bot-steps` stays synchronous.
+- **Tests (new):** core `R03_03_Coherency.OneModelMovedAgreesWithTheFullCheck`, `M54_ShotOptions.*` (2),
+  `M54_ShotProblems.SharedFactsGiveEveryDeclarationItsOwnReason`, `M54_Queries.*`, `M54_ApplyAction.*` (2),
+  `M54_Match.ACopiedMatchPlaysOnTheSameAsTheOriginal`; client `M54_ReachRegion.*` (4: `hypot_less` and
+  `point_segment_closer_than` against `std::hypot` with edge and non-finite values, `trimmed_region` and
+  `RayRefusals` against `in_region` over the reach areas of random play); ai
+  `M54_Simulator.ResetIsTheSameAsANewSimulator`, `M54_Driver.InstantOnTheWorkerHandsOverTheSynchronousBotsActions`,
+  `M54_Arena.ThePerGameReportIsAFunctionOfTheGames`.
+  `M39_NoRulesInTheBot` now looks for the simulator's 5-argument `apply_action` call. ctest (Debug, serial): 742 →
+  757 tests, all pass, 55.4 s → 48.4 s.
+- **Open (for M57):** the Hard chain table build (`ChainTable::build_half_turn`) is now the largest single cost of a
+  1v1 Hard game (18–24%); it was left alone because its values depend on the order of its sums. `has_line_of_sight`
+  itself and Normal's move scoring are unchanged.
 
 ---
 

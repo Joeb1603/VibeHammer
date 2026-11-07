@@ -1,6 +1,7 @@
 #include "core/state/queries.hpp"
 
 #include "core/geometry/closest.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 
 namespace wh40k::core {
@@ -74,15 +75,30 @@ CoherencyResult unit_coherency(const Unit& unit) {
     return check_coherency(models);
 }
 
+namespace {
+
+// 03.04: units_engaged(placed_models(a), placed_models(b)) without building the lists (M54).
+bool engaged_units(const Unit& a, const Unit& b) {
+    for (const Model& ma : a.models) {
+        const PlacedModel pa{ma.id, ma.position, ma.base};
+        for (const Model& mb : b.models) {
+            if (models_engaged(pa, PlacedModel{mb.id, mb.position, mb.base})) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+}  // namespace
+
 std::vector<UnitId> engaged_enemy_units(const GameState& state, const Unit& unit) {
     std::vector<UnitId> out;
-    const auto mine = placed_models(unit);
     for (const Unit& other : state.units) {
         if (other.side == unit.side) {
             continue;
         }
-        const auto theirs = placed_models(other);
-        if (units_engaged(mine, theirs)) {
+        if (engaged_units(unit, other)) {
             out.push_back(other.id);
         }
     }
@@ -90,19 +106,40 @@ std::vector<UnitId> engaged_enemy_units(const GameState& state, const Unit& unit
 }
 
 bool is_engaged(const GameState& state, const Unit& unit) {
-    return !engaged_enemy_units(state, unit).empty();
+    // M54: the first engaged enemy unit is enough (the same tests as engaged_enemy_units).
+    for (const Unit& other : state.units) {
+        if (other.side != unit.side && engaged_units(unit, other)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::optional<float> model_distance_to_unit(const Model& model, const Position& pos, const Unit& target) {
-    const PlacedModel from{model.id, pos, model.base};
-    const auto targets = placed_models(target);
-    return closest_distance(std::span<const PlacedModel>(&from, 1), targets);
+    // closest_distance({model at pos}, placed_models(target)) without building the list (M54): the least
+    // base_distance (the same value whatever the order).
+    std::optional<float> best;
+    for (const Model& t : target.models) {
+        const float d = base_distance(pos, model.base, t.position, t.base);
+        if (!best || d < *best) {
+            best = d;
+        }
+    }
+    return best;
 }
 
 std::optional<float> unit_distance(const Unit& a, const Unit& b) {
-    const auto ma = placed_models(a);
-    const auto mb = placed_models(b);
-    return closest_distance(ma, mb);
+    // closest_distance(placed_models(a), placed_models(b)) without building the lists (M54).
+    std::optional<float> best;
+    for (const Model& ma : a.models) {
+        for (const Model& mb : b.models) {
+            const float d = base_distance(ma.position, ma.base, mb.position, mb.base);
+            if (!best || d < *best) {
+                best = d;
+            }
+        }
+    }
+    return best;
 }
 
 }  // namespace wh40k::core

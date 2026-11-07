@@ -22,6 +22,10 @@ public:
 
     [[nodiscard]] const core::GameState& state() const noexcept { return state_; }
 
+    // M54: the same as a new Simulator(state, dice_seed), reusing this one's copies (copy assignment keeps their
+    // allocations), for callers that simulate many short lines from one state.
+    void reset(const core::GameState& state, std::uint64_t dice_seed);
+
     // validate_action for `side`, then (if valid) the engine step with the bot's dice. The events of an
     // accepted step are appended to `events` when given. Nothing changes when the action is invalid.
     core::ValidationResult step(core::Side side, const core::GameAction& action,
@@ -40,6 +44,7 @@ private:
     core::GameState state_;
     core::DiceState dice_;  // the bot's own dice, not state_.dice
     std::size_t steps_ = 0;
+    core::GameState backup_;  // M54: apply_action's rollback copy, reused from step to step
 };
 
 }  // namespace wh40k::ai

@@ -1881,3 +1881,56 @@ conservative choices made for M53). Amends D-008.
   (x = 37", unit 6) has `depth_in` 3. Every unit passes 03.03 (a Termagant block is 3.5" corner to corner, well
   inside 9"), is wholly within its zone, and no bases overlap. The closest enemy front lines are 20" apart (23"
   for unit 6), so no unit is charge-eligible on turn 1.
+
+## D-068: Speed-ups that keep every decision and roll the same (M54)
+**Decided:** 2026-11-07 (M54 is pre-approved; numbered after D-065–D-067, which PLAN.md reserves for M55–M57).
+Pure optimisation of core's read-only queries, the client logic the bots call and `src/ai`. No rule, state,
+replay or JSON change; the engine API gains one overload. The test of "the same" is the arena's per-game report
+(below): before and after builds give the same lines for every game compared.
+- **What "the same" means here.** Every change keeps each function's answer bit for bit, not just "close": the
+  same floats from the same expressions in the same order, the same reasons in the same order. Where a shortcut
+  decides a comparison without the slow computation, it only decides cases a margin far larger than the rounding
+  makes certain, and computes the original expression otherwise.
+- **Geometry (core).** `centre_distance`, `base_radius`, `base_distance` and `bases_overlap` are inline (the same
+  arithmetic; the non-round base error is thrown from an out-of-line function). `engaged_enemy_units`,
+  `is_engaged` (stops at the first engaged enemy unit), `unit_distance` and `model_distance_to_unit` loop over the
+  models instead of building `PlacedModel` lists (a minimum of the same `base_distance` values).
+  `CoherencyWithOneMoved` answers 03.03 for one model tried at many spots from a table of the other models'
+  distances: each spot's answer is `check_coherency`'s, from the same `within` tests on the same `base_distance`
+  calls (both orders of each pair, as the full check measures them).
+- **Shooting (core, 04.02, 06.01, 10.04–10.06).** One `shot_problems` call, and one `shot_options` walk, share their
+  facts (`TargetFacts`): the enemy units the shooting unit is engaged with, whether a target is engaged, whether a
+  target is visible to a model (06.01's blockers built once per observing and target unit). The checks and the
+  reasons are unchanged and in the same order. `shot_options` (only a yes/no per declaration) checks range before
+  line of sight and the target-free checks once per profile. New `has_shot_option` = `!shot_options().empty()`,
+  stopping at the first; `legal_actions` at a Shoot decision uses it (D-004/D-016 templates unchanged).
+- **Engine step (core, D-026).** New overload `apply_action(state, side, action, dice, backup)`: the same
+  validation and rollback, with the rollback copy made by copy assignment into the caller's `backup`, so its
+  strings and vectors are reused (about 3 µs instead of 15 µs per step on the strike state). The bot's
+  `Simulator` keeps one; `Match::submit` keeps one as scratch (not copied with the match) and passes the
+  `SeededDice(state.dice)` the 3-argument overload uses. `Simulator::reset(state, seed)` = a new simulator,
+  reusing the copies (charge and advance odds, Normal's move candidates).
+- **The auto moves (client logic, D-047, D-050, D-057).** `trimmed_region` drops the circles and shadows no point of
+  the region can be in (further than its smallest `inside_all` circle reaches, with a 1 mm margin); `in_region`
+  gives the same answer everywhere. `hypot_less(dx, dy, r)` is `std::hypot(dx, dy) < r`: false when
+  `|dx|` or `|dy|` ≥ r (a faithful hypot is never below either), decided from the squares in double when they are
+  more than 1e-6 apart relatively (hypot is accurate to well under that), and `std::hypot` itself otherwise (near
+  the edge, r outside 1e-10..1e10, or not finite). `RayRefusals` marks the sample spots on rays from the start
+  that `in_region` certainly refuses (inside a forbidden circle, or outside every circle of an `inside_any` group,
+  by more than 0.05 mm against about 1e-4 mm of rounding in a spot's coordinates); the others still get
+  `in_region`. `auto_fight_move` uses all three and the coherency table, works each angle's sine and cosine out
+  once (the same expressions), finds the gap to the closest target from each base group's least squared distance
+  (`base_distance` only grows with it) and rounds each candidate's gap once for the sort. `fight_move_skip` uses
+  `trimmed_region` and `RayRefusals` too, `auto_charge_move` `trimmed_region`.
+- **Instant bot speed (client, D-054).** Decisions now always run on the worker thread, so a slow one never
+  freezes the window; at Instant speed a frame still takes up to 20 actions, waiting for the worker at most
+  15 ms a frame (`BotDriver::wait_for_decision`). `--bot-steps` still decides on the calling thread.
+- **Arena `--per-game 1`.** One line per game: result, end round, steps, survivors, wounds, coherency removals,
+  fight-move counts, rejections, reverts, fallbacks, and FNV-1a hashes of the accepted actions (JSON), the final
+  state (JSON) and the bot decisions' trace lines (reasons, which carry Hard's printed values; no times); then the
+  decision times and the run's wall time. The same patch was applied to a Release build of `7536893` (M53) for the
+  "before" lines.
+- **Guard test.** `M39_NoRulesInTheBot` checks that `simulator.cpp` calls `apply_action(state_, side, action, dice,
+  backup_)` (the bot's own dice, and now its reused backup) instead of the 4-argument form.
+- **Not changed (open for M57):** the Hard chain table build (`ChainTable::build_half_turn`, about a quarter of a V1
+  Hard game; its sums' order fixes its values), `has_line_of_sight` itself, Normal's move scoring.

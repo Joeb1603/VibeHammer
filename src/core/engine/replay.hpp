@@ -88,10 +88,23 @@ public:
     [[nodiscard]] Replay to_replay(std::string description) const;
 
 private:
+    // M54: apply_action's rollback copy, reused from one submit to the next (copy assignment keeps its
+    // allocations). Scratch only, not part of the match: a copied Match starts with an empty one.
+    struct Scratch {
+        GameState state;
+        Scratch() = default;
+        Scratch(const Scratch&) {}
+        Scratch& operator=(const Scratch&) { return *this; }
+        Scratch(Scratch&&) = default;
+        Scratch& operator=(Scratch&&) = default;
+        ~Scratch() = default;
+    };
+
     GameState initial_;
     GameState state_;
     std::vector<ReplayStep> steps_;
     std::vector<GameEvent> events_;
+    Scratch scratch_;
 };
 
 }  // namespace wh40k::core

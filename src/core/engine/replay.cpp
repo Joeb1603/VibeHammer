@@ -141,7 +141,8 @@ ValidationResult Match::submit(Side side, const GameAction& action) {
     if (!v.ok()) {
         return v;
     }
-    auto events = apply_action(state_, side, action);
+    SeededDice dice(state_.dice);  // as apply_action's 3-argument overload, with the reused scratch copy (M54)
+    auto events = apply_action(state_, side, action, dice, scratch_.state);
     events_.insert(events_.end(), events.begin(), events.end());
     steps_.push_back(ReplayStep{side, action});
     return v;
