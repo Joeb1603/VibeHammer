@@ -11,6 +11,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
+#include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/queries.hpp"
@@ -66,6 +67,19 @@ TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
         Match match(initial);
         TestRng rng(seed);
         random_play(match, rng, 200);
+        expect_replays_identically(match);
+    }
+}
+
+TEST(Replay, RandomGamesFromTheStrikeScenarioReplayIdentically) {
+    // M53: seven units on the 60"x44" field (D-064), played to the end. A few seeds keep the Debug run short.
+    for (std::uint64_t seed = 1; seed <= 5; ++seed) {
+        GameState initial = load_scenario(repo_root() / "data/scenarios/strike_44x60.json", repo_root());
+        initial.dice.seed = seed;
+        Match match(initial);
+        TestRng rng(seed);
+        random_play(match, rng, 1000);
+        EXPECT_EQ(match.state().flow.stage, Stage::GameOver) << "seed " << seed;
         expect_replays_identically(match);
     }
 }
@@ -441,4 +455,81 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_EQ(*g14.pending, (PendingDecision{Side::B, decision::Shoot{}}));
     close.expect = replay_expectation(g14);
     save_if_clean(close, kReplayDir / "m14_close_formation.json");
+
+    // M53: battle round 1 on the 60"x44" field with seven units (D-064). Stops at Side A's first Move
+    // Units decision of battle round 2; later milestones (M54-M58) change bots, client and speed only.
+    Replay strike;
+    strike.description =
+        "M53: battle round 1 of the Strike scenario (D-064), 3 Intercessor Squads (units 1-3) vs 4 Termagant "
+        "units (4-7). Side A: squad 1 Normal-moves 3\" north, squad 2 remains stationary, squad 3 advances 4\" "
+        "north (seeded roll). Squads 1 and 2 fire every Bolt Rifle that can on Focused Fire at Termagants 4 and "
+        "5 (squad 3 advanced and doesn't shoot); casualties are removed in unit order (D-013). No charges. "
+        "Side B: Termagants 4 Normal-move 4\" south, 5 advance 3\" south, 6 (held back 3\") and 7 remain "
+        "stationary; 4 and 7 fire every Fleshborer that can at the closest squads. No charges. Every other "
+        "decision takes the first legal action. Stops at Side A's first Move Units decision of battle round 2.";
+    strike.initial.scenario = "data/scenarios/strike_44x60.json";
+    strike.initial.seed = 53;
+    GameState g53 = replay_initial_state(strike, repo_root());
+    start_game(g53);
+    auto s_act = [&](const GameAction& a) {
+        const Side side = decider(g53);
+        const auto v = validate_action(g53, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        strike.steps.push_back(ReplayStep{side, a});
+        apply_action(g53, side, a);
+    };
+    auto s_first_legal = [&]() -> GameAction {
+        GameAction a = legal_actions(g53, decider(g53)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g53.find_unit(oc->target));
+        }
+        return a;
+    };
+    auto s_unit = [&](std::uint32_t id) -> const Unit& { return *g53.find_unit(UnitId{id}); };
+    // Every model of the unit moves straight by (dx, dy) inches, in listed order (the front rank first).
+    auto s_move = [&](std::uint32_t id, MoveType type, float dy_in) {
+        s_act(action::StartMove{UnitId{id}, type, std::nullopt});
+        if (type == MoveType::RemainStationary) return;
+        for (const Model& m : s_unit(id).models) {
+            const Position p = *move_start_position(g53, m.id);
+            s_act(action::ProposeModelMove{m.id, {Position{p.x, p.y + wh40k::test::in(dy_in), 0}}});
+        }
+        s_act(action::CommitUnitMove{});
+    };
+    // Every model that can fires its first weapon's first profile at `target` (04.02 range, 06.01 visibility).
+    auto s_volley = [&](std::uint32_t id, std::uint32_t target) {
+        const Unit& u = s_unit(id);
+        action::Shoot a{u.id, ShootingType::Normal, {}};
+        for (const ShotDeclaration& d : shot_options(g53, u, ShootingType::Normal)) {
+            if (d.weapon_index == 0 && d.profile_index == 0 && d.target == UnitId{target}) a.shots.push_back(d);
+        }
+        ASSERT_FALSE(a.shots.empty()) << "unit " << id << " has no shot at unit " << target;
+        s_act(a);
+        while (g53.flow.attack) s_act(s_first_legal());
+    };
+    s_move(1, MoveType::Normal, 3);
+    s_move(2, MoveType::RemainStationary, 0);
+    s_move(3, MoveType::Advance, 4);
+    s_volley(1, 4);
+    s_volley(2, 5);
+    s_act(action::EndShootStep{});
+    s_act(action::EndChargeStep{});
+    while (!(g53.pending && *g53.pending == PendingDecision{Side::B, decision::MoveUnits{}})) {
+        s_act(s_first_legal());  // Side A's empty Fight phase, Side B's Command phase
+    }
+    s_move(4, MoveType::Normal, -4);
+    s_move(5, MoveType::Advance, -3);
+    s_move(6, MoveType::RemainStationary, 0);
+    s_move(7, MoveType::RemainStationary, 0);
+    ASSERT_FALSE(s_unit(4).models.empty());
+    s_volley(4, 1);
+    s_volley(7, 3);
+    s_act(action::EndShootStep{});
+    s_act(action::EndChargeStep{});
+    while (!(g53.pending && *g53.pending == PendingDecision{Side::A, decision::MoveUnits{}})) {
+        s_act(s_first_legal());  // Side B's empty Fight phase, battle round 2's Command phase
+    }
+    ASSERT_EQ(g53.flow.battle_round, 2);
+    strike.expect = replay_expectation(g53);
+    save_if_clean(strike, kReplayDir / "m53_strike_round1.json");
 }

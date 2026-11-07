@@ -1,0 +1,73 @@
+{
+  "name": "Strike - 3 Intercessor Squads vs 4 Termagant units (44x60)",
+  "battlefield": { "width_in": 60, "depth_in": 44 },
+  "battle_rounds": 5,
+  "first_turn": "A",
+  "sides": {
+    "A": {
+      "name": "Space Marines",
+      "deployment_zone": { "edge": "south", "depth_in": 12 },
+      "units": [
+        {
+          "unit_file": "data/units/intercessor_squad.json",
+          "models": [
+            { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
+            { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
+          ],
+          "formation": { "ranks": 1, "gap_in": 0, "centre_x_in": 15, "anchor": "zone_front" }
+        },
+        {
+          "unit_file": "data/units/intercessor_squad.json",
+          "models": [
+            { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
+            { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
+          ],
+          "formation": { "ranks": 1, "gap_in": 0, "centre_x_in": 30, "anchor": "zone_front" }
+        },
+        {
+          "unit_file": "data/units/intercessor_squad.json",
+          "models": [
+            { "type": "Intercessor Sergeant", "count": 1, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] },
+            { "type": "Intercessor", "count": 4, "weapons": ["Bolt Rifle", "Bolt pistol", "Knives and Fists"] }
+          ],
+          "formation": { "ranks": 1, "gap_in": 0, "centre_x_in": 45, "anchor": "zone_front" }
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": { "edge": "north", "depth_in": 12 },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ],
+          "formation": { "ranks": 2, "gap_in": 0, "centre_x_in": 10, "anchor": "zone_front" }
+        },
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ],
+          "formation": { "ranks": 2, "gap_in": 0, "centre_x_in": 23, "anchor": "zone_front" }
+        },
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ],
+          "formation": { "ranks": 2, "gap_in": 0, "centre_x_in": 37, "depth_in": 3, "anchor": "zone_front" }
+        },
+        {
+          "unit_file": "data/units/termagants.json",
+          "models": [
+            { "type": "Termagants", "count": 10, "weapons": ["Fleshborer", "Chitinous claws and teeth"] }
+          ],
+          "formation": { "ranks": 2, "gap_in": 0, "centre_x_in": 50, "anchor": "zone_front" }
+        }
+      ]
+    }
+  },
+  "notes": "M53 scenario (D-064): a 60\" wide by 44\" deep battlefield (not in the core rules; the usual Strike Force table, agreed with the user 2026-11-07) with 12\"-deep zones along the long south and north edges, so 20\" between the front lines. Units are numbered 1-3 (Intercessor Squads, west to east) and 4-7 (Termagants, west to east). Formation (D-008, D-064): each Intercessor Squad is one rank of 5 in base contact on the zone front (6.3\" wide), centred at x = 15\", 30\" and 45\"; each Termagant unit is two ranks of 5 in base contact (5.61\" wide, 2.24\" deep), centred at x = 10\", 23\", 37\" and 50\". The third Termagant unit (x = 37\") is held back with depth_in 3, so its front rank stands 3\" behind the zone front (23\" from the Intercessors). Unit-specific abilities (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse, Combat Doctrines) are present in the unit data but out of scope for V1; the engine ignores them until a milestone implements them."
+}
