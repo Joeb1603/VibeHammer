@@ -1118,6 +1118,10 @@ change.
   for several units per side: Easy aims at the closest enemy unit and walks its full Move while it is far away;
   Normal moves its units closest first, weighs every enemy unit in its moves, shares the charger's strength between
   charge targets and measures casualty worth against the attacker. One unit per side plays exactly as before.
+  **Changed by D-067 (M57)** for several units per side: Hard values the army (per-unit-pair duel chains combined
+  into P(win) − P(loss) over every unit, D-007), checks its move plans with rollouts in which every unit acts, and
+  uses that value for its moves, charges, casualties, coherency removals and consolidations. One unit per side plays
+  exactly as before.
 - **M39 notes:**
   - **Files:** `src/ai/` holds `bot` (the `Bot` class, `BotConfig`, `BotChoice`, the level dispatch), `state_hash`,
     `simulator`, `baseline_bot` (level Easy), `fallback` (the fallback and `LoopGuard`), `bot_driver` (pacing) and
@@ -2036,6 +2040,144 @@ for it). Bot only (`src/ai`); no rule, core, state, replay or JSON change. Amend
 - **Approximations kept (for M57/M58):** a unit's own reply model is still the closest enemy unit's line; the other
   units' replies ignore our reply to them and our next turn against them; only the moving unit is scored (friendly
   units are obstacles); a prospect from earlier in the turn assumes the units not yet moved remain stationary.
+
+## D-067: Hard across several units: the army value, the lookahead and the decisions (M57)
+**Decided:** 2026-11-07 (M57 is pre-approved with M53–M58; PLAN.md's outline was agreed with the user, the details
+below are the conservative choices made for it). Bot only (`src/ai/hard`, and one helper in `src/ai/normal/movement.*`
+that only Hard calls); no rule, core, state, replay or JSON change. Amends D-054 (level Hard).
+- **When each path applies.** Hard's own answers apply while both sides have a unit with models and the game isn't
+  over. With one unit with models per side (every V1 scenario, and a bigger game reduced to one unit each) Hard is
+  M44's duel, unchanged: the same code, the same expressions in the same order (the duel's evaluation, rollouts and
+  decisions take the army path only behind `Evaluator::army()`), so V1 and the two bot scenarios play exactly as at
+  3afc2f0 (proved below by per-game hashes) and `m45_bot_game.json` regenerates byte-identical. With several units on
+  either side, the army path below (before M57 Hard played as Normal there).
+- **The army value** (`Evaluator` in army mode, `evaluator.*`):
+  - **Per-unit-pair exchange values:** M44's duel chain, one table per pair of unit types (a type is the
+    representative model, the keywords and the starting strength: on the Strike scenario one table, Intercessor
+    Squad against Termagants), built for the whole unit (every wound, from the half-turn of the first decision on) and
+    cached as M44's tables are, so one build serves the game.
+  - **Each unit's main enemy** (`Evaluator::main_enemy`, the real target choice): an enemy unit it is engaged with
+    (the closest of them), else the closest enemy unit (01.04, D-010; a tie goes to the first in unit order).
+  - **A pair's duel:** the chain of the pair (an attacker, a defender) at the pair's real position: both units' wounds
+    left, the half-turn, the gap in 2" bands and the rooms to back away, with the half-turn in progress read as M44
+    reads it (the engine's best_shooting for the pair's unit that still shoots, the charge, the fight). Two things
+    differ from the duel's reading: the stage tests look at the pair's own units (a move or an attack in progress may
+    be another unit's), and "engaged" means engaged with each other.
+  - **Attention:** a unit can't fight everyone at once. Each unit deals with the enemy units closest to it first (its
+    queue, by distance; engaged ones are the closest), so its duel with a further one starts only when it is free of
+    the ones before. When that is comes from a timeline of each side's turns: every attacker works on its closest
+    target still standing, once that target is in reach (its M plus its longest usable range, or a charge, in each of
+    its turns; a turn spent closing takes nothing), at its pace (`volley_wounds`: one volley per turn, the better of
+    its shooting at close range after a move and its fight, the volley's expected wounds against a whole unit),
+    within a turn in unit order; what a volley has left when its target falls goes on to the next one, which it
+    starts that turn if at least half the volley is left (else the next turn). So attackers share the work: a unit
+    that three squads stand in front of is reached once they have wiped out together what is in front of it. A
+    delayed duel starts from the chain at that half-turn, with the attacker having closed on its first target in the
+    meantime (its M in each of its turns, never past it; the gap to this defender follows from where that leaves it),
+    and models the approach to this defender itself.
+  - **How it was found** (Release arena, Strike, seeds 1–200 per seat against Normal; the full tables are in PLAN.md
+    M57). No attention (each unit's fate its duel with its main enemy alone): every Termagant unit looked surely
+    wiped out (a squad alone kills 10 in time), so there was no point in keeping one back. Each attacker's queue
+    on its own, the delay the sum of the time it would need alone for every unit ahead: too hopeful for a unit at
+    the back (a 94% draw for the Tyranids in battle round 1 of some games, which they lose). The shared timeline
+    without reach, then with it (the final one): the arena results of these last three are level within the noise
+    (see below), and the last is the one whose reasoning holds.
+  - **A unit's fate:** it is wiped out unless it survives every enemy unit's duel with it: P(wiped) = 1 − the
+    product over the enemy units of (1 − P(that duel wipes it out)).
+  - **Army-level P(win) − P(loss), still D-007:** a side loses only when every one of its units is wiped out. With the
+    units' fates taken as independent, P(A wins) = the product over side B's units of P(wiped), P(B wins) the same over
+    side A's units, and the draw is the rest (if the two add up to more than 1 they are scaled down to 1). V =
+    P(win) − P(loss).
+  - **Tempo and material (ChainWeights unchanged):** a side's win or loss comes when its last unit falls, so the score
+    adds the tempo and material terms of each side's longest-lasting unit (the one whose duel with its main enemy is
+    best for its own side), the mean of the two sides'. The first try took the mean over all units: a unit kept back
+    a round longer then moved the score by about 0.006, below Hard's margin (0.01), so no plan ever changed for it.
+  - **The end is exact:** the game over, a side without models (it lost, now) or the last half-turn played (a draw),
+    scored as a duel's with material over the whole army's wounds.
+  - **It reduces to the duel:** with one unit per side every unit's queue holds one enemy unit (no delay) and both
+    units' longest-lasting duels are the duel, so the combination is the duel's own value, term by term
+    (`M57_Evaluator.TheArmyValueOfOneUnitEachIsTheDuel`, through `force_army`), though that case keeps the duel path.
+  - **The line (`kMaxLine`):** 24 → 38 buckets (76"). The army's tables use one fixed line, the battlefield's
+    diagonal in 2" bands rounded up (the 60"x44" board: 74.4" → 38 buckets), so one table serves every pair. A pair's
+    position on it: its real gap and the smaller of its two rooms exactly, the rest of the line to the larger room
+    (the side with room to spare; M44's line was the gap plus both rooms, so it never had a rest). The duel keeps its
+    own line, the gap plus both rooms; on the 24"x24" boards that is never more than their 34" diagonal (17
+    buckets), so the new limit changes nothing there.
+  - **Approximations kept:** the fates are independent; the timeline's paces ignore the attackers' own losses and
+    the defenders' kiting before their duel starts (a delayed duel's defender stands where it is, and kites from then
+    on, as the chain lets it); a unit's queue follows distance, not value; in the half-turn in progress a pair's unit
+    shoots the pair's other unit (its real target may differ).
+- **The lookahead** (`lookahead.*`):
+  - **Plans:** the unit's top move plans are Normal's plan, the best `static_plans` M43 candidates that stand (as
+    M44), and the move that ends furthest from every enemy model (`normal::furthest_standing_move`: with several
+    enemy units M43's cheap score rarely ranks the keep-away move among its best few, and a probe that only kept away
+    lasted longer against Normal's Marines than Normal's Termagants did); each valued with the army value, Normal's
+    plan and the `plans` best others checked by the Monte Carlo, the blend and the margin as M44.
+  - **Rollouts:** each plays the rest of the Movement phase (every other unit of ours), the rest of our turn and the
+    enemy's whole turn with every enemy unit, on the bot's own dice (`rollout_seed`, as M44), to the start of our next
+    turn, valued with the army value. The budget is M44's, counted in simulated actions (`rollout_actions` 400 per
+    rollout, `budget_actions` 6000 per Monte Carlo), never time.
+  - **The real target choice in the rollouts** (it replaces M44's first-enemy `enemy_of`): a unit's move is made
+    relative to its rollout target, an enemy unit it is engaged with, else of the enemy units within its shooting
+    reach next turn (its M plus its longest usable range) the one with the most models (a tie to the closest), else
+    the closest; the chain's choice for that pair (`Evaluator::turn_choice(state, unit, target)`) says how far
+    towards or away. The units move closest to an enemy first (Normal's order, D-066). Shooting is Normal's (M41:
+    the most valuable unit and declaration, overkill avoided across targets). The first try, each unit at its closest
+    target with best_shooting, fired full volleys at nearly-wiped units and walked every squad at a 1-model unit:
+    the rollouts' Marines killed 3 Termagants in a turn where Normal's killed 9, so the lookahead was far too hopeful
+    for the Tyranids. Charges: the closest eligible target (D-010), declared when that pair's chain wants it; the
+    charge move is M44's (Normal's planned D-056 Auto move), with the closest target alone when that set is offered.
+    Everything else is the baseline's, as M44.
+  - A duel's rollouts are M44's, unchanged.
+- **The decisions** (`hard_bot.cpp`): as M44, Normal's answer is the default, kept unless the army value (with the
+  lookahead, for moves) is more than `BotWeights::margin` higher.
+  - MoveUnits: the unit Normal would move (D-066's `unit_to_move`), so Normal's answer is for the same unit; its
+    Remain Stationary, Normal move, Advance (before its roll) and Fall Back as M44.
+  - Charge: every unit offered a DeclareCharge, at its closest eligible target (within 12", D-010): P from the 2D6
+    covering the gap (11.02), worth P x the army value with the two units engaged and the charger striking first
+    (11.04) + (1 − P) x the army value with it holding; ending the step, the army value after EndChargeStep.
+  - SelectChargeTargets, OrderCasualties, RestoreCoherency and Consolidate: as M44 with the army value; the "front
+    models first" and "rear models first" casualty orders are measured against the attacker (D-066's
+    attacking_enemy) rather than the closest enemy unit.
+- **No generation switch.** On several units Hard at 3afc2f0 was Normal (apart from an endgame reduced to one unit
+  each), so the comparison is with `normal` itself; no `hard-m56` level was added.
+- **Weights: `BotWeights{}` unchanged** (so the duel's are too). Release arena, Strike, seeds 1–200 per seat against
+  Normal, with the army value as it stood then (v5 below), `--weights` one at a time: rollouts 10, share 0.7, margin
+  0.005 and 0.02, static_plans 6, plans 5 all came out level with the defaults within the noise (draws as the
+  Tyranids 0–4 of 200 against 2; mean end round as the Tyranids 3.63–3.73 against 3.695, as the Space Marines
+  3.54–3.61 against 3.555), so none was taken. M58 tunes for several units.
+- **Speed (D-054: budgets in counts, never time).** M44's budgets unchanged: 6 rollouts per plan, at most 400
+  simulated actions per rollout and 6000 per Monte Carlo. A Strike rollout is 100–200 actions; the army's table (38
+  buckets, Intercessor Squad against Termagants) costs about 80 ms in Release once per game and bot. Measured on the
+  final build (Release, Strike, seeds 1–200, every bot decision): Hard against Normal p50 0.005 ms, p95 77 ms, max
+  1.16 s; Normal against Hard p95 65 ms, max 0.48 s; Hard against Hard p95 116 ms, max 1.14 s (M57's targets: p95
+  500 ms, max 3 s); over 1000 seeds of Normal against Hard the slowest was 1.15 s. The slowest decisions are a
+  Tyranid unit's MoveUnits (10 models: more candidates, six advance results). `ChainTable::build_half_turn` was not
+  needed and is unchanged (D-068: its sums' order fixes the duel's values). One speed-up was tried and dropped: the
+  rollouts shooting one unit at a time (the first offered unit with a declaration worth anything) instead of Normal's
+  most valuable first cut a decision by a fifth but made the lookahead's shooting unlike the real one (Hard's Marines
+  finished later: mean end round 3.645 against 3.555). Debug ctest is kept quick by the tests' choice of games.
+- **Measured** (Release arena, Strike 44x60; PLAN.md M57 has the tables). Seeds 1–200: Hard as the Space Marines wins
+  all 200 against Normal, and sooner (mean end round 3.575, against 3.625 for Normal against Normal; wounds lost
+  2.29 against 2.21); as the Tyranids it draws 3 (Normal against Normal: 0), mean end round 3.67 against 3.625.
+  Seeds 1–1000, the Tyranid seat: Hard draws 11 against Normal's 2, mean result −0.989 against −0.998, mean end
+  round 3.692 against 3.610 (standard error 0.019 each), 78 games reach battle round 5 against 54, 0.023 Termagants
+  left on average against 0.003, Marine wounds lost 2.14 against 2.18 (level). How the army value grew (seeds 1–200
+  per seat, Hard as the Tyranids / as the Space Marines, draws and mean end round): no attention, first rollouts (50
+  seeds): 0 draws, 3.54 / 3.68; the rollouts' shooting and targets as Normal's: 1 of 50, 3.58 / 3.64; the keep-away
+  candidate: 2 of 50, 3.62 / 3.64; attention per attacker, with its move: 3, 3.625 / 3.63; the last unit's tempo: 2,
+  3.695 / 3.555; the shared timeline: 3, 3.675 / 3.560; with reach (final): 3, 3.67 / 3.575.
+- **Proof that one unit per side plays the same:** the arena's `--per-game 1` lines (D-068) of a Release build of
+  3afc2f0 and of the final build are identical on V1, Termagants first and 20 Termagants for hard/hard, hard/normal,
+  normal/hard, hard/easy, easy/hard, normal/normal and easy/easy, seeds 1–200 (21 runs, 4200 games: result, counts and
+  the hashes of the actions, the final state and the decision trace with every reason), every game finished and
+  clean. On the Strike scenario normal/normal and easy/easy are identical too (Normal and Easy are untouched). The
+  four replay regenerations leave `tests/replays` unchanged.
+- **Open (M58):** the Tyranid seat's target (Hard winning 60% against Normal) is not reached: no Tyranid side wins a
+  game on the Strike scenario at any level (their losses are almost all to shooting: about 14.5 Termagants in battle
+  round 1, before they can act, then 13 and 10; they can deal about 2 wounds a game), so the measure there is the
+  draw (D-007). Hard's Tyranids lose a model to coherency in 1 of 200 games (Hard against Hard: 3), Normal's in none:
+  a casualty order the army value chose over Normal's in a unit about to be wiped out anyway.
 
 ## D-068: Speed-ups that keep every decision and roll the same (M54)
 **Decided:** 2026-11-07 (M54 is pre-approved; numbered after D-065–D-067, which PLAN.md reserves for M55–M57).

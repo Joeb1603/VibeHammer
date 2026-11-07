@@ -718,6 +718,41 @@ std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameSt
     return out;
 }
 
+std::optional<PlannedMove> furthest_standing_move(const GameState& origin) {
+    if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
+    const core::Unit* u = origin.find_unit(origin.flow.move->unit);
+    if (u == nullptr || u->models.empty()) return std::nullopt;
+    const std::vector<core::PlacedModel> enemies = core::enemy_models(origin, u->side);
+    if (enemies.empty()) return std::nullopt;
+    const std::vector<MoveCandidate> cands = move_candidates(origin);
+    // Each candidate's closest approach to an enemy model, edge to edge; the furthest first (stable: ties keep the
+    // candidates' order).
+    std::vector<std::pair<float, std::size_t>> order;
+    order.reserve(cands.size());
+    for (std::size_t i = 0; i < cands.size(); ++i) {
+        float closest = std::numeric_limits<float>::max();
+        for (std::size_t k = 0; k < cands[i].ends.size() && k < u->models.size(); ++k) {
+            for (const core::PlacedModel& e : enemies) {
+                const float d = core::base_distance(cands[i].ends[k], u->models[k].base, e.position, e.base);
+                closest = std::min(closest, d);
+            }
+        }
+        order.emplace_back(closest, i);
+    }
+    std::stable_sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    const std::uint64_t seed = decision_seed(origin);
+    std::size_t tried = 0;
+    for (const auto& [gap, i] : order) {
+        if (tried >= kMaxSimulatedMoves) break;
+        if (!fits(origin, cands[i])) continue;
+        ++tried;
+        std::optional<Simulated> sim = simulate(origin, u->side, cands[i], seed);
+        if (!sim) continue;
+        return PlannedMove{cands[i], MoveScore{}, std::move(sim->steps), std::move(sim->after)};
+    }
+    return std::nullopt;
+}
+
 std::optional<core::UnitId> unit_to_move(const GameState& gs, const std::vector<GameAction>& legal, Generation gen) {
     std::vector<core::UnitId> offered_units;
     for (const GameAction& a : legal) {

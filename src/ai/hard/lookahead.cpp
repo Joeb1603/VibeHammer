@@ -8,15 +8,20 @@
 #include <variant>
 
 #include "analysis/charge_odds.hpp"
+#include "analysis/threat.hpp"
 #include "baseline_bot.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/rules/charge.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
 #include "fallback.hpp"
 #include "normal/charge.hpp"
+#include "normal/movement.hpp"
+#include "normal/shooting.hpp"
+#include "normal/value.hpp"
 #include "reach_area.hpp"
 #include "simulator.hpp"
 #include "state_hash.hpp"
@@ -46,11 +51,40 @@ Position centroid(const std::vector<Position>& ps) {
     return Position{c.x / n, c.y / n, 0.0f};
 }
 
-const core::Unit* enemy_of(const GameState& s, const core::Unit& u) {
+// M44: the first enemy unit with models: in a duel, the only one.
+const core::Unit* first_enemy(const GameState& s, const core::Unit& u) {
     for (const core::Unit& o : s.units) {
         if (o.side != u.side && !o.models.empty()) return &o;
     }
     return nullptr;
+}
+
+// D-067 (M57), the real target choice for a rollout's move: an enemy unit it is engaged with (its main enemy in
+// the army's evaluation); else, of the enemy units within its shooting reach next turn (its M and its longest
+// usable range, analysis::ThreatRanges), the one with the most models (a tie to the closest; D-010); else the
+// closest. A unit backing away goes from it, one closing goes at it.
+const core::Unit* rollout_target(const GameState& s, const core::Unit& u) {
+    if (core::is_engaged(s, u)) return Evaluator::main_enemy(s, u);
+    const float reach = analysis::threat_ranges(u).shooting_reach_mm();
+    const core::Unit* best = nullptr;
+    float best_gap = 0.0f;
+    for (const core::Unit& e : s.units) {
+        if (e.side == u.side || e.models.empty()) continue;
+        const float gap = core::unit_distance(u, e).value_or(0.0f);
+        if (!core::within(gap, reach)) continue;
+        if (best == nullptr || e.models.size() > best->models.size() ||
+            (e.models.size() == best->models.size() && gap < best_gap)) {
+            best = &e;
+            best_gap = gap;
+        }
+    }
+    return best != nullptr ? best : normal::closest_enemy(s, u);
+}
+
+// The enemy unit a rollout's move is made relative to: M44's first enemy unit (a duel's only one), or (D-067) the
+// rollout target.
+const core::Unit* target_of(const Evaluator& eval, const GameState& s, const core::Unit& u) {
+    return eval.army() ? rollout_target(s, u) : first_enemy(s, u);
 }
 
 // The move in progress with no model moved yet: every model's start, the enemy's models, the battlefield.
@@ -68,11 +102,11 @@ struct MoveSetup {
     float depth = 0.0f;
 };
 
-std::optional<MoveSetup> setup_of(const GameState& s) {
+std::optional<MoveSetup> setup_of(const Evaluator& eval, const GameState& s) {
     if (!s.flow.move) return std::nullopt;
     const core::Unit* u = s.find_unit(s.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
-    const core::Unit* e = enemy_of(s, *u);
+    const core::Unit* e = target_of(eval, s, *u);
     if (e == nullptr) return std::nullopt;
     MoveSetup m;
     m.unit = u->id;
@@ -182,19 +216,27 @@ std::optional<std::vector<GameAction>> plan_translation(const MoveSetup& m, floa
     return translation_steps(m, 1.0f, 0.0f, 0.0f);
 }
 
+// The first StartMove of `type` offered (D-067: for `unit`, when given).
 std::optional<GameAction> offered_start(const std::vector<GameAction>& legal, core::MoveType type,
-                                        std::optional<core::FallBackMode> mode = std::nullopt) {
+                                        std::optional<core::FallBackMode> mode = std::nullopt,
+                                        std::optional<core::UnitId> unit = std::nullopt) {
     for (const GameAction& a : legal) {
         const auto* m = std::get_if<core::action::StartMove>(&a);
-        if (m != nullptr && m->move_type == type && (!mode || m->fall_back_mode == mode)) return a;
+        if (m == nullptr || m->move_type != type) continue;
+        if ((!mode || m->fall_back_mode == mode) && (!unit || m->unit == *unit)) return a;
     }
     return std::nullopt;
 }
 
-// The rollout policy (see the header). `queue` gets the rest of a multi-step answer.
+// The rollout policy (see the header). `queue` gets the rest of a multi-step answer. D-067 (M57): with an army's
+// evaluator the units move closest to an enemy first (Normal's order, D-066), each relative to its rollout target
+// (the real target choice) by the chain's choice for that pair; they shoot as Normal does (M41); a unit declares a
+// charge at its closest eligible target when that pair's chain wants it and charges it alone when it may. A duel's
+// rollout is M44's, unchanged.
 class RolloutPolicy {
 public:
-    RolloutPolicy(const Evaluator& eval, std::uint64_t seed) : eval_(eval), seed_(seed) {}
+    RolloutPolicy(const Evaluator& eval, analysis::OddsCache& odds, std::uint64_t seed)
+        : eval_(eval), odds_(odds), seed_(seed) {}
 
     GameAction next(const GameState& s, core::Side side, std::deque<GameAction>& queue) {
         const std::vector<GameAction> legal = core::legal_actions(s, side);
@@ -207,16 +249,29 @@ public:
         } else if (std::holds_alternative<core::decision::Charge>(kind)) {
             if (auto a = charge(s, side, legal)) return *a;
         } else if (const auto* d = std::get_if<core::decision::SelectChargeTargets>(&kind)) {
+            // D-067: the closest eligible target alone when that set is offered (else the first set, as M44).
+            const core::Unit* u = s.find_unit(d->unit);
+            const core::Unit* closest = eval_.army() && u != nullptr ? closest_charge_target(s, *u) : nullptr;
+            const core::action::StartChargeMove* chosen = nullptr;
             for (const GameAction& a : legal) {
                 const auto* m = std::get_if<core::action::StartChargeMove>(&a);
                 if (m == nullptr || m->unit != d->unit) continue;
-                if (auto plan = normal::plan_charge_move(s, side, d->unit, m->targets, seed_, {})) {
+                if (chosen == nullptr) chosen = m;
+                if (closest != nullptr && m->targets.size() == 1 && m->targets.front() == closest->id) {
+                    chosen = m;
+                    break;
+                }
+                if (!eval_.army()) break;
+            }
+            if (chosen != nullptr) {
+                if (auto plan = normal::plan_charge_move(s, side, d->unit, chosen->targets, seed_, {})) {
                     for (std::size_t i = 1; i < plan->steps.size(); ++i) queue.push_back(plan->steps[i].action);
                     return plan->steps.front().action;
                 }
-                break;
             }
             return core::action::SkipChargeMove{d->unit};
+        } else if (eval_.army() && std::holds_alternative<core::decision::Shoot>(kind)) {
+            if (auto a = shoot(s, legal)) return *a;
         }
         const PolicyResult r = easy_policy(s, side, legal, seed_);
         for (const PlannedStep& step : r.rest) queue.push_back(step.action);
@@ -227,29 +282,58 @@ public:
     void stuck(core::UnitId unit) { stuck_.push_back(unit); }
 
 private:
+    // The chain's choice for the unit's move: a duel's (M44), or (D-067) the unit's duel with its rollout target.
+    Evaluator::TurnChoice choice_for(const GameState& s, core::UnitId unit) const {
+        if (!eval_.army()) return eval_.turn_choice(s);
+        const core::Unit* u = s.find_unit(unit);
+        const core::Unit* t = u != nullptr ? rollout_target(s, *u) : nullptr;
+        if (t == nullptr) return {};
+        return eval_.turn_choice(s, unit, t->id);
+    }
+
+    // D-067: Normal's shooting (M41: the unit and declaration worth the most, overkill avoided across targets), so the
+    // rollouts' volleys go where Normal's (and Hard's own) would; the step ends when nothing is worth anything. A
+    // cheaper try, the first unit offered with a declaration worth anything firing first, made the lookahead's
+    // shooting less like the real one: Hard's Marines finished later (Release arena, 200 seeds: mean end round 3.645
+    // against 3.555).
+    std::optional<GameAction> shoot(const GameState& s, const std::vector<GameAction>& legal) {
+        if (const std::optional<normal::ShootingChoice> c = normal::choose_shooting(odds_, s, legal)) {
+            return GameAction{core::action::Shoot{c->unit, c->type, c->shots}};
+        }
+        for (const GameAction& a : legal) {
+            if (std::holds_alternative<core::action::EndShootStep>(a)) return a;
+        }
+        return std::nullopt;
+    }
+
     std::optional<GameAction> move_units(const GameState& s, const std::vector<GameAction>& legal) {
         std::optional<core::UnitId> unit;
-        for (const GameAction& a : legal) {
-            if (const auto* m = std::get_if<core::action::StartMove>(&a)) {
-                unit = m->unit;
-                break;
+        if (eval_.army()) {
+            unit = normal::unit_to_move(s, legal);  // D-066: the unit closest to an enemy unit first
+        } else {
+            for (const GameAction& a : legal) {
+                if (const auto* m = std::get_if<core::action::StartMove>(&a)) {
+                    unit = m->unit;
+                    break;
+                }
             }
         }
         if (!unit) return std::nullopt;
-        const std::optional<GameAction> stay = offered_start(legal, core::MoveType::RemainStationary);
+        const std::optional<GameAction> stay =
+            offered_start(legal, core::MoveType::RemainStationary, std::nullopt, unit);
         if (std::find(stuck_.begin(), stuck_.end(), *unit) != stuck_.end()) return stay;
-        const Evaluator::TurnChoice c = eval_.turn_choice(s);
+        const Evaluator::TurnChoice c = choice_for(s, *unit);
         if (c.fall_back) {
             std::optional<GameAction> fb =
-                offered_start(legal, core::MoveType::FallBack, core::FallBackMode::OrderedRetreat);
-            if (!fb) fb = offered_start(legal, core::MoveType::FallBack, core::FallBackMode::DesperateEscape);
+                offered_start(legal, core::MoveType::FallBack, core::FallBackMode::OrderedRetreat, unit);
+            if (!fb) fb = offered_start(legal, core::MoveType::FallBack, core::FallBackMode::DesperateEscape, unit);
             if (fb) return fb;
         }
         if (c.advance) {
-            if (auto adv = offered_start(legal, core::MoveType::Advance)) return adv;
+            if (auto adv = offered_start(legal, core::MoveType::Advance, std::nullopt, unit)) return adv;
         }
         if (std::fabs(c.towards_mm) > kMinMoveMm) {
-            if (auto normal = offered_start(legal, core::MoveType::Normal)) return normal;
+            if (auto normal = offered_start(legal, core::MoveType::Normal, std::nullopt, unit)) return normal;
         }
         return stay ? stay : std::optional<GameAction>{};
     }
@@ -260,7 +344,7 @@ private:
             mv.type == core::MoveType::Consolidation) {
             return std::nullopt;  // the baseline's (a charge move is planned at SelectChargeTargets)
         }
-        const std::optional<MoveSetup> m = setup_of(s);
+        const std::optional<MoveSetup> m = setup_of(eval_, s);
         if (!m) return std::nullopt;
         const Position c = centroid(m->starts);
         const float ax = m->enemy_centroid.x - c.x;
@@ -272,7 +356,7 @@ private:
             need_some = true;
         } else {
             // No model has moved yet (paths empty): the unit stands where the move started.
-            const Evaluator::TurnChoice choice = eval_.turn_choice(s);
+            const Evaluator::TurnChoice choice = choice_for(s, mv.unit);
             if (mv.type == core::MoveType::Advance) {
                 const core::Unit* u = s.find_unit(mv.unit);
                 const int roll = u != nullptr ? u->phase_flags.advance_roll.value_or(0) : 0;
@@ -298,10 +382,11 @@ private:
             if (d == nullptr) continue;
             const core::Unit* u = s.find_unit(d->unit);
             if (u == nullptr || u->side != side) continue;
-            const core::Unit* e = enemy_of(s, *u);
+            // D-067: the closest eligible charge target (M44: the first enemy unit, the duel's only one).
+            const core::Unit* e = eval_.army() ? closest_charge_target(s, *u) : first_enemy(s, *u);
             if (e == nullptr) continue;
             const double p = analysis::p_charge_roll_covers(core::unit_distance(*u, *e).value_or(0.0f));
-            if (eval_.wants_charge(s, p)) return a;
+            if (eval_.army() ? eval_.wants_charge(s, u->id, e->id, p) : eval_.wants_charge(s, p)) return a;
         }
         for (const GameAction& a : legal) {
             if (std::holds_alternative<core::action::EndChargeStep>(a)) return a;
@@ -310,6 +395,7 @@ private:
     }
 
     const Evaluator& eval_;
+    analysis::OddsCache& odds_;
     std::uint64_t seed_;
     std::vector<core::UnitId> stuck_;
 };
@@ -339,8 +425,7 @@ std::uint64_t rollout_seed(const GameState& state) {
 
 MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, const GameState& start,
                              core::Side side, std::uint64_t seed, const LookaheadWeights& weights,
-                             const Opening& opening) {
-    (void)odds;
+                             const Opening& opening, std::vector<RolloutTrace>* traces) {
     MonteCarloResult out;
     if (!eval.ok()) return out;
     const int h_start = half_turn_of(start);
@@ -352,7 +437,7 @@ MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, c
         rs.u64(seed);
         rs.u64(static_cast<std::uint64_t>(i));
         Simulator sim(start, rs.value());
-        RolloutPolicy policy(eval, rs.value());
+        RolloutPolicy policy(eval, odds, rs.value());
         std::deque<GameAction> queue(opening.actions.begin(), opening.actions.end());
         bool advance_moves_taken = false;
         std::size_t steps = 0;
@@ -385,6 +470,10 @@ MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, c
             }
             ++steps;
             ++out.actions;
+            if (traces != nullptr) {
+                if (traces->size() <= i) traces->resize(i + 1);
+                (*traces)[i].actions.push_back(a);
+            }
             if (sim.step(who, a).ok()) continue;
             // Refused (the rollout's plan didn't fit the state): the always-legal fallback, else stop here.
             queue.clear();
@@ -396,6 +485,10 @@ MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, c
             }
         }
         const Evaluation e = eval.evaluate(sim.state());
+        if (traces != nullptr) {
+            if (traces->size() <= i) traces->resize(i + 1);
+            (*traces)[i].end = sim.state();
+        }
         sum += e.score;
         sum_v += e.v;
         ++out.rollouts;

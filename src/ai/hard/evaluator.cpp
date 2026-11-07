@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <variant>
@@ -11,9 +12,11 @@
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/rules/charge.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
+#include "normal/value.hpp"
 #include "state_hash.hpp"
 
 namespace wh40k::ai::hard {
@@ -28,7 +31,9 @@ constexpr float kJustOutsideMm = core::kEngagementRangeMm + 0.1f * kIn;
 constexpr double kTie = 1e-12;  // an option must beat an earlier one by more than this
 constexpr std::size_t kMaxTables = 8;
 constexpr int kMinLine = 2;   // buckets
-constexpr int kMaxLine = 24;  // buckets (48")
+// D-067 (M57): 38 buckets (76"), so a line as long as a 60"x44" battlefield's diagonal (74.4") fits. Before M57: 24
+// (48"); no line on the 24"x24" boards (at most their 34" diagonal, 17 buckets) ever reached either.
+constexpr int kMaxLine = 38;
 
 enum Kind : std::size_t { kHeavy = 0, kMoved = 1, kAssault = 2, kCloseQuarters = 3, kMelee = 4, kKinds = 5 };
 
@@ -150,6 +155,8 @@ std::vector<float> usable_ranges(const core::Model& m) {
     return out;
 }
 
+}  // namespace
+
 // ---- the static description of a duel (the table's key) ----
 
 struct SideSpec {
@@ -172,6 +179,8 @@ struct Spec {
     ChainWeights weights;
     std::uint64_t key = 0;  // everything but the region (h0, max wounds)
 };
+
+namespace {
 
 float bucket_gap_mm(int g, float bucket) {
     return std::max(static_cast<float>(g) * bucket, kJustOutsideMm);
@@ -221,6 +230,19 @@ public:
     // a target with `target_wounds` left.
     [[nodiscard]] const double* pmf(core::Side attacker, Kind kind, int g, int attacker_wounds,
                                     int target_wounds) const;
+    // D-067: the wounds one volley of `attacker` (`attacker_wounds` left) takes from a whole unit of the other side,
+    // the better of its shooting at close range after a move and its fight: its pace in each of its turns once a
+    // target is in reach (the army's attention timeline).
+    [[nodiscard]] double volley_wounds(core::Side attacker, int attacker_wounds) const {
+        const int full = std::max(1, side(core::opponent(attacker)).max_wounds);
+        const auto removed = [&](Kind kind) {
+            const double* p = pmf(attacker, kind, 1, attacker_wounds, full);
+            double left = 0.0;
+            for (int l = 0; l <= full; ++l) left += p[l] * static_cast<double>(l);
+            return static_cast<double>(full) - left;
+        };
+        return std::max(removed(kMoved), removed(kMelee));
+    }
 
 private:
     struct DistSet {
@@ -700,6 +722,24 @@ std::optional<Duel> duel_of(const core::GameState& state) {
     return d;
 }
 
+int max_line_buckets() noexcept { return kMaxLine; }
+
+const core::Unit* closest_charge_target(const core::GameState& state, const core::Unit& unit) {
+    const core::Unit* best = nullptr;
+    float best_gap = 0.0f;
+    const int range = static_cast<int>(core::kChargeRangeInches);
+    for (const core::UnitId id : core::eligible_charge_targets(state, unit, range)) {
+        const core::Unit* t = state.find_unit(id);
+        if (t == nullptr || t->models.empty()) continue;
+        const float gap = core::unit_distance(unit, *t).value_or(0.0f);
+        if (best == nullptr || gap < best_gap) {
+            best = t;
+            best_gap = gap;
+        }
+    }
+    return best;
+}
+
 namespace {
 
 std::uint64_t hash_model(const core::Model& m) {
@@ -719,13 +759,112 @@ int half_turn_of(const core::GameState& s) {
     return std::max(0, (s.flow.battle_round - 1) * 2 + s.flow.turn_in_round);
 }
 
+// ---- D-067: the army's tables ----
+
+// A unit's type for the army's tables: its representative model, keywords and starting strength (what a duel
+// table's key holds for one side). Units with models only.
+std::uint64_t side_key(const core::Unit& u) {
+    Fnv1a key;
+    const core::Model& rep = representative(u);
+    key.u64(hash_model(rep));
+    for (const std::string& k : u.keywords) key.bytes(k.data(), k.size());
+    const int wpm = std::max(1, rep.characteristics.wounds);
+    const int strength = std::max(u.starting_strength, static_cast<int>(u.models.size()));
+    key.i32(std::max(1, strength * wpm));
+    key.i32(strength);
+    return key.value();
+}
+
+// The army's line: the battlefield's diagonal in buckets, rounded up (so any gap and rooms fit), within the
+// table's limits.
+int army_line(const core::GameState& root, float bucket) {
+    const double w = root.battlefield.width_mm;
+    const double d = root.battlefield.depth_mm;
+    const double diagonal = std::sqrt(w * w + d * d);
+    return std::clamp(static_cast<int>(std::ceil(diagonal / bucket - 1e-9)), kMinLine, kMaxLine);
+}
+
+// The table's spec for units of the types of `ua` (side A) and `ub` (side B): the whole unit (every later state of
+// a unit of that type), from the root's half-turn on, on the army's line.
+Spec army_spec(const core::GameState& root, const core::Unit& ua, const core::Unit& ub, const ChainWeights& weights,
+               int line) {
+    Spec spec;
+    spec.half_turns = 2 * root.battle_rounds;
+    spec.first = root.first_turn;
+    spec.h0 = std::min(half_turn_of(root), spec.half_turns - 1);
+    spec.weights = weights;
+    spec.line = line;
+    Fnv1a key;
+    for (const core::Unit* u : {&ua, &ub}) {
+        SideSpec& s = spec.sides[si(u->side)];
+        const core::Model& rep = representative(*u);
+        s.wounds_per_model = std::max(1, rep.characteristics.wounds);
+        const int strength = std::max(u->starting_strength, static_cast<int>(u->models.size()));
+        s.wounds_start = std::max(1, strength * s.wounds_per_model);
+        s.max_wounds = s.wounds_start;
+        s.max_models = (s.max_wounds + s.wounds_per_model - 1) / s.wounds_per_model;
+        s.proto = prototype(*u, std::max(strength, s.max_models));
+        const analysis::ThreatRanges t = analysis::threat_ranges(s.proto);
+        s.move_buckets = static_cast<int>(std::floor((t.move_mm + core::EPS_MM) / Evaluator::bucket_mm()));
+        for (std::size_t f = 1; f <= 6; ++f) {
+            s.advance_buckets[f] =
+                static_cast<int>(std::floor((t.advance_mm[f] + core::EPS_MM) / Evaluator::bucket_mm()));
+        }
+        s.ranges = usable_ranges(rep);
+        key.u64(hash_model(rep));
+        for (const std::string& k : u->keywords) key.bytes(k.data(), k.size());
+        key.i32(s.wounds_start);
+        key.i32(static_cast<int>(s.proto.models.size()));
+    }
+    key.i32(spec.half_turns);
+    key.i32(spec.first == core::Side::A ? 0 : 1);
+    key.i32(spec.line);
+    key.u64(static_cast<std::uint64_t>(std::llround(weights.tempo * 1e9)));
+    key.u64(static_cast<std::uint64_t>(std::llround(weights.material * 1e9)));
+    spec.key = key.value();
+    return spec;
+}
+
 }  // namespace
 
 Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, core::Side side, ChainWeights weights,
-                     ChainCache* cache)
+                     ChainCache* cache, bool force_army)
     : odds_(odds), side_(side), weights_(weights) {
     const std::optional<Duel> d = duel_of(root);
-    if (!d) return;
+    if (!d) {
+        // D-067: the army. One table per pair of unit types present (both sides need a unit with models).
+        if (root.battle_rounds <= 0) return;
+        std::vector<const core::Unit*> a_units;
+        std::vector<const core::Unit*> b_units;
+        for (const core::Unit& u : root.units) {
+            if (u.models.empty()) continue;
+            (u.side == core::Side::A ? a_units : b_units).push_back(&u);
+        }
+        if (a_units.empty() || b_units.empty()) return;
+        army_ = true;
+        const int line = army_line(root, kBucketMm);
+        std::vector<std::pair<std::uint64_t, const core::Unit*>> a_types;
+        std::vector<std::pair<std::uint64_t, const core::Unit*>> b_types;
+        for (const auto& [units, types] : {std::pair{&a_units, &a_types}, std::pair{&b_units, &b_types}}) {
+            for (const core::Unit* u : *units) {
+                const int wpm = std::max(1, representative(*u).characteristics.wounds);
+                start_wounds_[si(u->side)] +=
+                    std::max(1, std::max(u->starting_strength, static_cast<int>(u->models.size())) * wpm);
+                const std::uint64_t k = side_key(*u);
+                unit_keys_.emplace_back(u->id, k);
+                if (std::none_of(types->begin(), types->end(), [&](const auto& t) { return t.first == k; })) {
+                    types->emplace_back(k, u);
+                }
+            }
+        }
+        for (const auto& [ka, ua] : a_types) {
+            for (const auto& [kb, ub] : b_types) {
+                army_tables_.push_back(
+                    PairTable{ka, kb, find_or_build(army_spec(root, *ua, *ub, weights, line), cache)});
+            }
+        }
+        return;
+    }
     duel_ = *d;
     const core::Unit* ua = root.find_unit(duel_.units[0]);
     const core::Unit* ub = root.find_unit(duel_.units[1]);
@@ -768,27 +907,50 @@ Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, cor
     key.u64(static_cast<std::uint64_t>(std::llround(weights.tempo * 1e9)));
     key.u64(static_cast<std::uint64_t>(std::llround(weights.material * 1e9)));
     spec.key = key.value();
+    table_ = find_or_build(std::move(spec), cache);
+    if (force_army && table_) {
+        // D-067 (tests): the army's combination over the duel's own table, each pair read the duel's way.
+        army_ = true;
+        duel_reading_ = true;
+        const std::uint64_t ka = side_key(*ua);
+        const std::uint64_t kb = side_key(*ub);
+        unit_keys_ = {{ua->id, ka}, {ub->id, kb}};
+        army_tables_.push_back(PairTable{ka, kb, table_});
+        for (const core::Unit* u : {ua, ub}) {
+            const int wpm = std::max(1, representative(*u).characteristics.wounds);
+            const int strength = std::max(u->starting_strength, static_cast<int>(u->models.size()));
+            start_wounds_[si(u->side)] += std::max(1, strength * wpm);
+        }
+        table_.reset();
+    }
+}
+
+std::shared_ptr<const ChainTable> Evaluator::find_or_build(Spec spec, ChainCache* cache) const {
     if (cache != nullptr) {
         for (auto it = cache->tables_.begin(); it != cache->tables_.end(); ++it) {
             if ((*it)->covers(spec)) {
-                table_ = *it;
+                std::shared_ptr<const ChainTable> found = *it;
                 // Most recently used last.
                 std::rotate(it, it + 1, cache->tables_.end());
-                return;
+                return found;
             }
         }
     }
-    table_ = std::make_shared<const ChainTable>(odds_, std::move(spec), kBucketMm);
+    std::shared_ptr<const ChainTable> table = std::make_shared<const ChainTable>(odds_, std::move(spec), kBucketMm);
     if (cache != nullptr) {
         ++cache->builds_;
-        cache->tables_.push_back(table_);
+        cache->tables_.push_back(table);
         if (cache->tables_.size() > kMaxTables) cache->tables_.erase(cache->tables_.begin());
     }
+    return table;
 }
 
 Evaluator::~Evaluator() = default;
 
-int Evaluator::line_buckets() const noexcept { return table_ ? table_->line() : 0; }
+int Evaluator::line_buckets() const noexcept {
+    if (table_) return table_->line();
+    return army_tables_.empty() ? 0 : army_tables_.front().table->line();
+}
 
 UnitView Evaluator::view(const core::GameState& state, core::Side of) const {
     UnitView v;
@@ -823,6 +985,27 @@ LinePos line_pos(int line, float bucket, bool engaged, float gap_mm, float room_
     const double rest = total - gap;
     p.g = gap / bucket;
     p.ra = (rooms > 0.0 ? rest * room_a / rooms : rest / 2.0) / bucket;
+    return p;
+}
+
+// D-067: the army's fixed line (longer than a pair's gap and rooms): the real gap and the smaller room exactly,
+// the rest of the line to the larger room; when the gap and both rooms don't fit, shared as line_pos shares them.
+LinePos line_pos_army(int line, float bucket, bool engaged, float gap_mm, float room_a, float room_b) {
+    LinePos p;
+    p.engaged = engaged;
+    const double total = static_cast<double>(line) * bucket;
+    const double gap = engaged ? 0.0 : std::clamp(static_cast<double>(gap_mm), static_cast<double>(bucket), total);
+    const double rest = total - gap;
+    const double a = std::max(0.0, static_cast<double>(room_a));
+    const double b = std::max(0.0, static_cast<double>(room_b));
+    double ra = 0.0;
+    if (a + b >= rest) {
+        ra = a + b > 0.0 ? rest * a / (a + b) : rest / 2.0;
+    } else {
+        ra = a <= b ? a : rest - b;
+    }
+    p.g = gap / bucket;
+    p.ra = ra / bucket;
     return p;
 }
 
@@ -863,21 +1046,286 @@ Evaluation to_eval(const Node& n, core::Side side) {
     return e;
 }
 
-struct Real {
-    int h = 0;
-    std::array<int, 2> wounds{};
-    bool engaged = false;
-    float gap_mm = 0.0f;
-    std::array<float, 2> rooms{};
+// How a pair of units is read from a state: the duel's way (M44), or the army's (D-067).
+struct PairMode {
+    // D-067: the stage tests look at this pair's units only (a move or an attack in progress may be another
+    // unit's), "engaged" means with each other, and positions go on the army's fixed line (line_pos_army).
+    bool army = false;
+    // D-067 charge_values: this unit of the side whose turn it is charges no more this phase.
+    std::optional<core::UnitId> no_charge;
 };
+
+LinePos pos_on_line(const PairMode& mode, int line, float bucket, bool engaged, float gap_mm, float room_a,
+                    float room_b) {
+    return mode.army ? line_pos_army(line, bucket, engaged, gap_mm, room_a, room_b)
+                     : line_pos(line, bucket, engaged, gap_mm, room_a, room_b);
+}
+
+bool engaged_with(const core::GameState& state, const core::Unit& u, const core::Unit& other) {
+    const std::vector<core::UnitId> e = core::engaged_enemy_units(state, u);
+    return std::find(e.begin(), e.end(), other.id) != e.end();
+}
+
+// The pair's engagement as the mode reads it: the duel asks whether the unit whose turn it is is engaged at all.
+bool pair_engaged(const PairMode& mode, const core::GameState& state, const core::Unit& ux, const core::Unit& uy) {
+    return mode.army ? engaged_with(state, ux, uy) : core::is_engaged(state, ux);
+}
+
+// The value (side A's view) of the duel between `ua` (side A) and `ub` (side B) in `state`, by where the turn is
+// (Evaluator::evaluate). Precondition: both have models, the half-turn is within the game.
+Node pair_node(const ChainTable& t, analysis::OddsCache& odds, const core::GameState& state, const core::Unit& ua,
+               const core::Unit& ub, const PairMode& mode) {
+    const float bucket = Evaluator::bucket_mm();
+    const int h = half_turn_of(state);
+    const core::Side x = core::turn_side(state);
+    const core::Unit& ux = x == core::Side::A ? ua : ub;
+    const core::Unit& uy = x == core::Side::A ? ub : ua;
+    const int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
+    const int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    const float room_a = room_away(state, ua, centroid_of(ub));
+    const float room_b = room_away(state, ub, centroid_of(ua));
+    const bool engaged = pair_engaged(mode, state, ux, uy);
+    const float gap = core::unit_distance(ua, ub).value_or(0.0f);
+    const LinePos here = pos_on_line(mode, t.line(), bucket, engaged, gap, room_a, room_b);
+    const bool xa = x == core::Side::A;
+
+    const auto start_next = [&](int na, int nb, const LinePos& p) {
+        return interpolate(t.line(), p, [&](int g, int ra) { return t.end_turn(h, na, nb, g, ra); });
+    };
+    const auto fight_now = [&](int na, int nb, double ra) {
+        return interpolate(t.line(), LinePos{true, 0.0, ra}, [&](int, int r) { return t.fight(h, na, nb, r); });
+    };
+    const auto reply_now = [&](int na, int nb, double ra) {
+        return interpolate(t.line(), LinePos{true, 0.0, ra}, [&](int, int r) { return t.reply(h, na, nb, r); });
+    };
+    // After the shooting of the side whose turn it is, at a real gap: its charge (P from the 2D6 roll covering the
+    // gap, 11.02), if it wants one, else the turn ends there.
+    const auto after_shoot = [&](int na, int nb, float gap_mm, bool may_charge) {
+        const LinePos p = pos_on_line(mode, t.line(), bucket, false, gap_mm, room_a, room_b);
+        const Node hold = start_next(na, nb, p);
+        const double pc = may_charge ? analysis::p_charge_roll_covers(gap_mm) : 0.0;
+        if (!(pc > 0.0)) return hold;
+        const Node charged = mix(fight_now(na, nb, xa ? std::min<double>(t.line(), p.ra + p.g) : p.ra), hold, pc);
+        return t.better_for(x, charged, hold) ? charged : hold;
+    };
+    // The shooting of the side whose turn it is, from the engine (best_shooting), then the charge or the fight.
+    const auto before_shoot = [&](bool may_charge) {
+        const std::optional<analysis::ShootingPlan> plan = analysis::best_shooting(odds, state, ux.id, uy.id);
+        const int wy = xa ? wb : wa;
+        std::vector<double> pmf(static_cast<std::size_t>(wy) + 1, 0.0);
+        if (plan && plan->outcome.wounds_left_pmf.size() == pmf.size()) {
+            pmf = plan->outcome.wounds_left_pmf;
+        } else {
+            pmf.back() = 1.0;
+        }
+        const int wpm = std::max(1, t.side(core::opponent(x)).wounds_per_model);
+        const int models = static_cast<int>(uy.models.size());
+        Node out;
+        for (int left = 0; left <= wy; ++left) {
+            const double q = pmf[static_cast<std::size_t>(left)];
+            if (q == 0.0) continue;
+            if (left == 0) {
+                add(out, t.win(x, h, wa, wb), q);
+                continue;
+            }
+            const int na = xa ? wa : left;
+            const int nb = xa ? left : wb;
+            if (engaged) {
+                add(out, fight_now(na, nb, here.ra), q);
+                continue;
+            }
+            // The defender removes its front models (the worst case for a charge, M40's distance_after_casualties).
+            const int destroyed = std::clamp(models - (left + wpm - 1) / wpm, 0, std::max(0, models - 1));
+            const float gap_k = analysis::kth_closest_model_distance(ux, uy, destroyed + 1).value_or(gap);
+            add(out, after_shoot(na, nb, gap_k, may_charge), q);
+        }
+        return out;
+    };
+
+    const core::Stage st = state.flow.stage;
+    const core::Phase ph = core::phase_of(st);
+    const core::UnitTurnFlags& tf = ux.turn_flags;
+    const core::UnitPhaseFlags& pf = ux.phase_flags;
+    // D-067: no further charge by this unit (charge_values' holding).
+    const bool may_charge = !tf.advanced && !tf.fell_back && !(mode.no_charge && *mode.no_charge == ux.id);
+    // The move and the attack in progress, as the stage tests see them: the duel's (its only unit's), or (D-067)
+    // this pair's unit's own.
+    const bool moving = mode.army ? state.flow.move && state.flow.move->unit == ux.id : state.flow.move.has_value();
+    const bool attacking =
+        mode.army ? state.flow.attack && state.flow.attack->attacker == ux.id : state.flow.attack.has_value();
+    Node n;
+    if (ph == core::Phase::None || ph == core::Phase::Command ||
+        (ph == core::Phase::Movement && !pf.selected_to_move && !moving)) {
+        if (st == core::Stage::EndOfTurn || st == core::Stage::EndOfBattleRound) {
+            n = start_next(wa, wb, here);
+        } else {
+            n = interpolate(t.line(), here, [&](int g, int ra) { return t.start(h, wa, wb, g, ra); });
+        }
+    } else if (ph == core::Phase::Movement || (ph == core::Phase::Shooting && !pf.selected_to_shoot && !attacking &&
+                                               st != core::Stage::EndOfShootingPhase)) {
+        if (tf.fell_back || (moving && state.flow.move->type == core::MoveType::FallBack)) {
+            n = start_next(wa, wb, here);  // 09.07: no shooting, no charge
+        } else {
+            const bool advancing = tf.advanced || (moving && state.flow.move->type == core::MoveType::Advance);
+            n = before_shoot(may_charge && !advancing);
+        }
+    } else if (ph == core::Phase::Shooting) {
+        n = engaged ? fight_now(wa, wb, here.ra) : after_shoot(wa, wb, gap, may_charge);
+    } else if (ph == core::Phase::Charge) {
+        if (tf.made_charge_move || (engaged && st == core::Stage::EndOfChargePhase)) {
+            // D-067: a charge move into another unit leaves this pair apart for the rest of the turn.
+            n = mode.army && !engaged ? start_next(wa, wb, here) : fight_now(wa, wb, here.ra);
+        } else if (engaged) {
+            n = fight_now(wa, wb, here.ra);
+        } else if (pf.declared_charge || st == core::Stage::EndOfChargePhase) {
+            n = start_next(wa, wb, here);  // the charge failed or was not made
+        } else {
+            n = after_shoot(wa, wb, gap, may_charge);
+        }
+    } else {  // Fight phase
+        if (engaged && !pf.selected_to_fight && st != core::Stage::EndOfFightPhase) {
+            n = fight_now(wa, wb, here.ra);
+        } else if (engaged && !uy.phase_flags.selected_to_fight && st != core::Stage::EndOfFightPhase) {
+            n = reply_now(wa, wb, here.ra);
+        } else {
+            n = start_next(wa, wb, here);
+        }
+    }
+    return n;
+}
+
+// The chain's own choice for the side whose turn it is in the duel of `ua` and `ub` (Evaluator::turn_choice).
+// Precondition: both have models, the half-turn is within the game.
+Evaluator::TurnChoice pair_turn_choice(const ChainTable& t, const core::GameState& state, const core::Unit& ua,
+                                       const core::Unit& ub, const PairMode& mode) {
+    Evaluator::TurnChoice out;
+    const float bucket = Evaluator::bucket_mm();
+    const int h = half_turn_of(state);
+    const core::Side x = core::turn_side(state);
+    const bool xa = x == core::Side::A;
+    const int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
+    const int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    const core::Unit& ux = xa ? ua : ub;
+    const bool engaged = pair_engaged(mode, state, ux, xa ? ub : ua);
+    const float room_a = room_away(state, ua, centroid_of(ub));
+    const float room_b = room_away(state, ub, centroid_of(ua));
+    const float gap = core::unit_distance(ua, ub).value_or(0.0f);
+    const LinePos here = pos_on_line(mode, t.line(), bucket, engaged, gap, room_a, room_b);
+    const SideSpec& sx = t.side(x);
+    const double room = xa ? here.ra : (engaged ? t.line() - here.ra : t.line() - here.g - here.ra);
+    if (engaged) {
+        // Stay or Fall Back, as the chain's start node does.
+        const auto stay = [&] {
+            const double* cq = t.pmf(x, kCloseQuarters, 1, xa ? wa : wb, xa ? wb : wa);
+            const int wy = xa ? wb : wa;
+            Node s;
+            for (int left = 0; left <= wy; ++left) {
+                if (cq[left] == 0.0) continue;
+                if (left == 0) {
+                    add(s, t.win(x, h, wa, wb), cq[left]);
+                    continue;
+                }
+                add(s, interpolate(t.line(), here,
+                                   [&](int, int r) { return t.fight(h, xa ? wa : left, xa ? left : wb, r); }),
+                    cq[left]);
+            }
+            return s;
+        }();
+        const double d = std::min<double>(sx.move_buckets, std::floor(room));
+        if (d >= 1.0) {
+            const LinePos p{false, d, xa ? here.ra - d : here.ra};
+            const Node back = interpolate(t.line(), p, [&](int g, int ra) { return t.end_turn(h, wa, wb, g, ra); });
+            out.fall_back = t.better_for(x, back, stay);
+        }
+        return out;
+    }
+    const auto value_at = [&](Kind kind, double d) {  // d > 0: towards
+        const LinePos p{false, here.g - d, xa ? here.ra + d : here.ra};
+        return interpolate(t.line(), p, [&](int g, int ra) { return t.shoot_then(h, kind, wa, wb, g, ra); });
+    };
+    // How far it can go towards the enemy (it must end unengaged, 09.05) and back (its room), in buckets.
+    const double towards_limit = std::max(0.0, here.g - 1.0);
+    const double back_limit = std::max(0.0, room);
+    const auto kind_for = [bucket](double d) {
+        return static_cast<float>(std::fabs(d)) * bucket <= kHeavyMoveMm + core::EPS_MM ? kHeavy : kMoved;
+    };
+    Node best = value_at(kHeavy, 0.0);
+    double best_d = 0.0;
+    for (int step = 1; step <= sx.move_buckets; ++step) {
+        for (const double d : {std::min<double>(step, towards_limit), -std::min<double>(step, back_limit)}) {
+            if (std::fabs(d) < 1e-9) continue;
+            const Node v = value_at(kind_for(d), d);
+            if (t.better_for(x, v, best)) {
+                best = v;
+                best_d = d;
+            }
+        }
+    }
+    if (sx.move_buckets > 0) {
+        Node advance;
+        std::array<double, 7> best_by{};
+        for (std::size_t f = 1; f <= 6; ++f) {
+            Node bf = value_at(kAssault, 0.0);
+            double bd = 0.0;
+            for (int step = 1; step <= sx.advance_buckets[f]; ++step) {
+                for (const double d : {std::min<double>(step, towards_limit), -std::min<double>(step, back_limit)}) {
+                    if (std::fabs(d) < 1e-9) continue;
+                    const Node v = value_at(kAssault, d);
+                    if (t.better_for(x, v, bf)) {
+                        bf = v;
+                        bd = d;
+                    }
+                }
+            }
+            best_by[f] = bd;
+            add(advance, bf, analysis::d6_pmf()[f]);
+        }
+        if (t.better_for(x, advance, best)) {
+            out.advance = true;
+            for (std::size_t f = 1; f <= 6; ++f) out.advance_towards_mm[f] = static_cast<float>(best_by[f]) * bucket;
+            return out;
+        }
+    }
+    out.towards_mm = static_cast<float>(best_d) * bucket;
+    return out;
+}
+
+// The pair's hold and fight nodes for a charge by the side whose turn it is (Evaluator::charge_values).
+struct PairCharge {
+    Node hold;
+    Node fight;
+};
+PairCharge pair_charge(const ChainTable& t, const core::GameState& state, const core::Unit& ua, const core::Unit& ub,
+                       const PairMode& mode) {
+    const float bucket = Evaluator::bucket_mm();
+    const int h = half_turn_of(state);
+    const core::Side x = core::turn_side(state);
+    const bool xa = x == core::Side::A;
+    const int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
+    const int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    const float room_a = room_away(state, ua, centroid_of(ub));
+    const float room_b = room_away(state, ub, centroid_of(ua));
+    const float gap = core::unit_distance(ua, ub).value_or(0.0f);
+    const LinePos here = pos_on_line(mode, t.line(), bucket, false, gap, room_a, room_b);
+    PairCharge out;
+    out.hold = interpolate(t.line(), here, [&](int g, int ra) { return t.end_turn(h, wa, wb, g, ra); });
+    const double ra_after = xa ? std::min<double>(t.line(), here.ra + here.g) : here.ra;
+    out.fight =
+        interpolate(t.line(), LinePos{true, 0.0, ra_after}, [&](int, int r) { return t.fight(h, wa, wb, r); });
+    return out;
+}
 
 }  // namespace
 
 Evaluation Evaluator::at(int half_turn, std::array<int, 2> wounds, float gap_mm, std::array<float, 2> rooms_mm) const {
-    if (!table_) return {};
-    const ChainTable& t = *table_;
-    const LinePos p = line_pos(t.line(), kBucketMm, !(gap_mm > core::kEngagementRangeMm + core::EPS_MM), gap_mm,
-                               rooms_mm[0], rooms_mm[1]);
+    const ChainTable* tp = table_ ? table_.get() : (army_tables_.empty() ? nullptr : army_tables_.front().table.get());
+    if (tp == nullptr) return {};
+    const ChainTable& t = *tp;
+    const LinePos p = army_ && !duel_reading_
+                          ? line_pos_army(t.line(), kBucketMm, !(gap_mm > core::kEngagementRangeMm + core::EPS_MM),
+                                            gap_mm, rooms_mm[0], rooms_mm[1])
+                            : line_pos(t.line(), kBucketMm, !(gap_mm > core::kEngagementRangeMm + core::EPS_MM),
+                                       gap_mm, rooms_mm[0], rooms_mm[1]);
     const int wa = std::clamp(wounds[0], 0, t.side(core::Side::A).max_wounds);
     const int wb = std::clamp(wounds[1], 0, t.side(core::Side::B).max_wounds);
     const int h = std::max(half_turn, t.spec().h0);
@@ -921,7 +1369,322 @@ std::optional<Evaluation> Evaluator::terminal(const core::GameState& state) cons
     return e;
 }
 
+// D-067: the army's end, exact: the game is over, a side has no models left (it lost, now; D-007), or every half-turn
+// is played (a draw). Its score as a duel's: a win's tempo, then material over the whole army (each side's wounds
+// left as a share of its starting wounds).
+std::optional<Evaluation> Evaluator::army_terminal(const core::GameState& state) const {
+    std::optional<core::Side> winner;
+    bool over = false;
+    std::array<bool, 2> alive{};
+    std::array<double, 2> left{};
+    for (const core::Unit& u : state.units) {
+        if (!u.models.empty()) alive[si(u.side)] = true;
+        left[si(u.side)] += wounds_of(u);
+    }
+    const std::array<double, 2>& start = start_wounds_;
+    const int half_turns = 2 * state.battle_rounds;
+    const int h = std::min(half_turn_of(state), half_turns);
+    if (state.result) {
+        over = true;
+        winner = state.result->winner;
+    } else if (!alive[0] || !alive[1]) {
+        over = true;
+        if (alive[0] != alive[1]) winner = alive[0] ? core::Side::A : core::Side::B;
+    } else if (h >= half_turns) {
+        over = true;
+    }
+    if (!over) return std::nullopt;
+    Evaluation e;
+    double j = weights_.material * (left[0] / std::max(1.0, start[0]) - left[1] / std::max(1.0, start[1]));
+    const double tempo =
+        weights_.tempo * static_cast<double>(half_turns - h) / static_cast<double>(std::max(1, half_turns));
+    if (!winner) {
+        e.p_draw = 1.0;
+    } else {
+        j += *winner == core::Side::A ? 1.0 + tempo : -1.0 - tempo;
+        if (*winner == side_) {
+            e.p_win = 1.0;
+            e.v = 1.0;
+        } else {
+            e.p_loss = 1.0;
+            e.v = -1.0;
+        }
+    }
+    e.score = side_ == core::Side::A ? j : -j;
+    return e;
+}
+
+const ChainTable* Evaluator::table_for(const core::Unit& a, const core::Unit& b) const {
+    const auto key_of = [&](const core::Unit& u) {
+        for (const auto& [id, k] : unit_keys_) {
+            if (id == u.id) return k;
+        }
+        return side_key(u);  // a unit the root didn't have alive (not in a real game)
+    };
+    const std::uint64_t ka = key_of(a);
+    const std::uint64_t kb = key_of(b);
+    for (const PairTable& p : army_tables_) {
+        if (p.key_a == ka && p.key_b == kb) return p.table.get();
+    }
+    return nullptr;
+}
+
+const core::Unit* Evaluator::main_enemy(const core::GameState& state, const core::Unit& unit) {
+    // D-067: an enemy unit it is engaged with (the closest of them, a tie to the first in unit order), else the
+    // closest enemy unit (01.04, D-010).
+    const core::Unit* best = nullptr;
+    float best_gap = 0.0f;
+    for (const core::UnitId id : core::engaged_enemy_units(state, unit)) {
+        const core::Unit* e = state.find_unit(id);
+        if (e == nullptr || e->models.empty()) continue;
+        const float g = core::unit_distance(unit, *e).value_or(0.0f);
+        if (best == nullptr || g < best_gap) {
+            best = e;
+            best_gap = g;
+        }
+    }
+    return best != nullptr ? best : normal::closest_enemy(state, unit);
+}
+
+Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<core::UnitId> no_charge,
+                                    const Charged* charged, std::vector<UnitFate>* fates) const {
+    if (const std::optional<Evaluation> e = army_terminal(state)) return *e;
+    PairMode mode;
+    mode.army = !duel_reading_;
+    mode.no_charge = no_charge;
+    const int h = half_turn_of(state);
+    const int half_turns = 2 * state.battle_rounds;
+    std::vector<const core::Unit*> alive;
+    for (const core::Unit& u : state.units) {
+        if (!u.models.empty()) alive.push_back(&u);
+    }
+    // A pair's duel (side A's view) starting `delay` half-turns from now: now, the half-turn in progress as the duel
+    // reads it (each pair once: two units that are each other's first target share it); later, the chain from the
+    // start of that half-turn, the pair `gap_mm` apart (the attacker has moved meanwhile).
+    struct Cached {
+        core::UnitId a;
+        core::UnitId b;
+        Node n;
+    };
+    std::vector<Cached> cached;
+    const auto node_at = [&](const core::Unit& a, const core::Unit& b, int delay,
+                             float gap_mm) -> std::optional<Node> {
+        if (delay == 0) {
+            for (const Cached& c : cached) {
+                if (c.a == a.id && c.b == b.id) return c.n;
+            }
+        }
+        const ChainTable* t = table_for(a, b);
+        if (t == nullptr) return std::nullopt;
+        Node n;
+        if (delay == 0) {
+            n = pair_node(*t, odds_, state, a, b, mode);
+            cached.push_back(Cached{a.id, b.id, n});
+        } else {
+            const int wa = std::clamp(wounds_of(a), 1, t->side(core::Side::A).max_wounds);
+            const int wb = std::clamp(wounds_of(b), 1, t->side(core::Side::B).max_wounds);
+            if (h + delay >= t->half_turns()) {
+                n = t->draw(wa, wb);
+            } else {
+                const bool engaged = !(gap_mm > core::kEngagementRangeMm + core::EPS_MM);
+                const float room_a = room_away(state, a, centroid_of(b));
+                const float room_b = room_away(state, b, centroid_of(a));
+                const LinePos here = line_pos_army(t->line(), kBucketMm, engaged, gap_mm, room_a, room_b);
+                n = interpolate(t->line(), here, [&](int g, int ra) { return t->start(h + delay, wa, wb, g, ra); });
+            }
+        }
+        return n;
+    };
+    // charge_values: the charged pair engaged, the charger striking first, each the other's first target.
+    std::optional<Node> charged_node;
+    if (charged != nullptr) {
+        const core::Unit* cu = state.find_unit(charged->unit);
+        const core::Unit* ct = state.find_unit(charged->target);
+        if (cu != nullptr && ct != nullptr && !cu->models.empty() && !ct->models.empty() && cu->side != ct->side) {
+            const core::Unit& a = cu->side == core::Side::A ? *cu : *ct;
+            const core::Unit& b = cu->side == core::Side::A ? *ct : *cu;
+            if (const ChainTable* t = table_for(a, b)) charged_node = pair_charge(*t, state, a, b, mode).fight;
+        }
+    }
+    const auto is_charged_pair = [&](const core::Unit& x, const core::Unit& y) {
+        return charged_node && ((x.id == charged->unit && y.id == charged->target) ||
+                                (x.id == charged->target && y.id == charged->unit));
+    };
+    // Attention: each unit deals with the enemy units closest to it first (D-010; engaged ones are the closest), so
+    // its duel with a further one starts once it has wiped out the closer ones (ChainTable::wipe_half_turns).
+    // A unit survives only if it survives every enemy unit's duel (the fates of the duels are independent).
+    struct Fate {
+        const core::Unit* unit;
+        double survive = 1.0;
+        const core::Unit* main = nullptr;  // its main enemy, whose duel gives its tempo and material terms
+        std::optional<Node> main_node;
+    };
+    std::vector<Fate> fate;
+    for (const core::Unit* u : alive) fate.push_back(Fate{u, 1.0, main_enemy(state, *u), std::nullopt});
+    const auto fate_of = [&](const core::Unit* u) -> Fate& {
+        for (Fate& f : fate) {
+            if (f.unit == u) return f;
+        }
+        return fate.front();
+    };
+    // Each attacker's queue: the enemy units, closest first (the charged pair's target first).
+    struct Queue {
+        const core::Unit* attacker;
+        std::vector<std::pair<float, const core::Unit*>> targets;  // (gap now, unit)
+        std::vector<int> start;  // [k]: the attacker's turn (0: its next) in which it starts on targets[k]
+    };
+    std::vector<Queue> queues;
+    for (const core::Unit* e : alive) {
+        Queue q{e, {}, {}};
+        for (const core::Unit* v : alive) {
+            if (v->side == e->side) continue;
+            const float gap = is_charged_pair(*e, *v) ? -1.0f : core::unit_distance(*e, *v).value_or(0.0f);
+            q.targets.emplace_back(gap, v);
+        }
+        std::stable_sort(q.targets.begin(), q.targets.end(),
+                         [](const auto& x, const auto& y) { return x.first < y.first; });
+        q.start.assign(q.targets.size(), std::numeric_limits<int>::max());
+        queues.push_back(std::move(q));
+    }
+    // The attention timeline, each side's attackers in their own turns: every attacker works on its closest target
+    // still standing, at its pace (ChainTable::volley_wounds), once it is in reach (its M and its longest usable
+    // range, or a charge, in each of its turns: a turn spent closing takes nothing), the units in unit order within a
+    // turn; what a volley has left when its target falls goes on to the next one, which it starts this turn if at
+    // least half of the volley is left (else next turn). So the attackers share the work: a unit three squads stand
+    // in front of is reached once they have wiped out what is in front of it together, not each on its own. (The
+    // duel that then starts models the approach to that unit itself.)
+    const int turns_left = (std::max(0, half_turns - h) + 1) / 2 + 1;
+    const auto arrival = [&](const Queue& q, std::size_t k) {
+        const analysis::ThreatRanges r = analysis::threat_ranges(*q.attacker);
+        const float reach = std::max(r.shooting_reach_mm(), r.move_mm + core::inches_to_mm(7.0f));
+        const float gap = std::max(0.0f, q.targets[k].first);
+        if (!(gap > reach) || !(r.move_mm > 0.0f)) return 0;
+        return static_cast<int>(std::ceil((gap - reach) / r.move_mm - 1e-6f));
+    };
+    for (const core::Side s : {core::Side::A, core::Side::B}) {
+        std::vector<std::pair<const core::Unit*, double>> left;  // wounds left of the side's targets
+        for (const core::Unit* v : alive) {
+            if (v->side != s) left.emplace_back(v, static_cast<double>(wounds_of(*v)));
+        }
+        const auto wounds_left = [&](const core::Unit* v) -> double& {
+            for (auto& [u, w] : left) {
+                if (u == v) return w;
+            }
+            return left.front().second;
+        };
+        std::vector<std::size_t> at(queues.size(), 0);  // each attacker's position in its queue
+        for (std::size_t qi = 0; qi < queues.size(); ++qi) {
+            if (queues[qi].attacker->side == s && !queues[qi].start.empty()) queues[qi].start[0] = 0;
+        }
+        for (int turn = 0; turn < turns_left; ++turn) {
+            for (std::size_t qi = 0; qi < queues.size(); ++qi) {
+                Queue& q = queues[qi];
+                if (q.attacker->side != s) continue;
+                double volley = 1.0;  // the share of this turn's volley still to spend
+                while (volley > 1e-9 && at[qi] < q.targets.size()) {
+                    const core::Unit* v = q.targets[at[qi]].second;
+                    double& w = wounds_left(v);
+                    if (w <= 1e-9) {  // wiped out already (by another attacker)
+                        ++at[qi];
+                        if (at[qi] < q.targets.size()) q.start[at[qi]] = volley >= 0.5 ? turn : turn + 1;
+                        continue;
+                    }
+                    if (turn < arrival(q, at[qi])) break;  // still closing in
+                    const core::Unit& a = s == core::Side::A ? *q.attacker : *v;
+                    const core::Unit& b = s == core::Side::A ? *v : *q.attacker;
+                    const ChainTable* t = table_for(a, b);
+                    const double pace = t != nullptr ? t->volley_wounds(s, wounds_of(*q.attacker)) : 0.0;
+                    if (!(pace > 1e-9)) break;
+                    const double spend = std::min(volley, w / pace);
+                    w -= spend * pace;
+                    volley -= spend;
+                }
+            }
+        }
+    }
+    for (Queue& q : queues) {
+        const core::Unit* e = q.attacker;
+        // While it deals with the closer units the attacker closes on the first of them, its M in each of its turns
+        // (never past it): a later duel starts from where that leaves it (centre to centre, as far as the gap goes).
+        const core::Position from = centroid_of(*e);
+        core::Position towards = from;
+        if (!q.targets.empty()) towards = centroid_of(*q.targets.front().second);
+        const float span = std::hypot(towards.x - from.x, towards.y - from.y);
+        const float move_mm = analysis::threat_ranges(*e).move_mm;
+        for (std::size_t k = 0; k < q.targets.size(); ++k) {
+            const auto& [gap, v] = q.targets[k];
+            const int delay = q.start[k] >= turns_left ? half_turns : std::min(2 * q.start[k], half_turns);
+            const core::Unit& a = e->side == core::Side::A ? *e : *v;
+            const core::Unit& b = e->side == core::Side::A ? *v : *e;
+            float gap_then = std::max(0.0f, gap);
+            if (delay > 0 && span > 0.0f) {
+                const float travel = std::min(move_mm * static_cast<float>(delay / 2),
+                                              std::max(0.0f, q.targets.front().first));
+                const core::Position to{from.x + (towards.x - from.x) / span * travel,
+                                        from.y + (towards.y - from.y) / span * travel, 0.0f};
+                const core::Position cv = centroid_of(*v);
+                const float before = std::hypot(cv.x - from.x, cv.y - from.y);
+                const float after = std::hypot(cv.x - to.x, cv.y - to.y);
+                gap_then = std::max(0.0f, gap_then + (after - before));
+            }
+            std::optional<Node> n = is_charged_pair(*e, *v) ? charged_node : node_at(a, b, delay, gap_then);
+            if (!n) continue;
+            Fate& f = fate_of(v);
+            f.survive *= 1.0 - (v->side == core::Side::A ? n->pl : n->pw);
+            if (f.main == e) f.main_node = n;
+        }
+    }
+    double p_a = 1.0;  // P(side A wins): every unit of side B wiped out
+    double p_b = 1.0;
+    // D-007: a side's win or loss comes when its last unit falls, so the tempo and material terms are those of each
+    // side's longest-lasting unit: the one whose main duel is best for its own side (side A's view: the highest j for
+    // an A unit, the lowest for a B unit; a tie to the first in unit order), the mean of the two sides'.
+    std::array<std::optional<Node>, 2> last;
+    for (const Fate& f : fate) {
+        const double wiped = 1.0 - f.survive;
+        (f.unit->side == core::Side::A ? p_b : p_a) *= wiped;
+        if (f.main_node) {
+            std::optional<Node>& l = last[si(f.unit->side)];
+            const bool better =
+                !l || (f.unit->side == core::Side::A ? f.main_node->j > l->j : f.main_node->j < l->j);
+            if (better) l = f.main_node;
+        }
+        if (fates != nullptr && f.main != nullptr) fates->push_back(UnitFate{f.unit->id, f.main->id, wiped});
+    }
+    if (!last[0] || !last[1]) return {};
+    const auto terms = [](const Node& n) { return n.j - (n.pw - n.pl); };
+    const double total = p_a + p_b;
+    if (total > 1.0) {
+        p_a /= total;
+        p_b /= total;
+    }
+    Node army;
+    army.pw = p_a;
+    army.pl = p_b;
+    army.j = (p_a - p_b) + 0.5 * (terms(*last[0]) + terms(*last[1]));
+    return to_eval(army, side_);
+}
+
+std::vector<UnitFate> Evaluator::fates(const core::GameState& state) const {
+    std::vector<UnitFate> out;
+    if (army_) (void)army_evaluate(state, std::nullopt, nullptr, &out);
+    return out;
+}
+
 Evaluation Evaluator::at_turn_start(const core::GameState& state) const {
+    if (army_) {
+        // The army's value with every pair at the start of its half-turn (the chain alone).
+        if (const std::optional<Evaluation> e = army_terminal(state)) return *e;
+        core::GameState start = state;
+        start.flow.stage = core::Stage::StartOfTurn;
+        start.flow.move.reset();
+        start.flow.attack.reset();
+        for (core::Unit& u : start.units) {
+            u.turn_flags = {};
+            u.phase_flags = {};
+        }
+        return army_evaluate(start);
+    }
     if (!table_) return {};
     if (const std::optional<Evaluation> e = terminal(state)) return *e;
     const core::Unit* ua = state.find_unit(duel_.units[0]);
@@ -932,6 +1695,7 @@ Evaluation Evaluator::at_turn_start(const core::GameState& state) const {
 }
 
 Evaluation Evaluator::evaluate(const core::GameState& state) const {
+    if (army_) return army_evaluate(state);
     if (!table_) return {};
     if (const std::optional<Evaluation> e = terminal(state)) return *e;
     const ChainTable& t = *table_;
@@ -939,240 +1703,76 @@ Evaluation Evaluator::evaluate(const core::GameState& state) const {
     const core::Unit* ub = state.find_unit(duel_.units[1]);
     const int h = half_turn_of(state);
     if (h >= t.half_turns()) return to_eval(t.draw(wounds_of(*ua), wounds_of(*ub)), side_);
-    const core::Side x = core::turn_side(state);
-    const core::Unit& ux = x == core::Side::A ? *ua : *ub;
-    const core::Unit& uy = x == core::Side::A ? *ub : *ua;
-    const int wa = std::clamp(wounds_of(*ua), 1, t.side(core::Side::A).max_wounds);
-    const int wb = std::clamp(wounds_of(*ub), 1, t.side(core::Side::B).max_wounds);
-    const float room_a = room_away(state, *ua, centroid_of(*ub));
-    const float room_b = room_away(state, *ub, centroid_of(*ua));
-    const bool engaged = core::is_engaged(state, ux);
-    const float gap = core::unit_distance(*ua, *ub).value_or(0.0f);
-    const LinePos here = line_pos(t.line(), kBucketMm, engaged, gap, room_a, room_b);
-    const bool xa = x == core::Side::A;
-
-    const auto start_next = [&](int na, int nb, const LinePos& p) {
-        return interpolate(t.line(), p, [&](int g, int ra) { return t.end_turn(h, na, nb, g, ra); });
-    };
-    const auto fight_now = [&](int na, int nb, double ra) {
-        return interpolate(t.line(), LinePos{true, 0.0, ra}, [&](int, int r) { return t.fight(h, na, nb, r); });
-    };
-    const auto reply_now = [&](int na, int nb, double ra) {
-        return interpolate(t.line(), LinePos{true, 0.0, ra}, [&](int, int r) { return t.reply(h, na, nb, r); });
-    };
-    // After the shooting of the side whose turn it is, at a real gap: its charge (P from the 2D6 roll covering the
-    // gap, 11.02), if it wants one, else the turn ends there.
-    const auto after_shoot = [&](int na, int nb, float gap_mm, bool may_charge) {
-        const LinePos p = line_pos(t.line(), kBucketMm, false, gap_mm, room_a, room_b);
-        const Node hold = start_next(na, nb, p);
-        const double pc = may_charge ? analysis::p_charge_roll_covers(gap_mm) : 0.0;
-        if (!(pc > 0.0)) return hold;
-        const Node charged = mix(fight_now(na, nb, xa ? std::min<double>(t.line(), p.ra + p.g) : p.ra), hold, pc);
-        return t.better_for(x, charged, hold) ? charged : hold;
-    };
-    // The shooting of the side whose turn it is, from the engine (best_shooting), then the charge or the fight.
-    const auto before_shoot = [&](bool may_charge) {
-        const std::optional<analysis::ShootingPlan> plan = analysis::best_shooting(odds_, state, ux.id, uy.id);
-        const int wy = xa ? wb : wa;
-        std::vector<double> pmf(static_cast<std::size_t>(wy) + 1, 0.0);
-        if (plan && plan->outcome.wounds_left_pmf.size() == pmf.size()) {
-            pmf = plan->outcome.wounds_left_pmf;
-        } else {
-            pmf.back() = 1.0;
-        }
-        const int wpm = std::max(1, t.side(core::opponent(x)).wounds_per_model);
-        const int models = static_cast<int>(uy.models.size());
-        Node out;
-        for (int left = 0; left <= wy; ++left) {
-            const double q = pmf[static_cast<std::size_t>(left)];
-            if (q == 0.0) continue;
-            if (left == 0) {
-                add(out, t.win(x, h, wa, wb), q);
-                continue;
-            }
-            const int na = xa ? wa : left;
-            const int nb = xa ? left : wb;
-            if (engaged) {
-                add(out, fight_now(na, nb, here.ra), q);
-                continue;
-            }
-            // The defender removes its front models (the worst case for a charge, M40's distance_after_casualties).
-            const int destroyed = std::clamp(models - (left + wpm - 1) / wpm, 0, std::max(0, models - 1));
-            const float gap_k = analysis::kth_closest_model_distance(ux, uy, destroyed + 1).value_or(gap);
-            add(out, after_shoot(na, nb, gap_k, may_charge), q);
-        }
-        return out;
-    };
-
-    const core::Stage st = state.flow.stage;
-    const core::Phase ph = core::phase_of(st);
-    const core::UnitTurnFlags& tf = ux.turn_flags;
-    const core::UnitPhaseFlags& pf = ux.phase_flags;
-    const bool may_charge = !tf.advanced && !tf.fell_back;
-    Node n;
-    if (ph == core::Phase::None || ph == core::Phase::Command ||
-        (ph == core::Phase::Movement && !pf.selected_to_move && !state.flow.move)) {
-        if (st == core::Stage::EndOfTurn || st == core::Stage::EndOfBattleRound) {
-            n = start_next(wa, wb, here);
-        } else {
-            n = interpolate(t.line(), here, [&](int g, int ra) { return t.start(h, wa, wb, g, ra); });
-        }
-    } else if (ph == core::Phase::Movement || (ph == core::Phase::Shooting && !pf.selected_to_shoot &&
-                                               !state.flow.attack && st != core::Stage::EndOfShootingPhase)) {
-        if (tf.fell_back || (state.flow.move && state.flow.move->type == core::MoveType::FallBack)) {
-            n = start_next(wa, wb, here);  // 09.07: no shooting, no charge
-        } else {
-            const bool advancing = tf.advanced || (state.flow.move && state.flow.move->type == core::MoveType::Advance);
-            n = before_shoot(may_charge && !advancing);
-        }
-    } else if (ph == core::Phase::Shooting) {
-        n = engaged ? fight_now(wa, wb, here.ra) : after_shoot(wa, wb, gap, may_charge);
-    } else if (ph == core::Phase::Charge) {
-        if (tf.made_charge_move || (engaged && st == core::Stage::EndOfChargePhase)) {
-            n = fight_now(wa, wb, here.ra);
-        } else if (engaged) {
-            n = fight_now(wa, wb, here.ra);
-        } else if (pf.declared_charge || st == core::Stage::EndOfChargePhase) {
-            n = start_next(wa, wb, here);  // the charge failed or was not made
-        } else {
-            n = after_shoot(wa, wb, gap, may_charge);
-        }
-    } else {  // Fight phase
-        if (engaged && !pf.selected_to_fight && st != core::Stage::EndOfFightPhase) {
-            n = fight_now(wa, wb, here.ra);
-        } else if (engaged && !uy.phase_flags.selected_to_fight && st != core::Stage::EndOfFightPhase) {
-            n = reply_now(wa, wb, here.ra);
-        } else {
-            n = start_next(wa, wb, here);
-        }
-    }
-    return to_eval(n, side_);
+    return to_eval(pair_node(t, odds_, state, *ua, *ub, PairMode{}), side_);
 }
 
 Evaluator::TurnChoice Evaluator::turn_choice(const core::GameState& state) const {
-    TurnChoice out;
-    if (!table_ || state.result) return out;
+    if (army_ || !table_ || state.result) return {};
     const ChainTable& t = *table_;
     const core::Unit* ua = state.find_unit(duel_.units[0]);
     const core::Unit* ub = state.find_unit(duel_.units[1]);
-    if (ua == nullptr || ub == nullptr || ua->models.empty() || ub->models.empty()) return out;
-    const int h = half_turn_of(state);
-    if (h >= t.half_turns()) return out;
-    const core::Side x = core::turn_side(state);
-    const bool xa = x == core::Side::A;
-    const int wa = std::clamp(wounds_of(*ua), 1, t.side(core::Side::A).max_wounds);
-    const int wb = std::clamp(wounds_of(*ub), 1, t.side(core::Side::B).max_wounds);
-    const core::Unit& ux = xa ? *ua : *ub;
-    const bool engaged = core::is_engaged(state, ux);
-    const float room_a = room_away(state, *ua, centroid_of(*ub));
-    const float room_b = room_away(state, *ub, centroid_of(*ua));
-    const float gap = core::unit_distance(*ua, *ub).value_or(0.0f);
-    const LinePos here = line_pos(t.line(), kBucketMm, engaged, gap, room_a, room_b);
-    const SideSpec& sx = t.side(x);
-    const double room = xa ? here.ra : (engaged ? t.line() - here.ra : t.line() - here.g - here.ra);
-    if (engaged) {
-        // Stay or Fall Back, as the chain's start node does.
-        const auto stay = [&] {
-            const double* cq = t.pmf(x, kCloseQuarters, 1, xa ? wa : wb, xa ? wb : wa);
-            const int wy = xa ? wb : wa;
-            Node s;
-            for (int left = 0; left <= wy; ++left) {
-                if (cq[left] == 0.0) continue;
-                if (left == 0) {
-                    add(s, t.win(x, h, wa, wb), cq[left]);
-                    continue;
-                }
-                add(s, interpolate(t.line(), here,
-                                   [&](int, int r) { return t.fight(h, xa ? wa : left, xa ? left : wb, r); }),
-                    cq[left]);
-            }
-            return s;
-        }();
-        const double d = std::min<double>(sx.move_buckets, std::floor(room));
-        if (d >= 1.0) {
-            const LinePos p{false, d, xa ? here.ra - d : here.ra};
-            const Node back = interpolate(t.line(), p, [&](int g, int ra) { return t.end_turn(h, wa, wb, g, ra); });
-            out.fall_back = t.better_for(x, back, stay);
-        }
-        return out;
-    }
-    const auto value_at = [&](Kind kind, double d) {  // d > 0: towards
-        const LinePos p{false, here.g - d, xa ? here.ra + d : here.ra};
-        return interpolate(t.line(), p, [&](int g, int ra) { return t.shoot_then(h, kind, wa, wb, g, ra); });
-    };
-    // How far it can go towards the enemy (it must end unengaged, 09.05) and back (its room), in buckets.
-    const double towards_limit = std::max(0.0, here.g - 1.0);
-    const double back_limit = std::max(0.0, room);
-    const auto kind_for = [](double d) {
-        return static_cast<float>(std::fabs(d)) * kBucketMm <= kHeavyMoveMm + core::EPS_MM ? kHeavy : kMoved;
-    };
-    Node best = value_at(kHeavy, 0.0);
-    double best_d = 0.0;
-    for (int step = 1; step <= sx.move_buckets; ++step) {
-        for (const double d : {std::min<double>(step, towards_limit), -std::min<double>(step, back_limit)}) {
-            if (std::fabs(d) < 1e-9) continue;
-            const Node v = value_at(kind_for(d), d);
-            if (t.better_for(x, v, best)) {
-                best = v;
-                best_d = d;
-            }
-        }
-    }
-    if (sx.move_buckets > 0) {
-        Node advance;
-        std::array<double, 7> best_by{};
-        for (std::size_t f = 1; f <= 6; ++f) {
-            Node bf = value_at(kAssault, 0.0);
-            double bd = 0.0;
-            for (int step = 1; step <= sx.advance_buckets[f]; ++step) {
-                for (const double d : {std::min<double>(step, towards_limit), -std::min<double>(step, back_limit)}) {
-                    if (std::fabs(d) < 1e-9) continue;
-                    const Node v = value_at(kAssault, d);
-                    if (t.better_for(x, v, bf)) {
-                        bf = v;
-                        bd = d;
-                    }
-                }
-            }
-            best_by[f] = bd;
-            add(advance, bf, analysis::d6_pmf()[f]);
-        }
-        if (t.better_for(x, advance, best)) {
-            out.advance = true;
-            for (std::size_t f = 1; f <= 6; ++f) out.advance_towards_mm[f] = static_cast<float>(best_by[f]) * kBucketMm;
-            return out;
-        }
-    }
-    out.towards_mm = static_cast<float>(best_d) * kBucketMm;
-    return out;
+    if (ua == nullptr || ub == nullptr || ua->models.empty() || ub->models.empty()) return {};
+    if (half_turn_of(state) >= t.half_turns()) return {};
+    return pair_turn_choice(t, state, *ua, *ub, PairMode{});
+}
+
+Evaluator::TurnChoice Evaluator::turn_choice(const core::GameState& state, core::UnitId unit,
+                                             std::optional<core::UnitId> target) const {
+    if (!army_) return turn_choice(state);
+    if (state.result || half_turn_of(state) >= 2 * state.battle_rounds) return {};
+    const core::Unit* u = state.find_unit(unit);
+    if (u == nullptr || u->models.empty()) return {};
+    const core::Unit* e = target ? state.find_unit(*target) : main_enemy(state, *u);
+    if (e == nullptr || e->models.empty() || e->side == u->side) return {};
+    const core::Unit& a = u->side == core::Side::A ? *u : *e;
+    const core::Unit& b = u->side == core::Side::A ? *e : *u;
+    const ChainTable* t = table_for(a, b);
+    if (t == nullptr) return {};
+    PairMode mode;
+    mode.army = !duel_reading_;
+    return pair_turn_choice(*t, state, a, b, mode);
 }
 
 Evaluator::ChargeValues Evaluator::charge_values(const core::GameState& state, double p_success) const {
     ChargeValues out;
-    if (!table_ || state.result) return out;
+    if (army_ || !table_ || state.result) return out;
     const ChainTable& t = *table_;
     const core::Unit* ua = state.find_unit(duel_.units[0]);
     const core::Unit* ub = state.find_unit(duel_.units[1]);
     if (ua == nullptr || ub == nullptr || ua->models.empty() || ub->models.empty()) return out;
-    const int h = half_turn_of(state);
-    if (h >= t.half_turns()) return out;
+    if (half_turn_of(state) >= t.half_turns()) return out;
     const core::Side x = core::turn_side(state);
-    const bool xa = x == core::Side::A;
-    const int wa = std::clamp(wounds_of(*ua), 1, t.side(core::Side::A).max_wounds);
-    const int wb = std::clamp(wounds_of(*ub), 1, t.side(core::Side::B).max_wounds);
-    const float room_a = room_away(state, *ua, centroid_of(*ub));
-    const float room_b = room_away(state, *ub, centroid_of(*ua));
-    const float gap = core::unit_distance(*ua, *ub).value_or(0.0f);
-    const LinePos here = line_pos(t.line(), kBucketMm, false, gap, room_a, room_b);
-    const Node hold = interpolate(t.line(), here, [&](int g, int ra) { return t.end_turn(h, wa, wb, g, ra); });
-    const double ra_after = xa ? std::min<double>(t.line(), here.ra + here.g) : here.ra;
-    const Node fight = interpolate(t.line(), LinePos{true, 0.0, ra_after}, [&](int, int r) { return t.fight(h, wa, wb, r); });
+    const PairCharge pc = pair_charge(t, state, *ua, *ub, PairMode{});
     const double p = std::clamp(p_success, 0.0, 1.0);
-    const Node charged = mix(fight, hold, p);
-    out.hold = to_eval(hold, side_);
-    out.fight = to_eval(fight, side_);
+    const Node charged = mix(pc.fight, pc.hold, p);
+    out.hold = to_eval(pc.hold, side_);
+    out.fight = to_eval(pc.fight, side_);
     out.charge = to_eval(charged, side_);
-    out.wanted = p > 0.0 && t.better_for(x, charged, hold);
+    out.wanted = p > 0.0 && t.better_for(x, charged, pc.hold);
+    return out;
+}
+
+Evaluator::ChargeValues Evaluator::charge_values(const core::GameState& state, core::UnitId unit, core::UnitId target,
+                                                 double p_success) const {
+    if (!army_) return charge_values(state, p_success);
+    ChargeValues out;
+    if (state.result || half_turn_of(state) >= 2 * state.battle_rounds) return out;
+    const core::Unit* u = state.find_unit(unit);
+    const core::Unit* e = state.find_unit(target);
+    if (u == nullptr || e == nullptr || u->models.empty() || e->models.empty() || u->side == e->side) return out;
+    const double p = std::clamp(p_success, 0.0, 1.0);
+    const Charged charged{unit, target};
+    out.hold = army_evaluate(state, unit);
+    out.fight = army_evaluate(state, unit, &charged);
+    const auto blend = [p](double f, double h) { return p * f + (1.0 - p) * h; };
+    out.charge.p_win = blend(out.fight.p_win, out.hold.p_win);
+    out.charge.p_draw = blend(out.fight.p_draw, out.hold.p_draw);
+    out.charge.p_loss = blend(out.fight.p_loss, out.hold.p_loss);
+    out.charge.v = blend(out.fight.v, out.hold.v);
+    out.charge.score = blend(out.fight.score, out.hold.score);
+    // The side whose turn it is (the charger's) prefers it: its own score, by more than the chain's tie.
+    const double sign = u->side == side_ ? 1.0 : -1.0;
+    out.wanted = p > 0.0 && sign * (out.charge.score - out.hold.score) > kTie;
     return out;
 }
 
