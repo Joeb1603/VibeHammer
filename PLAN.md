@@ -1433,6 +1433,156 @@ Decision D-063. Still open: the manual check on Windows (download, unzip, run Vi
 
 ---
 
+## Full-size battlefield with several units per side (M53–M58)
+
+**Run note (agreed with the user 2026-11-07):** M53–M58 are pre-approved as one batch and run back to back
+without `/clear` and without per-milestone sign-off, on branch `strike-force-44x60`. This overrides "one
+milestone per session" and "agree each milestone first" for these milestones only. Each milestone is implemented
+by a sub-agent at the effort shown, then verified (clean Debug and Release builds, all of `ctest`,
+`git diff tests/replays` showing only the planned changes, arena numbers and screenshots where the milestone asks),
+marked ✅, committed and pushed. A missed acceptance number is recorded as an open item, never lowered silently.
+Ambiguities get the conservative choice, recorded in `docs/decisions.md`. At the end the branch goes to `main` by
+a rebase-merged pull request.
+
+**Agreed with the user:**
+- Board 60" wide × 44" deep (the core rules give no size; this is the usual Incursion/Strike Force table), with
+  12"-deep deployment zones along the long north and south edges, so 20" between the zones.
+- Armies: 3 × 5 Intercessors (Space Marines) vs 4 × 10 Termagants (Tyranids). Only the two existing datasheets;
+  more unit types are the next task ("Later", item 5).
+- Winning stays D-007 (wipe-out wins, otherwise a draw after round 5). No terrain and no objectives in this batch.
+- Deployment stays fixed by the scenario file (D-003), with per-unit positions.
+- Bots: Easy and Normal learn to play several units; Hard is generalised from the 1v1 duel to the whole army.
+- Client: each unit gets its own tint and a number on the board.
+
+---
+
+## M53: Scenario format for several units; the 44"x60" scenario
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-07) · **Rules:** 03.02, 03.03, 01.04 · **Decision:** D-064
+
+> - `formation` gets an optional `depth_in`: how far the front rank stands behind the zone's front line (default 0),
+>   so a side's units can stagger. Files without it load exactly as before.
+> - Set-up check: no two models' bases overlap (friendly or enemy), with the `geometry/` helpers. A failure is a
+>   corrupt-data exception that names both models.
+> - New `data/scenarios/strike_44x60.json`, "Strike - 3 Intercessor Squads vs 4 Termagant units (44x60)": width
+>   60, depth 44, 12" zones, 5 battle rounds. Side A (south): 3 × 5 Intercessors spread across the line. Side B
+>   (north): 4 × 10 Termagants in 2 ranks, one unit held back with `depth_in`.
+> - The arena's `--step-cap` default is raised if a measured game on the new scenario gets near it.
+
+**Acceptance**
+- Loader tests `R03_02_SetUp`: depth offset, overlapping bases refused, wholly within the zone with an offset, the
+  60x44 file loads, unit id order. Existing scenarios load identically.
+- The random-play property tests also run the new scenario (games finish, state round-trips, the replay reproduces
+  it). A client test finds it in the scenario list with its side names.
+- Replay `tests/replays/m53_strike_round1.json` (from `Replay.DISABLED_RegenerateReplays`): a scripted battle round
+  1 on the new scenario, stopped before anything later milestones change. Existing replays byte-identical.
+- 40 seeded Easy-vs-Easy and 10 Normal-vs-Normal Release arena games on the new scenario finish clean (no rejected
+  actions, reverts or fallbacks). Step counts, end rounds, results and decision times are recorded as the
+  baseline for M54.
+
+---
+
+## M54: Speed for big games, with no change in play
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07)
+
+> Pure optimisation of core's read-only queries and of `src/ai`. **Every decision and every roll stays identical.**
+> - Measure first (Release arena `--trace` on the new scenario), then fix the worst paths. Candidates:
+>   `target_problem` checks range and engagement before line of sight and builds its blockers once per query
+>   (`core/rules/shooting.cpp`); `legal_actions` at a Shoot decision only needs to know whether any shot exists
+>   (`core/engine/shooting.cpp`); fewer `GameState`/`Unit` copies in Normal (`model_worth`, `move_score`,
+>   `plan_shooting`); cheaper charge prospects; `has_line_of_sight` only if profiling says so.
+> - If Instant bot speed still freezes the window on a slow decision, Instant also runs on the worker thread.
+
+**Acceptance**
+- Arena per-game output identical before and after on all four scenarios (Easy, Normal and Hard pairs, fixed seeds,
+  compared with a Release build of the pre-change commit). All replays byte-identical. ctest green.
+- New scenario, Release: Normal p95 decision time ≤ 100 ms and max ≤ 1 s; Hard (which plays as Normal there until
+  M57) the same. Before and after numbers recorded.
+
+---
+
+## M55: Per-unit tint and board labels
+**Effort:** `medium` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-065
+
+> - Each unit gets its own shade of its side's colour, chosen from its index among the side's units. The side stays
+>   obvious, and the shades stay distinct from the board, the greyed "can't act" look and the selection outline.
+> - A small per-side number ("1".."4") is drawn on each unit on the board, scaled with zoom and UI scale and
+>   hidden when too small to read.
+> - The sidebar unit list and the hover tooltip show the same swatch and number; the log and action text use the
+>   same number ("Termagants 2").
+> - The choice of tint and number is a pure function in `wh40k_client_logic` (an RGB struct, no raylib).
+>   A scenario with one unit per side keeps today's colours, so the V1 board looks the same.
+
+**Acceptance**
+- Client tests `M55_UnitTint`: distinct, deterministic, unchanged for one unit per side.
+- Screenshots under `xvfb-run`: the new scenario at the start of round 1 and after `--bot both --bot-steps 60`;
+  V1 unchanged. ctest green; replays unchanged.
+
+---
+
+## M56: Easy and Normal across several units
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07) · **Rules:** 01.04, 09.02, 10.02, 11.02, 12.02–12.08 · **Decision:** D-066
+
+> - **Easy:** aims at the closest enemy unit (D-010) instead of the first one, for moves and charge moves. It walks
+>   its full Move while the closest enemy is far away (a threshold the V1 board never reaches), then the old 2"
+>   steps. V1 play, and so `m47_default_casualties.json`, stays identical.
+> - **Normal:**
+>   - Move scoring weighs our best shot over every enemy unit, and the reply (shooting and charge threat) of every
+>     enemy unit, not only the closest one.
+>   - Activation order: which unit moves, shoots or charges next is chosen by a stated heuristic, not unit id order.
+>   - Charge planner: no double counting across several targets; holding value and expected losses use the units
+>     actually involved.
+>   - Casualty worth, "front" and consolidation are measured against the attacker or the relevant enemies.
+>   - With one unit per side every change reduces to today's maths, so `m45_bot_game.json` and
+>     `m46_bot_fight_moves.json` stay byte-identical. If a 1v1 change proves unavoidable, D-066 records why, the
+>     replay is regenerated on purpose, and V1 strength is shown to be no worse.
+
+**Acceptance** (Release arena, 200 seeds, both seat assignments)
+- New scenario: Normal beats Easy in at least 75% of games; the new Normal beats the M55 Normal (built from that
+  commit in a scratch worktree) in at least 55% of games in both seats.
+- V1 and bot scenarios: Normal vs Easy no worse than recorded in M41. Zero rejected actions and reverts.
+- A seeded ctest subset on the new scenario (`M56_...`). Decision times within M54's targets. Replays as above.
+
+---
+
+## M57: Hard across several units
+**Effort:** `max` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-067
+
+> The design is written into D-067 before the code.
+> - The evaluator is generalised from `duel_of` (one unit each) to the army: per-unit-pair exchange values feed an
+>   army-level P(win) − P(loss) over (models left per side, battle round, distance bands), still under D-007. The
+>   exact 1v1 path stays when each side has one unit, so V1 play and `m45_bot_game.json` are unchanged.
+> - Lookahead: the top move plans, per unit and for the whole Movement phase, are checked by the engine-backed
+>   Monte Carlo (simulator, the bot's own dice, a fixed work budget in simulated actions, never wall-clock time)
+>   with the reply of every enemy unit. `lookahead.cpp`'s first-enemy `enemy_of` is replaced by a real target
+>   choice, and `kMaxLine` covers a 60" board.
+> - Casualty order, coherency removal, consolidation and charge choices use the army value.
+
+**Acceptance** (Release arena, 200 seeds, both seats)
+- New scenario: Hard beats Normal in at least 60% of games in both seats. Hard p95 ≤ 500 ms and max ≤ 3 s per
+  decision.
+- V1 and the two bot scenarios: Hard's results unchanged. Zero rejections, reverts and fallbacks.
+- A seeded ctest subset (`M57_...`). Replays unchanged.
+
+---
+
+## M58: Tuning, bot-game replay, docs
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-067
+
+> - Tune `BotWeights` for several units with `--weights` sweeps on the new scenario, without making V1 worse;
+>   the values and results go in D-067.
+> - Bot-game replay `tests/replays/m58_strike_bot_game.json` (Hard vs Hard, new scenario, a fixed seed that ends
+>   in a result rather than at the step cap), with determinism, `TheSavedFileMatchesTheGame` and
+>   `M58_Replay.DISABLED_RegenerateStrikeBotGameReplay` tests in `tests/ai/`.
+> - Docs: CLAUDE.md (scenarios, the regenerate command, the step cap), README (the new scenario), PLAN.md results;
+>   check the README text `tools/package.ps1` writes.
+
+**Acceptance**
+- Clean Debug and Release builds, all of ctest, `git diff main -- tests/replays` shows only the two new files.
+- Screenshot of a bot-vs-bot game on the new scenario mid-game.
+- Manual check left for the user: play the new scenario by mouse on Windows.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
@@ -1441,6 +1591,24 @@ Decision D-063. Still open: the manual check on Windows (download, unzip, run Vi
 2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
 4. **Core stratagems** (15): Command Re-roll, Fire Overwatch, Heroic Intervention, etc. These are new reactive PendingDecisions.
-5. **More units** via `tools/fetch_bsdata.py`, plus the remaining core abilities (24).
+5. **More unit types** (written down 2026-11-07 as the next task after M53–M58; findings from exploring the pinned
+   BSData commit):
+   - **Fetch tool fixes** (`tools/fetch_bsdata.py`): composition is `null` for most units (it only works when a group
+     carries min/max), so derive it from the model types; single models and characters come out `max null`; wargear
+     is read only one group deep (the Hive Tyrant and Captain get no weapons); `default_weapons` is empty when the
+     option group isn't required; non-round bases ("75x42", "Hull", ...) crash the tool instead of being skipped;
+     "Hunter: Monster/Vehicle" variants come out as ordinary profiles; wargear limits ("1 in 5") aren't enforced.
+   - **Refuse unknown weapon abilities** (extend D-026): today anything unparsed (Lethal Hits, Sustained Hits,
+     Anti-X, Melta, Lance, Precision, Extra Attacks, ...) is silently ignored, so a new unit would resolve wrongly.
+     [HAZARDOUS] is parsed but its test is a TODO (`attack_flow.cpp`).
+   - **Core weapon abilities, by value:** Hazardous (24.15); Random Characteristics (D-002, app-only: needs the
+     wording); Sustained Hits (24.36) and Lethal Hits (24.23); Twin-linked (24.38, re-rolls per D-011); Devastating
+     Wounds (24.10); Anti-X (24.03), Melta (24.25), Lance (24.21), Extra Attacks (24.11).
+   - **Units that would then work:** Assault Intercessors, Heavy Intercessors, Infernus Squad, Bladeguard Veterans
+     (4++), Hellblasters; Hormagaunts, Genestealers, Neurogaunts, Tyranid Warriors with Deathspitters. Several
+     load today once the fetch tool is fixed (Infernus, Assault Intercessors, Bladeguard, Hormagaunts).
+   - **After that:** monsters and vehicles (17.01 moving through models, 17.03 shooting at engaged ones, oval bases,
+     FRAME), characters and Leader (19), Feel No Pain (24.12), Deadly Demise (24.08); unit abilities stay out of
+     scope until item 3.
 6. **Networking:** a server-authoritative host runs the engine, clients send `GameAction`s and receive events or snapshots, and spectators subscribe to events. The engine API shouldn't need to change. If it does, that's a bug in the earlier design.
 7. **Attached units, transports, reserves, aircraft** (17–23).
