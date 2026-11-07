@@ -37,8 +37,9 @@ How to play
   2. Double-click VibeHammer.exe. It opens on the start screen:
      - Play hotseat: two players share the computer.
      - Play vs bot: choose the side you play (Space Marines or Tyranids); the bot plays the other.
-     - Watch bot vs bot: the bot plays both sides. The bar above the board has Pause / Resume,
-       Step (one action, or the next dice roll) and the bot speed (keys P, N, + and -).
+     - Watch bot vs bot: the bot plays both sides. In any game with a bot, the sidebar has
+       "Pause the bots" (key P); the bar above the board has Step (one action, or the bot's
+       next dice roll) and the bot speed (keys N, + and -).
      - Continue saved game (when there is one), Watch a replay, Quit.
   3. Space Marine Intercessors vs Tyranid Termagants. Follow the decision panel at the top;
      click the board to pick units, targets and moves.

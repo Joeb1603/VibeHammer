@@ -21,7 +21,8 @@ namespace wh40k::ai {
 
 using BotSpeed = client::BotSpeed;
 
-// How much longer (or shorter) every pause is than at Normal speed: Slow 2, Normal 1, Fast 0.4, Instant 0.
+// How much longer (or shorter) every pause is than at Normal speed: Slow 3 (2 before M48, D-059), Normal 1,
+// Fast 0.4, Instant 0.
 // The one place the speeds are defined (the client scales the bot's dice pop-ups with it too).
 [[nodiscard]] double speed_factor(BotSpeed speed);
 

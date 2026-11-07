@@ -105,6 +105,7 @@ void DicePopup::clear() {
     rolling_since_.reset();
     card_since_.reset();
     revealed_at_.reset();
+    focus_pending_ = false;
 }
 
 void DicePopup::advance() {
@@ -131,7 +132,10 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     if (queue_.empty()) return;
     const DiceCard& card = queue_.front();
     const double now = ImGui::GetTime();
-    if (!card_since_) card_since_ = now;
+    if (!card_since_) {
+        card_since_ = now;
+        focus_pending_ = true;
+    }
     if (rolling_since_ && now - *rolling_since_ >= kTumbleSeconds) {
         rolling_since_.reset();
         revealed_ = true;
@@ -140,19 +144,23 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     bool auto_advance = false;
     if (pace) {
         // D-054: the bot rolls after a short pause (at once at Instant speed, with no tumble) and continues
-        // after a dwell; a click anywhere skips the wait.
-        const bool click = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        // after a dwell. A click skips the wait too, but only on the pop-up or the bare board (below, M48).
         if (!revealed_ && !rolling_since_) {
             if (pace->roll_pause_s <= 0.0) {
                 revealed_ = true;
-            } else if (click || now - *card_since_ >= pace->roll_pause_s) {
+            } else if (now - *card_since_ >= pace->roll_pause_s) {
                 rolling_since_ = now;
             }
         } else if (revealed_) {
             if (!revealed_at_) revealed_at_ = now;
-            if (click || now - *revealed_at_ >= pace->dwell_s) auto_advance = true;
+            if (now - *revealed_at_ >= pace->dwell_s) auto_advance = true;
         }
     }
+    // M48 (D-059): a left click on the bare board: io.WantCaptureMouse is false when no ImGui window is under
+    // the mouse (the sidebar, the action bar, a datasheet) and no combo or other popup is open.
+    const bool clicked = pace.has_value() && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    DiceClickTarget click_target = ImGui::GetIO().WantCaptureMouse ? DiceClickTarget::OtherWindow
+                                                                    : DiceClickTarget::BareBoard;
 
     const Color side = side_color(card.roller);
     const ImVec4 side_colour(side.r / 255.0f, side.g / 255.0f, side.b / 255.0f, 1.0f);
@@ -166,7 +174,13 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     ImGui::SetNextWindowPos(ImVec2(area.x + area.width * 0.5f, area.y + area.height * 0.5f), ImGuiCond_Always,
                             ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, area.height));
-    ImGui::SetNextWindowFocus();
+    // M48 (D-059): on top once, when the card first appears, and not while a button elsewhere is held down.
+    // Taking the focus every frame cleared the active item of every other window, so a press on Pause, Step or
+    // the speed box never reached its release while dice showed.
+    if (focus_pending_ && !ImGui::IsAnyItemActive()) {
+        ImGui::SetNextWindowFocus();
+        focus_pending_ = false;
+    }
     ImGui::PushStyleColor(ImGuiCol_Border, side_colour);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.12f, 0.15f, 0.97f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ui_scale);
@@ -229,7 +243,19 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
         if ((big_button("Roll", true) || enter_or_space()) && !rolling_since_) rolling_since_ = now;
         ImGui::EndDisabled();
     }
+    // M48: a click on the pop-up itself skips; on its button, the button acts on its release instead.
+    if (ImGui::IsWindowHovered()) {
+        click_target = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) ? DiceClickTarget::PopUpButton
+                                                                                 : DiceClickTarget::PopUp;
+    }
     ImGui::End();
+    if (click_skips_bot_dice_wait(clicked, click_target) && !advance) {
+        if (!revealed_ && !rolling_since_) {
+            rolling_since_ = now;
+        } else if (revealed_) {
+            auto_advance = true;
+        }
+    }
     if (advance || auto_advance) next();
 }
 

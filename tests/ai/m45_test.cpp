@@ -186,7 +186,8 @@ TEST(M45_Watch, SpeedChangesLiveAndStepHandsOverOneAction) {
         if (c) watch.delivered();
         return c;
     };
-    // Slow: 1.6 s before a unit's activation. After 0.5 s the speed goes to Fast (0.32 s): due at once.
+    // Slow: 2.4 s before a unit's activation (1.6 s before M48, D-059). After 0.5 s the speed goes to Fast
+    // (0.32 s): due at once.
     EXPECT_FALSE(tick(0.0).has_value());
     EXPECT_FALSE(tick(0.5).has_value());
     watch.apply(client::WatchCommand::Faster, speed);

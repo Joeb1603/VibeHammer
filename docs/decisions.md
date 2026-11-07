@@ -1117,7 +1117,7 @@ change.
     `simulator`, `baseline_bot` (level Easy), `fallback` (the fallback and `LoopGuard`), `bot_driver` (pacing) and
     `arena` (+ `arena_main.cpp`, exe `wh40k_bot_arena`). `BotLevel` and `BotSpeed` are the client's enums
     (`settings.hpp`); `ai::speed_factor` is the one place the speed multipliers live (the bot's dice pop-ups use it
-    too). Normal and Hard play as Easy until M41/M44 (`effective_level`); the start screen and the game status say so.
+    too): Slow ×2 (**×3 since M48, D-059**), Normal ×1, Fast ×0.4, Instant 0. Normal and Hard play as Easy until M41/M44 (`effective_level`); the start screen and the game status say so.
   - **How a level plugs in:** a policy is `(state, side, legal, seed) -> PolicyResult {action, reason, rest}`.
     `Bot::decide` hashes the state, runs the loop guard, replays the memo while its next step's `expect_hash` equals
     the state's hash, otherwise calls the level's policy and keeps its `rest` as the new memo; then it validates the
@@ -1147,13 +1147,15 @@ change.
     is open or the bot is paused; Step hands over the next action at once. A refused or stopped bot stops the driver
     (the panel shows the reasons) until the next invalidate.
   - **Client:** the action bar shows "Bot (<army>) is thinking..." (or "is paused" / "has stopped") with Pause /
-    Resume, Step, the bot speed and the next or last reason. While a bot owns the decision the board is inactive (no
+    Resume, Step, the bot speed and the next or last reason (**since M48, D-059:** Step and the speed only; Pause is
+    the sidebar's "Pause the bots (P)"). While a bot owns the decision the board is inactive (no
     clicks, drags, move handle or menus) and the decision panel isn't drawn; `--steps` also stops there. Each bot
     action is its own Undo group, tagged `InputOwner::Bot`; against a bot, Undo (`undo_human`) removes the bot's
     groups after the human's last input and that input, and is disabled until the human has an input to undo (so it
     is always off in bot vs bot). "Undo last step" is never offered for the bot's placements. A bot's dice pop-ups
     roll after 0.35 s and continue after 1.2 s (times the speed factor; at Instant, at once, with no tumble) when "Bot
-    rolls its own dice automatically" is on (a sidebar toggle in a game with a bot); a click or Enter skips the wait.
+    rolls its own dice automatically" is on (a sidebar toggle in a game with a bot); a click or Enter skips the wait
+    (**since M48, D-059:** only a click on the pop-up or the bare board, not on another window).
   - **Save players block (extends D-025):** `saved_game.{hpp,cpp}` writes
     `"players": {"A": "human"|"bot", "B": ..., "bot_level": "easy"|"normal"|"hard"}`. Loading restores the bot sides
     and that game's level (kept apart from the settings' level, so loading doesn't change the user's setting). A save
@@ -1571,10 +1573,12 @@ change.
     maps the commands (Pause / Resume, Step, Faster, Slower) for the buttons and the keys P, N, + and -. In Watch
     bot vs bot a watch bar at the top of the action bar always shows them with the level and "Paused" /
     "Playing at <speed> speed", also while dice pop-ups show; against one bot they stay in the thinking bar.
+    **Changed by D-059 (M48):** Pause is the sidebar's "Pause the bots (P)" checkbox (`set_paused`), not a bar
+    button; the bar has Step first, then the speed, and against one bot it also shows while a bot's card is open.
     The speed is the settings' bot speed, which the driver reads every frame, so a change applies to the pause
     already running. Paused, the bot's own dice pop-ups wait for a click like a human's. Step with a pop-up
     showing reveals its dice, or closes it once they show; otherwise it hands over the bot's next action at
-    once (paused or not) and is used up.
+    once (paused or not) and is used up. (**D-059:** only a bot's card; a Step on a human's card is dropped.)
   - **Bot-game replay:** `tests/replays/m45_bot_game.json`, scenario form (`data/scenarios/v1_skirmish.json`,
     dice seed 9), Hard vs Hard, played through `GameSession` by `play_bot_session` (the arena's loop, now on a
     session the caller owns): 33 steps, ending in battle round 2 with a Space Marine win (the Termagants advance
@@ -1731,3 +1735,44 @@ rule, core, state or replay-format change. Amends D-024, D-038, D-051, D-054 and
     the next damage, and when it is the link of a line strung out by the charge its death isolates a neighbour
     (casualty decisions that can't keep coherency: 4 → 18 of about 230). Open: fixing it means changing Normal,
     which this batch keeps unchanged (PLAN.md M47).
+
+## D-059: Bot pacing and Pause in the sidebar (M48)
+User feedback (2026-11-07): "slow bots should be slower. When the bots are moving quick you can't click pause.
+maybe have somewhere else to pause the bots, like maybe have it as a config option. Tooltip for pausing bots
+covers some of the ui saying what the bot is doing, that would also fix this. still need to have the step button
+where it is though." Agreed: Slow = 3× Normal; Pause becomes a sidebar checkbox, not saved between games; Step
+and the bot speed stay in the bar above the board. Presentation only: no bot decision changes, replays unchanged.
+- **Speeds** (`ai::speed_factor`, still the one place): Slow ×3 (was ×2), Normal ×1, Fast ×0.4, Instant 0. At
+  Slow: 2.4 s before a unit's activation, 0.36 s per model placement, 1.2 s before a commit, 1.8 s for reactive
+  allocation and casualty answers; a bot dice card waits 1.05 s, tumbles 0.45 s (fixed) and shows its result
+  3.6 s, about 5 s in all.
+- **Where Pause is:** in a game with a bot, the sidebar's "Game" section has a bot block right under the unit
+  list (so it is near the top and never moves with the bar): "Pause the bots (P)" (`WatchControls::set_paused`;
+  key P still toggles it) and "Bot rolls its own dice automatically" (moved up from the toggles). Pause is client
+  state: never in `AppSettings` / `vibehammer_settings.json`, reset by a new game, a load and the start screen,
+  as before. "Paused" still shows in the watch bar's status and as "is paused" in the thinking bar.
+- **The bar:** no Pause / Resume button (its label width shifted Step). Step comes first at the row's start,
+  then the bot speed; the watch bar (bot vs bot) then has the "Watching bot vs bot (<level>)" chip and the
+  status. Against one bot, the Step / speed row is also drawn in the rolling bar while a bot's dice card is open
+  (on the same row as in the thinking bar), so it no longer vanishes whenever dice show.
+- **Why Pause couldn't be clicked, and the fix:** `DicePopup::draw` called `ImGui::SetNextWindowFocus()` every
+  frame. Focusing a window clears the active item of every other window, and a button fires on release, so a
+  press on any sidebar or action-bar widget was cancelled while a dice card showed (at Fast, nearly always). The
+  pop-up now takes the focus once per card, when it first appears, and waits while another item is active
+  (`!ImGui::IsAnyItemActive()`), so it still comes up on top (it is drawn last) without stealing a press.
+  Enter / Space still work (they are read globally).
+- **What skips a paced bot card's wait:** only a left click on the pop-up itself or on the bare board. A click on
+  the pop-up's Roll / Continue button is left to the button (it acts on release; a skip on the press as well
+  would also close the next card), and a click on the sidebar, the action bar, a datasheet or any other ImGui
+  window (`io.WantCaptureMouse`) doesn't skip, so Step doesn't both step and skip. The decision is
+  `click_skips_bot_dice_wait(clicked, DiceClickTarget)` in `watch_controls` (tested, `M48_Watch`).
+- **Step only on a bot's card:** `step_closes_popup(ShownCard)` (None / Bots / Humans). Step or key N while a
+  human's own card shows is dropped and leaves the card alone (the human rolls their own dice); with no card it
+  still waits for the bot's next action, and on a bot's card it reveals or closes it, as before.
+- **Tooltips:** the bar's tooltips (Step, the bot speed, the reason line's full reason) appear after a longer
+  rest (`ImGuiHoveredFlags_Stationary | DelayNormal | NoSharedDelay`, 0.4 s instead of 0.15 s) and open at the
+  item's x just below the action bar's bottom edge (`SetNextWindowPos` before `BeginTooltip`), so the bot's
+  status and reason lines stay readable. The bar's fixed height (D-030) is unchanged.
+- **Tests:** client `M48_Watch.*` (set_paused and the toggle, Step on a human's card, the dice run, the click
+  targets); ai `M48_Pacing.*` (the factors and a Slow delivery at 2.4 s); M39 / M45 expectations updated to ×3.
+  Mouse input can't be scripted: the clicks while dice show are a manual check on Windows (PLAN.md M48).

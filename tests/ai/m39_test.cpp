@@ -340,7 +340,7 @@ double first_delivery(BotSpeed speed, DriverInputs in) {
 }  // namespace
 
 TEST(M39_Driver, PausesFollowTheActionKindAndTheSpeed) {
-    EXPECT_DOUBLE_EQ(speed_factor(BotSpeed::Slow), 2.0);
+    EXPECT_DOUBLE_EQ(speed_factor(BotSpeed::Slow), 3.0);  // M48 (D-059): Slow = 3x Normal (2x before)
     EXPECT_DOUBLE_EQ(speed_factor(BotSpeed::Normal), 1.0);
     EXPECT_DOUBLE_EQ(speed_factor(BotSpeed::Fast), 0.4);
     EXPECT_DOUBLE_EQ(speed_factor(BotSpeed::Instant), 0.0);
@@ -363,7 +363,7 @@ TEST(M39_Driver, TheActionIsHandedOverOnceItsPauseHasPassed) {
     const double normal = pause_seconds(expected.action, BotSpeed::Normal);
     ASSERT_GT(normal, 0.0);
     EXPECT_NEAR(first_delivery(BotSpeed::Normal, inputs_for(gs)), normal, 0.011);
-    EXPECT_NEAR(first_delivery(BotSpeed::Slow, inputs_for(gs)), 2.0 * normal, 0.011);
+    EXPECT_NEAR(first_delivery(BotSpeed::Slow, inputs_for(gs)), 3.0 * normal, 0.011);  // M48: 3x
     EXPECT_NEAR(first_delivery(BotSpeed::Fast, inputs_for(gs)), 0.4 * normal, 0.011);
     EXPECT_DOUBLE_EQ(first_delivery(BotSpeed::Instant, inputs_for(gs)), 0.0);  // Instant: no pause
 

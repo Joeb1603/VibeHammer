@@ -10,11 +10,13 @@
 #include <vector>
 
 #include "dice_cards.hpp"
+#include "watch_controls.hpp"
 
 namespace wh40k::client {
 
 // D-054 (M39): a bot's own dice, rolled and continued by themselves ("Bot rolls its own dice automatically"):
-// the pause before the roll and how long the result stays up. A click or Enter / Space skips the wait.
+// the pause before the roll and how long the result stays up. Enter / Space, or a left click on the pop-up or the
+// bare board (not on another window: M48, D-059), skips the wait.
 struct DicePace {
     double roll_pause_s = 0.0;
     double dwell_s = 0.0;
@@ -46,6 +48,7 @@ private:
     std::optional<double> rolling_since_;  // the tumble after Roll is pressed
     std::optional<double> card_since_;     // when the current card was first drawn (D-054 pacing)
     std::optional<double> revealed_at_;    // when its result was first shown
+    bool focus_pending_ = false;           // M48: take the focus once, when a card first appears
 };
 
 }  // namespace wh40k::client

@@ -10,7 +10,7 @@ namespace wh40k::ai {
 
 double speed_factor(BotSpeed speed) {
     switch (speed) {
-        case BotSpeed::Slow: return 2.0;
+        case BotSpeed::Slow: return 3.0;  // M48 (D-059): was 2.0
         case BotSpeed::Normal: return 1.0;
         case BotSpeed::Fast: return 0.4;
         case BotSpeed::Instant: return 0.0;

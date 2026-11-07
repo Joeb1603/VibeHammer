@@ -31,10 +31,14 @@ void WatchControls::apply(WatchCommand command, BotSpeed& speed) {
     }
 }
 
-bool WatchControls::step_closes_popup(bool popup_open) {
-    if (!step_ || !popup_open) return false;
+bool WatchControls::step_closes_popup(ShownCard card) {
+    if (!step_ || card == ShownCard::None) return false;
     step_ = false;
-    return true;
+    return card == ShownCard::Bots;  // M48 (D-059): a human's card ignores the step
+}
+
+bool click_skips_bot_dice_wait(bool clicked, DiceClickTarget target) noexcept {
+    return clicked && (target == DiceClickTarget::BareBoard || target == DiceClickTarget::PopUp);
 }
 
 std::string watch_status(const WatchControls& controls, BotSpeed speed) {

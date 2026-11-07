@@ -581,8 +581,8 @@ private:
         driver_.set_speed(settings_.bot_speed);
         const bool instant = settings_.bot_speed == BotSpeed::Instant;
         driver_.set_threading(instant ? ai::BotDriver::Threading::Synchronous : ai::BotDriver::Threading::Worker);
-        // M45: Step while a dice pop-up shows reveals or closes that card.
-        if (watch_.step_closes_popup(dice_.active())) dice_.advance();
+        // M45: Step while a dice pop-up shows reveals or closes that card; M48: only a bot's card (D-059).
+        if (watch_.step_closes_popup(shown_card())) dice_.advance();
         for (int i = 0; i < (instant ? 20 : 1) && bot_deciding(); ++i) {
             ai::DriverInputs in;
             in.state = &session_->state();
@@ -596,6 +596,13 @@ private:
             watch_.delivered();
             if (!submit_bot(*c)) return;
         }
+    }
+
+    // M48 (D-059): the dice card showing, if any, and whether a bot rolls it.
+    ShownCard shown_card() const {
+        const DiceCard* card = dice_.current();
+        if (card == nullptr) return ShownCard::None;
+        return bot_sides_[core::side_index(card->roller)] ? ShownCard::Bots : ShownCard::Humans;
     }
 
     Rectangle board_area() const {
@@ -1601,6 +1608,16 @@ private:
             ImGui::Text("%s (unit %u): %zu/%d models%s", u.name.c_str(), u.id.v, u.models.size(), u.starting_strength,
                         u.battle_shocked ? ", battle-shocked" : "");
         }
+        if (mode_ == Mode::Play && (bot_sides_[0] || bot_sides_[1])) {  // M48 (D-059): the bot block, near the top
+            ImGui::Spacing();
+            bool paused = watch_.paused();
+            if (ImGui::Checkbox("Pause the bots (P)", &paused)) watch_.set_paused(paused);  // client state, not saved
+            ImGui::SetItemTooltip("The bots stop before their next action; their dice wait for a click. Step (in "
+                                  "the bar above the board, key N) still does one action. Not kept between games.");
+            ImGui::Checkbox("Bot rolls its own dice automatically", &settings_.bot_auto_dice);  // M39 (D-054)
+            ImGui::SetItemTooltip("The bot's dice pop-ups roll and continue by themselves (a click on the pop-up "
+                                  "or the board skips the wait).");
+        }
         ImGui::Spacing();
         ImGui::TextDisabled("Rings, each shown only when it is relevant:");
         overlay_toggle(RingKind::MoveRange, &overlays_.move_range);
@@ -1621,10 +1638,6 @@ private:
         ImGui::SetItemTooltip("The defending side's allocation order and casualty order take their defaults (05.03, "
                               "05.04) instead of asking. The default casualty order: %s",
                               kDefaultCasualtyOrderText);
-        if (bot_sides_[0] || bot_sides_[1]) {  // M39 (D-054)
-            ImGui::Checkbox("Bot rolls its own dice automatically", &settings_.bot_auto_dice);
-            ImGui::SetItemTooltip("The bot's dice pop-ups roll and continue by themselves (a click skips the wait).");
-        }
         ImGui::Checkbox("Warn before ending shooting with shots left", &settings_.warn_end_shooting);
         ImGui::SetItemTooltip("Ask before ending the Shooting phase while a unit still has a target it can shoot.");
         ImGui::Spacing();
@@ -1693,7 +1706,8 @@ private:
     }
 
     // D-054: a bot's own dice roll and continue by themselves when "Bot rolls its own dice automatically" is on,
-    // paced by the bot speed (a click or Enter skips the wait). A human's dice wait for the human as before.
+    // paced by the bot speed (Enter, or a click on the pop-up or the bare board, skips the wait; M48). A human's
+    // dice wait for the human as before.
     std::optional<DicePace> bot_dice_pace() const {
         const DiceCard* card = dice_.current();
         if (card == nullptr || !watch_.bot_dice_run(settings_.bot_auto_dice) ||
@@ -1707,27 +1721,44 @@ private:
     // M45: Watch bot vs bot (both sides are bots).
     bool watching() const { return mode_ == Mode::Play && session_ && bot_sides_[0] && bot_sides_[1]; }
 
-    // M45 (D-054): Pause / Resume, Step and the bot speed; in the watch bar and, against one bot, while it thinks.
+    // M48 (D-059): a tooltip for an item in the action bar. It waits for a longer rest than the default and
+    // opens below the bar's bottom edge, so it never covers the bot's status or reason lines.
+    static void bar_tooltip(const char* text) {
+        if (!ImGui::IsItemHovered(ImGuiHoveredFlags_Stationary | ImGuiHoveredFlags_DelayNormal |
+                                  ImGuiHoveredFlags_NoSharedDelay | ImGuiHoveredFlags_AllowWhenDisabled)) {
+            return;
+        }
+        const float bar_bottom = ImGui::GetWindowPos().y + ImGui::GetWindowSize().y;
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, bar_bottom + ImGui::GetStyle().ItemSpacing.y));
+        if (ImGui::BeginTooltip()) {
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+            ImGui::TextUnformatted(text);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    }
+
+    // M45 (D-054): Step and the bot speed; in the watch bar and, against one bot, while it thinks or rolls.
+    // M48 (D-059): Pause moved to the sidebar ("Pause the bots (P)"); Step comes first, so it never shifts.
     void draw_watch_buttons() {
         BotSpeed& speed = settings_.bot_speed;
-        if (ImGui::Button(watch_.paused() ? "Resume" : "Pause")) watch_.apply(WatchCommand::TogglePause, speed);
-        ImGui::SetItemTooltip("Pause or resume the bot (key P). Paused, its dice wait for a click too.");
-        ImGui::SameLine();
         if (ImGui::Button("Step")) watch_.apply(WatchCommand::Step, speed);
-        ImGui::SetItemTooltip("The bot's next action now, also while paused; with dice showing, the next roll (key N).");
+        bar_tooltip("The bot's next action now, also while paused; with the bot's dice showing, its next roll "
+                    "(key N). Pause the bots in the sidebar (key P).");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
         int index = static_cast<int>(speed);
         if (ImGui::Combo("Bot speed", &index, "Slow\0Normal\0Fast\0Instant\0")) speed = static_cast<BotSpeed>(index);
-        ImGui::SetItemTooltip("Changes the bot's pace at once (keys + and -).");
+        bar_tooltip("Changes the bot's pace at once (keys + and -). Slow is three times as long as Normal.");
     }
 
     // M45: the watch bar on top of the action bar in bot vs bot: what is playing, and the controls.
+    // M48 (D-059): Step first, then the speed, then what is playing and its status.
     void draw_watch_bar() {
+        draw_watch_buttons();
+        ImGui::SameLine();
         const std::string tag = std::string("Watching bot vs bot (") + bot_level_name(game_bot_level_) + ")";
         chip(tag.c_str(), ImVec4(0.30f, 0.33f, 0.40f, 1.0f));
-        ImGui::SameLine();
-        draw_watch_buttons();
         ImGui::SameLine();
         const std::string status =
             session_->state().result ? std::string("Game over") : watch_status(watch_, settings_.bot_speed);
@@ -1743,15 +1774,10 @@ private:
     static void bot_reason_text(const char* prefix, const std::string& reason) {
         const std::string text = std::string(prefix) + ai::short_reason(reason);
         ImGui::TextWrapped("%s", text.c_str());
-        if (ImGui::BeginItemTooltip()) {
-            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
-            ImGui::TextUnformatted(reason.c_str());
-            ImGui::PopTextWrapPos();
-            ImGui::EndTooltip();
-        }
+        bar_tooltip(reason.c_str());  // M48: after a longer rest, below the bar
     }
 
-    // D-054: the action bar while the bot decides: who, what it is about to do, Pause / Resume and Step.
+    // D-054: the action bar while the bot decides: who, what it is about to do, Step and the speed (M48).
     void draw_bot_thinking() {
         const core::Side side = session_->pending()->side;
         ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
@@ -1787,6 +1813,9 @@ private:
         ImGui::AlignTextToFramePadding();
         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s (%s)", card.title.c_str(), card.rule.c_str());
         ImGui::PopFont();
+        // M48 (D-059): against one bot, its Step / speed row stays while its dice show (the same row as in
+        // draw_bot_thinking), so it doesn't vanish and come back. In bot vs bot it is on the watch bar.
+        if (!watching() && shown_card() == ShownCard::Bots) draw_watch_buttons();
         const std::string hint = (card.purpose.empty() ? std::string() : card.purpose + ". ") + "Roll the dice in the pop-up.";
         ImGui::TextWrapped("%s", hint.c_str());
     }
@@ -2122,7 +2151,7 @@ private:
     BotSides bot_sides_{false, false};  // M38: which sides the bot plays (client state, not GameState; D-054)
     BotLevel game_bot_level_ = BotLevel::Easy;  // M39: this game's bot level (from the settings, or the save)
     ai::BotDriver driver_;              // M39 (D-054): paces the bot's decisions
-    WatchControls watch_;               // M45: Pause / Resume, Step and the speed (the watch bar)
+    WatchControls watch_;               // M45: Pause, Step and the speed; M48: Pause is in the sidebar
     std::string bot_reason_;            // why the bot did its last action
     ai::BotLog bot_log_;                // M45: the bot's reasons in the log (client state only, never saved)
     StartScreen start_screen_;

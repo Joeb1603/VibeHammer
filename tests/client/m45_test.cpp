@@ -52,11 +52,11 @@ TEST(M45_Watch, CommandsPauseStepAndChangeTheSpeed) {
 TEST(M45_Watch, AStepWithDiceShowingGoesToThePopUp) {
     WatchControls w;
     BotSpeed speed = BotSpeed::Normal;
-    EXPECT_FALSE(w.step_closes_popup(true));  // no step pressed
+    EXPECT_FALSE(w.step_closes_popup(ShownCard::Bots));  // no step pressed
     w.apply(WatchCommand::Step, speed);
-    EXPECT_FALSE(w.step_closes_popup(false));  // no pop-up: the step waits for the bot's action
+    EXPECT_FALSE(w.step_closes_popup(ShownCard::None));  // no pop-up: the step waits for the bot's action
     EXPECT_TRUE(w.step_requested());
-    EXPECT_TRUE(w.step_closes_popup(true));  // a pop-up: this step reveals or closes the card
+    EXPECT_TRUE(w.step_closes_popup(ShownCard::Bots));  // a (bot's, M48) pop-up: this step reveals or closes the card
     EXPECT_FALSE(w.step_requested());        // and is used up
 }
 

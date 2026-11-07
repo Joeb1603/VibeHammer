@@ -630,7 +630,7 @@ Every earlier level stays selectable as a regression opponent.
 >   - `tick(double now)` returns an action when it's due.
 >   - Thinking pauses per action kind, scaled by speed. Normal speed: 0.8 s before a unit's activation, 0.12 s
 >     between model placements, 0.4 s before a commit, 0.6 s for reactive allocation and casualty answers.
->   - Slow ×2, Fast ×0.4, Instant 0.
+>   - Slow ×2 (×3 since M48, D-059), Fast ×0.4, Instant 0.
 >   - It runs `decide` on a worker `std::thread` with a `GameState` copy. A generation counter drops results that
 >     went stale after undo, a new game or a load.
 > - `arena.*` and `arena_main.cpp` (exe `wh40k_bot_arena`, run in Release):
@@ -1083,7 +1083,8 @@ compared with `--a normal --b normal` on the same scenario and seeds 1–200.
 - **Watch controls:** in Watch bot vs bot a watch bar (level, Pause / Resume, Step, bot speed, status) sits on
   top of the action bar, also while dice show; keys P, N, + and -. The speed applies at once, paused bot dice
   wait for a click, and Step with dice showing reveals or closes the card (`WatchControls`,
-  `src/client_2d/logic/watch_controls.*`; client tests `M45_Watch`, ai test `M45_Watch`).
+  `src/client_2d/logic/watch_controls.*`; client tests `M45_Watch`, ai test `M45_Watch`). Since M48 (D-059) Pause is the
+  sidebar's "Pause the bots (P)" checkbox, and the bar has Step first, then the speed.
 - **package.ps1:** the README covers the start screen, the bot and the settings file; smoke test 2
   (`--seed 1 --bot B --steps 40 --bot-steps 5`) checks the exe's "bot-steps: 5 of 5 bot actions taken" line.
   Both smoke tests pass and `VibeHammer.zip` is built.
@@ -1274,7 +1275,7 @@ at `ec71730`, measured before any M47 edit) and after, `wh40k_bot_arena --games 
 
 ---
 
-## M48: Bot pacing and Pause in the sidebar
+## M48: Bot pacing and Pause in the sidebar ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-059
 
 > User feedback: slow bots should be slower; when the bots move quickly Pause can't be clicked; the Pause tooltip
@@ -1297,6 +1298,39 @@ at `ec71730`, measured before any M47 edit) and after, `wh40k_bot_arena --games 
 - Screenshots: the sidebar bot block in a game against the bot, and the watch bar in bot vs bot with Step first
   and no Pause button. The package README says where Pause is.
 - Manual check on Windows: Pause, Step and the bot speed respond while bot dice show at Fast.
+
+**Results (2026-11-07):**
+- **Slow = ×3:** `ai::speed_factor(Slow)` is 3.0 (was 2.0): 2.4 s before an activation, 0.36 s per placement,
+  1.05 s before a bot dice roll and 3.6 s on show. Normal, Fast and Instant are unchanged.
+- **Pause in the sidebar:** in a game with a bot, the "Game" section has the bot block right under the unit list:
+  "Pause the bots (P)" (bound to `WatchControls::set_paused`; key P still toggles it) and "Bot rolls its own dice
+  automatically" (moved up from the toggles below). Pause stays client state (`WatchControls::reset` on a new game,
+  a load or the start screen; never in `AppSettings`). The bar lost Pause / Resume: Step comes first, then the bot
+  speed, then (watch bar) the "Watching bot vs bot (<level>)" chip and the status ("Paused" stays there and as "is
+  paused" in the thinking bar). Against one bot, the Step / speed row also shows in the rolling bar while a bot's
+  card is open, on the same row as in the thinking bar.
+- **Clicks work while dice show:** `DicePopup::draw` takes the focus once per card, when it first appears and no
+  item is active (it called `SetNextWindowFocus` every frame, which cleared every other window's active item, so
+  a press never reached its release). A paced bot card's wait is skipped only by a left click on the pop-up (not
+  on its Roll / Continue button, which acts itself) or on the bare board (`!io.WantCaptureMouse`); the decision is
+  `click_skips_bot_dice_wait` in `watch_controls`. `step_closes_popup` takes a `ShownCard` (None / Bots /
+  Humans): Step or key N on a human's card is dropped and leaves the card alone.
+- **Tooltips:** Step, the bot speed and the reason line's full reason use `bar_tooltip`: `Stationary |
+  DelayNormal | NoSharedDelay`, placed at the item's x just below the action bar's bottom edge.
+- **Tests:** client `M48_Watch.SetPausedAndTheToggleAgree`, `StepIgnoresAHumansCard`,
+  `TheBotDiceRunFollowsThePauseCheckbox`, `OnlyAClickOnThePopUpOrTheBareBoardSkipsTheWait`; ai
+  `M48_Pacing.SlowIsThreeTimesNormal`, `ASlowBotHandsOverItsActivationAfter2Point4Seconds`. Updated:
+  `M39_Driver.PausesFollowTheActionKindAndTheSpeed` and `TheActionIsHandedOverOnceItsPauseHasPassed` (Slow 3.0,
+  delivery at 3× Normal), the comment in `M45_Watch.SpeedChangesLiveAndStepHandsOverOneAction`, and
+  `M45_Watch.AStepWithDiceShowingGoesToThePopUp` (same checks, now with `ShownCard`). All of ctest passes; replays
+  unchanged (`git diff tests/replays` empty).
+- **Screenshots** (`xvfb-run`, seed 1): the sidebar bot block against the bot (`--bot B`); the watch bar in bot vs
+  bot (`--bot both --bot-steps 3`) with Step first and no Pause button; a bot's dice card (`--bot A --bot-steps 10
+  --dice 1`) with the Step / speed row in the rolling bar.
+- **Manual check still needed on Windows** (mouse input can't be scripted): at Fast, while the bot's dice show,
+  ticking "Pause the bots", clicking Step and changing the bot speed all respond on the first click, and clicking
+  them doesn't also skip the dice card; a click on the board or the pop-up still skips it; the bar's tooltips
+  appear after a short rest, below the bar.
 
 ---
 
