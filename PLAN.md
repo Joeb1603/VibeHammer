@@ -1142,6 +1142,149 @@ after, `wh40k_bot_arena --games 200`:
 
 ---
 
+## User-testing feedback (M47–M50)
+
+**Run note (agreed with the user 2026-11-07):** M47–M50 come from user testing and are pre-approved as one batch.
+They run back to back without `/clear` and without per-milestone sign-off. This overrides "one milestone per
+session" and "agree each milestone first" for these milestones only. Each milestone is implemented by a sub-agent
+at the effort shown, then verified (clean build, all of `ctest`, `git diff tests/replays` showing only the planned
+changes), marked ✅, committed and pushed. A missed acceptance number is recorded as an open item, never lowered.
+
+**Agreed with the user:**
+- Slow bot speed = 3× Normal.
+- Pause moves to the sidebar as a checkbox, not saved between games. Step and the bot speed stay in the bar
+  above the board.
+- The new casualty order is the default everywhere; Hard also compares it as an extra candidate; Normal is
+  unchanged; the Hard vs Hard bot replay may be regenerated on purpose.
+- A unit's odd-one-out model (the Sergeant) is kept until last, unless removing it is the only way to keep
+  coherency.
+
+---
+
+## M47: Default casualty order: furthest from the action first, keeping coherency
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-07) · **Rules:** 03.03, 05.04, 06.02 · **Decision:** D-058
+
+> User feedback: "when choosing which units to kill, the auto mode should prefer models furthest away from the
+> 'action' ... so that could be models at the back, or models at risk of being split off and losing coherency. so
+> the least coherent ones I guess. this is important". Today the default (`CasualtyPlan`) is plain unit order,
+> and V1 lists the front rank first (D-008), so it removes the Sergeant and the front rank first.
+>
+> **New `src/client_2d/logic/casualty_order.{hpp,cpp}`** (read-only core queries and geometry; the engine still
+> decides 05.04, 06.02 and 03.03):
+> - `coherency_losses(models)`: moved verbatim from `normal::coherency_losses`, on a pairwise near/far table with
+>   the same `within` predicates as `check_coherency`.
+> - `default_casualty_order(state, target, picks = {})`: every model once, `picks` first.
+> - `default_coherency_removal(state, unit)`: the 03.03 Regaining Coherency pick.
+>
+> **Keys**, for each candidate m of the remaining set S; the first difference decides:
+> 1. Fewest extra 03.03 losses after removing m. Models already out of coherency therefore go first.
+> 2. The odd-one-out model last: the only model of its `type_name` in a unit with more than one type, fixed at the
+>    decision. Key 1 comes first, so it goes earlier only when that is the only way to keep coherency.
+> 3. At risk first: not engaged, and within 2" of at most one other model of S (a leaf, a straggler, a pair, or
+>    already isolated). Engaged models are the action and never count as at risk.
+> 4. Furthest from the closest enemy model first (edge to edge, any enemy unit on the battlefield, compared with
+>    `more_than`; skipped with no enemies).
+> 5. Later in unit order first (the back rank, D-008); the first-listed model is kept longest.
+>
+> **Phase A**, only while `OrderCasualties` for this target is pending: step through
+> `preview_casualties(state, priority)` and push the best of its options, so forced wounded models, a picked W2
+> model taking the damage, allocation groups and the 06.02 tiers are right. **Phase B:** the best of S,
+> repeatedly, so every prefix is a good removal set.
+>
+> **Where it applies:**
+> - `CasualtyPlan`'s default: "Allocate damage automatically", "Use default order", Easy's casualties and the
+>   all-level fallback.
+> - `CasualtyPicks` fills the rest after manual picks with it. On the board, "Use default order" finishes from the
+>   current picks ("Default order for the rest" when there are picks).
+> - Easy and the fallback answer RestoreCoherency with `default_coherency_removal`. A human's pick stays a click
+>   (D-042).
+> - Normal: unchanged (it uses the moved `coherency_losses`).
+> - Hard: the default order is a 4th candidate in `decide_casualties`, after Normal's order, front-first and
+>   rear-first; Normal's order is still kept unless beaten by the margin. Hard's rollouts use Easy's answers, so
+>   they see the new order too.
+>
+> **UI text:** "use the default order" explains the order in a tooltip; the auto-allocate tooltip says it too
+> (and moves back onto its own checkbox: with a bot in the game it was attached to "Bot rolls its own dice").
+
+**Acceptance**
+- Clean build; all of ctest passes. New client tests `M47_*` (inch coordinates: back rank first, straggler first,
+  a line keeps coherency, an isolated model first, the Sergeant last, a wounded W2 model, melee, 06.02, picks plus
+  the rest, auto-allocate, the coherency pick) and ai tests `M47_*` (Easy, fallback, Hard's candidate). Existing
+  tests that used `CasualtyPlan` as "unit order" use an explicit unit-order priority instead, with every assertion
+  kept.
+- `m46_bot_fight_moves.json` (Normal vs Normal) regenerates byte-identical. `m45_bot_game.json` (Hard vs Hard) may
+  change: regenerated on purpose, the first differing step recorded. The core replays are unchanged. New replay
+  `tests/replays/m47_default_casualties.json` (Easy vs Easy, 20 Termagants) is byte-stable and replays with core
+  only.
+- Release arena (`--games 200`; V1, Termagants first and 20 Termagants; Easy/Easy, Normal/Easy, Easy/Normal,
+  Hard/Normal, Normal/Hard), before and after:
+  - 0 rejected actions, 0 `UnitMoveReverted`, 0 unfinished games, 0 fallbacks.
+  - Easy's Termagant coherency removals at most half of before (D-057's open item: 37 / 128 / 10).
+  - Normal's and Hard's coherency removals at most before + max(3, 20%).
+  - No seat's wins + draws drops by more than 3 points; Hard seats at most 2 games lower.
+  - p95 decision time ≤ 500 ms; Hard's slowest decision on 20 Termagants ≤ 1.2 × before.
+
+---
+
+## M48: Bot pacing and Pause in the sidebar
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-059
+
+> User feedback: slow bots should be slower; when the bots move quickly Pause can't be clicked; the Pause tooltip
+> covers the bar's text saying what the bot is doing; the Step button stays where it is.
+> - **Slow = 3× Normal** (`ai::speed_factor`): 2.4 s before a unit's activation, 0.36 s per placement, about 5 s
+>   per bot dice card.
+> - **Pause in the sidebar:** in a game with a bot, the "Game" section has a bot block under the unit list:
+>   "Pause the bots (P)" and "Bot rolls its own dice automatically". Client state only, reset by a new game or a
+>   load. The bar loses its Pause / Resume button and keeps Step first (so it doesn't shift), then the bot speed,
+>   then the status. Against one bot the Step / speed row also shows while a bot's dice card is open.
+> - **Clicks work while dice show:** the dice pop-up takes focus only when a card first appears and not while an
+>   item is active (it took focus every frame, which cancelled every press elsewhere). Only a click on the pop-up
+>   or on the bare board skips a bot card's wait. Step and key N only reveal or close a bot's card, never a
+>   human's.
+> - **Tooltips don't cover the bot's status:** the bar's tooltips wait for a longer rest and open below the bar.
+
+**Acceptance**
+- Clean build; all of ctest passes (speed factors updated in the M39 / M45 tests; new client tests `M48_*` for
+  `set_paused`, Step on a human's card and the dice run). Replays unchanged.
+- Screenshots: the sidebar bot block in a game against the bot, and the watch bar in bot vs bot with Step first
+  and no Pause button. The package README says where Pause is.
+- Manual check on Windows: Pause, Step and the bot speed respond while bot dice show at Fast.
+
+---
+
+## M49: The Roll button only when the bot's dice wait for a click
+**Effort:** `medium` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-060
+
+> User feedback: only show the button to roll the bot's dice if the bot is paused.
+> - A bot's card that rolls by itself (the bot's card, "Bot rolls its own dice" on, not paused) has no Roll and
+>   no Continue / Done button. A same-height dim line takes their place: "The bot rolls its own dice. Pause the
+>   bots to roll them yourself." (after the reveal, "Continuing..."). Enter, Space and a click on the pop-up or the
+>   board still skip the wait.
+> - Paused, or with the setting off, the card waits with Roll and Continue as a human's does. Pausing mid-card
+>   shows them at once.
+
+**Acceptance**
+- Clean build; all of ctest passes; new client tests `M49_DiceButtons` cover every combination. Replays
+  unchanged.
+- A screenshot of a bot's card without Roll, if the flags can reach one.
+
+---
+
+## M50: Short ring legend, full text on hover
+**Effort:** `medium` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-061
+
+> User feedback: the movement range description paragraph is too big; put the detail in a tooltip.
+> - `ring_summary(RingKind)`: one short line per ring, shown in the sidebar legend under each checkbox.
+> - Hovering a legend row (swatch, checkbox or summary) shows the full `ring_meaning`, wrapped, as the board's
+>   ring tooltip does. The board tooltip keeps the full text.
+
+**Acceptance**
+- Clean build; all of ctest passes; new client test `M50_RingText` (every summary non-empty, short, one sentence;
+  the full meanings unchanged). Replays unchanged.
+- A sidebar screenshot shows the short legend.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
