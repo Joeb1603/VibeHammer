@@ -1882,6 +1882,40 @@ conservative choices made for M53). Amends D-008.
   inside 9"), is wholly within its zone, and no bases overlap. The closest enemy front lines are 20" apart (23"
   for unit 6), so no unit is charge-eligible on turn 1.
 
+## D-065: Per-unit shade, board number and numbered names (M55)
+**Decided:** 2026-11-07 (M55 is pre-approved; the details below are the conservative choices made for it).
+Client only (`wh40k_client_logic` `unit_style.{hpp,cpp}`, drawn by `board_view.cpp` and `main.cpp`); no rule,
+state, replay or JSON change. Amends D-028 (the client layout) and D-029 (greyed units) only by adding to them.
+- **Per-side index.** A unit's number is its 1-based position among its own side's units in `GameState::units`
+  order (the scenario file's order). Destroyed units stay in `units`, so numbers never shift during a game.
+- **Shades (RGB).** Each side has six shades, handed out by index (a seventh unit wraps round to shade 1).
+  Side A: 1 (52,110,200) side blue, 2 (130,180,245) light blue, 3 (60,175,200) teal, 4 (28,62,140) navy,
+  5 (120,110,225) periwinkle, 6 (175,215,250) pale blue. Side B: 1 (190,60,60) side red, 2 (245,130,105) salmon,
+  3 (225,120,40) orange, 4 (125,28,40) maroon, 5 (205,60,140) crimson pink, 6 (245,180,170) pale pink. Shade 1
+  is the pre-M55 side colour, so a side with one unit (V1, the bot scenarios) looks exactly as before (the V1
+  start screenshot is pixel-identical). `M55_UnitTint` checks, in CIE76 delta E: at least 20 between any two
+  shades of a side, at least 40 between any shade of A and any of B, at least 45 from the board fill
+  (46,58,48), at least 35 from the shade's own greyed "can't act" look (D-029: 80% towards (55,55,60)) and at
+  least 25 from the white outline / selection ring. Greyed units stay grey as before; their number tells them
+  apart. Deployment-zone tints and other side-coloured chrome (turn chip, panel border, dice cards, datasheet
+  title) keep the side colour.
+- **Board number.** Drawn in white with a black outline (8 offsets) at the centroid of the unit's remaining
+  models, on top of all bases; light grey on a greyed unit. Size: base radius on screen x 1.6, clamped to
+  16..30 px x UI scale, rounded to a multiple of 10 px (raylib's default font is a 10 px bitmap, so these stay
+  crisp); 20 px at the default fitted zoom of the 44"x60" board. Hidden when the largest base radius is under
+  4 px on screen, when the unit has no models left, and whenever the side has only one unit.
+- **Names.** When a side has several units, its units are shown as the datasheet name plus the number:
+  "Intercessor Squad 1".."Intercessor Squad 3" and "Termagants 1".."Termagants 4" in the Strike scenario. The
+  number is the per-side index even when the side's datasheets differ, so it always matches the board label.
+  A side with one unit keeps the plain datasheet name. Used by the action text (which keeps its id: "Declare
+  charge: Termagants 2 (5)"), the decision panel, board prompts, dice cards, the datasheet window title, the
+  sidebar unit list and the hover tooltip (both keep "(unit N)" and show a swatch of the shade with the number,
+  drawn only when the side has several units), and the bots' decision reasons (`src/ai`, through
+  `client::unit_display_name`). The event log keeps naming units "unit N" (it never used names).
+- **Tests.** No existing expectation changed: every one uses a scenario with one unit per side. The bots'
+  reasons for multi-unit scenarios now read "Termagants 2", so a decision-trace hash of the Strike scenario
+  (D-068's `--per-game` report) differs from M54's; the actions, rolls and states do not.
+
 ## D-068: Speed-ups that keep every decision and roll the same (M54)
 **Decided:** 2026-11-07 (M54 is pre-approved; numbered after D-065–D-067, which PLAN.md reserves for M55–M57).
 Pure optimisation of core's read-only queries, the client logic the bots call and `src/ai`. No rule, state,

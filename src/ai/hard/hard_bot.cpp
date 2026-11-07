@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "hard/hard_bot.hpp"
 
 #include <algorithm>
@@ -79,8 +80,7 @@ bool offered(const std::vector<GameAction>& legal, const GameAction& a) {
 }
 
 std::string name_of(const GameState& gs, core::UnitId id) {
-    const core::Unit* u = gs.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return client::unit_display_name(gs, id);  // D-065
 }
 
 double blend(const LookaheadWeights& w, const Evaluation& chain, const std::optional<MonteCarloResult>& mc) {
@@ -100,7 +100,7 @@ std::string gap_text(const GameState& after, core::UnitId unit) {
     const core::Unit* u = after.find_unit(unit);
     const core::Unit* e = u != nullptr ? normal::closest_enemy(after, *u) : nullptr;
     if (u == nullptr || e == nullptr) return "no enemy left";
-    return inches(core::unit_distance(*u, *e).value_or(0.0f)) + " from " + e->name;
+    return inches(core::unit_distance(*u, *e).value_or(0.0f)) + " from " + client::unit_display_name(after, e->id);
 }
 
 std::string move_type_text(core::MoveType t, std::optional<core::FallBackMode> mode) {
@@ -437,7 +437,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
         others += (others.empty() ? "" : ", ") + move_type_text(m.move_type, m.fall_back_mode) + " " +
                   signed_value(options[i].value);
     }
-    std::string reason = u.name + ": " + chosen.text;
+    std::string reason = client::unit_display_name(gs, u.id) + ": " + chosen.text;
     if (!chosen.where.empty()) reason += " - " + chosen.where;
     reason += " (Hard: " + odds_text(chosen.chain) + ", value " + signed_value(chosen.value) +
               lookahead_text(chosen.mc) + (normal_index && best == *normal_index ? ", as Normal" : "") +
@@ -513,9 +513,9 @@ std::optional<PolicyResult> decide_charge(HardContext& hc, analysis::OddsCache& 
         // The chosen option's odds come first (M45: the combat log shows the first odds of a Hard reason).
         const std::string fight = "the fight " + signed_value(cv.fight.score) + " (" + odds_text(cv.fight) + ")";
         const std::string hold = "holding " + signed_value(cv.hold.score) + " (" + odds_text(cv.hold) + ")";
-        const std::string odds = percent(p) + " charge odds against " + e->name + "; ";
-        if (declare) return single(a, u->name + ": declare a charge (Hard: " + odds + fight + ", " + hold + ")");
-        return single(end, u->name + ": no charge (Hard: " + odds + hold + ", " + fight + ")");
+        const std::string odds = percent(p) + " charge odds against " + client::unit_display_name(gs, e->id) + "; ";
+        if (declare) return single(a, client::unit_display_name(gs, u->id) + ": declare a charge (Hard: " + odds + fight + ", " + hold + ")");
+        return single(end, client::unit_display_name(gs, u->id) + ": no charge (Hard: " + odds + hold + ", " + fight + ")");
     }
     return std::nullopt;
 }
@@ -547,7 +547,7 @@ std::optional<PolicyResult> decide_charge_targets(HardContext& hc, analysis::Odd
             best = std::move(plan);
         }
     }
-    if (!best) return single(skip, u->name + ": no charge move stands for a roll of " + std::to_string(roll));
+    if (!best) return single(skip, client::unit_display_name(gs, u->id) + ": no charge move stands for a roll of " + std::to_string(roll));
     // Normal's answer (M42: the planned move if it beats holding) is the default.
     bool charge = best_value.score > hold.score + kBetter;
     if (hc.weights.margin >= 0.0) {
@@ -556,14 +556,14 @@ std::optional<PolicyResult> decide_charge_targets(HardContext& hc, analysis::Odd
         charge = normal_charges ? !deviates(hc, hold.score, best_value.score) : deviates(hc, best_value.score, hold.score);
     }
     if (charge) {
-        const std::string reason = u->name + ": charge move (roll " + std::to_string(roll) + "): " +
+        const std::string reason = client::unit_display_name(gs, u->id) + ": charge move (roll " + std::to_string(roll) + "): " +
                                    std::to_string(best->score.engaged) + " of " + std::to_string(u->models.size()) +
                                    " models engaged (Hard: " + signed_value(best_value.score) + ", " +
                                    odds_text(best_value) + "; holding " + signed_value(hold.score) + ")";
         for (PlannedStep& step : best->steps) step.reason = reason;
         return from_steps(std::move(best->steps), 0, reason);
     }
-    return single(skip, u->name + ": no charge move (Hard: holding " + signed_value(hold.score) + " against " +
+    return single(skip, client::unit_display_name(gs, u->id) + ": no charge move (Hard: holding " + signed_value(hold.score) + " against " +
                             signed_value(best_value.score) + " for the charge)");
 }
 
@@ -667,7 +667,7 @@ std::optional<PolicyResult> decide_casualties(HardContext& hc, analysis::OddsCac
     }
     if (!best) return std::nullopt;
     const std::string reason =
-        (*best == 0 && have_normal ? normal_reason : unit->name + ": casualties, " + cands[*best].text) +
+        (*best == 0 && have_normal ? normal_reason : client::unit_display_name(gs, unit->id) + ": casualties, " + cands[*best].text) +
         " (Hard: " + signed_value(best_value.score) + ", " + odds_text(best_value) + ")";
     return single(core::action::OrderCasualties{d->target, cands[*best].priority}, reason);
 }
@@ -706,7 +706,7 @@ std::optional<PolicyResult> decide_coherency(HardContext& hc, analysis::OddsCach
     }
     if (!best) return std::nullopt;
     return single(core::action::RemoveModelForCoherency{unit_id, *best},
-                  unit->name + ": remove model " + std::to_string(best->v) + " to regain coherency (03.03; Hard: " +
+                  client::unit_display_name(gs, unit->id) + ": remove model " + std::to_string(best->v) + " to regain coherency (03.03; Hard: " +
                       signed_value(best_value.score) + ", " + odds_text(best_value) + ")");
 }
 

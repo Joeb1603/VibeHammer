@@ -7,10 +7,14 @@
 
 #include "camera.hpp"
 #include "core/state/game_state.hpp"
+#include "unit_style.hpp"
 
 namespace wh40k::client {
 
+[[nodiscard]] Color to_color(Rgb rgb);
 [[nodiscard]] Color side_color(core::Side side);
+// D-065: the unit's own shade of its side colour (side_color when its side has one unit).
+[[nodiscard]] Color unit_color(const core::GameState& state, core::UnitId id);
 
 // Draws the battlefield (grid, deployment zones) and every model. Read-only. Units for which `dimmed`
 // returns true are drawn grey: they can't be clicked now. `emphasised`: the clickable unit under the cursor,

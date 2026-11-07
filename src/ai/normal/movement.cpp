@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "normal/movement.hpp"
 
 #include <algorithm>
@@ -523,7 +524,7 @@ std::string position_text(const GameState& gs, core::UnitId unit, const MoveScor
     const core::Unit* u = gs.find_unit(unit);
     const core::Unit* e = u != nullptr ? closest_enemy(gs, *u) : nullptr;
     if (e == nullptr) return "no enemy left";
-    std::string out = inches(s.gap_mm) + " from " + e->name;
+    std::string out = inches(s.gap_mm) + " from " + client::unit_display_name(gs, e->id);
     if (s.half_range_models > 0) {
         out += ", " + std::to_string(s.half_range_models) + " of " + std::to_string(u->models.size()) +
                " models within half range";
@@ -538,8 +539,7 @@ std::string position_text(const GameState& gs, core::UnitId unit, const MoveScor
 }
 
 std::string name_of(const GameState& gs, core::UnitId id) {
-    const core::Unit* u = gs.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return client::unit_display_name(gs, id);  // D-065
 }
 
 // ---- move types at the MoveUnits decision ----
@@ -821,7 +821,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
         others += (others.empty() ? "" : ", ") + move_type_text(m.move_type, m.fall_back_mode) + " " +
                   signed_value(options[i].value);
     }
-    const std::string reason = u.name + ": " + chosen.text + " - " + position_text(gs, *unit, chosen.score) + " (" +
+    const std::string reason = client::unit_display_name(gs, u.id) + ": " + chosen.text + " - " + position_text(gs, *unit, chosen.score) + " (" +
                                signed_value(chosen.value) + (others.empty() ? "" : "; " + others) + ")";
     if (!chosen.steps.empty()) return from_steps(std::move(chosen.steps), 0, reason);
     return single(chosen.start, reason);

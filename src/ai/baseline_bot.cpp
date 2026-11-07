@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "baseline_bot.hpp"
 
 #include <algorithm>
@@ -154,8 +155,7 @@ PolicyResult single(const GameState& gs, const GameAction& a, const std::string&
 }
 
 std::string unit_name(const GameState& gs, core::UnitId id) {
-    const core::Unit* u = gs.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return client::unit_display_name(gs, id);  // D-065
 }
 
 // 09.02: a Normal move towards the enemy while it is more than 8" away, else Remain Stationary.
@@ -168,10 +168,10 @@ PolicyResult move_units(const GameState& gs, core::Side side, const client::Deci
         if (e == nullptr) break;
         const float gap = core::mm_to_inches(core::unit_distance(u, *e).value_or(0.0f));
         const core::action::StartMove stay{m->unit, core::MoveType::RemainStationary, std::nullopt};
-        if (gap <= kFarInches) return single(gs, stay, e->name + " within 8\"");
-        const std::string reason = u.name + ": Normal move 2\" towards " + e->name + " (more than 8\" away)";
+        if (gap <= kFarInches) return single(gs, stay, client::unit_display_name(gs, e->id) + " within 8\"");
+        const std::string reason = client::unit_display_name(gs, u.id) + ": Normal move 2\" towards " + client::unit_display_name(gs, e->id) + " (more than 8\" away)";
         if (auto plan = plan_move(gs, side, b, seed, reason)) return from_plan(std::move(*plan));
-        return single(gs, stay, "a 2\" move towards " + e->name + " would not stand");
+        return single(gs, stay, "a 2\" move towards " + client::unit_display_name(gs, e->id) + " would not stand");
     }
     return single(gs, view.buttons.front());
 }

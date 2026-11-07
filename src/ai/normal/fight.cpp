@@ -1,3 +1,4 @@
+#include "unit_style.hpp"
 #include "normal/fight.hpp"
 
 #include <algorithm>
@@ -49,8 +50,7 @@ client::FightMoveShape move_change(const core::GameState& before, const core::Ga
 }
 
 std::string name_of(const core::GameState& state, core::UnitId id) {
-    const core::Unit* u = state.find_unit(id);
-    return u != nullptr ? u->name : "unit " + std::to_string(id.v);
+    return client::unit_display_name(state, id);  // D-065
 }
 
 std::string names_of(const core::GameState& state, const std::vector<core::UnitId>& ids) {
