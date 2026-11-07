@@ -52,7 +52,9 @@ How to play
        next dice roll) and the bot speed (keys N, + and -).
      - Continue saved game (when there is one), Watch a replay, Quit.
   3. Space Marine Intercessors vs Tyranid Termagants. Follow the decision panel at the top;
-     click the board to pick units, targets and moves.
+     click the board to pick units, targets and moves. Pick strike_44x60.json in the start
+     screen's Scenario list for a full-size 60" x 44" battlefield with 3 Intercessor Squads
+     against 4 Termagant units (the default is one unit each on 24" x 24").
 
 The bot
   Levels: Easy, Normal and Hard (Hard is the default). Speed: Slow, Normal, Fast or Instant;
