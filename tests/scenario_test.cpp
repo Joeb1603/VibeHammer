@@ -497,3 +497,117 @@ TEST(D064_Formation, AbsentDepthIsTheSameStateAsZero) {
         EXPECT_EQ(nlohmann::json(a).dump(), nlohmann::json(b).dump());
     }
 }
+
+// ---- M59 / D-070: the roster fixture scenarios (tests/data/scenarios) ----
+
+TEST(R02_06_UnitComposition, RostersFixtureLoadsThirteenUnitsWithTheRosterModelCounts) {
+    const GameState gs = wh40k::test::load_rosters_fixture();
+    EXPECT_FLOAT_EQ(gs.battlefield.width_mm, in(44));  // portrait: 44" wide, 60" deep
+    EXPECT_FLOAT_EQ(gs.battlefield.depth_mm, in(60));
+    EXPECT_EQ(gs.first_turn, Side::A);
+    EXPECT_EQ(gs.side(Side::A).name, "Chaos Space Marines");
+    EXPECT_EQ(gs.side(Side::B).name, "Tyranids");
+    EXPECT_EQ(zone_rect(gs.battlefield, gs.side(Side::A).deployment_zone), (Rect{0, 0, in(44), in(12)}));
+    EXPECT_EQ(zone_rect(gs.battlefield, gs.side(Side::B).deployment_zone), (Rect{0, in(48), in(44), in(60)}));
+    struct Expected {
+        Side side;
+        const char* name;
+        std::size_t models;
+    };
+    const std::vector<Expected> expected{
+        {Side::A, "Chaos Lord", 1},   {Side::A, "Legionaries", 10},  {Side::A, "Legionaries", 10},
+        {Side::A, "Chaos Terminator Squad", 10},                     {Side::A, "Havocs", 5},
+        {Side::B, "Hive Tyrant", 1},  {Side::B, "Termagants", 10},   {Side::B, "Termagants", 10},
+        {Side::B, "Genestealers", 5}, {Side::B, "Genestealers", 5},  {Side::B, "Tyrant Guard", 3},
+        {Side::B, "Screamer-killer", 1},                             {Side::B, "Screamer-killer", 1}};
+    ASSERT_EQ(gs.units.size(), 13u);
+    std::uint32_t model_id = 1;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        const Unit& u = gs.units[i];
+        EXPECT_EQ(u.id, UnitId{static_cast<std::uint32_t>(i + 1)});
+        EXPECT_EQ(u.side, expected[i].side) << i;
+        EXPECT_EQ(u.name, expected[i].name) << i;
+        EXPECT_EQ(u.models.size(), expected[i].models) << i;
+        EXPECT_EQ(u.starting_strength, static_cast<int>(expected[i].models)) << i;
+        for (const Model& m : u.models) {
+            EXPECT_EQ(m.id, ModelId{model_id++});
+            EXPECT_EQ(m.base.shape, BaseShape::Round);  // no Tyrannofex (oval) until M65
+        }
+    }
+    EXPECT_EQ(model_id - 1, 72u);  // 36 Chaos Space Marines + 36 Tyranids
+}
+
+TEST(R02_07_WargearOptions, RostersFixtureCarriesTheRosterLoadouts) {
+    const GameState gs = wh40k::test::load_rosters_fixture();
+    auto names = [&](std::uint32_t unit, std::size_t model) { return weapon_names(gs.units[unit - 1].models[model]); };
+    using V = std::vector<std::string>;
+    EXPECT_EQ(names(1, 0), (V{"Plasma pistol", "Astartes chainblade"}));
+    EXPECT_EQ(gs.units[1].models[0].type_name, "Aspiring Champion");
+    EXPECT_EQ(names(2, 0), (V{"Bolt pistol", "Astartes chainsword", "Close combat weapon"}));
+    EXPECT_EQ(names(2, 9), (V{"Bolt pistol", "Astartes chainsword", "Close combat weapon"}));
+    EXPECT_EQ(names(3, 0), (V{"Bolt pistol", "Astartes chainsword", "Close combat weapon"}));
+    EXPECT_EQ(names(3, 9), (V{"Boltgun", "Bolt pistol", "Close combat weapon"}));
+    EXPECT_EQ(names(4, 0), (V{"Combi-bolter", "Accursed weapon"}));
+    EXPECT_EQ(names(4, 9), (V{"Combi-bolter", "Accursed weapon"}));
+    EXPECT_EQ(names(5, 0), (V{"Plasma gun", "Astartes chainsword"}));
+    EXPECT_EQ(names(5, 4), (V{"Havoc lascannon", "Close combat weapon"}));
+    EXPECT_EQ(names(6, 0), (V{"Monstrous bonesword and lash whip", "Monstrous scything talons"}));
+    EXPECT_EQ(names(7, 0), (V{"Fleshborer", "Chitinous claws and teeth"}));
+    EXPECT_EQ(names(9, 0), (V{"Genestealers claws and talons"}));
+    EXPECT_EQ(names(11, 0), (V{"Scything talons and rending claws"}));
+    EXPECT_EQ(names(12, 0), (V{"Bio-plasmic scream", "Screamer-killer talons"}));
+    // D-070: the Havoc Champion's chainsword has A5 (BSData modifier), the Legionaries' A4.
+    EXPECT_EQ(gs.units[4].models[0].weapons[1].profiles[0].attacks, DiceExpr::fixed(5));
+    EXPECT_EQ(gs.units[1].models[0].weapons[1].profiles[0].attacks, DiceExpr::fixed(4));
+}
+
+TEST(R03_02_SetUp, RostersFixtureIsALegalSetUp) {
+    const GameState gs = wh40k::test::load_rosters_fixture();
+    float closest_enemy = 1e9f;
+    for (const Unit& u : gs.units) {
+        EXPECT_TRUE(check_coherency(placed(u)).ok()) << u.id.v;  // 03.03
+        const Rect zone = zone_rect(gs.battlefield, gs.side(u.side).deployment_zone);
+        for (const Model& m : u.models) {
+            EXPECT_TRUE(wholly_within(zone, m.position, m.base)) << "model " << m.id.v;  // D-009
+        }
+        for (const Unit& v : gs.units) {
+            for (const Model& a : u.models) {
+                for (const Model& b : v.models) {
+                    if (a.id == b.id) continue;
+                    EXPECT_FALSE(bases_overlap(a.position, a.base, b.position, b.base)) << a.id.v << " " << b.id.v;
+                    if (u.side != v.side) {
+                        closest_enemy = std::min(closest_enemy, base_distance(a.position, a.base, b.position, b.base));
+                    }
+                }
+            }
+        }
+    }
+    EXPECT_GE(closest_enemy, in(36) - EPS_MM);  // 36" between the zones
+}
+
+TEST(R03_02_SetUp, HavocsVsHiveTyrantFixtureLoads) {
+    const GameState gs = load_scenario(repo_root() / wh40k::test::kHavocsVsTyrantFixture, repo_root());
+    ASSERT_EQ(gs.units.size(), 2u);
+    EXPECT_EQ(gs.units[0].name, "Havocs");
+    EXPECT_EQ(gs.units[0].models.size(), 5u);
+    EXPECT_EQ(gs.units[1].name, "Hive Tyrant");
+    const float gap = base_distance(gs.units[0].models[2].position, gs.units[0].models[2].base,
+                                    gs.units[1].models[0].position, gs.units[1].models[0].base);
+    EXPECT_NEAR(gap, in(8), 0.01f);  // 8" between the front lines
+}
+
+TEST(D008_Formation, TheTyrannofexOvalBaseIsStillRefusedAtPlacement) {
+    // D-070: the Tyrannofex file loads (oval 120x92mm), but placement refuses non-round bases until M65.
+    nlohmann::json s = read_json_file(repo_root() / wh40k::test::kRostersFixture);
+    s["sides"]["B"]["units"].push_back(nlohmann::json::parse(R"({
+        "unit_file": "data/units/tyrannofex.json",
+        "models": [{"type": "Tyrannofex", "count": 1,
+                    "weapons": ["Stinger salvoes", "Fleshborer hive", "Powerful limbs"]}],
+        "formation": {"ranks": 1, "gap_in": 0, "centre_x_in": 22, "depth_in": 6, "anchor": "zone_front"}})"));
+    try {
+        (void)build(s);
+        FAIL() << "expected DataError";
+    } catch (const DataError& e) {
+        EXPECT_NE(std::string(e.what()).find("V1 supports round bases only"), std::string::npos) << e.what();
+    }
+}

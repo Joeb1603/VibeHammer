@@ -2276,3 +2276,82 @@ replay or JSON change; the engine API gains one overload. The test of "the same"
   backup_)` (the bot's own dice, and now its reused backup) instead of the 4-argument form.
 - **Not changed (open for M57):** the Hard chain table build (`ChainTable::build_half_turn`, about a quarter of a V1
   Hard game; its sums' order fixes its values), `has_line_of_sight` itself, Normal's move scoring.
+
+## D-070: Fetch tool fixes, the nine roster datasheets and the roster fixtures (M59)
+**Decided:** 2026-11-08 (M59 of the pre-approved M59–M70 batch; ambiguities take the conservative choice).
+`tools/fetch_bsdata.py` now reads the nine roster units (Hive Tyrant, Genestealers, Tyrant Guard, Screamer-killer,
+Tyrannofex, Chaos Lord, Legionaries, Chaos Terminator Squad, Havocs) correctly from BSData `0f90355`, and never
+crashes on a datasheet it can't read. The engine's unit loader reads the two new things the files can hold.
+- **Fetch rules (02.02, 02.04, 02.06, 02.07).**
+  - *Composition* comes from the model types and the groups that hold them. A group's own min/max bounds the sum of
+    what it holds; a model outside the group (a champion) adds to it. Legionaries are 1 + (4–9) = 5–10, Chaos
+    Terminators 5–10, Havocs 1 + 4 = 5–5, Genestealers 5–10 and Tyrant Guard 3–6 (their constraints sit on the model).
+    Intercessors (5–10) and Termagants (10–20) come out as before. A unit that is a single model is 1–1, and so is
+    its model type. A composition the tool can't find is written as null with a warning (the loader refuses it).
+  - *Wargear* is read at any depth: groups and entries are walked, also through entryLinks to groups. The Crusade,
+    Weapon Modifications, Enhancements and Crusade Relic Upgrades subtrees are skipped (Crusade holds real weapon
+    profiles such as Vortex Grenade). Weapon profiles reached through `infoLinks` of type "profile" are read
+    (Boltgun, Bolt pistol, Astartes chainsword, Accursed weapon, Combi-bolter, Plasma gun, Heavy melee weapon, ...).
+  - *Default weapons:* a node is in the default loadout when its parent is and it is a min-1 entry, or it is the
+    default entry (`defaultSelectionEntryId`, else the first entry) of a required (min-1) group. Groups without a
+    min are plain containers. This gives the Hive Tyrant, Chaos Lord and every champion a loadout (the Terminator
+    Champion's is three levels deep). The datasheet default is not the roster's loadout in three places (Chaos
+    Lord: daemon hammer, not chainblade; Aspiring Champion: boltgun, not chainsword; Havoc Champion: flamer, not
+    plasma gun). That is a wargear choice (02.07), so the fixture scenario lists the roster loadouts.
+  - *Weapon type per profile:* each profile's own Ranged/Melee type. When a weapon mixes the two (none of the
+    roster's do), every profile gets a `"type"` field; the weapon's `"type"` stays the first profile's, as before.
+    Files without mixed weapons are unchanged.
+  - *Characteristic modifiers:* BSData changes some characteristics with modifiers on shared profiles. The tool
+    applies a `set` modifier when all its conditions are `instanceOf` / `notInstanceOf` an ancestor that is the unit,
+    its model or one of their categories. The Astartes chainsword is A5 in a HAVOCS unit (the roster agrees) and A4
+    for Legionaries. Any other modifier of a characteristic (e.g. `append`, roster-wide conditions) is reported as a
+    warning and not applied. None of the roster units' profiles has one.
+  - *Abilities from an Abilities profile* behind an infoLink ("Damaged: 1-5 Wounds Remaining", "Will of the Hive
+    Mind", "Lord of Chaos") now get their Description text; it was empty before. Everything else about keywords,
+    InSv and abilities is as before (hidden-ability modifiers are not evaluated, see the roster differences).
+- **Bases.** "32mm" / "28.5mm" are round. "AxBmm" is an oval: `{"shape": "oval", "diameter_mm": B, "length_mm": A}`
+  with B the width (the smaller number) and A the length (the larger); "120x92mm" is `diameter_mm` 92, `length_mm`
+  120. `Base` keeps that meaning (`diameter_mm` = width across the short axis). Any other text ("Hull", "~40mm",
+  "32mm Flying", "Unique", "-") is written as `"base": null` with a warning. The loader refuses a null base
+  ("D-070: base is null") and an oval whose `length_mm` is missing or smaller than its `diameter_mm`.
+  `scenario_loader.cpp` still refuses non-round bases at placement until M65.
+- **Conditional profiles.** A profile named "... - Hunter: X" (only the Space Marine Chainfist at this commit) is
+  written with `"condition": "Hunter: X"`. The loader leaves it out of the weapon's profiles, so it can never be
+  selected, and lists it in `Datasheet::conditional_profiles`. A weapon with only conditional profiles is left out
+  too, so a scenario that equips it is refused (02.04). This is the conservative reading: the condition (attacks
+  against a MONSTER or VEHICLE) is not implemented.
+- **Unreadable data never crashes the run.** Other base strings, a missing model max or profile, or a missing
+  composition produce a warning and a file the loader refuses. Checked on about twenty other units from the three
+  catalogues (Land Raider, Gargoyles, Chaos Rhino, Cultist Mob, ...).
+- **The V1 files.** Re-running the tool on `intercessor_squad.json` and `termagants.json` gives byte-identical
+  content apart from the `fetched` date. So the files were left as they are, and every replay and bot game stays
+  the same.
+- **Roster differences (New Recruit export vs BSData; BSData wins).** Every stats row (M, T, Sv, W, Ld, OC, InSv,
+  base) and every weapon profile with its abilities in the two rosters matches the generated files, including the
+  Havoc Champion's A5 chainsword (through the modifier above). The differences are all outside the engine's scope:
+  - *Keywords:* BSData gives the Chaos Lord and the Hive Tyrant a LEADER keyword, which the rosters' categories don't
+    list.
+  - *Abilities:* "Leader" appears twice for the Chaos Lord and the Hive Tyrant (an ability profile and the core rule).
+    Deadly Demise and Scouts lose their value ("Deadly Demise D3", "Scouts 8\""), which BSData appends through a
+    modifier the tool doesn't apply. The Genestealers list Stealth, which BSData hides unless Chameleonic is taken;
+    the roster doesn't show it. Ability text is display-only (unit abilities are out of scope for the batch).
+  - *Composition* is not in the roster exports. The BSData values above match the datasheets (Legionaries 5–10,
+    Havocs 5, Terminators 5–10, Genestealers 5–10, Tyrant Guard 3–6).
+- **Fixture scenarios** (`tests/data/scenarios/`, not under `data/scenarios`, so the client and the package don't
+  list them):
+  - `rosters_no_tyrannofex_44x60.json`: both rosters except the Tyrannofex, with the roster loadouts, on the 44"
+    wide by 60" deep board. The zones are 12" deep on the short south (A, Chaos Space Marines, first turn) and north
+    (B) edges, 36" apart. It has 13 units and 72 models. Formations (D-008, D-064) put the 10-model units in two
+    ranks; the second Genestealers unit has `depth_in` 3.
+  - `havocs_vs_hive_tyrant_24x24.json`: the Havocs 8" from the Hive Tyrant, for focused tests of their weapons.
+- **Weapons the engine can't resolve yet.** On the fixture these are refused by validation with a rule-cited reason,
+  never by the engine throwing into the D-026 rollback:
+  - random A or D (D-002): Havoc lascannon, Bio-plasmic scream, Heavy venom and Stranglethorn cannons;
+  - [TWIN-LINKED] (D-026): Monstrous bonesword and lash whip, Crushing claws.
+  - *Accepted silently until M60:* Unknown abilities and [HAZARDOUS] are loaded and ignored. In the fixture's
+    loadouts these are the Monstrous scything talons (Extra Attacks) and the plasma pistol / plasma gun supercharge
+    profiles. Random play fires and fights with both.
+  - Outside the fixture, the Tyrannofex's Fleshborer hive (Sustained Hits 1) is also an Unknown ability.
+- **Replay** `m59_rosters_fixture_round1.json` embeds its initial state (`initial.state`) rather than naming the
+  fixture, so the client's replay list and the package load it without `tests/data`. It is larger than the others
+  (about 210 KB).

@@ -13,6 +13,7 @@ add_executable(wh40k_tests
     mortal_wounds_test.cpp
     weapon_ability_test.cpp
     datasheet_test.cpp
+    roster_datasheet_test.cpp
     scenario_test.cpp
     serialization_test.cpp
     engine_flow_test.cpp
