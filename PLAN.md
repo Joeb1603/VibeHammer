@@ -1882,6 +1882,349 @@ games), not lowered.
 
 ---
 
+## Two rosters on a 44"x60" portrait board (M59–M70)
+
+**Run note (agreed with the user 2026-11-08):** M59–M70 are pre-approved as one batch and run back to back
+without `/clear` and without per-milestone sign-off, on branch `rosters-44x60-portrait`. This overrides "one
+milestone per session" and "agree each milestone first" for these milestones only.
+- **Process:** each milestone is implemented by a sub-agent at the effort shown, then verified, marked ✅,
+  committed and pushed. Verification means:
+  - clean Debug and Release builds, and all of `ctest`;
+  - every replay regeneration leaves `tests/replays` byte-identical apart from the milestone's new file;
+  - `--per-game` arena hashes on V1, both bot scenarios and Strike identical to the previous commit wherever
+    play must not change;
+  - screenshots where the client changes.
+- **Design first:** in M61, M62, M65 and M69 the sub-agent writes its decision entry first, which is reviewed
+  against the rules text before any code.
+- **Every milestone also gives:**
+  - new actions and events their log text, action text and dice cards;
+  - undo grouping;
+  - a `fallback.cpp` / `bot_driver.cpp` answer for a new decision;
+  - JSON round trips, with new fields omitted when default so old files stay byte-identical;
+  - a scripted replay of its flow, stopped before anything a later milestone changes.
+- **Missed targets** are recorded as open items, never lowered silently.
+- **Ambiguities** get the conservative choice, recorded in `docs/decisions.md`.
+- **At the end** the branch goes to `main` by a rebase-merged pull request.
+
+**Agreed with the user (2026-11-08):**
+- **Armies:** the two New Recruit rosters in `docs/datasheets/`. Only the units, their weapons and their weapon
+  abilities are used.
+  - **Chaos Space Marines (side A, south edge, first turn):**
+    - Chaos Lord (Astartes chainblade, plasma pistol);
+    - 2 × 10 Legionaries (one squad with chainswords and bolt pistols, one with boltguns and bolt pistols, each led by an Aspiring Champion);
+    - 10 Chaos Terminators (accursed weapon and combi-bolter);
+    - 5 Havocs (4 lascannons; the champion has a plasma gun and chainsword).
+  - **Tyranids (side B, north edge):**
+    - Hive Tyrant (bonesword and lash whip, scything talons);
+    - 2 × 10 Termagants;
+    - 2 × 5 Genestealers;
+    - 3 Tyrant Guard;
+    - 2 Screamer-killers;
+    - a Tyrannofex (120×92 mm oval base).
+- **Not used:** stratagems, unit abilities (Synapse, Shadow in the Warp, Skulking Horrors, Death Scream, Onslaught, ...),
+  Leader and attached units (the characters stay separate units), Deep Strike, Scouts, Feel No Pain,
+  Deadly Demise and Damaged profiles. Their text is still shown on the datasheets.
+- **Board:** 44" wide × 60" deep (portrait), with 12" deployment zones on the short north and south edges, so
+  36" between the zones. No terrain, no objectives, fixed deployment from the scenario file.
+- **Random Characteristics** (app-only, wording approved by the user; not verified against the app):
+  - Attacks: each time a model attacks with a weapon whose A is random, roll it for that model and weapon
+    (Blast bonus added after).
+  - Damage: each time an attack with a random D is allocated to a model after a failed save, roll the damage
+    for that attack.
+  - The defender still gives one casualty order per batch (D-013).
+- **[TWIN-LINKED]:** the player is asked which wound dice to re-roll, only when at least one wound roll failed.
+  A "re-roll all failed" shortcut is offered.
+- **Oval bases** are done properly, with a facing per model, so the Tyrannofex plays as listed.
+- **Result for this scenario only:** a wipe-out still wins. Otherwise, after round 5, the side that destroyed
+  more points wins, and equal points is a draw.
+  - Points destroyed are the full points of destroyed units, plus points × wounds lost ÷ starting wounds for
+    surviving units, compared exactly.
+  - Unit points come from the rosters and are stored in the scenario file.
+  - Every other scenario keeps D-007.
+- **Conservative readings chosen in planning** (recorded in the decisions as they land):
+  - an oval's turn must clear enemy bases and the battlefield edge (03.01);
+  - Remaining Stationary forbids rotating (09.04);
+  - a rotation-only move doesn't count as moving closer (12.03, 12.08, D-022);
+  - 17.01 applies to normal and Advance moves only, and monsters may pass friendly monsters (03.01);
+  - [BLAST] can't target an engaged MONSTER/VEHICLE (the 17.03 diagram);
+  - random A is rolled when the weapon's batch resolves (04.03);
+  - random-A melee weapons can't split their attacks across targets.
+
+---
+
+## M59: Fetch tool fixes and the nine new datasheets
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 02.04–02.07 · **Decision:** D-070
+
+> **`tools/fetch_bsdata.py` fixes:**
+> - Composition comes from the model types, counting champions. Single models are min 1 / max 1.
+> - Wargear is read recursively, skipping the Crusade, Weapon Modifications, Enhancements and Crusade Relic
+>   subtrees.
+> - Weapon profiles behind `infoLinks` are dereferenced.
+> - Each profile gets its own ranged or melee type.
+> - `default_weapons` comes from min-1 entries.
+> - "AxBmm" bases become `oval` (`diameter_mm` = width B, `length_mm` = length A). Bases it can't read are
+>   skipped with a warning instead of crashing.
+> - "Hunter" profiles are marked conditional, and the loader refuses them.
+>
+> **Datasheets.** Generate `hive_tyrant`, `genestealers`, `tyrant_guard`, `screamer_killer`, `tyrannofex`,
+> `chaos_lord`, `legionaries`, `chaos_terminator_squad` and `havocs` at the pinned commit 0f90355.
+> - `intercessor_squad.json` and `termagants.json` are regenerated only if their engine-relevant content
+>   comes out identical.
+> - Differences from the roster are recorded in D-070. BSData wins.
+>
+> **Loader.** The unit loader reads the weapon type per profile. Oval bases are still refused at placement
+> until M65.
+>
+> **Fixture scenarios.** Round-base scenarios under `tests/data/scenarios/` (not shown in the client): Chaos
+> Space Marines vs Tyranids without the Tyrannofex, used for testing M60–M64.
+
+**Acceptance**
+- `datasheet_test` checks each new file against the roster: stats, InSv, base, weapons, profiles, abilities and
+  composition. Loader tests.
+- D-004 random play over the fixture scenarios, with weapons not implemented yet refused cleanly (the D-026
+  exception backup is never hit).
+- Old play and replays unchanged.
+
+---
+
+## M60: Unknown abilities refused; Hazardous, Sustained Hits, Extra Attacks; mixed-loadout default plans
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 24.15, 06.03, 24.36, 24.11, 04.01 · **Decision:** D-071 (extends D-026)
+
+> **Unknown abilities.** Any weapon profile with an ability the engine doesn't know is refused at selection.
+>
+> **[HAZARDOUS].** After the unit's attacks, make one hazard roll per Hazardous weapon selected. The mortal
+> wounds go through `OrderCasualties`, with its own pending field.
+>
+> **[SUSTAINED HITS X].** Each critical hit adds X hits that are not critical.
+>
+> **[EXTRA ATTACKS].** A model takes all its Extra Attacks weapons plus one other melee weapon if possible. This
+> needs the one-weapon check, `melee_options` and the D-021 "every able model declares" rule relaxed, and the
+> client melee plan and the minimal bot plan updated.
+>
+> **Default plans.** The client's default shooting and melee plans give every model its own weapon, instead of
+> only the models that match the first option. They never default to a Hazardous profile.
+
+**Acceptance**
+- Tests `R24_15_`, `R24_36_`, `R24_11_`, `D071_` and client `M60_`, plus a replay.
+- Units with a single loadout play exactly as before (hashes). Replays unchanged.
+
+---
+
+## M61: [TWIN-LINKED] with a re-roll decision
+**Effort:** `xhigh` · **Plan mode:** design first, then pre-approved · **Rules:** 24.38, D-011 · **Decision:** D-072
+
+> **Flow.** `start_batch` is split at the wound rolls. When a Twin-linked attack's wound roll fails, the
+> attacker gets the `RerollWoundRolls` decision:
+> - "re-roll all failed" is listed first, then "re-roll none";
+> - any subset is valid;
+> - each raw die is re-rolled once, then modifiers apply (D-011);
+> - the event is `WoundRollsRerolled`.
+>
+> **Other weapons** keep exactly the old dice order.
+>
+> **Client.** A dice pop-up where you pick the dice to re-roll.
+>
+> **Bots.** They re-roll every failed die, and their odds use p + (1−p)p.
+
+**Acceptance**
+- Tests `R24_38_`, `D072_` and client `M61_`, round trips and a replay.
+- Old play and replays unchanged.
+
+---
+
+## M62: Random characteristics
+**Effort:** `xhigh` · **Plan mode:** design first, then pre-approved · **Rules:** 04.03, 05.04 · **Decision:** D-069 (replaces D-002, amends D-013)
+
+> **Random A** is rolled per selection when its batch resolves (event `AttackDiceRolled`). Blast is added
+> after. Batches lost under D-012 never roll.
+>
+> **Random D** is rolled from the dice after the model is chosen.
+> - The casualty-decision check and the preview use a stand-in that never consumes dice.
+> - The preview marks later steps as provisional.
+> - Fixed values never roll, so the dice stream of every old weapon is unchanged.
+>
+> **Bot odds** mix exactly over the A and D distributions.
+
+**Acceptance**
+- Tests `D069_`, `R04_03_` and `R05_04_`, including one proving that previews never move the dice position.
+- Client dice cards and a replay.
+- Old play and replays unchanged.
+
+---
+
+## M63: Monsters and vehicles (17.01, 17.03)
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 17.01, 17.03, 10.06 · **Decision:** D-073
+
+> **17.01.** In normal and Advance moves, MONSTER/VEHICLE models may pass through enemy models that aren't
+> MONSTER/VEHICLE. The path check, the movement reach and the client all follow this.
+>
+> **17.03.** An engaged enemy MONSTER/VEHICLE can be targeted at −1 to hit, except with close-quarters weapons
+> fired by a unit engaged with it. [BLAST] is refused against it.
+>
+> **10.06.** The −1 becomes `+=`, so the D-011 cap applies.
+
+**Acceptance**
+- Tests `R17_01_` and `R17_03_`, plus a replay.
+- Old play and replays unchanged.
+
+---
+
+## M64: Oval geometry kernel
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 01.04, 03.01 · **Decision:** D-074 (part 1)
+
+> Pure `geometry/` functions, with no change to the state.
+>
+> **Distances.**
+> - Round to round keeps today's code.
+> - Round to oval uses a signed point-to-ellipse distance minus r.
+> - Oval to oval and swept segments use GJK on support functions.
+>
+> **Overlap** means the bases intersect after each is shrunk by EPS/2.
+>
+> **Rotation sweeps.**
+> - Exact against the battlefield edge and against round bases.
+> - Conservative for oval against oval.
+>
+> **Line of sight.** Ovals block it, via closed-form chords and boundary samples.
+
+**Acceptance**
+- Within 0.01 mm of brute-force sampling over 10,000 random poses.
+- Round-to-round results bit-identical. Arena wall time on Strike within 5%.
+
+---
+
+## M65: Oval bases in the engine
+**Effort:** `max` · **Plan mode:** design first, then pre-approved · **Rules:** 01.04, 03.01, 03.02, 09.04, 12.03, 12.08 · **Decision:** D-074 (part 2)
+
+> **Facing.** `Position` gets `facing_deg`, defaulting to 0. It is omitted from JSON when 0 and refused on round
+> bases.
+>
+> **Moves.**
+> - Each path vertex may carry a facing.
+> - A model rotates in place first, then translates.
+> - The distance moved is the sum of the centre's moves.
+>
+> **Checks.** Validation of the turn and the path against enemy bases and the battlefield edge. Coherency,
+> engagement, wholly-within, the closer checks and formation placement all handle ovals.
+>
+> **`MoveReach`** gains `ReachShape` for anything that isn't round to round.
+
+**Acceptance**
+- Tests `R01_04_`, `R03_01_` and `D074_`, plus round trips.
+- D-004 random play over a fixture with the Tyrannofex, plus a replay.
+- Old play and replays unchanged.
+
+---
+
+## M66: Oval bases in the client and bots; big-base polish
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Decision:** D-074 (part 3), D-075
+
+> **Client.**
+> - Ovals are drawn and hit-tested.
+> - You rotate a model while dragging it (Q/E and Shift+wheel).
+> - The reach shading, the "fix illegal move" helper, the ring outlines and the auto charge and fight moves
+>   handle ovals.
+>
+> **Bots** keep an oval's facing fixed and use bounding circles to choose moves, then check each move with the
+> engine.
+>
+> **Big bases.**
+> - A drag keeps the grab offset.
+> - Wounds show past W 6.
+> - Contact sampling is finer.
+> - The bots can park large models.
+
+**Acceptance**
+- Client `M66_` tests.
+- Screenshots of the Tyrannofex at several facings, mid-rotation and with its reach area.
+- Old play and replays unchanged.
+
+---
+
+## M67: The portrait scenario and the points tiebreak
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 07.03 · **Decision:** D-076 (amends D-007), D-065 extended
+
+> **Scenario.** `data/scenarios/rosters_44x60.json`, "Incursion - Chaos Space Marines vs Tyranids (44x60
+> portrait)", with each unit's roster loadout and points.
+>
+> **Tiebreak.** The scenario option `result: "points_destroyed"` decides the game as agreed. The result is
+> shown in the end-of-game panel and the log.
+>
+> **Colours.** At least 10 unit shades per side. The single-unit and Strike looks are unchanged.
+
+**Acceptance**
+- D-004 random play on the new scenario.
+- Tests `R07_03_`, `D076_` and client `M67_`.
+- Easy vs Easy arena games all finish clean.
+- Replay `m67_rosters_round1.json`, plus screenshots.
+
+---
+
+## M68: Easy and Normal for the new units
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Decision:** D-077 (amends D-066)
+
+> **Odds.** The bots' odds learn:
+> - per-model loadouts;
+> - Extra Attacks;
+> - Sustained Hits and Twin-linked;
+> - random A and D;
+> - the cost of Hazardous.
+>
+> **Value.** Material is weighted by points, but only for sides with more than one unit type, so Strike is
+> unchanged. The objective knows the points tiebreak.
+
+**Acceptance** (Release arena, new scenario, 200 seeds, both seats)
+- Normal beats Easy in at least 75% of games.
+- Zero rejections, reverts and fallbacks.
+- Normal p95 ≤ 100 ms and max ≤ 1 s.
+- The old scenarios play identically (hashes) and replays are unchanged.
+- Tests `M68_`.
+
+---
+
+## M69: Hard for the new units
+**Effort:** `max` · **Plan mode:** design first, then pre-approved · **Decision:** D-078 (amends D-067)
+
+> **Measure first.**
+>
+> **Chain tables.**
+> - One cache per game, sized to every pair of unit types in play, with deterministic eviction under a memory cap.
+> - A coarser wounds grid only above 20 wounds per side.
+> - A unit's volley is the sum of its loadout groups.
+>
+> **Army value** includes the points tiebreak.
+>
+> **Rollout budget** scales with the number of units, counted in simulated actions.
+
+**Acceptance** (Release arena, new scenario, 200 seeds, both seats)
+- Hard beats Normal in at least 60% of games.
+- Hard p95 ≤ 500 ms and max ≤ 3 s, including the first decision.
+- Zero rejections, reverts and fallbacks.
+- V1, the bot scenarios and Strike play identically (hashes). Replays are unchanged.
+- Tests `M69_`.
+
+---
+
+## M70: Bot-game replay, docs, final verification
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-08)
+
+> **Tuning.** A `BotWeights` sweep on the new scenario.
+>
+> **Replay.** `tests/replays/m70_rosters_bot_game.json` (Hard vs Hard, a seed that ends in a result), with
+> determinism, `TheSavedFileMatchesTheGame` and `M70_Replay.DISABLED_RegenerateRostersBotGameReplay` tests.
+>
+> **Docs.** CLAUDE.md (the scenario, the regenerate command, the client keys, the fixture scenarios), the
+> README, the README text `package.ps1` writes, and PLAN.md.
+
+**Acceptance**
+- Clean Debug and Release builds and all of `ctest`.
+- `git diff main -- tests/replays` shows only new files.
+- A mid-game bot screenshot on the new board.
+- Manual check left for the user: play the new scenario by mouse on Windows, including rotating the Tyrannofex,
+  the re-roll prompt and the tiebreak.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
@@ -1890,24 +2233,15 @@ games), not lowered.
 2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
 4. **Core stratagems** (15): Command Re-roll, Fire Overwatch, Heroic Intervention, etc. These are new reactive PendingDecisions.
-5. **More unit types** (written down 2026-11-07 as the next task after M53–M58; findings from exploring the pinned
-   BSData commit):
-   - **Fetch tool fixes** (`tools/fetch_bsdata.py`): composition is `null` for most units (it only works when a group
-     carries min/max), so derive it from the model types; single models and characters come out `max null`; wargear
-     is read only one group deep (the Hive Tyrant and Captain get no weapons); `default_weapons` is empty when the
-     option group isn't required; non-round bases ("75x42", "Hull", ...) crash the tool instead of being skipped;
-     "Hunter: Monster/Vehicle" variants come out as ordinary profiles; wargear limits ("1 in 5") aren't enforced.
-   - **Refuse unknown weapon abilities** (extend D-026): today anything unparsed (Lethal Hits, Sustained Hits,
-     Anti-X, Melta, Lance, Precision, Extra Attacks, ...) is silently ignored, so a new unit would resolve wrongly.
-     [HAZARDOUS] is parsed but its test is a TODO (`attack_flow.cpp`).
-   - **Core weapon abilities, by value:** Hazardous (24.15); Random Characteristics (D-002, app-only: needs the
-     wording); Sustained Hits (24.36) and Lethal Hits (24.23); Twin-linked (24.38, re-rolls per D-011); Devastating
-     Wounds (24.10); Anti-X (24.03), Melta (24.25), Lance (24.21), Extra Attacks (24.11).
-   - **Units that would then work:** Assault Intercessors, Heavy Intercessors, Infernus Squad, Bladeguard Veterans
-     (4++), Hellblasters; Hormagaunts, Genestealers, Neurogaunts, Tyranid Warriors with Deathspitters. Several
-     load today once the fetch tool is fixed (Infernus, Assault Intercessors, Bladeguard, Hormagaunts).
-   - **After that:** monsters and vehicles (17.01 moving through models, 17.03 shooting at engaged ones, oval bases,
-     FRAME), characters and Leader (19), Feel No Pain (24.12), Deadly Demise (24.08); unit abilities stay out of
-     scope until item 3.
+5. **More unit types** (M59–M70 added the fetch-tool fixes, Hazardous, Sustained Hits, Extra Attacks, Twin-linked,
+   Random Characteristics, 17.01/17.03 and oval bases). Still to do:
+   - **Weapon abilities:** Lethal Hits (24.23), Devastating Wounds (24.10), Anti-X (24.03), Melta (24.25), Lance
+     (24.21), Precision (24.28). Until then, weapons with them are refused when selected (D-071).
+   - **Fetch tool:** "Hunter: Monster/Vehicle" profiles (refused today), wargear limits ("1 in 5", "1 per unit"),
+     `modifiers`/`hidden`, and bases with no size ("Hull", "-").
+   - **Unit-level core abilities:** Feel No Pain (24.12), Deadly Demise (24.08), Leader and attached units (19),
+     FRAME (17.02); unit abilities stay out of scope until item 3.
+   - **Candidate units:** Assault/Heavy Intercessors, Infernus, Bladeguard, Hellblasters; Hormagaunts, Neurogaunts,
+     Tyranid Warriors.
 6. **Networking:** a server-authoritative host runs the engine, clients send `GameAction`s and receive events or snapshots, and spectators subscribe to events. The engine API shouldn't need to change. If it does, that's a bug in the earlier design.
 7. **Attached units, transports, reserves, aircraft** (17–23).
