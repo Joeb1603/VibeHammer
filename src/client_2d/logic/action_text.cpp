@@ -1,8 +1,11 @@
 #include "action_text.hpp"
 
+#include <algorithm>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
+#include "core/rules/attack_sequence.hpp"
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
@@ -84,6 +87,17 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 return "Allocation order: groups " + order;
             } else if constexpr (std::is_same_v<T, a::OrderCasualties>) {
                 return "Order casualties: " + unit_name(state, x.target);
+            } else if constexpr (std::is_same_v<T, a::RerollWoundRolls>) {
+                // 24.38 (D-072): "Re-roll all failed" when the dice are exactly the failed ones of the pending batch.
+                if (x.indices.empty()) return "Keep the wound rolls";
+                if (state.flow.attack && state.flow.attack->wound_rerolls) {
+                    std::vector<std::size_t> chosen = x.indices;
+                    std::sort(chosen.begin(), chosen.end());
+                    if (chosen == core::failed_wound_rolls(state.flow.attack->wound_rerolls->rolls)) {
+                        return "Re-roll all failed (" + std::to_string(chosen.size()) + ")";
+                    }
+                }
+                return "Re-roll " + std::to_string(x.indices.size()) + " wound roll" + (x.indices.size() == 1 ? "" : "s");
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

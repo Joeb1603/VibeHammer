@@ -100,7 +100,21 @@ bool casualty_decision_needed(const GameState& state, const AttackFlow& f) {
     return std::any_of(r.steps.begin(), r.steps.end(), [](const SaveStep& s) { return s.damage.has_value(); });
 }
 
-// 04.03 Gather Attack Dice + 05.01 + 05.02 for batch `index`.
+// After batch `index`'s wound rolls (05.02), and any re-rolls of them (24.38): the batch is done if nothing wounded,
+// otherwise 05.03 starts.
+void after_wound_rolls(GameState& state, std::size_t index, const WoundRolls& wounds) {
+    AttackFlow& f = flow_of(state);
+    if (wounds.wounds() == 0) {
+        f.batch_done[index] = true;  // every attack failed: nothing to save
+        return;
+    }
+    // 05.03 Create Groups now; the order and the save rolls follow.
+    const Unit& target = unit_ref(state, f.batches[index].target);
+    f.current = BatchInProgress{index, wounds.wounds(), create_allocation_groups(target), std::nullopt, std::nullopt};
+}
+
+// 04.03 Gather Attack Dice + 05.01 + 05.02 for batch `index`. A [TWIN-LINKED] batch with a failed wound roll waits
+// for its attacker's re-roll choice (24.38, D-072); every other batch goes straight on, with the same dice as before.
 void start_batch(GameState& state, DiceSource& dice, std::size_t index, Events& events) {
     AttackFlow& f = flow_of(state);
     const AttackBatch batch = f.batches[index];
@@ -113,12 +127,11 @@ void start_batch(GameState& state, DiceSource& dice, std::size_t index, Events& 
     const WoundRolls wounds = make_wound_rolls(dice, batch.profile, hits.hits(), target_toughness(target));  // 05.02
     events.push_back(event::WoundRollsMade{index, wounds});
 
-    if (wounds.wounds() == 0) {
-        f.batch_done[index] = true;  // every attack failed: nothing to save
+    if (twin_linked(batch.profile) && !failed_wound_rolls(wounds).empty()) {
+        f.wound_rerolls = PendingWoundRerolls{index, wounds};  // 24.38: the attacker is asked (attack_decision)
         return;
     }
-    // 05.03 Create Groups now; the order and the save rolls follow.
-    f.current = BatchInProgress{index, wounds.wounds(), create_allocation_groups(target), std::nullopt, std::nullopt};
+    after_wound_rolls(state, index, wounds);
 }
 
 void declare_order(GameState& state, std::vector<std::size_t> order, Events& events) {
@@ -202,6 +215,10 @@ std::vector<ModelId> model_ids(const Unit& unit) {
 
 std::optional<PendingDecision> attack_decision(const GameState& state) {
     const AttackFlow& f = flow_of(state);
+    if (f.wound_rerolls) {
+        // 24.38 (D-072): the attacking unit's player (the active player, 01.03) chooses the wound rolls to re-roll.
+        return PendingDecision{unit_ref(state, f.attacker).side, decision::RerollWoundRolls{f.attacker}};
+    }
     if (!f.current && f.pending_mortal_wounds > 0) {
         // 06.02 Select Model for the hazard mortal wounds (24.15), answered once by the attacking unit's player
         // (D-013). Every mortal wound selects a model, so they are always asked (D-051).
@@ -238,6 +255,9 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
 
 void attack_progress(GameState& state, DiceSource& dice, Events& events) {
     AttackFlow& f = flow_of(state);
+    if (f.wound_rerolls) {
+        throw std::logic_error("attack flow: the wound rolls wait for the attacker's re-roll choice (24.38)");
+    }
     if (f.current) {
         BatchInProgress& b = *f.current;
         const AttackBatch& batch = f.batches[b.batch];
@@ -359,12 +379,14 @@ std::vector<GameAction> legal_for(const GameState&, const decision::OrderCasualt
 
 ValidationResult validate_details(const GameState& state, Side, const action::OrderCasualties& a) {
     const auto& d = std::get<decision::OrderCasualties>(state.pending->kind);
+    // M61: 05.04 for an attack's save rolls, 06.02 for mortal wounds (decision_rule(state, ...)).
+    const std::string rule(decision_rule(state, *state.pending));
     if (a.target != d.target) {
-        return ValidationResult::failure("05.04: casualties are being allocated in " + unit_label(d.target) +
+        return ValidationResult::failure(rule + ": casualties are being allocated in " + unit_label(d.target) +
                                          ", not " + unit_label(a.target));
     }
     if (a.priority.empty()) {
-        return ValidationResult::failure("05.04: the casualty order is empty; list every model in " +
+        return ValidationResult::failure(rule + ": the casualty order is empty; list every model in " +
                                          unit_label(d.target) + " (D-013)");
     }
     std::vector<ModelId> expected = model_ids(unit_ref(state, d.target));
@@ -372,10 +394,58 @@ ValidationResult validate_details(const GameState& state, Side, const action::Or
     std::sort(expected.begin(), expected.end());
     std::sort(given.begin(), given.end());
     if (given != expected) {
-        return ValidationResult::failure("05.04: the casualty order must list every model in " +
+        return ValidationResult::failure(rule + ": the casualty order must list every model in " +
                                          unit_label(d.target) + " exactly once (D-013)");
     }
     return ValidationResult::success();
+}
+
+// ---- 24.38 RerollWoundRolls (D-072) ----
+
+namespace {
+
+const PendingWoundRerolls& pending_rerolls(const GameState& state) {
+    const AttackFlow& f = flow_of(state);
+    if (!f.wound_rerolls) {
+        throw std::logic_error("attack flow: no wound rolls are waiting to be re-rolled");
+    }
+    return *f.wound_rerolls;
+}
+
+}  // namespace
+
+std::vector<GameAction> legal_for(const GameState& state, const decision::RerollWoundRolls&) {
+    // D-072 (a D-004 extension): every failed wound roll first, then none. Any other subset is valid too.
+    return {action::RerollWoundRolls{failed_wound_rolls(pending_rerolls(state).rolls)}, action::RerollWoundRolls{}};
+}
+
+ValidationResult validate_details(const GameState& state, Side, const action::RerollWoundRolls& a) {
+    const PendingWoundRerolls& p = pending_rerolls(state);
+    const std::size_t n = p.rolls.rolls.size();
+    ValidationResult r;
+    std::vector<std::size_t> seen;
+    for (const std::size_t i : a.indices) {
+        if (i >= n) {
+            r.reasons.push_back("24.38: there is no wound roll " + std::to_string(i) + "; attack batch " +
+                                std::to_string(p.batch) + " made " + std::to_string(n) + " wound roll" +
+                                (n == 1 ? "" : "s") + " (0 to " + std::to_string(n - 1) + ")");
+        } else if (std::find(seen.begin(), seen.end(), i) != seen.end()) {
+            r.reasons.push_back("D-011: wound roll " + std::to_string(i) +
+                                " is listed twice; a dice can't be re-rolled more than once");
+        }
+        seen.push_back(i);
+    }
+    return r.reasons.empty() ? ValidationResult::success() : r;
+}
+
+void apply_details(GameState& state, Side, const action::RerollWoundRolls& a, DiceSource& dice, Events& events) {
+    AttackFlow& f = flow_of(state);
+    PendingWoundRerolls p = pending_rerolls(state);
+    f.wound_rerolls.reset();
+    const AttackBatch& batch = f.batches[p.batch];
+    std::vector<WoundReroll> rerolls = reroll_wound_rolls(dice, batch.profile, p.rolls, a.indices);  // D-011
+    events.push_back(event::WoundRollsRerolled{p.batch, std::move(rerolls), p.rolls});
+    after_wound_rolls(state, p.batch, p.rolls);
 }
 
 void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource&, Events& events) {

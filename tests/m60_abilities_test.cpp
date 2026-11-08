@@ -518,9 +518,14 @@ MeleeDeclaration tyrant_with(const GameState& gs, std::size_t weapon) {
                             {MeleeTarget{gs.units[kHavocs].id, t.weapons[weapon].profiles[0].attacks.fixed_value()}}};
 }
 
-// Stand-in: the bonesword without [TWIN-LINKED] (until M61 implements it), so the Tyrant has another usable
-// melee weapon.
+// Stand-in: the bonesword without [TWIN-LINKED], so the Tyrant has another usable melee weapon. (Written before M61
+// implemented [TWIN-LINKED]; kept so these tests resolve the same dice. The real bonesword is usable too since M61.)
 void usable_bonesword(GameState& gs) { gs.units[kTyrant].models[0].weapons[kBonesword].profiles[0].abilities.clear(); }
+
+// Stand-in: a bonesword the engine still refuses (an ability it doesn't know, D-071), as the real one was until M61.
+void refused_bonesword(GameState& gs) {
+    gs.units[kTyrant].models[0].weapons[kBonesword].profiles[0].abilities.push_back(ability::Unknown{"Lethal Hits"});
+}
 
 }  // namespace
 
@@ -594,15 +599,34 @@ TEST(R24_11_ExtraAttacks, AModelWithOnlyItsExtraAttacksWeaponSelectsItAlone) {
 }
 
 TEST(R24_11_ExtraAttacks, WhileItsOtherWeaponIsRefusedTheTyrantSelectsItsTalonsAlone) {
-    // D-071: the bonesword is [TWIN-LINKED], refused until M61 (D-026), so it counts as absent: the talons alone
-    // are a legal selection; with the bonesword the declaration is refused for the bonesword.
-    const GameState gs = tyrant_declaring();
+    // D-071: a weapon the engine refuses counts as absent, so the talons alone are a legal selection; with the
+    // refused weapon the declaration is refused for it. Until M61 the real bonesword ([TWIN-LINKED], D-026) was the
+    // refused weapon; since M61 (D-072) it is usable, so a stand-in with an ability the engine doesn't know is.
+    const GameState gs = tyrant_declaring(refused_bonesword);
     const Unit& tyrant = gs.units[kTyrant];
     for (const MeleeDeclaration& d : melee_options(gs, tyrant)) EXPECT_EQ(d.weapon_index, kTalons);
     expect_valid(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kTalons)}});
     const auto with_bonesword =
         rejection(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kBonesword), tyrant_with(gs, kTalons)}});
-    EXPECT_TRUE(starts_with(with_bonesword.front(), "24.38: ")) << with_bonesword.front();
+    EXPECT_TRUE(starts_with(with_bonesword.front(), "D-071: ")) << with_bonesword.front();
+}
+
+TEST(R24_11_ExtraAttacks, TheTyrantMustTakeItsTwinLinkedBoneswordWithItsTalons) {
+    // M61 (D-072): the real bonesword ([TWIN-LINKED]) is selectable now, so 24.11 makes the Tyrant select it and its
+    // scything talons together: the talons alone are refused, and both are valid.
+    const GameState gs = tyrant_declaring();
+    const Unit& tyrant = gs.units[kTyrant];
+    ASSERT_TRUE(gs.units[kTyrant].models[0].weapons[kBonesword].profiles[0].has<ability::TwinLinked>());
+    bool bonesword_offered = false;
+    for (const MeleeDeclaration& d : melee_options(gs, tyrant)) bonesword_offered |= d.weapon_index == kBonesword;
+    EXPECT_TRUE(bonesword_offered);
+    const std::string who = "model " + std::to_string(tyrant.models[0].id.v);
+    const auto talons_alone = rejection(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kTalons)}});
+    EXPECT_TRUE(contains(talons_alone, "24.11: " + who +
+                                           " must also select one of its melee weapons other than its [EXTRA ATTACKS] "
+                                           "weapons"))
+        << talons_alone.front();
+    expect_valid(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kBonesword), tyrant_with(gs, kTalons)}});
 }
 
 TEST(R24_11_ExtraAttacks, ItIsUsedUpAtSelectionSoItDoesNotSplitIdenticalAttacks) {
@@ -660,8 +684,9 @@ TEST(D071_UnknownAbilities, AnUnknownAbilityIsNeverOfferedForShootingAndDeclarin
 }
 
 TEST(D071_UnknownAbilities, AModelWhoseOnlyMeleeWeaponIsRefusedCannotMakeMeleeAttacks) {
-    // D-026 / D-071: like an unsupported weapon, so D-021 doesn't require it to declare one.
-    GameState gs = tyrant_declaring();
+    // D-026 / D-071: like an unsupported weapon, so D-021 doesn't require it to declare one. (M61: the bonesword is
+    // usable since [TWIN-LINKED] is implemented, D-072, so it is refused here with a stand-in ability as well.)
+    GameState gs = tyrant_declaring(refused_bonesword);
     Unit& tyrant = gs.units[kTyrant];
     tyrant.models[0].weapons[kTalons].profiles[0].abilities.push_back(ability::Unknown{"Lethal Hits"});
     EXPECT_TRUE(melee_options(gs, tyrant).empty());

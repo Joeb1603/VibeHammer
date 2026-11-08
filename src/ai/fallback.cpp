@@ -65,6 +65,8 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
     if (const auto* d = std::get_if<decision::OrderCasualties>(&kind)) {
         return client::CasualtyPlan(state, d->target).action();
     }
+    // 24.38 (D-072): re-roll every failed wound roll (listed first).
+    if (std::holds_alternative<decision::RerollWoundRolls>(kind)) return first_of<action::RerollWoundRolls>(legal);
     return std::nullopt;
 }
 

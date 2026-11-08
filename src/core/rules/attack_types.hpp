@@ -77,6 +77,25 @@ struct AttackBatch {
     friend bool operator==(const AttackBatch&, const AttackBatch&) = default;
 };
 
+// ---- 05.02 Wound Rolls (the functions are in attack_sequence.hpp) ----
+
+enum class WoundOutcome : std::uint8_t { Fail, Wound, CriticalWound };
+
+struct WoundRoll {
+    int unmodified = 0;
+    int modified = 0;
+    WoundOutcome outcome = WoundOutcome::Fail;
+    friend bool operator==(const WoundRoll&, const WoundRoll&) = default;
+};
+
+struct WoundRolls {
+    int required = 0;
+    std::vector<WoundRoll> rolls;
+    [[nodiscard]] int wounds() const;  // includes critical wounds
+    [[nodiscard]] int critical_wounds() const;
+    friend bool operator==(const WoundRolls&, const WoundRolls&) = default;
+};
+
 // 05.03 Create Groups: one group per CHARACTER model; one group for all other models with the same
 // W, Sv and InSv characteristics.
 struct AllocationGroup {

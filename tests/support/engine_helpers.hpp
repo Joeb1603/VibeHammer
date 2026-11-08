@@ -234,6 +234,16 @@ inline core::GameAction random_action(const core::GameState& gs, TestRng& rng) {
     const core::Side side = decider(gs);
     const auto legal = core::legal_actions(gs, side);
     EXPECT_FALSE(legal.empty());
+    // M61 (D-072, a D-004 extension): legal_actions lists two of the re-roll subsets; a third of the time random
+    // play picks any subset instead. Only this decision draws the extra numbers, so other games are unchanged.
+    if (gs.pending && std::holds_alternative<core::decision::RerollWoundRolls>(gs.pending->kind) && gs.flow.attack &&
+        gs.flow.attack->wound_rerolls && rng.below(3) == 0) {
+        core::action::RerollWoundRolls subset;
+        for (std::size_t i = 0; i < gs.flow.attack->wound_rerolls->rolls.rolls.size(); ++i) {
+            if (rng.below(2) == 0) subset.indices.push_back(i);
+        }
+        return subset;
+    }
     const core::GameAction& pick = legal[rng.below(legal.size())];
     if (!core::is_template(pick)) {
         return pick;

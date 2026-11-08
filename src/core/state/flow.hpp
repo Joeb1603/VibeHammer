@@ -80,6 +80,14 @@ struct BatchInProgress {
     friend bool operator==(const BatchInProgress&, const BatchInProgress&) = default;
 };
 
+// 24.38 [TWIN-LINKED]: a batch's wound rolls, made, while the attacking unit's player chooses which to re-roll
+// (D-072). Only set when at least one of them failed; the batch goes on (05.03) once the re-rolls are made.
+struct PendingWoundRerolls {
+    std::size_t batch = 0;  // index into AttackFlow::batches
+    WoundRolls rolls;       // 05.02, as rolled
+    friend bool operator==(const PendingWoundRerolls&, const PendingWoundRerolls&) = default;
+};
+
 // 04.03 Resolve Attacks in progress for one attacking unit.
 struct AttackFlow {
     UnitId attacker;
@@ -95,6 +103,8 @@ struct AttackFlow {
     // 06.02: mortal wounds from failed hazard rolls not yet inflicted on the attacking unit; its player
     // answers OrderCasualties for it (D-013, D-051). Omitted from JSON when 0.
     int pending_mortal_wounds = 0;
+    // 24.38 (D-072): the wound rolls waiting for the attacker's RerollWoundRolls answer. Omitted from JSON when absent.
+    std::optional<PendingWoundRerolls> wound_rerolls;
     friend bool operator==(const AttackFlow&, const AttackFlow&) = default;
 };
 

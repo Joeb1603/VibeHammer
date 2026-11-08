@@ -104,10 +104,7 @@ WeaponSelection select_weapon_target(const GameState& state, ModelId attacker, s
 }
 
 std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon) {
-    if (weapon.has<ability::TwinLinked>()) {
-        return "24.38: '" + weapon.name + "' has [TWIN-LINKED], which V1 does not implement yet (it needs Re-rolls, "
-                                          "D-011; D-026)";
-    }
+    // [TWIN-LINKED] (24.38) is implemented since M61 (D-072).
     if (weapon.has<ability::DevastatingWounds>()) {
         return "24.10: '" + weapon.name + "' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)";
     }
@@ -215,8 +212,11 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
             if (context.type == AttackType::Shooting && context.heavy_conditions_met) e.hit_modifier = 1;  // 24.16
         } else if (std::holds_alternative<ability::Torrent>(a)) {
             e.active = true;  // 24.37
-        } else if (std::holds_alternative<ability::SustainedHits>(a) || std::holds_alternative<ability::Hazardous>(a)) {
-            e.active = true;  // 24.36 on each critical hit; 24.15 a hazard roll after the unit's attacks (D-071)
+        } else if (std::holds_alternative<ability::SustainedHits>(a) || std::holds_alternative<ability::Hazardous>(a) ||
+                   std::holds_alternative<ability::TwinLinked>(a)) {
+            // 24.36 on each critical hit; 24.15 a hazard roll after the unit's attacks (D-071); 24.38 the wound rolls
+            // can be re-rolled (D-072)
+            e.active = true;
         } else if (std::holds_alternative<ability::ExtraAttacks>(a)) {
             e.active = context.type == AttackType::Fighting;  // 24.11: made in addition to another melee weapon
         }

@@ -303,5 +303,5 @@ TEST(R24_37_Torrent, AbilityEffectsMarkTorrentActiveAndAssaultNot) {
     ASSERT_EQ(effects.size(), 3u);
     EXPECT_TRUE(effects[0].active);
     EXPECT_FALSE(effects[1].active);  // acts when the shooting type is chosen (10.05)
-    EXPECT_FALSE(effects[2].active);  // not implemented (D-026)
+    EXPECT_TRUE(effects[2].active);   // 24.38: the wound rolls can be re-rolled (D-072, M61; was refused, D-026)
 }

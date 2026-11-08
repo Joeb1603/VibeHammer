@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <variant>
 
 #include "core/dice/modifiers.hpp"
@@ -13,14 +14,11 @@ namespace wh40k::core {
 
 namespace {
 
-// Abilities whose effects (re-rolls, critical-wound handling, anything unrecognised) are not implemented
-// yet. Validation refuses them when they are selected (D-026, D-071); this second safety net refuses to
-// resolve them wrongly.
+// Abilities whose effects (critical-wound handling, anything unrecognised) are not implemented yet. Validation
+// refuses them when they are selected (D-026, D-071); this second safety net refuses to resolve them wrongly.
+// [TWIN-LINKED] is implemented since M61 (D-072).
 void reject_unimplemented(const AttackProfile& profile) {
     for (const WeaponAbility& a : profile.attack_time_abilities) {
-        if (std::holds_alternative<ability::TwinLinked>(a)) {
-            throw std::logic_error("24.38 [TWIN-LINKED] is not implemented (needs Re-rolls, D-011)");
-        }
         if (std::holds_alternative<ability::DevastatingWounds>(a)) {
             throw std::logic_error("24.10 [DEVASTATING WOUNDS] is not implemented");
         }
@@ -118,25 +116,67 @@ int WoundRolls::critical_wounds() const {
     }));
 }
 
+WoundRoll wound_roll_result(int unmodified, int modifier, int required) {
+    WoundRoll r;
+    r.unmodified = unmodified;
+    r.modified = modified_result(unmodified, modifier);
+    if (r.unmodified == 1) {
+        r.outcome = WoundOutcome::Fail;
+    } else if (r.unmodified == 6) {
+        r.outcome = WoundOutcome::CriticalWound;
+    } else if (r.modified >= required) {
+        r.outcome = WoundOutcome::Wound;
+    } else {
+        r.outcome = WoundOutcome::Fail;
+    }
+    return r;
+}
+
 WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits, int toughness) {
     reject_unimplemented(profile);
     WoundRolls out;
     out.required = required_wound_roll(profile.strength, toughness);
     const int modifier = cap_hit_wound_modifier(profile.wound_modifier);  // D-011
     for (int i = 0; i < hits; ++i) {
-        WoundRoll r;
-        r.unmodified = dice.roll_d6();
-        r.modified = modified_result(r.unmodified, modifier);
-        if (r.unmodified == 1) {
-            r.outcome = WoundOutcome::Fail;
-        } else if (r.unmodified == 6) {
-            r.outcome = WoundOutcome::CriticalWound;
-        } else if (r.modified >= out.required) {
-            r.outcome = WoundOutcome::Wound;
-        } else {
-            r.outcome = WoundOutcome::Fail;
-        }
-        out.rolls.push_back(r);
+        out.rolls.push_back(wound_roll_result(dice.roll_d6(), modifier, out.required));
+    }
+    return out;
+}
+
+// ---- 24.38 [TWIN-LINKED] ----
+
+bool twin_linked(const AttackProfile& profile) {
+    return std::any_of(profile.attack_time_abilities.begin(), profile.attack_time_abilities.end(),
+                       [](const WeaponAbility& a) { return std::holds_alternative<ability::TwinLinked>(a); });
+}
+
+std::vector<std::size_t> failed_wound_rolls(const WoundRolls& rolls) {
+    std::vector<std::size_t> out;
+    for (std::size_t i = 0; i < rolls.rolls.size(); ++i) {
+        if (rolls.rolls[i].outcome == WoundOutcome::Fail) out.push_back(i);
+    }
+    return out;
+}
+
+std::vector<WoundReroll> reroll_wound_rolls(DiceSource& dice, const AttackProfile& profile, WoundRolls& rolls,
+                                            std::span<const std::size_t> indices) {
+    std::vector<std::size_t> order(indices.begin(), indices.end());
+    std::sort(order.begin(), order.end());
+    if (std::adjacent_find(order.begin(), order.end()) != order.end()) {
+        throw std::logic_error("D-011: a wound roll can't be re-rolled more than once");
+    }
+    if (!order.empty() && order.back() >= rolls.rolls.size()) {
+        throw std::logic_error("24.38: wound roll " + std::to_string(order.back()) + " does not exist");
+    }
+    const int modifier = cap_hit_wound_modifier(profile.wound_modifier);  // D-011: after the re-roll
+    std::vector<WoundReroll> out;
+    for (const std::size_t i : order) {
+        WoundReroll r;
+        r.index = i;
+        r.before = rolls.rolls[i];
+        r.after = wound_roll_result(dice.roll_d6(), modifier, rolls.required);  // the new roll replaces the old one
+        rolls.rolls[i] = r.after;
+        out.push_back(r);
     }
     return out;
 }
@@ -359,7 +399,8 @@ InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup
 }
 
 BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBatch& batch,
-                                 const AllocationOrderChooser& choose_order, const ModelChooser& choose_model) {
+                                 const AllocationOrderChooser& choose_order, const ModelChooser& choose_model,
+                                 const WoundRerollChooser& choose_rerolls) {
     if (target.models.empty()) {
         throw std::logic_error("resolve_attack_batch: target unit '" + target.name +
                                "' is destroyed (Target No Longer Eligible or Viable is not implemented)");
@@ -367,6 +408,14 @@ BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBat
     BatchResult r;
     r.hits = make_hit_rolls(dice, batch.profile, batch.attack_dice);                           // 05.01
     r.wounds = make_wound_rolls(dice, batch.profile, r.hits.hits(), target_toughness(target));  // 05.02
+    if (twin_linked(batch.profile) && !failed_wound_rolls(r.wounds).empty()) {
+        // 24.38 (D-072): the attacker picks the wound rolls to re-roll, as the engine asks.
+        if (!choose_rerolls) {
+            throw std::logic_error("24.38: a [TWIN-LINKED] batch with a failed wound roll needs the attacker's re-roll choice");
+        }
+        const std::vector<std::size_t> chosen = choose_rerolls(r.wounds);
+        r.rerolls = reroll_wound_rolls(dice, batch.profile, r.wounds, chosen);
+    }
     const int wounds = r.wounds.wounds();
     if (wounds == 0) {
         return r;

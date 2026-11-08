@@ -60,7 +60,8 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
     for (const WeaponAbility& a : all) expect_readable(weapon_ability_help(a));
     EXPECT_TRUE(weapon_ability_help(ability::Heavy{}).in_this_game);
     EXPECT_EQ(weapon_ability_help(ability::RapidFire{2}).rule, "24.30");
-    EXPECT_FALSE(weapon_ability_help(ability::TwinLinked{}).in_this_game);
+    EXPECT_TRUE(weapon_ability_help(ability::TwinLinked{}).in_this_game);  // M61 (D-072): 24.38 is in the game now
+    EXPECT_EQ(weapon_ability_help(ability::TwinLinked{}).rule, "24.38");
     EXPECT_FALSE(weapon_ability_help(ability::Unknown{"Lethal Hits"}).in_this_game);
     // M60 (D-071): 24.15, 24.36 and 24.11 are in the game now.
     EXPECT_TRUE(weapon_ability_help(ability::Hazardous{}).in_this_game);

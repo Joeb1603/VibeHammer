@@ -45,6 +45,15 @@ std::string wound_rolls(const core::WoundRolls& r) {
     return out;
 }
 
+// One die's roll: "3", "5(6)" when modified, with "!" for a critical and "x" for a failure.
+std::string wound_roll(const core::WoundRoll& roll) {
+    std::string out = std::to_string(roll.unmodified);
+    if (roll.modified != roll.unmodified) out += "(" + std::to_string(roll.modified) + ")";
+    if (roll.outcome == core::WoundOutcome::CriticalWound) out += '!';
+    if (roll.outcome == core::WoundOutcome::Fail) out += 'x';
+    return out;
+}
+
 std::string ints(const std::vector<int>& v) {
     std::string out;
     for (const int x : v) {
@@ -179,6 +188,15 @@ std::string body(const core::GameEvent& e) {
                 return std::to_string(x.attack_dice) + " attacks against " + unit(x.target) + " are lost";
             } else if constexpr (std::is_same_v<T, ev::GameOver>) {
                 return "Game over: " + x.reason;
+            } else if constexpr (std::is_same_v<T, ev::WoundRollsRerolled>) {
+                // 24.38 (D-072): each re-rolled die, old -> new, then the batch's new total.
+                const std::string total = std::to_string(x.rolls.wounds()) + " wound" + (x.rolls.wounds() == 1 ? "" : "s");
+                if (x.rerolls.empty()) return "Wound rolls kept, none re-rolled ([TWIN-LINKED]) -> " + total;
+                std::string dice;
+                for (const core::WoundReroll& r : x.rerolls) {
+                    dice += (dice.empty() ? "" : ", ") + wound_roll(r.before) + " -> " + wound_roll(r.after);
+                }
+                return "Wound re-rolls ([TWIN-LINKED]): " + dice + " -> " + total;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -189,6 +207,7 @@ std::string body(const core::GameEvent& e) {
 }  // namespace
 
 bool is_roll_event(const core::GameEvent& event) {
+    if (const auto* r = std::get_if<ev::WoundRollsRerolled>(&event)) return !r->rerolls.empty();  // 24.38: dice re-rolled
     return std::holds_alternative<ev::HitRollsMade>(event) || std::holds_alternative<ev::WoundRollsMade>(event) ||
            std::holds_alternative<ev::SaveRollsMade>(event) || std::holds_alternative<ev::AdvanceRolled>(event) ||
            std::holds_alternative<ev::ChargeRolled>(event) || std::holds_alternative<ev::HazardRollsMade>(event) ||

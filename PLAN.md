@@ -2193,12 +2193,10 @@ milestone per session" and "agree each milestone first" for these milestones onl
   - The bots don't price the hazard of a supercharge profile (Normal and Hard may pick it; M68).
   - The per-model editors still choose one declaration per model (the others are listed, not editable), and the
     Split popup splits only the main weapon.
-  - The pending-decision text cites 05.04 for every `OrderCasualties`, including 06.02's (as Desperate Escape already
-    did).
 
 ---
 
-## M61: [TWIN-LINKED] with a re-roll decision
+## M61: [TWIN-LINKED] with a re-roll decision ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** design first, then pre-approved · **Rules:** 24.38, D-011 · **Decision:** D-072
 
 > **Flow.** `start_batch` is split at the wound rolls. When a Twin-linked attack's wound roll fails, the
@@ -2217,6 +2215,97 @@ milestone per session" and "agree each milestone first" for these milestones onl
 **Acceptance**
 - Tests `R24_38_`, `D072_` and client `M61_`, round trips and a replay.
 - Old play and replays unchanged.
+
+**Results (2026-11-08):** design in D-072 (amends D-026, applies D-011), reviewed before any code.
+- **Engine** (`engine/attack_flow.cpp`, `rules/attack_sequence`):
+  - `start_batch` is split after the wound rolls. A [TWIN-LINKED] batch with a failed wound roll (the 05.02 result
+    Fail) waits in `AttackFlow::wound_rerolls`, and the attacking unit's player gets `RerollWoundRolls{attacker}`
+    (24.38). In the Fight phase that can be the player whose turn it is not (01.03).
+  - `legal_actions` lists every failed die first, then none. Any subset of distinct dice is valid, successes too;
+    out-of-range and repeated indices are refused (24.38, D-011).
+  - The chosen dice are re-rolled once each, in index order, before modifiers (`reroll_wound_rolls`, sharing
+    `wound_roll_result` with `make_wound_rolls`), then 05.03 goes on. Event `WoundRollsRerolled` (old and new dice,
+    the new totals), also for "Keep".
+  - No failed roll, or no ability: nothing asked, the same dice as before.
+  - [SUSTAINED HITS]' extra hits' wound rolls are re-rollable too.
+  - `resolve_attack_batch` takes the re-roll choice as an input.
+  - [TWIN-LINKED] is out of `unimplemented_ability_problem` (D-026 amended); [DEVASTATING WOUNDS] stays refused.
+  - JSON: the pending field is written only while it waits; the new decision, action and event are appended to their
+    variants.
+- **M60 carry-over, done here:** `decision_rule(state, decision)` / `describe(state, decision)` cite 06.02 for a
+  casualty decision over mortal wounds ([HAZARDOUS], Desperate Escape) and 05.04 for saves; `validate_action`'s
+  messages, the casualty validation messages, the action bar's headline and the replay viewer's "Waiting for" line
+  use them. (Removed from M60's open list.)
+- **Client:**
+  - `RerollPicks` (logic) and a re-roll pop-up (`reroll_popup.cpp`): the wound dice, failed ones outlined in red, a
+    click picks or drops a die; "Re-roll selected", "Re-roll all failed", "Keep".
+  - The action bar's buttons are "Re-roll all failed (n)" first (what `--steps` clicks), "Keep the wound rolls", and
+    "Re-roll selected (k)" once dice are picked.
+  - Log text, action text, a "Wound re-rolls" dice card (24.38: which dice are re-rolled before the roll; their new
+    faces, old -> new and the new totals after it; none for Keep), the wound card's note, the help and the hit card's
+    ability line. A dice card's result line now wraps at the pop-up's edge (only the re-roll card's can be long).
+  - The answer is its own Undo group; undoing it restores the dice position, so the same answer gives the same dice.
+    The automatic settings never answer it.
+  - `--load <save.json>` starts on a saved game (the Save / Load format; not with `--scenario`, `--replay` or
+    `--seed`; the save's players unless `--bot` / `--bot-level`; a bad file exits with code 2), and
+    `--pick-dice <i,j,...>` picks dice in the first re-roll pop-up, both for screenshots. The flags are parsed in
+    `wh40k_client_logic` (`launch_options`, moved from `main.cpp`).
+- **Bots:**
+  - Every level re-rolls every failed wound roll and no other (`reroll_failed_wound_rolls`, Easy; Normal, Hard and the
+    lookahead's rollouts fall through to it). `fallback.cpp` prefers it; the driver gives it the step pause.
+  - Odds: a Twin-linked profile's wound chance is p + (1−p)p and its critical chance c + (1−p)c, enumerated through
+    core's functions. Twin-linked is in the cache key; other profiles take the old arithmetic unchanged. Hard's chain
+    tables get it through `expected_outcome`.
+  - `profile_supported` lets it through. The state hash includes the pending re-roll only while it waits.
+- **Replay** `tests/replays/m61_twin_linked_reroll.json` (22 steps, seed 1, embedded state):
+  - The Havocs vs Hive Tyrant fixture as it is. The Tyrant moves, charges into base contact and fights first with its
+    real bonesword ([TWIN-LINKED]) and its talons, bonesword first.
+  - A wound roll fails, Side B re-rolls every failed one (1 -> 5), then saves, casualties, the talons, and the Havocs
+    fighting back.
+  - It stops at Side B's first Consolidate decision. Checked in the replay viewer (frame 17: "Waiting for: ... (24.38)").
+- **Tests** (all new unless listed under "Changed"):
+  - `tests/m61_twin_linked_test.cpp` (23): `R24_38_TwinLinked.*` (16): asked only after a failed roll, not when all
+    wound or nothing hits, all failed, a subset, a success re-rolled, Keep, index order, modifiers after the re-roll,
+    once only, a critical from a re-rolled 6, sustained hits, the dice stream without the ability, the Fight phase with
+    the player whose turn it is not, validation, the weapons offered. `D072_TwinLinked.*` (5): old loadouts have no
+    Twin-linked weapon, the pending state's round trip and omission, an old attack flow, the JSON names, and
+    `resolve_attack_batch` matching the engine. `D072_DecisionRule.*` (2).
+  - `movement_test.cpp`: `D072_DecisionRule.DesperateEscapeCasualtiesCite0602`. `m60_abilities_test.cpp`:
+    `R24_11_ExtraAttacks.TheTyrantMustTakeItsTwinLinkedBoneswordWithItsTalons`. `engine_property_test.cpp`:
+    `D004_LegalActions.RandomPlayExercisesTwinLinkedReRolls` (the real bonesword and a stand-in fleshborer hive; all
+    failed, none and other subsets all happen, and sustained hits' rolls are re-rolled). The random-play helper picks a
+    random subset a third of the time (only at this decision, so other games are unchanged).
+  - `tests/client/m61_test.cpp` (12): `M61_RerollPicks.*`, `M61_DecisionPanel.*`, `M61_ClientText.*`, `M61_Undo.*`,
+    `M61_Saves.*`, `M61_LaunchOptions.*` (a good and a bad file, the flag combinations).
+  - `tests/ai/m61_test.cpp` (7): every level and the fallback, the state hash, the rollouts, the exact odds, 20,000
+    engine batches (with and without sustained hits), `profile_supported`, clean bot games on both fixtures.
+  - *Changed, for the rule reason ([TWIN-LINKED] is no longer refused; each keeps its check with a still-refused
+    stand-in):* `R24_38_TwinLinked.IsRefusedUntilReRollsAreImplemented` is now
+    `IsResolvedWhileDevastatingWoundsIsStillRefused`; `D026_UnimplementedAbilities.ATwinLinkedWeaponIsRejectedAndNotOffered`
+    is now `ADevastatingWoundsRangedWeaponIsRejectedAndNotOffered`; `R24_37_Torrent.AbilityEffectsMarkTorrentActiveAndAssaultNot`
+    (Twin-linked is active); `D004_LegalActions.RandomPlayFromTheRostersFixture` (the bonesword may be used) and the
+    D026 roster test's melee part ([DEVASTATING WOUNDS] stand-in); `R24_11_ExtraAttacks.WhileItsOtherWeaponIsRefused...`,
+    `D071_UnknownAbilities.AModelWhoseOnlyMeleeWeaponIsRefused...`, ai `M60_Odds.TheMeleeVolleyAddsTheExtraAttacksWeapon`,
+    `M60_Bots.EveryLevelDeclaresTheExtraAttacksWeaponWithItsMainWeapon` and client
+    `M60_DefaultPlans.TheHiveTyrantFightsWithItsTalonsWhileItsBoneswordIsRefused` (a refused stand-in bonesword); ai
+    `M40_ExpectedDamage.RejectedProfilesAreExcluded` (the spinefist is supported) and the M40 grid (23 variants, the
+    spinefist added to the ctest picks); `M24_RulesHelp.EveryWeaponAbilityHasPlainHelp` (24.38 in the game); the
+    three serialization size guards.
+  - ctest (Debug): 869 → 914 tests, all pass.
+- **Acceptance:**
+  - *Tests and a replay:* **met** (above).
+  - *Old play and replays unchanged:* **met.** `Replay.DISABLED_RegenerateReplays` and the four ai regenerations
+    leave every existing replay byte-identical; only `m61_twin_linked_reroll.json` is new. The Release arena's
+    `--per-game` output matches `baseline/m60` on every `game` line (actions, state and trace hashes) for all 24
+    pairings of V1, both bot scenarios and Strike. No weapon equipped there is Twin-linked (a test checks), and
+    profiles without the ability keep the old dice order and odds arithmetic.
+  - *Screenshots* (`xvfb-run`, scratchpad `m61/`): the re-roll pop-up with the failed die outlined and another
+    picked, the action bar's buttons, the "Wound re-rolls" card after `--steps 1`, and the replay viewer's
+    "Waiting for" line citing 06.02 at the M60 hazard decision and 24.38 at the M61 decision.
+- **Open:**
+  - The action bar's headline for the casualty decision is still clipped beside its buttons (as before M61); the
+    re-roll decision uses a short headline.
+  - No setting re-rolls automatically; every Twin-linked batch with a failed roll asks.
 
 ---
 

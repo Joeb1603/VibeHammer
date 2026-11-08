@@ -127,6 +127,14 @@ void from_json(const Json& j, WoundRolls& v) {
     j.at("required").get_to(v.required);
     j.at("rolls").get_to(v.rolls);
 }
+void to_json(Json& j, const WoundReroll& v) {
+    j = Json{{"index", v.index}, {"before", v.before}, {"after", v.after}};
+}
+void from_json(const Json& j, WoundReroll& v) {
+    j.at("index").get_to(v.index);
+    j.at("before").get_to(v.before);
+    j.at("after").get_to(v.after);
+}
 
 void to_json(Json& j, const SaveCheck& v) {
     j = Json{{"unmodified", v.unmodified},
@@ -218,6 +226,8 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, OrderCasualties>) {
                 j["target"] = a.target;
                 j["priority"] = a.priority;
+            } else if constexpr (std::is_same_v<T, RerollWoundRolls>) {
+                j["indices"] = a.indices;  // 24.38 (D-072)
             }
         },
         v);
@@ -272,6 +282,8 @@ void from_json(const Json& j, GameAction& v) {
         v = DeclareAllocationOrder{j.at("target").get<UnitId>(), j.at("order").get<std::vector<std::size_t>>()};
     } else if (kind == "OrderCasualties") {
         v = OrderCasualties{j.at("target").get<UnitId>(), j.at("priority").get<std::vector<ModelId>>()};
+    } else if (kind == "RerollWoundRolls") {
+        v = RerollWoundRolls{j.at("indices").get<std::vector<std::size_t>>()};
     } else {
         bad_enum("GameAction", j);
     }
@@ -400,6 +412,10 @@ void to_json(Json& j, const GameEvent& v) {
             } else if constexpr (std::is_same_v<T, GameOver>) {
                 put_opt(j, "winner", e.winner);
                 j["reason"] = e.reason;
+            } else if constexpr (std::is_same_v<T, WoundRollsRerolled>) {
+                j["batch"] = e.batch;  // 24.38 (D-072)
+                j["rerolls"] = e.rerolls;
+                j["rolls"] = e.rolls;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -502,6 +518,9 @@ void from_json(const Json& j, GameEvent& v) {
         get_opt(j, "winner", g.winner);
         j.at("reason").get_to(g.reason);
         v = g;
+    } else if (kind == "WoundRollsRerolled") {
+        v = WoundRollsRerolled{j.at("batch").get<std::size_t>(), j.at("rerolls").get<std::vector<WoundReroll>>(),
+                               j.at("rolls").get<WoundRolls>()};
     } else {
         bad_enum("GameEvent", j);
     }

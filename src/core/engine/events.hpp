@@ -233,6 +233,12 @@ struct GameOver {  // D-007
     std::string reason;
     friend bool operator==(const GameOver&, const GameOver&) = default;
 };
+struct WoundRollsRerolled {  // 24.38 [TWIN-LINKED], D-011 (D-072): the attacker's re-rolls of a batch's wound rolls
+    std::size_t batch = 0;
+    std::vector<WoundReroll> rerolls;  // each re-rolled die (index, before, after), in index order; empty: kept
+    WoundRolls rolls;                  // every wound roll of the batch after the re-rolls
+    friend bool operator==(const WoundRollsRerolled&, const WoundRollsRerolled&) = default;
+};
 }  // namespace event
 
 using GameEvent =
@@ -247,7 +253,7 @@ using GameEvent =
                  event::BattleShockEnded, event::ModelRemovedForCoherency, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
-                 event::GameOver>;
+                 event::GameOver, event::WoundRollsRerolled>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

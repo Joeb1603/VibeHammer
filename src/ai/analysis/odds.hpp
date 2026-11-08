@@ -37,16 +37,18 @@ namespace wh40k::ai::analysis {
 
 // One attack die of a profile against a target's Toughness (05.01, 05.02). `hit` includes critical and automatic
 // hits ([TORRENT], 24.37); `wound` is P(wound | hit) and includes critical wounds. V1 gives criticals no extra
-// effect beyond succeeding ([DEVASTATING WOUNDS] and [TWIN-LINKED] are rejected, D-026), so they are reported but
-// add nothing.
+// effect beyond succeeding ([DEVASTATING WOUNDS] is rejected, D-026), so they are reported but add nothing.
 // M60 (D-071): `hit` counts the hit rolls that hit; [SUSTAINED HITS X] (24.36) adds X hits per critical hit on top,
 // so a die can score up to 1 + X hits (expected_outcome mixes over that exactly).
+// M61 (D-072): for a [TWIN-LINKED] profile (24.38) `wound` and `critical_wound` include the re-roll of a failed wound
+// roll (the bots re-roll every failed one): p + (1 - p)p and c + (1 - p)c.
 struct HitWoundOdds {
     double hit = 0.0;
     double critical_hit = 0.0;
     double wound = 0.0;
     double critical_wound = 0.0;
-    int sustained = 0;  // 24.36: the X of [SUSTAINED HITS X], 0 without it
+    int sustained = 0;         // 24.36: the X of [SUSTAINED HITS X], 0 without it
+    bool twin_linked = false;  // 24.38: `wound` includes the re-roll of a failed wound roll
 };
 
 // Per-die chances, computed once per key. Lookups are deterministic and the values do not depend on what else is
@@ -62,8 +64,8 @@ public:
     [[nodiscard]] std::size_t lookups() const noexcept { return lookups_; }
 
 private:
-    // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X)
-    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int>;
+    // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X, [TWIN-LINKED])
+    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
     std::map<HitWoundKey, HitWoundOdds> hit_wound_;
@@ -144,13 +146,14 @@ struct SampledOutcome {
 
 // `samples` resolutions of `volley` by core::resolve_attack_batch, each on a fresh copy of `target` (weapons
 // stripped, for speed), with the bot's own dice seeded by `seed` (D-054). The defender's choices are the
-// engine's first legal ones (the first allocation order, the first selectable model).
+// engine's first legal ones (the first allocation order, the first selectable model); the attacker re-rolls every
+// failed wound roll of a [TWIN-LINKED] batch (24.38, D-072).
 [[nodiscard]] SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::Unit& target,
                                             std::uint64_t seed, int samples);
 
 // ---- profiles ----
 
-// D-002 / D-026: can the engine resolve this profile (fixed A and D, no unimplemented ability)?
+// D-002 / D-026 / D-071: can the engine resolve this profile (fixed A and D, no unimplemented ability)?
 [[nodiscard]] bool profile_supported(const core::WeaponProfile& profile);
 
 // 24.30 [RAPID FIRE]: is `gap_mm` within half the profile's range? The same test select_weapon_target records

@@ -38,6 +38,33 @@ HitWoundOdds derive_hit_wound(const core::AttackProfile& profile, int toughness)
     o.wound /= kFaces;
     o.critical_wound /= kFaces;
     o.sustained = core::sustained_hits(profile);
+    if (core::twin_linked(profile)) {
+        // 24.38 (M61, D-072): the bot re-rolls every failed wound roll and no other. Each first face, then each face of
+        // a failed one's re-roll, through core's own functions: P(wound) = p + (1 - p)p and P(critical wound) =
+        // c + (1 - p)c exactly. Profiles without the ability keep the arithmetic above unchanged.
+        double wound = 0.0;
+        double critical = 0.0;
+        for (int first = 1; first <= kFaces; ++first) {
+            core::ScriptedDice first_die{first};
+            core::WoundRolls w = core::make_wound_rolls(first_die, profile, 1, toughness);
+            const std::vector<std::size_t> failed = core::failed_wound_rolls(w);
+            if (failed.empty()) {
+                wound += static_cast<double>(w.wounds()) / kFaces;
+                critical += static_cast<double>(w.critical_wounds()) / kFaces;
+                continue;
+            }
+            for (int second = 1; second <= kFaces; ++second) {
+                core::WoundRolls again = w;
+                core::ScriptedDice second_die{second};
+                (void)core::reroll_wound_rolls(second_die, profile, again, failed);
+                wound += static_cast<double>(again.wounds()) / (kFaces * kFaces);
+                critical += static_cast<double>(again.critical_wounds()) / (kFaces * kFaces);
+            }
+        }
+        o.wound = wound;
+        o.critical_wound = critical;
+        o.twin_linked = true;
+    }
     return o;
 }
 
@@ -126,7 +153,8 @@ std::vector<Decl> pick_model_set(const std::vector<Candidate<Decl>>& cands, bool
 const HitWoundOdds& OddsCache::hit_wound(const core::AttackProfile& profile, int toughness) {
     ++lookups_;
     const HitWoundKey key{opt_or(profile.skill), profile.torrent,         profile.strength, profile.hit_modifier,
-                          profile.wound_modifier,  toughness, core::sustained_hits(profile)};
+                          profile.wound_modifier,  toughness, core::sustained_hits(profile),
+                          core::twin_linked(profile)};
     auto it = hit_wound_.find(key);
     if (it == hit_wound_.end()) {
         ++computed_;
@@ -363,6 +391,8 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
     const core::ModelChooser first_model = [](const core::Unit&, std::span<const core::ModelId> options) {
         return options.front();
     };
+    // 24.38 (D-072): the attacker re-rolls every failed wound roll, as the bots do.
+    const core::WoundRerollChooser all_failed = [](const core::WoundRolls& w) { return core::failed_wound_rolls(w); };
     double sum_d = 0.0;
     double sum_d2 = 0.0;
     double sum_m = 0.0;
@@ -373,7 +403,8 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
         for (const VolleyBatch& vb : volley) {
             if (unit.models.empty()) break;  // the rest of the volley has nothing to attack
             const core::AttackBatch batch{unit.id, vb.profile, {}, vb.attack_dice};
-            const core::BatchResult r = core::resolve_attack_batch(dice, unit, batch, first_order, first_model);
+            const core::BatchResult r =
+                core::resolve_attack_batch(dice, unit, batch, first_order, first_model, all_failed);
             for (const core::SaveStep& step : r.damage.steps) {
                 if (step.damage) damage += step.damage->wounds_lost;
             }
@@ -400,7 +431,7 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
 
 bool profile_supported(const core::WeaponProfile& profile) {
     return profile.attacks.is_fixed() && profile.damage.is_fixed() &&  // D-002
-           !core::unimplemented_ability_problem(profile);               // D-026
+           !core::unimplemented_ability_problem(profile);               // D-026 ([TWIN-LINKED] is resolved, D-072)
 }
 
 bool within_half_range(const core::WeaponProfile& profile, float gap_mm) {

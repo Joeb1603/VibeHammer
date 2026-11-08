@@ -74,6 +74,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::A, decision::SelectAttackBatch{UnitId{1}}},
         {Side::B, decision::DeclareAllocationOrder{UnitId{2}}},
         {Side::B, decision::OrderCasualties{UnitId{2}}},
+        {Side::B, decision::RerollWoundRolls{UnitId{2}}},  // M61 (24.38)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
@@ -221,6 +222,7 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::SelectAttackBatch{3},
         action::DeclareAllocationOrder{UnitId{2}, {1, 0}},
         action::OrderCasualties{UnitId{2}, {ModelId{9}, ModelId{6}}},
+        action::RerollWoundRolls{{2, 0}},  // M61 (24.38)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {
@@ -310,6 +312,7 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::UnitDestroyed{UnitId{2}},
         event::AttacksLost{UnitId{2}, 1, 2},
         event::GameOver{Side::A, "D-007: Side B has no models on the battlefield; Side A wins"},
+        event::WoundRollsRerolled{0, {WoundReroll{0, wounds.rolls[0], WoundRoll{5, 5, WoundOutcome::Wound}}}, wounds},  // M61
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {
