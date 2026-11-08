@@ -3,6 +3,7 @@
 #include <cctype>
 
 #include "core/engine/engine.hpp"
+#include "core/state/points_destroyed.hpp"
 
 namespace wh40k::client {
 
@@ -48,7 +49,20 @@ std::optional<GameOverText> game_over_text(const core::GameState& state) {
     } else {
         t.title = "Draw";
     }
+    if (state.result_rule == core::ResultRule::PointsDestroyed) {
+        // D-076: the totals the result was decided on; after a wipe-out (D-007) the totals as the game ended.
+        const core::PointsTally tally = state.result->points ? *state.result->points : core::points_destroyed(state);
+        t.points = "Points destroyed: Side A (" + state.side(core::Side::A).name + ") " + tally.display[0] +
+                   ", Side B (" + state.side(core::Side::B).name + ") " + tally.display[1];
+    }
     return t;
+}
+
+std::optional<std::string> points_destroyed_text(const core::GameState& state) {
+    if (state.result_rule != core::ResultRule::PointsDestroyed) return std::nullopt;
+    const core::PointsTally tally = state.result && state.result->points ? *state.result->points
+                                                                         : core::points_destroyed(state);
+    return "Points destroyed: Side A " + tally.display[0] + ", Side B " + tally.display[1];
 }
 
 }  // namespace wh40k::client

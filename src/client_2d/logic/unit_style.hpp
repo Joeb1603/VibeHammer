@@ -20,8 +20,9 @@ struct Rgb {
 // The side colour used before M55 (blue for A, red for B). Shade 1 of each side is this colour.
 [[nodiscard]] Rgb side_rgb(core::Side side);
 
-// The number of shades each side has; a side with more units repeats them (index wraps).
-inline constexpr int kUnitShades = 6;
+// The number of shades each side has; a side with more units repeats them (index wraps). D-065: six since M55, ten
+// since M67 (the first six unchanged).
+inline constexpr int kUnitShades = 10;
 
 // Shade `index` (1-based) of `side`'s palette. Shade 1 is side_rgb(side).
 [[nodiscard]] Rgb side_shade(core::Side side, int index);

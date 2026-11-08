@@ -33,6 +33,10 @@ struct DeploymentZone {
 
 [[nodiscard]] Rect zone_rect(const Battlefield& field, const DeploymentZone& zone);
 
+// How the game is decided when no side is wiped out (scenario "result"). D-007: a draw after the last battle round.
+// D-076 (M67, amends D-007): the side that destroyed more points wins (core/state/points_destroyed.hpp).
+enum class ResultRule : std::uint8_t { D007Draw, PointsDestroyed };
+
 struct SideInfo {
     std::string name;
     DeploymentZone deployment_zone;
@@ -53,6 +57,9 @@ struct GameState {
     std::optional<PendingDecision> pending;  // whose input the engine waits for; nullopt when not
                                              // started or over
     std::optional<GameResult> result;        // set when the game ends (D-007)
+    // D-076: how the game is decided after the last battle round. JSON "result_rule", omitted at the default (D-007),
+    // so every older file loads and saves unchanged. With PointsDestroyed every unit has points (Unit::points).
+    ResultRule result_rule = ResultRule::D007Draw;
 
     [[nodiscard]] const SideInfo& side(Side s) const { return sides[side_index(s)]; }
     [[nodiscard]] const Unit* find_unit(UnitId id) const;

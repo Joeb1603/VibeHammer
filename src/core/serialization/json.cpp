@@ -1,11 +1,14 @@
 #include "core/serialization/json.hpp"
 
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 
+#include "core/state/points_destroyed.hpp"
 #include "core/serialization/json_util.hpp"
 
 namespace wh40k::core {
@@ -254,6 +257,9 @@ void to_json(Json& j, const Unit& v) {
              {"battle_shocked", v.battle_shocked},
              {"turn_flags", v.turn_flags},
              {"phase_flags", v.phase_flags}};
+    // D-076: omitted at 0 (no points given), so older files are unchanged.
+    if (v.points != 0) j["points"] = v.points;
+    if (v.starting_wounds != 0) j["starting_wounds"] = v.starting_wounds;
 }
 void from_json(const Json& j, Unit& v) {
     j.at("id").get_to(v.id);
@@ -267,6 +273,22 @@ void from_json(const Json& j, Unit& v) {
     j.at("battle_shocked").get_to(v.battle_shocked);
     j.at("turn_flags").get_to(v.turn_flags);
     j.at("phase_flags").get_to(v.phase_flags);
+    // D-076: whole numbers; their ranges are checked with the whole state (check_points_data).
+    auto whole = [&j, &v](const char* key) {
+        if (!j.contains(key)) return 0;
+        const Json& e = j.at(key);
+        const bool in_range = e.is_number_unsigned()  ? e.get<std::uint64_t>() <= std::numeric_limits<int>::max()
+                              : e.is_number_integer() ? e.get<std::int64_t>() >= std::numeric_limits<int>::min() &&
+                                                            e.get<std::int64_t>() <= std::numeric_limits<int>::max()
+                                                      : false;
+        if (!in_range) {
+            throw DataError("state JSON: D-076: unit " + std::to_string(v.id.v) + "'s " + key +
+                            " must be a whole number: " + e.dump());
+        }
+        return e.get<int>();
+    };
+    v.points = whole("points");
+    v.starting_wounds = whole("starting_wounds");
 }
 
 // ---- dice ----
@@ -327,6 +349,8 @@ void to_json(Json& j, const GameState& v) {
              {"flow", v.flow}};
     put_opt(j, "pending", v.pending);
     put_opt(j, "result", v.result);
+    // D-076: omitted at the default (D-007), so older files are unchanged.
+    if (v.result_rule == ResultRule::PointsDestroyed) j["result_rule"] = "points_destroyed";
 }
 void from_json(const Json& j, GameState& v) {
     j.at("scenario_name").get_to(v.scenario_name);
@@ -340,6 +364,15 @@ void from_json(const Json& j, GameState& v) {
     j.at("flow").get_to(v.flow);
     get_opt(j, "pending", v.pending);
     get_opt(j, "result", v.result);
+    v.result_rule = ResultRule::D007Draw;
+    if (j.contains("result_rule")) {
+        const Json& r = j.at("result_rule");
+        if (!r.is_string() || r.get<std::string>() != "points_destroyed") {
+            throw DataError("state JSON: D-076: unknown result_rule " + r.dump() + " (the only value is \"points_destroyed\")");
+        }
+        v.result_rule = ResultRule::PointsDestroyed;
+    }
+    check_points_data(v, "state JSON");  // D-076: the points and their bounds
 }
 
 }  // namespace wh40k::core

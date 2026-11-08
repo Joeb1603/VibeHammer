@@ -448,13 +448,34 @@ void from_json(const Json& j, FlowState& v) {
     j.at("forced_fights").get_to(v.forced_fights);
 }
 
+// D-076 (M67): the exact totals (numerators over the common denominator) and their display forms.
+void to_json(Json& j, const PointsTally& v) {
+    j = Json{{"destroyed", v.destroyed},
+             {"denominator", v.denominator},
+             {"display", v.display},
+             {"battle_round", v.battle_round}};
+}
+void from_json(const Json& j, PointsTally& v) {
+    j.at("destroyed").get_to(v.destroyed);
+    j.at("denominator").get_to(v.denominator);
+    j.at("display").get_to(v.display);
+    j.at("battle_round").get_to(v.battle_round);
+    if (v.denominator < 1 || v.destroyed[0] < 0 || v.destroyed[1] < 0) {
+        throw DataError("state JSON: D-076: a points tally needs a positive denominator and totals of 0 or more: " +
+                        j.dump());
+    }
+}
+
 void to_json(Json& j, const GameResult& v) {
     j = Json{{"reason", v.reason}};
     put_opt(j, "winner", v.winner);
+    if (v.points) j["points"] = *v.points;  // D-076: omitted unless the game was decided on points
 }
 void from_json(const Json& j, GameResult& v) {
     get_opt(j, "winner", v.winner);
     j.at("reason").get_to(v.reason);
+    v.points.reset();
+    if (j.contains("points")) v.points = j.at("points").get<PointsTally>();
 }
 
 // ---- decisions ----

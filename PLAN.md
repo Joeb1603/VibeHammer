@@ -3013,7 +3013,7 @@ core's pose-aware ones (D-074 part 2), and every move they build is still checke
 
 ---
 
-## M67: The portrait scenario and the points tiebreak
+## M67: The portrait scenario and the points tiebreak ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 07.03 · **Decision:** D-076 (amends D-007), D-065 extended
 
 > **Scenario.** `data/scenarios/rosters_44x60.json`, "Incursion - Chaos Space Marines vs Tyranids (44x60
@@ -3029,6 +3029,120 @@ core's pose-aware ones (D-074 part 2), and every move they build is still checke
 - Tests `R07_03_`, `D076_` and client `M67_`.
 - Easy vs Easy arena games all finish clean.
 - Replay `m67_rosters_round1.json`, plus screenshots.
+
+**Results (2026-11-08):** decision D-076 (amends D-007; the points tiebreak and the scenario) and D-065 extended (ten
+shades). No design stop (pre-approved).
+- **Scenario** `data/scenarios/rosters_44x60.json` ("Incursion - Chaos Space Marines vs Tyranids (44x60 portrait)"):
+  - 44" wide by 60" deep, 12" zones on the short south (A) and north (B) edges, 36" apart, 5 battle rounds, A first,
+    `"result": "points_destroyed"`.
+  - Every unit of both rosters, model by model with the roster loadout (as the M59 fixture), and its roster points:
+    CSM 960, Tyranids 955 (a duplicated roster unit is printed once with a count, at one unit's points).
+  - Numbered west to east (the file's order): 1 Legionaries (chainswords), 2 Chaos Lord, 3 Chaos Terminator Squad,
+    4 Havocs (held back 3"), 5 Legionaries (boltguns); 6 Termagants, 7 Genestealers, 8 Screamer-killer, 9 Tyrant Guard
+    (held back 4"), 10 Hive Tyrant, 11 Tyrannofex (held back 4", facing 0), 12 Screamer-killer, 13 Genestealers,
+    14 Termagants. Coherent, wholly within the zones, unengaged, no overlap; described in `notes`.
+  - It is in the start screen's list and the package's `data/` (package.ps1 copies `data/`); `docs/datasheets/` is
+    not copied anywhere.
+- **Engine** (`wh40k_core`):
+  - *State:* `GameState::result_rule` (`ResultRule::D007Draw` / `PointsDestroyed`), `Unit::points` and
+    `Unit::starting_wounds` (the sum of W of the models as set up, recorded by the loader with the points).
+  - *New `core/state/points_destroyed.{hpp,cpp}`:* `points_destroyed(state)` (a `PointsTally`: both totals as
+    numerators over one denominator, the lcm of the starting wounds, so they compare as integers; display strings;
+    the round), `check_points_data` (the bounds: points 1..100000, both-or-neither, every unit with the option, lcm x
+    total points <= 2^59, proven overflow-free in D-076), `points_decimal` / `points_display` (2 places, more while two
+    unequal totals read alike; at most 18 needed). It lives under `core/state/` with the other read-only queries, so
+    the client logic may call it (M12's architecture test allows only listed `core/rules/` headers).
+  - *Game end (`advance.cpp`):* after the End of Battle Round step of the last round, with the option, the side with the
+    larger numerator wins, equal is a draw; the reason gives both totals ("D-076: battle round 5 has ended with both
+    sides on the battlefield; points destroyed: Side A 113.5, Side B 19; Side A wins on points destroyed"). D-007's
+    wipe-out check is untouched and runs first.
+  - *Result and event:* `GameResult::points` and `GameOver::points` hold the tally when the game was decided on points;
+    such a `GameOver` cites D-076 (`event_rule`).
+  - *Loader:* `result` (any other value refused) and per-unit `points` (missing with the option, non-integer,
+    < 1 or > 100000 refused as `DataError` with the unit named).
+  - *JSON:* `result_rule`, `points`, `starting_wounds`, `result.points` and `GameOver.points` omitted at their defaults;
+    the state JSON runs the same checks.
+- **Bots** (`wh40k_ai`): no level knows the tiebreak yet (M68, M69). `state_hash` hashes the points, starting wounds
+  and rule only when set. The arena reads the result's winner as before, so points wins and draws are counted as wins
+  and draws; `GameRecord::on_points` and, for such a scenario only, a summary line "decided on points destroyed after
+  the last battle round (D-076): A wins n, B wins n, draws n". `--per-game` lines are unchanged.
+- **Client:** the victory pop-up shows the title, "Points destroyed: Side A (Chaos Space Marines) 95.5, Side B
+  (Tyranids) 75" and the reason (after a wipe-out in such a scenario, the totals as it ended); the Game panel shows
+  "Points destroyed: Side A 123.5, Side B 76.33" above the units while the scenario uses the tiebreak (the rule in its
+  tooltip); the log reads "[D-076] Battle round 5 ends: Side A wins on points destroyed (95.5 to 75)". Nothing changes
+  without the option. No new decision, action or flag (so no dice card, undo group or fallback answer is needed).
+- **Shades (D-065 extended):** `kUnitShades` 6 -> 10. Shades 1-6 unchanged. New A: indigo, pale cyan, lavender,
+  light violet; B: cream, dusty rose, brown, amber. Chosen by a search (each in turn the furthest from those before it
+  under simulated colour blindness, within every M55 bound and a hue family) and checked with the Machado 2009
+  simulations of protanopia, deuteranopia and tritanopia: every pair with a new shade >= 11.5 (CIE76), A against B
+  >= 21.1; the M55 pairs unchanged (lowest 7.1 / 7.3). Labels: white outlined in black, so >= 4.62 WCAG contrast on
+  every shade; >= 3.57 (large text) on the greyed look.
+- **Tests** (27 new, all pass):
+  - `tests/m67_points_tiebreak_test.cpp` (15): `R02_07_WargearOptions.TheRostersScenarioCarriesEveryRosterUnitWithItsLoadoutAndPoints`,
+    `R03_02_SetUp.TheRostersScenarioIsALegalSetUpNumberedWestToEast`, `D076_Loader` (2: options read; the refusals),
+    `R07_03_PointsTiebreak` (2: a win after round 5, a loss), `D076_PointsTiebreak` (2: an exact tie that doubles
+    would give to Side A (0.1 + 0.2 against 0.3) is a draw; a near-tie that doubles can't tell apart, 6 / (154781107 x
+    137511488) apart, is won exactly), `D007_GameEnd.AWipeOutStillWinsAtOnceUnderThePointsTiebreak` (in round 1, with
+    Side B ahead on points), `D007_GameEnd.AScenarioWithoutTheOptionStillDrawsWhateverWasDestroyed`,
+    `D076_PointsDestroyed` (2: destroyed units count in full, damaged their fraction; the display), `D076_Json` (3:
+    round trips of the state, the result and the event; an old file loads and saves the same, and every saved replay
+    re-saves byte for byte; malformed points in a state refused).
+  - `engine_property_test.cpp`: `D004_LegalActions.RandomPlayOnTheRostersScenario` (the full D-004 checks on 3 games,
+    36", 10" and 0.5" apart, and 9 more games of plain random play, A first: every game ends and round-trips; 12 were
+    decided on points, each with the totals of its final state and the right winner; wipe-outs would be checked as
+    D-007's).
+  - `replay_test.cpp`: the M67 regeneration and `Replay.DISABLED_SearchM67Seed`.
+  - `tests/client/m67_test.cpp` (8): `M67_EndPanel` (2), `M67_Log`, `M67_GamePanel`, `M67_Scenarios`,
+    `M67_UnitShades` (3: ten per side with the first six and the Strike tints unchanged and the roster's nine Tyranid
+    units on nine shades; distinct under simulated colour blindness; labels legible).
+  - `tests/ai/m67_test.cpp` (3): `M67_StateHash.StatesWithoutPointsHashAsBefore` (against a verbatim copy of the M66
+    hash, every decision of random games on V1, Strike and the Tyrannofex fixture, and the roster scenario with its
+    points taken out), `M67_StateHash.PointsAndTheResultRuleChangeTheHash`, `M67_Arena.AGameDecidedOnPointsIsCountedByItsWinner`.
+  - Test helpers `load_rosters_scenario()` / `load_rosters_scenario_closer(in)`.
+  - **No existing test changed.** No existing test pins the exact scenario list (M38's and M53's check that their
+    files are in it), so the new file needed no change; `M67_Scenarios` checks it is listed. M55's shade tests now run
+    over ten shades per side and pass unchanged.
+  - ctest: 1101 -> 1128 tests, all pass in Debug and in Release.
+- **Replay** `tests/replays/m67_rosters_round1.json` (scenario-file, seed 1, 90 steps): round 1, the chainsword
+  Legionaries move 6", the Havocs' four lascannons hit the west Termagants (2 slain), the west Genestealers move 8";
+  round 2, the Legionaries move 6" again, the Genestealers move 8", charge, fight first (a Legionary slain) and the
+  Legionaries fight back (2 Genestealers slain). It stops at Side A's first Move Units decision of round 3 (points
+  destroyed: A 41, B 18). *Departure from the brief:* the brief asked for battle round 1 only, stopping at round 2;
+  with 36" between the zones and M 8" at most no charge is possible in round 1, so the replay covers rounds 1 and 2.
+  The file name is kept as briefed.
+- **Acceptance:**
+  - *D-004 random play on the new scenario:* **met** (above: 12 games, every one ends and round-trips).
+  - *Tests `R07_03_`, `D076_` and client `M67_`:* **met** (above).
+  - *Easy vs Easy arena games all finish clean:* **met.** Release arena, the new scenario, seeds 1-200: 200 finished,
+    rejected 0, UnitMoveReverted 0, fallbacks 0, unfinished 0; A 77, B 123, draws 0, every game decided on points
+    after round 5 (no wipe-out); decision p50 0.008 ms, p95 0.43 ms, max 25.8 ms; 16 s, peak RSS 9.6 MB.
+  - *For information (M68 and M69 own them):*
+    - Normal vs Normal, seeds 1-60: all finished, rejected 0, reverted 0, fallbacks 0; A 46, B 14, all on points;
+      p95 8.5 ms, max 432 ms; 50 s, peak RSS 9.4 MB.
+    - Hard vs Normal, seed 1, one game in each seat (the two at once, part of the time next to the Release ctest):
+      both finished, rejected 0, reverted 0, fallbacks 0, both decided on points after round 5 and won by the Chaos
+      Space Marines. Hard as A: decision p95 6.3 s, max 33.4 s, 526 s, peak RSS 2.87 GB. Hard as B: p95 9.3 s, max
+      29.9 s, 740 s, peak RSS 2.59 GB. No problem other than the time (M69).
+  - *Replay `m67_rosters_round1.json`:* **met** (above).
+  - *Screenshots* (scratchpad `m67/`): the scenario at deployment with all fourteen shades and badges
+    (`deployment_all_shades.png`, the replay viewer's frame 0; `deployment_play.png`, the game at Side A's first
+    decision, Side B greyed); the end-of-game pop-up after a tiebreak (`end_of_game_points_win.png`: a `--load` save at
+    Side B's last decision of round 5, from a scratch tool, then `--steps 1`); the Game panel's running totals
+    (`bot_game_mid_running_totals.png`: an Easy bot game in round 3, "Points destroyed: Side A 123.5, Side B 76.33";
+    `game_panel_running_totals.png`: a `--load` save in round 3); the replay's last frame (`replay_end.png`).
+  - *Old play and replays unchanged:* **met.**
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave all 18 old replays byte-identical; the only
+      new file is `m67_rosters_round1.json`.
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line (actions, final state and
+      trace hashes) for all 24 pairings of V1, both bot scenarios and Strike: 4,380 games.
+    - Strike timing (Normal vs Normal, 60 games, Release, the M66 binary and M67 run alternately, four runs each):
+      M66 9.11, 9.01, 8.80, 9.13 s (mean 9.01); M67 8.97, 9.31, 9.08, 9.06 s (mean 9.11), +1.0%; decision p95
+      5.69-5.91 ms against 5.83-6.06 ms.
+- **Open:**
+  - The bots don't know the tiebreak (M68, M69): they still play as if a round-5 game were a draw.
+  - Hard on the roster scenario is slow (above); M69 owns it.
+  - On a greyed unit a pale shade's light-grey number reaches WCAG's large-text contrast (3.57), not the 4.5 for body
+    text; the M55 pairs closest under colour-blindness simulation (7.1, 7.3) are unchanged, told apart by their numbers.
 
 ---
 

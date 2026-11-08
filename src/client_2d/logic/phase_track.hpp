@@ -29,12 +29,19 @@ struct PhaseTrack {
 [[nodiscard]] PhaseTrack phase_track(const core::GameState& state);
 
 // D-038: the victory pop-up: "Side A (Space Marines) wins!" or "Draw", and the engine's rule-cited reason.
+// D-076 (M67): with the points tiebreak, also both sides' points destroyed (the result's totals, or for a wipe-out the
+// totals at the end): "Points destroyed: Side A (Chaos Space Marines) 412.5, Side B (Tyranids) 380".
 struct GameOverText {
     std::string title;
     std::string reason;
     std::optional<core::Side> winner;  // nullopt: a draw
+    std::optional<std::string> points;  // D-076; nullopt when the scenario doesn't decide on points
 };
 [[nodiscard]] std::optional<GameOverText> game_over_text(const core::GameState& state);
+
+// D-076 (M67): the points each side has destroyed so far, for the Game panel ("Points destroyed: Side A 120, Side B
+// 55.5"); nullopt when the scenario doesn't use the points tiebreak (nothing is shown then).
+[[nodiscard]] std::optional<std::string> points_destroyed_text(const core::GameState& state);
 
 // "MoveUnits" -> "Move Units".
 [[nodiscard]] std::string spaced(std::string_view camel_case);

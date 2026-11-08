@@ -109,6 +109,7 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     rec.steps = session.history().size();
     rec.finished = end.result.has_value();
     if (end.result) rec.winner = end.result->winner;
+    rec.on_points = end.result && end.result->points.has_value();  // M67 (D-076)
     if (!rec.finished && rec.problems.empty()) rec.problems.push_back("step cap reached");
     rec.end_round = end.flow.battle_round;
     for (const core::Unit& u : end.units) rec.surviving_models[core::side_index(u.side)] += static_cast<int>(u.models.size());
@@ -130,8 +131,10 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
             ++r.unfinished;
         } else if (g.winner) {
             ++r.wins[core::side_index(*g.winner)];
+            if (g.on_points) ++r.points_wins[core::side_index(*g.winner)];  // M67 (D-076)
         } else {
             ++r.draws;
+            if (g.on_points) ++r.points_draws;
         }
         r.rejected += g.rejected;
         r.reverted += g.reverted;
@@ -219,6 +222,12 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                   r.reverted, r.fallbacks, r.p50_ms, r.p95_ms, r.max_ms, r.mean_result(core::Side::A),
                   r.mean_result(core::Side::B));
     std::string out = buf;
+    if (scenario.result_rule == core::ResultRule::PointsDestroyed) {  // M67 (D-076): only for such a scenario
+        std::snprintf(buf, sizeof buf,
+                      "decided on points destroyed after the last battle round (D-076): A wins %d, B wins %d, draws %d\n",
+                      r.points_wins[0], r.points_wins[1], r.points_draws);
+        out += buf;
+    }
     std::snprintf(buf, sizeof buf,
                   "pile-in / consolidate steps answered: A %d, B %d; pile-ins and consolidations made: A %d, B %d\n",
                   r.fight_move_steps[0], r.fight_move_steps[1], r.fight_moves[0], r.fight_moves[1]);

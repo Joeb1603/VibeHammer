@@ -1822,6 +1822,14 @@ private:
 
     void draw_game_info() {
         const core::GameState& s = state();
+        if (const std::optional<std::string> points = points_destroyed_text(s)) {  // D-076 (M67): the running totals
+            ImGui::TextUnformatted(points->c_str());
+            ImGui::SetItemTooltip("D-076: unless a side is wiped out, the side that has destroyed more points wins "
+                                  "after battle round %d; equal points is a draw. A destroyed unit counts its full "
+                                  "points, a damaged one its points x wounds lost / starting wounds.",
+                                  s.battle_rounds);
+            ImGui::Spacing();
+        }
         for (const core::Unit& u : s.units) {
             ImGui::TextColored(to_imvec(side_color(u.side)), "%s", side_name(u.side).c_str());
             if (mode_ == Mode::Play && bot_sides_[static_cast<std::size_t>(u.side)]) {  // M38
@@ -2146,6 +2154,7 @@ private:
             ImGui::TextColored(colour, "%s", text->title.c_str());
             ImGui::PopFont();
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28.0f);
+            if (text->points) ImGui::TextUnformatted(text->points->c_str());  // D-076 (M67): both totals
             ImGui::TextDisabled("%s", text->reason.c_str());
             ImGui::PopTextWrapPos();
         }

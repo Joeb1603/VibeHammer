@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <string>
 #include <string_view>
@@ -13,6 +15,7 @@
 #include "core/geometry/oval.hpp"
 #include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
+#include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -323,6 +326,14 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     if (scenario.contains("seed")) {
         gs.dice.seed = scenario.at("seed").get<std::uint64_t>();
     }
+    // D-076: optional; absent means D-007 (a draw after the last battle round).
+    if (scenario.contains("result")) {
+        const Json& r = scenario.at("result");
+        if (!r.is_string() || r.get<std::string>() != "points_destroyed") {
+            fail("root: D-076: unknown result " + r.dump() + " (the only value is \"points_destroyed\")");
+        }
+        gs.result_rule = ResultRule::PointsDestroyed;
+    }
 
     const Json& sides = require(scenario, "sides", "root");
     std::uint32_t next_unit = 1;
@@ -356,6 +367,22 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
                 m.id = ModelId{next_model++};
             }
             unit.starting_strength = static_cast<int>(unit.models.size());
+            // D-076: the unit's points (required with result "points_destroyed") and its starting wounds.
+            if (uj.contains("points")) {
+                const Json& p = uj.at("points");
+                if (!p.is_number_integer() || p.get<std::int64_t>() < 1 || p.get<std::int64_t>() > kMaxUnitPoints) {
+                    fail(uwhere + ": D-076: points must be a positive integer of at most " +
+                         std::to_string(kMaxUnitPoints) + ", not " + p.dump());
+                }
+                const std::int64_t wounds = sum_of_wounds_characteristics(unit);
+                if (wounds < 1 || wounds > std::numeric_limits<int>::max()) {
+                    fail(uwhere + ": D-076: the unit's starting wounds (" + std::to_string(wounds) + ") must be a positive int");
+                }
+                unit.points = p.get<int>();
+                unit.starting_wounds = static_cast<int>(wounds);
+            } else if (gs.result_rule == ResultRule::PointsDestroyed) {
+                fail(uwhere + ": D-076: missing field 'points' (result \"points_destroyed\" needs every unit's points)");
+            }
 
             place_formation(unit.models, parse_formation(require(uj, "formation", uwhere), uwhere),
                             gs.battlefield, info.deployment_zone, uwhere);
@@ -365,6 +392,7 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     }
     check_no_overlap(gs);
     check_unengaged(gs);
+    check_points_data(gs, "scenario");  // D-076: the bound on the exact count
     return gs;
 }
 

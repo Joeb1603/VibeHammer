@@ -41,6 +41,7 @@ constexpr std::uint64_t kM61Seed = 1;  // M61: picked by Replay.DISABLED_SearchM
 constexpr std::uint64_t kM62Seed = 10;  // M62: picked by Replay.DISABLED_SearchM62Seed
 constexpr std::uint64_t kM63Seed = 1;   // M63: picked by Replay.DISABLED_SearchM63Seed
 constexpr std::uint64_t kM65Seed = 1;   // M65: picked by Replay.DISABLED_SearchM65Seed
+constexpr std::uint64_t kM67Seed = 1;   // M67: picked by Replay.DISABLED_SearchM67Seed
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -641,6 +642,144 @@ Replay m65_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     if (failed || !g.pending || *g.pending != PendingDecision{Side::A, decision::MoveUnits{}}) return r;
     r.expect = replay_expectation(g);
     ok = heavy && fought && fought_back;
+    return r;
+}
+
+// M67 (D-076): the playable roster scenario (data/scenarios/rosters_44x60.json, a scenario-file replay). No unit can
+// reach a charge in battle round 1 (36" between the zones, M 8" at most), so the replay runs to the start of battle
+// round 3. `ok` says whether the seed shows what it is about: the Havocs' lascannons damage their target in round 1,
+// the west Genestealers' charge in round 2 succeeds, and both they and the chainsword Legionaries fight; `problem`,
+// the first refused step (none expected).
+Replay m67_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M67: the portrait roster scenario (data/scenarios/rosters_44x60.json; D-076's points tiebreak, D-064, D-070, "
+        "D-074), battle rounds 1 and 2 (no unit can reach a charge in round 1: 36\" between the zones). Round 1: the "
+        "chainsword Legionaries (unit 1) move 6\" north; every other Chaos Space Marine unit remains stationary; the "
+        "Havocs (unit 4) fire their four lascannons at the Tyranid unit their first shot option names (48\", about "
+        "39\" away), casualties in unit order. The west Genestealers (unit 7) move 8\" south; the rest remain "
+        "stationary. Round 2: the chainsword Legionaries move 6\" north again, nothing shoots; the Genestealers move "
+        "8\" south, declare a charge at the Legionaries and move straight at them (each model the charge roll or 1\" "
+        "short of the closest gap, whichever is less), fight first, and the Legionaries fight back (first melee options, "
+        "casualties in unit order, no pile-ins or consolidations). Every other decision takes the first legal action. "
+        "Stops at Side A's first Move Units decision of battle round 3.";
+    r.initial.scenario = wh40k::test::kRostersScenario;
+    r.initial.seed = seed;
+    GameState g = replay_initial_state(r, repo_root());
+    std::vector<GameEvent> events = start_game(g);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    auto until = [&](Side side, int round) {
+        while (!failed && g.pending && !(g.flow.battle_round == round && *g.pending == PendingDecision{side, decision::MoveUnits{}})) {
+            act(wh40k::test::neutral_action(g));
+        }
+    };
+    // A straight move of every model by dy inches, the leading rank first.
+    auto move = [&](std::uint32_t id, MoveType type, float dy_in) {
+        act(action::StartMove{UnitId{id}, type, std::nullopt});
+        std::vector<Model> models = g.find_unit(UnitId{id})->models;
+        std::stable_sort(models.begin(), models.end(), [&](const Model& a, const Model& b) {
+            return dy_in > 0.0f ? a.position.y > b.position.y : a.position.y < b.position.y;
+        });
+        for (const Model& m : models) {
+            const Position p = *move_start_position(g, m.id);
+            act(action::ProposeModelMove{m.id, {Position{p.x, p.y + wh40k::test::in(dy_in), 0.0f}}, {}});
+        }
+        act(action::CommitUnitMove{});
+    };
+    constexpr std::uint32_t kLegionaries = 1;
+    constexpr std::uint32_t kHavocs = 4;
+    constexpr std::uint32_t kGenestealers = 7;
+    // Round 1, Side A.
+    until(Side::A, 1);
+    move(kLegionaries, MoveType::Normal, 6.0f);
+    while (!failed && g.pending && std::holds_alternative<decision::MoveUnits>(g.pending->kind)) {
+        act(wh40k::test::neutral_action(g));  // the rest remain stationary
+    }
+    if (failed || !g.pending || !std::holds_alternative<decision::Shoot>(g.pending->kind)) return r;
+    action::Shoot volley{UnitId{kHavocs}, ShootingType::Normal, {}};
+    {
+        const Unit& havocs = *g.find_unit(UnitId{kHavocs});
+        std::optional<UnitId> target;
+        std::vector<std::pair<ModelId, std::size_t>> taken;
+        for (const ShotDeclaration& d : shot_options(g, havocs, ShootingType::Normal)) {
+            if (find_model(havocs, d.model)->weapons.at(d.weapon_index).name != "Havoc lascannon") continue;
+            if (!target) target = d.target;
+            const std::pair<ModelId, std::size_t> key{d.model, d.weapon_index};
+            if (d.target != *target || std::find(taken.begin(), taken.end(), key) != taken.end()) continue;
+            taken.push_back(key);
+            volley.shots.push_back(d);
+        }
+        if (volley.shots.size() != 4) return r;
+    }
+    const UnitId target = volley.shots.front().target;
+    const int target_wounds_before = [&] {
+        int w = 0;
+        for (const Model& m : g.find_unit(target)->models) w += m.wounds_remaining;
+        return w;
+    }();
+    act(volley);
+    while (!failed && g.flow.attack) act(wh40k::test::neutral_action(g));
+    int target_wounds_after = 0;
+    for (const Model& m : g.find_unit(target)->models) target_wounds_after += m.wounds_remaining;
+    const bool shot_hurt = target_wounds_after < target_wounds_before;
+    // Round 1, Side B.
+    until(Side::B, 1);
+    move(kGenestealers, MoveType::Normal, -8.0f);
+    // Round 2.
+    until(Side::A, 2);
+    move(kLegionaries, MoveType::Normal, 6.0f);
+    until(Side::B, 2);
+    move(kGenestealers, MoveType::Normal, -8.0f);
+    while (!failed && g.pending && !std::holds_alternative<decision::Charge>(g.pending->kind)) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !g.pending) return r;
+    act(action::DeclareCharge{UnitId{kGenestealers}});
+    if (failed || !g.pending || !std::holds_alternative<decision::SelectChargeTargets>(g.pending->kind)) return r;
+    const int roll = g.find_unit(UnitId{kGenestealers})->phase_flags.charge_roll.value_or(0);
+    const float gap = *unit_distance(*g.find_unit(UnitId{kGenestealers}), *g.find_unit(UnitId{kLegionaries}));
+    const float step = std::min(wh40k::test::in(static_cast<float>(roll)), gap - wh40k::test::in(1.0f));
+    if (gap - step > wh40k::test::in(2.0f) - 0.1f) {  // the roll is too short to end engaged
+        act(action::EndChargeStep{});
+        return r;
+    }
+    act(action::StartChargeMove{UnitId{kGenestealers}, {UnitId{kLegionaries}}});
+    for (const Model& m : g.find_unit(UnitId{kGenestealers})->models) {
+        const Position p = *move_start_position(g, m.id);
+        act(action::ProposeModelMove{m.id, {Position{p.x, p.y - step, 0.0f}}, {}});
+    }
+    act(action::CommitUnitMove{});
+    if (failed || !g.find_unit(UnitId{kGenestealers})->turn_flags.made_charge_move) return r;
+    const std::size_t before = events.size();
+    until(Side::A, 3);
+    if (failed || !g.pending || g.flow.battle_round != 3) return r;
+    bool fought = false;
+    bool fought_back = false;
+    for (std::size_t i = before; i < events.size(); ++i) {
+        if (const auto* m = std::get_if<event::MeleeAttacksDeclared>(&events[i])) {
+            fought = fought || (m->unit == UnitId{kGenestealers} && !m->selections.empty());
+            fought_back = fought_back || (m->unit == UnitId{kLegionaries} && !m->selections.empty());
+        }
+    }
+    r.expect = replay_expectation(g);
+    ok = shot_hurt && fought && fought_back;
     return r;
 }
 
@@ -1277,6 +1416,28 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m65_problem.empty()) << m65_problem;
     EXPECT_TRUE(m65_shows_it) << "seed " << kM65Seed << " no longer shows the [HEAVY] +1, the charge and the fight";
     save_if_clean(m65, kReplayDir / "m65_oval_tyrannofex.json");
+
+    // M67: the playable roster scenario (D-076): a lascannon volley in round 1, a Genestealer charge and the fight in
+    // round 2. Stops at Side A's first Move Units decision of round 3, before anything M68-M70 change (the bots).
+    bool m67_shows_it = false;
+    std::string m67_problem;
+    const Replay m67 = m67_replay(kM67Seed, m67_shows_it, m67_problem);
+    ASSERT_TRUE(m67_problem.empty()) << m67_problem;
+    EXPECT_TRUE(m67_shows_it) << "seed " << kM67Seed << " no longer shows the lascannon damage, the charge and the fight";
+    save_if_clean(m67, kReplayDir / "m67_rosters_round1.json");
+}
+
+TEST(Replay, DISABLED_SearchM67Seed) {
+    for (std::uint64_t seed = 1; seed <= 200; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m67_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M67 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
 }
 
 TEST(Replay, DISABLED_SearchM65Seed) {

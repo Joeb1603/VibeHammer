@@ -188,10 +188,23 @@ struct FlowState {
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 
+// D-076 (M67): the points each side has destroyed, exactly: side s destroyed destroyed[side_index(s)] / denominator
+// points (core/state/points_destroyed.hpp). `denominator` is the same for both sides, so the totals compare as
+// integers; `display` holds their decimal forms, at a precision that never shows two unequal totals alike.
+struct PointsTally {
+    std::array<std::int64_t, 2> destroyed{};  // numerators, indexed by side_index of the side that destroyed them
+    std::int64_t denominator = 1;             // the lcm of every unit's starting wounds (D-076)
+    std::array<std::string, 2> display{};     // e.g. "412.5" and "380"
+    int battle_round = 0;                     // the battle round they were counted in
+    friend bool operator==(const PointsTally&, const PointsTally&) = default;
+};
+
 // D-007: the end of the game.
 struct GameResult {
     std::optional<Side> winner;  // nullopt: a draw
     std::string reason;          // rule-cited
+    // D-076: both sides' points destroyed, when the scenario decides the game on them (JSON omitted otherwise).
+    std::optional<PointsTally> points{};
     friend bool operator==(const GameResult&, const GameResult&) = default;
 };
 
