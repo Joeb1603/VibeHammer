@@ -74,6 +74,24 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
                     if (used != dy.size()) throw std::invalid_argument("not a number");
                 }
                 o.turn = t;
+            } else if (key == "--window") {
+                // M70: <w>x<h> in pixels.
+                const std::size_t x = value.find('x');
+                if (x == std::string::npos) throw std::invalid_argument("expected <w>x<h>");
+                const std::string w = value.substr(0, x);
+                const std::string h = value.substr(x + 1);
+                for (const std::string* part : {&w, &h}) {
+                    if (part->empty() || part->size() > 5 || part->find_first_not_of("0123456789") != std::string::npos) {
+                        throw std::invalid_argument("not a size");
+                    }
+                }
+                const CliWindow size{std::stoi(w), std::stoi(h)};
+                constexpr int kMin = 320;
+                constexpr int kMax = 16384;
+                if (size.width < kMin || size.height < kMin || size.width > kMax || size.height > kMax) {
+                    throw std::invalid_argument("out of range");
+                }
+                o.window = size;
             } else if (key == "--pick-dice" || key == "--pick-models" || key == "--click-units") {
                 std::vector<std::size_t> items;
                 std::size_t start = 0;

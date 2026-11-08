@@ -73,19 +73,42 @@ private:
 
 // The decision's headline, a little larger than the body text, after a tag in the colour of the side that
 // must act (D-030): "Side A to act: Space Marines".
+// M70: core's describe() starts with "Side A: ", which the tag already says, so the headline drops it (the decision's
+// words and rule number stay). When the line is still wider than the column at 1.25x, it is drawn at the body size,
+// and at that size it wraps rather than run under the buttons.
 void headline(const core::GameState& gs, core::Side side, const std::string& text) {
-    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
+    const std::string side_name = side == core::Side::A ? "Side A" : "Side B";
+    std::string body = text;
+    if (body.rfind(side_name + ": ", 0) == 0 && body.size() > side_name.size() + 2) {
+        body.erase(0, side_name.size() + 2);
+        if (body.front() >= 'a' && body.front() <= 'z') body.front() = static_cast<char>(body.front() - 'a' + 'A');
+    }
+    const std::string tag = side_name + " to act: " + gs.side(side).name;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    // The line's width at a font size: the tag button, the gap and the text (CalcTextSize scales with the font).
+    const auto width_at = [&](float size) {
+        ImGui::PushFont(nullptr, size);
+        const float w = ImGui::CalcTextSize(tag.c_str()).x + style.FramePadding.x * 2.0f + ImGui::GetFontSize() * 0.6f +
+                        ImGui::CalcTextSize(body.c_str()).x;
+        ImGui::PopFont();
+        return w;
+    };
+    const float large = style.FontSizeBase * 1.25f;
+    const bool fits_large = width_at(large) <= avail;
+    ImGui::PushFont(nullptr, fits_large ? large : style.FontSizeBase);
     const Color c = side_color(side);
     const ImVec4 colour(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, colour);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, colour);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, colour);
-    const std::string tag = std::string(side == core::Side::A ? "Side A" : "Side B") + " to act: " + gs.side(side).name;
     ImGui::Button(tag.c_str());
     ImGui::PopStyleColor(3);
     ImGui::SameLine(0.0f, ImGui::GetFontSize() * 0.6f);
     ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(kHighlight, "%s", text.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, kHighlight);
+    ImGui::TextWrapped("%s", body.c_str());
+    ImGui::PopStyleColor();
     ImGui::PopFont();
 }
 
