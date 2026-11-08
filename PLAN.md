@@ -2454,7 +2454,7 @@ random-A melee weapons were made refused rather than declared with a sentinel `a
 
 ---
 
-## M63: Monsters and vehicles (17.01, 17.03)
+## M63: Monsters and vehicles (17.01, 17.03) ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 17.01, 17.03, 10.06 · **Decision:** D-073
 
 > **17.01.** In normal and Advance moves, MONSTER/VEHICLE models may pass through enemy models that aren't
@@ -2468,6 +2468,96 @@ random-A melee weapons were made refused rather than declared with a sentinel `a
 **Acceptance**
 - Tests `R17_01_` and `R17_03_`, plus a replay.
 - Old play and replays unchanged.
+
+**Results (2026-11-08):** decision D-073 (applies D-011). No design stop (pre-approved).
+- **Engine:**
+  - *17.01:* `moves_through_non_monster_enemies(type, unit, model)` (`engine/movement`): a Normal or Advance move of a
+    MONSTER/VEHICLE model (`is_monster_or_vehicle`, a unit keyword). `PathContext` gains `passable_enemy` (crossed, not
+    ended on). The ProposeModelMove check splits the enemy models into blocking (enemy MONSTER/VEHICLE) and passable
+    ones when 17.01 applies, otherwise every enemy model blocks as before. `move_reach` leaves out a passable model's
+    `blocking` circle; its `forbidden` circles (not on a model, not within Engagement Range for Normal/Advance) stay.
+    Friendly MONSTERS stay passable (03.01, agreed). Fall Back, charge, pile-in and consolidation are unchanged.
+  - *17.03:* `target_problem` / `target_ok` (`rules/shooting.cpp`) admit an engaged enemy MONSTER/VEHICLE unit in every
+    shooting type; an engaged non-MONSTER stays refused (04.02). [BLAST] at an engaged MONSTER/VEHICLE is refused for
+    every shooter ("17.03: '...' is a [BLAST] weapon and cannot target unit N, an engaged MONSTER/VEHICLE unit (Rules
+    Appendix FAQ)"); 10.06's own [BLAST] refusal is checked first and keeps its message.
+  - *The -1 and the 10.06 fix:* `make_weapon_selections` now adds 10.06's -1 (`-=`) and 17.03's -1 (an engaged
+    MONSTER/VEHICLE target, except a [CLOSE-QUARTERS] weapon of a unit engaged with it), judged at Select Targets.
+    Both make -2 on the selection; `make_hit_rolls` caps the net to -1 (D-011), so the cap is applied at the hit roll.
+    `WeaponSelection::hit_modifier_rules` records the rules (`["10.06", "17.03"]` in JSON, omitted when empty).
+- **Client:**
+  - *Board:* the shaded area, the ring outline and the fix-illegal-move helper follow `move_reach`, so a MONSTER's
+    Normal or Advance move is shaded through enemy infantry, and the path through is accepted. Target highlighting and
+    menus come from `shot_options`, so they offer the engaged MONSTER.
+  - *Text:* the hit card and the weapon menus get "Engaged MONSTER/VEHICLE target: -1 to hit (17.03)" and "Close-
+    quarters shooting by a MONSTER/VEHICLE: -1 to hit (10.06)" lines (`hit_modifier_lines`), and "Net -2 to hit, capped
+    at -1 (D-011)" when the cap bites; the card's need reads the applied modifier ("(modifier -1, capped from -2,
+    D-011)"). Help: the MONSTER and VEHICLE keywords (17.01, 17.03, 10.06, 06.03), "Moving MONSTERS and VEHICLES"
+    (17.01) on a MONSTER's Normal / Advance move entries, "Shooting at engaged MONSTERS and VEHICLES" (17.03) on a weapon
+    entry at one, close-quarters shooting's help and the movement ring's text.
+  - *Fix:* a weapon entry of a mixed loadout (D-071) described the first shot's weapon (the Havoc Champion's plasma gun
+    under "Havoc lascannon"); it now describes the chosen weapon at the clicked target.
+  - *Flag:* `--click-units <id,...>` clicks units on the board in the first decision, as clicks would, and opens the
+    target's weapon menu next to it (for the screenshot); it submits nothing.
+- **Bots:** no new decision. The live shooting odds (`shooting_batches`, `evaluate_shots`, `best_shooting`) take the
+  -1 from the engine's selections and the cap from core's `make_hit_rolls`. Normal's and Hard's own movement planner
+  still avoids every enemy model (legal, stricter); Easy's moves are validated by the engine. The hypothetical volleys
+  (`unit_ranged_volley`) apply neither 10.06's nor 17.03's -1, as before for 10.06 (open, below).
+- **Replay** `tests/replays/m63_monsters.json` (31 steps, seed 1, picked by `Replay.DISABLED_SearchM63Seed`; embedded
+  state from the new monster fixture, `tests/support/monster_fixtures.hpp`: the Chaos Lord, chainsword Legionaries
+  and Havocs vs the Hive Tyrant, Tyrant Guard and a Screamer-killer, placed by hand on the 44"x60" board):
+  - Side B first: the Tyrant's Normal move 7.7" south straight through the Legionaries' rank, ending 2.04" beyond it;
+    its charge back into base contact; the fight (four Legionaries slain).
+  - Side A: the Havocs' four lascannons at the engaged Tyrant at -1 (17.03), then the engaged Legionaries' bolt
+    pistols at it in close-quarters shooting at 0 (the exception). The Tyrant ends on 4 wounds.
+  - It stops at Side A's first Charge decision (round bases only, before M64-M67).
+- **Tests** (42 new, all pass):
+  - `tests/m63_monsters_test.cpp` (29):
+    - `R17_01_MovingMonsters.*` (14): the fixture; Normal and Advance moves through enemy infantry accepted; not
+      through an enemy MONSTER or VEHICLE; not in Fall Back (a Desperate Escape still passes every enemy model), charge,
+      pile-in or consolidation; not ending on a model; not ending engaged (reverted, 09.05); a non-MONSTER still can't
+      pass (and has the shadows); the reach area includes the far side; an enemy VEHICLE still blocks the reach.
+    - `R17_03_ShootingAtEngagedMonsters.*` (9): an engaged MONSTER can be targeted; an engaged non-MONSTER can't; -1
+      (a 3 fails at BS3+, a 4 hits); none at an unengaged MONSTER; none for [CLOSE-QUARTERS] weapons of a unit engaged
+      with it; -1 for the Chaos Lord's plasma pistol (not engaged with it); [BLAST] refused (krak allowed); the cap with
+      10.06 (-2 on the selection and batch, the hit roll at -1); both exceptions at once.
+    - `R10_06_CloseQuartersShooting.AMonstersPenaltyAddsToTheOthers`.
+    - `D073_Monsters.*` (5): friendly MONSTERS passable; `check_model_path` crosses a `passable_enemy` model but
+      can't end on it; only Normal / Advance moves of a MONSTER or VEHICLE; no
+      MONSTER or VEHICLE in V1, the two bot scenarios or Strike; `hit_modifier_rules` JSON (round trip, omitted when
+      empty, bad value refused, a state waiting in the attack flow).
+  - `engine_property_test.cpp`: `D004_LegalActions.RandomPlayOnTheMonsterFixture` (16 games, apart and engaged,
+    either side first; shots at the engaged Tyrant happen).
+  - `tests/client/m63_test.cpp` (8): the shaded area through infantry (and the Tyrant Guard's shadow); the path in a
+    session; the target menu with the 17.03 line and help; the hit card's -1; the cap noted; the move menu's 17.01
+    help; the keyword, ring and close-quarters help and `hit_modifier_lines`; `--click-units`.
+  - `tests/ai/m63_test.cpp` (4, + a disabled Hard test): the odds take the engine's -1 (3/6 hit chance instead of
+    4/6, `evaluate_shots` and `best_shooting` agree); the cap in the odds; every level shoots legally at the engaged
+    Tyrant; clean Easy / Normal games on the fixture. `M63_Bots.DISABLED_HardGamesOnTheMonsterFixtureAreClean` (Hard
+    takes 10-40 s a game there even in Release) passes when run by hand in Release.
+  - No existing test changed.
+  - ctest (Debug and Release): 954 -> 996 tests, all pass.
+- **Acceptance:**
+  - *Tests `R17_01_` and `R17_03_`, plus a replay:* **met** (above).
+  - *Old play and replays unchanged:* **met.**
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave every replay byte-identical; the only
+      new file is `m63_monsters.json`.
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line for all 24 pairings of V1,
+      both bot scenarios and Strike.
+    - Legality on the fixtures (Release arena): the Havocs vs Hive Tyrant duel, 50 games at each of the six pairings,
+      and the roster fixture, 30 games each of Easy-Easy, Normal-Normal and Normal-Easy and 4 of Hard-Normal (p95 3.2 s,
+      max 25.9 s a decision; Hard for the roster units is M69's): no rejected action, reverted move or fallback. The
+      monster fixture: `M63_Bots.*`, Hard included.
+  - *Screenshots* (scratchpad `m63/`): `tyrant_reach_through_infantry.png` (the Tyrant's Advance reach shaded beyond
+    the Legionaries' rank, `--load`), `target_menu_engaged_tyrant.png` (the Havocs' target menu at the engaged Tyrant,
+    with the 17.03 line, `--click-units 5,6`), `minus_one_card.png` (the Easy bot's Chaos Lord firing its plasma pistol
+    at the engaged Tyrant: "Need 2+ to hit (modifier -1)", "Engaged MONSTER/VEHICLE target: -1 to hit (17.03)").
+- **Open:**
+  - The bots' hypothetical volleys (threat and movement scores) don't apply 10.06's or 17.03's -1, and Normal's charge
+    planner still assumes an engaged enemy can shoot only the units it is engaged with (10.06), which a MONSTER can.
+    For M68 / M69.
+  - A MONSTER of Normal or Hard walks round enemy infantry it could pass (their planner keeps every enemy model as an
+    obstacle). For M68 / M69.
 
 ---
 

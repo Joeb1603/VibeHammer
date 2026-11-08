@@ -132,8 +132,9 @@ std::string_view ring_meaning(RingKind kind) {
                    "still engaged with any unit it started engaged with. While the whole unit is dragged, it "
                    "is where the mouse can be let go. Spots the next straight line can only reach by passing "
                    "through an enemy model are left out (paths may pass through engagement range, not "
-                   "enemy models); coherency and unit-wide conditions are checked when the move ends "
-                   "(D-040, D-041, D-044). The faint red part is within Engagement Range: a model may move or "
+                   "enemy models; in a Normal or Advance move a MONSTER or VEHICLE passes enemy models that "
+                   "aren't MONSTER or VEHICLE models, 17.01); coherency and unit-wide conditions are checked when the move ends "
+                   "(D-040, D-041, D-044, D-073). The faint red part is within Engagement Range: a model may move or "
                    "be dropped there, but the move can't end there (it is checked at Commit, D-053)";
         case RingKind::Engagement:
             return "2\" around the enemy models: a model inside it is engaged, and a Normal or Advance move "

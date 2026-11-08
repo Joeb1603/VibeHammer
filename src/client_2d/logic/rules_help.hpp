@@ -52,6 +52,15 @@ struct EffectLine {
                                                    const core::AttackContext& context,
                                                    std::optional<core::ShootingType> type = std::nullopt);
 
+// D-073: what the shooting type and the target did to these selections' hit rolls: one line per rule that gave them
+// -1 when their targets were selected (10.06: a MONSTER/VEHICLE in close-quarters shooting; 17.03: an engaged
+// MONSTER/VEHICLE target), and one when D-011 caps `net`, the attacks' whole hit roll modifier ([HEAVY] included).
+[[nodiscard]] std::vector<EffectLine> hit_modifier_lines(std::span<const core::WeaponSelection> selections, int net);
+
+// D-073: help for 17.01 / 17.03 (the MONSTER and VEHICLE keywords' rules in this game).
+[[nodiscard]] HelpEntry monsters_moving_help();
+[[nodiscard]] HelpEntry engaged_monster_target_help();
+
 // "24\"  A2  BS3+  S4  AP-1  D1" (WS for melee).
 [[nodiscard]] std::string profile_stats(const core::WeaponProfile& weapon);
 

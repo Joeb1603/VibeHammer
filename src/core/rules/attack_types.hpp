@@ -29,6 +29,12 @@ struct AttackContext {
     friend bool operator==(const AttackContext&, const AttackContext&) = default;
 };
 
+// D-073: a rule that gave a selection -1 to its hit rolls when its targets were selected (each is recorded once).
+enum class HitModifierRule : std::uint8_t {
+    CloseQuartersMonster,  // 10.06: a MONSTER/VEHICLE model in close-quarters shooting
+    EngagedMonsterTarget,  // 17.03: the target is an engaged enemy MONSTER/VEHICLE unit
+};
+
 // 04.01 + 04.02: one weapon selected by one model, the profile it uses (D-001: chosen per model),
 // and its target. A melee weapon splitting its attacks (04.02) appears once per target.
 struct WeaponSelection {
@@ -41,9 +47,12 @@ struct WeaponSelection {
     // Recorded in the Select Targets step, because Gather Attack Dice refers back to it:
     bool target_within_half_range = false;  // 24.30 [RAPID FIRE]
     int target_models_at_selection = 0;     // 24.05 [BLAST]
-    // Hit roll modifier from the shooting type, before the D-011 cap (10.06: -1 for a MONSTER/VEHICLE
-    // model unless a [CLOSE-QUARTERS] weapon targets a unit its unit is engaged with).
+    // Hit roll modifier from the shooting type and the target, before the D-011 cap (10.06: -1 for a
+    // MONSTER/VEHICLE model unless a [CLOSE-QUARTERS] weapon targets a unit its unit is engaged with; 17.03: -1 at an
+    // engaged MONSTER/VEHICLE unit, with the same exception; both count, D-073).
     int hit_modifier = 0;
+    // D-073: the rules behind hit_modifier (-1 each), for clients to explain. Omitted from JSON when empty.
+    std::vector<HitModifierRule> hit_modifier_rules{};
     friend bool operator==(const WeaponSelection&, const WeaponSelection&) = default;
 };
 

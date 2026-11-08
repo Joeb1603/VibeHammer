@@ -8,6 +8,9 @@
 // --pick-dice <i,j,...> picks those wound dice (0-based) in the first [TWIN-LINKED] re-roll pop-up, as clicks would
 // (for screenshots, like --select-model); it submits nothing. M62 (D-069): --pick-models <id,id,...> picks those models
 // (by id) in the first casualty decision picked on the board (D-051), as clicks would; it submits nothing either.
+// M63 (D-073): --click-units <id,id,...> clicks those units (by id) on the board, in order, in the first decision the
+// board handles, as clicks would (a shooter, then its target, opens the target's weapon menu next to it). It stops at
+// a click that would submit an action, so it submits nothing.
 
 #include <array>
 #include <cstddef>
@@ -42,6 +45,7 @@ struct LaunchOptions {
     std::optional<std::string> load;    // --load (M61)
     std::vector<std::size_t> pick_dice;  // --pick-dice (M61)
     std::vector<unsigned> pick_models;   // --pick-models (M62)
+    std::vector<unsigned> click_units;   // --click-units (M63)
 };
 
 // argv[1..]: "--key value" pairs.

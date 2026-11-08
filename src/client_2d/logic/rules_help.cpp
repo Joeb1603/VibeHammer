@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <variant>
 
+#include "core/dice/modifiers.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/dice_expr.hpp"
 #include "core/rules/attacks.hpp"
@@ -127,6 +128,14 @@ HelpEntry keyword_help(std::string_view keyword, bool faction) {
                     "being hidden in terrain areas, 13), as do some actions (16). There is no terrain in this "
                     "game yet, so it has no effect here.";
         h.rule = "13";
+    } else if (h.title == "MONSTER" || h.title == "VEHICLE") {
+        // D-073 (M63): 17.01 and 17.03 (also 10.06, 06.03 and [HAZARDOUS], 24.15).
+        h.summary = "Moves through enemy models that aren't MONSTER or VEHICLE models in a Normal or Advance move "
+                    "(not ending on them, 17.01). Can be shot at while engaged, at -1 to hit (17.03). Can fire "
+                    "all its ranged weapons while engaged (close-quarters shooting, at -1 to hit, 10.06), and "
+                    "suffers 3 mortal wounds instead of 1 from a failed hazard roll (06.03).";
+        h.rule = "17.01";
+        h.in_this_game = true;
     } else if (h.title == "EXPLOSIVES" || h.title == "GRENADES") {
         h.summary = "Lets the unit use the Explosives core Stratagem in your Shooting phase (six D6 at an "
                     "enemy within 8\", each 4+ is a mortal wound). Stratagems are not in this game yet.";
@@ -152,10 +161,53 @@ HelpEntry shooting_type_help(core::ShootingType type) {
         case core::ShootingType::CloseQuarters:
             return {"Close-quarters shooting",
                     "The unit is engaged and did not Advance. Its models can only fire [CLOSE-QUARTERS] "
-                    "(pistol) weapons, at enemy units they are engaged with.",
+                    "(pistol) weapons, at enemy units they are engaged with. MONSTER and VEHICLE models can fire "
+                    "any ranged weapon at any target (no [BLAST] at units they are engaged with), at -1 to hit "
+                    "unless a [CLOSE-QUARTERS] weapon targets a unit they are engaged with.",
                     "10.06", true};
     }
     return {};
+}
+
+std::vector<EffectLine> hit_modifier_lines(std::span<const core::WeaponSelection> selections, int net) {
+    std::vector<EffectLine> out;
+    const auto with = [&](core::HitModifierRule rule) {
+        return static_cast<std::size_t>(std::count_if(selections.begin(), selections.end(), [&](const core::WeaponSelection& s) {
+            return std::find(s.hit_modifier_rules.begin(), s.hit_modifier_rules.end(), rule) != s.hit_modifier_rules.end();
+        }));
+    };
+    const auto of = [&](std::size_t n) {
+        return n == selections.size() ? std::string() : " (" + std::to_string(n) + " of " + models(selections.size()) + ")";
+    };
+    if (const std::size_t n = with(core::HitModifierRule::CloseQuartersMonster); n > 0) {
+        out.push_back({"Close-quarters shooting by a MONSTER/VEHICLE: -1 to hit (10.06)" + of(n), EffectKind::Active});
+    }
+    if (const std::size_t n = with(core::HitModifierRule::EngagedMonsterTarget); n > 0) {
+        out.push_back({"Engaged MONSTER/VEHICLE target: -1 to hit (17.03)" + of(n), EffectKind::Active});
+    }
+    if (const int capped = core::cap_hit_wound_modifier(net); capped != net) {
+        const auto sign = [](int v) { return (v > 0 ? "+" : "") + std::to_string(v); };
+        out.push_back({"Net " + sign(net) + " to hit, capped at " + sign(capped) + " (D-011)", EffectKind::Active});
+    }
+    return out;
+}
+
+HelpEntry monsters_moving_help() {
+    return {"Moving MONSTERS and VEHICLES",
+            "In a Normal or Advance move, a MONSTER or VEHICLE model can be moved through enemy models that aren't "
+            "MONSTER or VEHICLE models (and through friendly models, as any model can). It still can't end on a "
+            "model, and the unit must still end unengaged. Fall Back, charge, pile-in and consolidation moves "
+            "can't pass enemy models (D-073).",
+            "17.01", true};
+}
+
+HelpEntry engaged_monster_target_help() {
+    return {"Shooting at engaged MONSTERS and VEHICLES",
+            "In your Shooting phase an engaged enemy MONSTER or VEHICLE unit can be selected as a target, at -1 to "
+            "hit, except for [CLOSE-QUARTERS] weapons fired by a unit engaged with it. [BLAST] weapons can't "
+            "target it (Rules Appendix FAQ). The -1 adds to close-quarters shooting's -1, and the net is capped "
+            "at -1 (D-011, D-073).",
+            "17.03", true};
 }
 
 std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,

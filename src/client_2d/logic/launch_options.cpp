@@ -46,7 +46,7 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
             } else if (key == "--load") {
                 if (value.empty()) throw std::invalid_argument("empty");
                 o.load = value;
-            } else if (key == "--pick-dice" || key == "--pick-models") {
+            } else if (key == "--pick-dice" || key == "--pick-models" || key == "--click-units") {
                 std::vector<std::size_t> items;
                 std::size_t start = 0;
                 while (start <= value.size()) {
@@ -60,9 +60,12 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
                 }
                 if (key == "--pick-dice") {
                     o.pick_dice = std::move(items);
-                } else {
+                } else if (key == "--pick-models") {
                     o.pick_models.clear();  // M62: model ids
                     for (const std::size_t i : items) o.pick_models.push_back(static_cast<unsigned>(i));
+                } else {
+                    o.click_units.clear();  // M63: unit ids
+                    for (const std::size_t i : items) o.click_units.push_back(static_cast<unsigned>(i));
                 }
             }
         } catch (const std::exception&) {

@@ -31,7 +31,8 @@ add_executable(wh40k_tests
     m54_test.cpp
     m60_abilities_test.cpp
     m61_twin_linked_test.cpp
-    m62_random_characteristics_test.cpp)
+    m62_random_characteristics_test.cpp
+    m63_monsters_test.cpp)
 
 target_link_libraries(wh40k_tests PRIVATE wh40k_core GTest::gtest_main)
 target_include_directories(wh40k_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

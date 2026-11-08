@@ -22,6 +22,7 @@
 #include "core/serialization/json.hpp"
 #include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
+#include "support/monster_fixtures.hpp"
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
@@ -37,6 +38,7 @@ const std::filesystem::path kReplayDir{WH40K_REPLAY_DIR};
 constexpr std::uint64_t kM60Seed = 2;  // M60: picked by Replay.DISABLED_SearchM60Seed
 constexpr std::uint64_t kM61Seed = 1;  // M61: picked by Replay.DISABLED_SearchM61Seed
 constexpr std::uint64_t kM62Seed = 10;  // M62: picked by Replay.DISABLED_SearchM62Seed
+constexpr std::uint64_t kM63Seed = 1;   // M63: picked by Replay.DISABLED_SearchM63Seed
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -372,6 +374,140 @@ Replay m62_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     if (failed || !g.pending || *g.pending != PendingDecision{Side::B, decision::Charge{}}) return r;
     r.expect = replay_expectation(g);
     ok = damage_rolls >= 2 && cannon_rolled;
+    return r;
+}
+
+// M63 (D-073): the monster fixture (tests/support/monster_fixtures.hpp: a few roster units placed by hand), embedded.
+// `ok` says whether the seed shows what the replay is about: the Tyrant's charge ends engaged with the Legionaries, it
+// is still engaged (and alive) in Side A's Shooting phase, the lascannons roll at -1 (17.03) and the Legionaries' bolt
+// pistols at the Tyrant they are engaged with at 0 (the close-quarters exception); `problem`, the first refused step
+// (none expected).
+Replay m63_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    namespace mf = wh40k::test::monsters;
+    ok = false;
+    Replay r;
+    r.description =
+        "M63: Monsters and Vehicles (17.01, 17.03, D-073) on the monster fixture (roster units placed by hand on the "
+        "44\"x60\" board; embedded state). Round 1, Side B first: the Hive Tyrant makes a Normal move 7.7\" south "
+        "straight through the chainsword Legionaries' rank (17.01: a MONSTER moves through enemy models that aren't "
+        "MONSTER/VEHICLE models), ending 2.04\" beyond it, unengaged (09.05). It declares a charge at the Legionaries "
+        "and moves into base contact (or as far as its roll allows); it fights first, then the Legionaries fight back "
+        "(every other decision takes the first legal action; casualties in unit order). Side A: every unit remains "
+        "stationary; the unengaged Havocs fire their four lascannons at the engaged Tyrant at -1 to hit (17.03), then "
+        "the engaged Legionaries fire their bolt pistols at it in close-quarters shooting with no penalty ([PISTOL] = "
+        "[CLOSE-QUARTERS] weapons of a unit engaged with the target, 10.06, 17.03). Stops at Side A's first Charge "
+        "decision.";
+    GameState init = mf::fixture(false, Side::B);
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    start_game(g);
+    bool failed = false;
+    std::vector<GameEvent> events;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    // The scripted answer to anything not asked about below.
+    auto answer = [&]() -> GameAction {
+        const DecisionKind& k = g.pending->kind;
+        if (std::holds_alternative<decision::Shoot>(k)) return action::EndShootStep{};
+        if (std::holds_alternative<decision::Charge>(k)) return action::EndChargeStep{};
+        if (std::holds_alternative<decision::PileIn>(k)) return action::EndPileIns{};
+        if (std::holds_alternative<decision::Consolidate>(k)) return action::EndConsolidations{};
+        if (const auto* o = std::get_if<decision::OverrunPileIn>(&k)) return action::SkipPileIn{o->unit};
+        if (const auto* d = std::get_if<decision::DeclareMeleeAttacks>(&k)) return wh40k::test::first_melee_options(g, d->unit);
+        GameAction a = legal_actions(g, decider(g)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g.find_unit(oc->target));
+        }
+        return a;
+    };
+    const UnitId tyrant = g.units[mf::kTyrant].id;
+    const UnitId legionaries = g.units[mf::kLegionaries].id;
+    const UnitId havocs = g.units[mf::kHavocs].id;
+    const ModelId tyrant_model = g.units[mf::kTyrant].models[0].id;
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::B, decision::MoveUnits{}})) act(answer());
+    act(action::StartMove{tyrant, MoveType::Normal, std::nullopt});
+    act(action::ProposeModelMove{tyrant_model, {wh40k::test::at(22.0f, mf::kThroughY)}});
+    act(action::CommitUnitMove{});
+    if (failed || g.units[mf::kTyrant].models[0].position != wh40k::test::at(22.0f, mf::kThroughY)) return r;
+    while (!failed && g.pending && std::holds_alternative<decision::MoveUnits>(g.pending->kind)) act(answer());
+    act(action::EndShootStep{});
+    act(action::DeclareCharge{tyrant});
+    if (failed || !g.pending || !std::holds_alternative<decision::SelectChargeTargets>(g.pending->kind)) return r;
+    act(action::StartChargeMove{tyrant, {legionaries}});
+    {
+        // Straight north at the rank: into base contact if the roll allows, else as far as it goes (2" or more: engaged).
+        const float gap = wh40k::test::in(mf::kRankY) - wh40k::test::in(mf::kThroughY) - base_radius(g.units[mf::kTyrant].models[0].base) -
+                          base_radius(g.units[mf::kLegionaries].models[0].base);
+        const float step = std::min(gap, max_move_distance_mm(g, tyrant_model).value_or(0.0f));
+        const Position from = *move_start_position(g, tyrant_model);
+        act(action::ProposeModelMove{tyrant_model, {Position{from.x, from.y + step, 0.0f}}});
+    }
+    act(action::CommitUnitMove{});
+    if (failed || !g.units[mf::kTyrant].turn_flags.made_charge_move) return r;
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::A, decision::MoveUnits{}})) act(answer());
+    while (!failed && g.pending && std::holds_alternative<decision::MoveUnits>(g.pending->kind)) act(answer());
+    if (failed || !g.pending || !std::holds_alternative<decision::Shoot>(g.pending->kind)) return r;
+    if (g.units[mf::kTyrant].models.empty() || !is_engaged(g, g.units[mf::kTyrant])) return r;
+    std::size_t before = events.size();
+    {
+        action::Shoot lascannons{havocs, ShootingType::Normal, {}};
+        for (const Model& m : g.units[mf::kHavocs].models) {
+            if (m.weapons[0].name == "Havoc lascannon") lascannons.shots.push_back(ShotDeclaration{m.id, 0, 0, tyrant});
+        }
+        act(lascannons);
+    }
+    while (!failed && g.flow.attack) act(answer());
+    bool lascannons_at_minus_one = false;
+    for (std::size_t i = before; i < events.size(); ++i) {
+        if (const auto* h = std::get_if<event::HitRollsMade>(&events[i])) {
+            lascannons_at_minus_one = !h->rolls.rolls.empty();
+            for (const HitRoll& x : h->rolls.rolls) {
+                if (x.unmodified && *x.unmodified != 1 && *x.unmodified != 6) {
+                    lascannons_at_minus_one = lascannons_at_minus_one && x.modified == std::max(1, *x.unmodified - 1);
+                }
+            }
+        }
+    }
+    if (failed || g.units[mf::kTyrant].models.empty() || g.units[mf::kLegionaries].models.empty()) return r;
+    before = events.size();
+    {
+        action::Shoot pistols{legionaries, ShootingType::CloseQuarters, {}};
+        for (const ShotDeclaration& d : shot_options(g, g.units[mf::kLegionaries], ShootingType::CloseQuarters)) {
+            const bool taken = std::any_of(pistols.shots.begin(), pistols.shots.end(),
+                                           [&](const ShotDeclaration& x) { return x.model == d.model; });
+            if (d.target == tyrant && !taken) pistols.shots.push_back(d);
+        }
+        if (pistols.shots.empty()) return r;
+        act(pistols);
+    }
+    while (!failed && g.flow.attack) act(answer());
+    bool pistols_unmodified = false;
+    for (std::size_t i = before; i < events.size(); ++i) {
+        if (const auto* s = std::get_if<event::ShootingStarted>(&events[i])) {
+            pistols_unmodified = !s->selections.empty() &&
+                                 std::all_of(s->selections.begin(), s->selections.end(),
+                                             [](const WeaponSelection& w) { return w.hit_modifier == 0; });
+        }
+    }
+    act(action::EndShootStep{});
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::A, decision::Charge{}}) return r;
+    r.expect = replay_expectation(g);
+    ok = lascannons_at_minus_one && pistols_unmodified;
     return r;
 }
 
@@ -988,6 +1124,29 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m62_problem.empty()) << m62_problem;
     EXPECT_TRUE(m62_shows_it) << "seed " << kM62Seed << " no longer shows two lascannon damage rolls and the cannon's roll";
     save_if_clean(m62, kReplayDir / "m62_random_characteristics.json");
+
+    // M63: Monsters and Vehicles (D-073): the Hive Tyrant's Normal move through the Legionaries (17.01), then the Havocs'
+    // lascannons at the engaged Tyrant at -1 and the Legionaries' bolt pistols with no penalty (17.03). Stops at Side
+    // A's first Charge decision, before anything M64-M70 change (round bases only, no points result).
+    bool m63_shows_it = false;
+    std::string m63_problem;
+    const Replay m63 = m63_replay(kM63Seed, m63_shows_it, m63_problem);
+    ASSERT_TRUE(m63_problem.empty()) << m63_problem;
+    EXPECT_TRUE(m63_shows_it) << "seed " << kM63Seed << " no longer shows the -1 and the close-quarters exception";
+    save_if_clean(m63, kReplayDir / "m63_monsters.json");
+}
+
+TEST(Replay, DISABLED_SearchM63Seed) {
+    for (std::uint64_t seed = 1; seed <= 200; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m63_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M63 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
 }
 
 TEST(Replay, DISABLED_SearchM62Seed) {

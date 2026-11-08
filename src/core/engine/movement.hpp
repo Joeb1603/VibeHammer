@@ -33,7 +33,8 @@ namespace wh40k::core {
 // - `immobile`: it can't be moved (12.03 / 12.08 Ongoing: in base contact with an enemy model).
 // - D-044: the next straight line can't pass through a `blocking` circle (03.01: its base cannot be moved
 //   through enemy models; as check_model_path, base radii less EPS). None when the move may pass through
-//   enemy models (09.07 Desperate Escape).
+//   enemy models (09.07 Desperate Escape). 17.01 (D-073): in a Normal or Advance move a MONSTER/VEHICLE model
+//   has blocking circles only round enemy MONSTER/VEHICLE models (it can't end on the others: `forbidden`).
 // Ending inside the area does not make the path legal (enemy bases can't be crossed), the unit coherent
 // (03.03) or meet unit-wide conditions (e.g. 12.03 "your unit must be engaged"); the engine still checks
 // them. D-046: a charge move (11.04) is shaded too: up to the charge roll, closer to one or more charge
@@ -60,6 +61,13 @@ struct MoveReach {
     friend bool operator==(const MoveReach&, const MoveReach&) = default;
 };
 [[nodiscard]] std::optional<MoveReach> move_reach(const GameState& state, ModelId model);
+
+// 17.01 (D-073): "Each time you make a normal or advance move with a unit, MONSTER/VEHICLE models in that unit can
+// be moved through friendly and enemy models (excluding other MONSTER/VEHICLE models)." True when a move of `type`
+// lets `model` of `unit` pass through enemy models that are not MONSTER/VEHICLE models: a Normal (09.05) or Advance
+// (09.06) move of a MONSTER/VEHICLE model (is_monster_or_vehicle, a unit keyword). Friendly models it may pass in any
+// move (03.01), friendly MONSTER/VEHICLE models included (D-073).
+[[nodiscard]] bool moves_through_non_monster_enemies(MoveType type, const Unit& unit, const Model& model);
 
 // D-047: the state just after `side` starts the pile-in (12.03) or consolidation (12.08) `start`, with the
 // move in progress, so move_reach can be asked about a move before it is made. nullopt if `start` is not a

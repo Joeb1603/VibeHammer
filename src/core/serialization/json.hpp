@@ -64,6 +64,8 @@ void from_json(const Json& j, Unit& v);
 // ---- attack data (rules/attack_types.hpp), stored while an attack is in progress ----
 void to_json(Json& j, AttackType v);
 void from_json(const Json& j, AttackType& v);
+void to_json(Json& j, HitModifierRule v);
+void from_json(const Json& j, HitModifierRule& v);
 void to_json(Json& j, const AttackContext& v);
 void from_json(const Json& j, AttackContext& v);
 void to_json(Json& j, const WeaponSelection& v);

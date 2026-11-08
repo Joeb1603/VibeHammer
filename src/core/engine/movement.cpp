@@ -280,10 +280,24 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
     // 03.01: enemy models and battlefield edges. D-027: the path may pass through friendly models but not
     // end on any model at its current position (including models of this unit already moved); the
     // commit still checks 03.01 Ending a Move for the whole unit.
-    const std::vector<PlacedModel> enemies = enemy_models(state, u.side);
+    // 17.01 (D-073): a MONSTER/VEHICLE model's Normal or Advance move may pass through enemy models that are not
+    // MONSTER/VEHICLE models (still not end on them).
+    std::vector<PlacedModel> enemies;
+    std::vector<PlacedModel> passable;
+    if (moves_through_non_monster_enemies(mv.type, u, *m)) {
+        for (const Unit& other : state.units) {
+            if (other.side == u.side) continue;
+            for (const Model& o : other.models) {
+                (is_monster_or_vehicle(other, o) ? enemies : passable).push_back(PlacedModel{o.id, o.position, o.base});
+            }
+        }
+    } else {
+        enemies = enemy_models(state, u.side);
+    }
     const std::vector<PlacedModel> friends = friendly_models(state, u.side);
     const PathContext context{Rect{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm}, friends,
-                              enemies, mv.mode == FallBackMode::DesperateEscape};  // 09.07 While Moving
+                              enemies, mv.mode == FallBackMode::DesperateEscape,  // 09.07 While Moving
+                              passable};
     for (const PathViolation& v : check_model_path(a.model, m->base, points, context)) {
         r.reasons.push_back(v.reason);
     }
@@ -401,6 +415,11 @@ std::optional<float> max_move_distance_mm(const GameState& state, ModelId model)
     return max;
 }
 
+bool moves_through_non_monster_enemies(MoveType type, const Unit& unit, const Model& model) {
+    // 17.01: normal (09.05) and advance (09.06) moves only; not Fall Back, charge, pile-in or consolidation (D-073).
+    return (type == MoveType::Normal || type == MoveType::Advance) && is_monster_or_vehicle(unit, model);
+}
+
 std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
     if (!state.flow.move) return std::nullopt;
     const MoveInProgress& mv = *state.flow.move;
@@ -425,11 +444,14 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model) {
         mv.type == MoveType::Normal || mv.type == MoveType::Advance || mv.type == MoveType::FallBack;
     // 09.07 While Moving: a Desperate Escape may move through enemy models.
     const bool through_enemies = mv.mode == FallBackMode::DesperateEscape;
+    // 17.01 (D-073): a MONSTER/VEHICLE model's Normal or Advance move passes non-MONSTER/VEHICLE enemy models.
+    const bool through_non_monsters = moves_through_non_monster_enemies(mv.type, *u, *m);
     for (const Unit& other : state.units) {
         for (const Model& o : other.models) {
             if (o.id == m->id) continue;
             const float touching = r + base_radius(o.base);
-            if (other.side != u->side && !through_enemies) {
+            if (other.side != u->side && !through_enemies &&
+                !(through_non_monsters && !is_monster_or_vehicle(other, o))) {
                 // 03.01: its base cannot be moved through enemy models (check_model_path's limit).
                 reach.blocking.push_back(ReachCircle{o.position, touching - EPS_MM, false, o.id});
             }

@@ -38,10 +38,13 @@ struct PathContext {
     // Other models of the moving model's army (including its own unit, at their current/final
     // positions). The path may pass through them but must not end on them.
     std::span<const PlacedModel> friendly;
-    // Enemy models. The path may not pass through them (unless allowed) or end on them.
+    // Enemy models the path may not pass through (unless allowed below) or end on.
     std::span<const PlacedModel> enemy;
     // Some move types let a model move through enemy models (e.g. Desperate Escape, 09.07).
     bool may_move_through_enemy_models = false;
+    // 17.01 (D-073): enemy models this model may be moved through but not end on (a MONSTER/VEHICLE model's
+    // Normal or Advance move passes enemy models that are not MONSTER/VEHICLE models). Empty for every other move.
+    std::span<const PlacedModel> passable_enemy{};
 };
 
 // Checks one model's path against 03.01 (movement restrictions and "on another model"). Does not

@@ -159,8 +159,15 @@ std::optional<std::string> target_problem(const Unit& unit, const Model& model, 
             return "10.06: '" + profile.name + "' is a [BLAST] weapon and cannot target " + unit_label(target.id) +
                    ", which " + unit_label(unit.id) + " is engaged with";
         }
-    } else if (facts.target_engaged(target)) {
+    } else if (facts.target_engaged(target) && !unit_is_monster_or_vehicle(target)) {
+        // 17.03: in your Shooting phase, enemy MONSTER/VEHICLE units that are engaged can be selected as targets.
         return "04.02: " + unit_label(target.id) + " is engaged; targets must be unengaged";
+    }
+    if (profile.has<ability::Blast>() && facts.target_engaged(target) && unit_is_monster_or_vehicle(target)) {
+        // Rules Appendix FAQ and the 17.03 diagram: [BLAST] weapons cannot target an engaged MONSTER/VEHICLE unit
+        // (D-073).
+        return "17.03: '" + profile.name + "' is a [BLAST] weapon and cannot target " + unit_label(target.id) +
+               ", an engaged MONSTER/VEHICLE unit (Rules Appendix FAQ)";
     }
     if (!facts.visible(model, target)) {
         return "06.01: " + unit_label(target.id) + " is not visible to " + model_label(model.id);
@@ -183,8 +190,11 @@ bool target_ok(const Unit& unit, const Model& model, const WeaponProfile& profil
         if (!target_engaged_with_us) return false;  // 10.06
     } else if (close_quarters && target_engaged_with_us) {
         if (profile.has<ability::Blast>()) return false;  // 10.06
-    } else if (facts.target_engaged(target)) {
-        return false;  // 04.02
+    } else if (facts.target_engaged(target) && !unit_is_monster_or_vehicle(target)) {
+        return false;  // 04.02 (17.03: an engaged MONSTER/VEHICLE unit can be targeted)
+    }
+    if (profile.has<ability::Blast>() && facts.target_engaged(target) && unit_is_monster_or_vehicle(target)) {
+        return false;  // 17.03, Rules Appendix FAQ (D-073)
     }
     return target_within_range(model, profile, target) && facts.visible(model, target);  // 04.02, 06.01
 }
@@ -423,13 +433,27 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
     for (const ShotDeclaration& s : shots) {
         WeaponSelection sel = select_weapon_target(state, s.model, s.weapon_index, s.profile_index, s.target);
         const Model& model = *find_model(unit, s.model);
-        if (type == ShootingType::CloseQuarters && is_monster_or_vehicle(unit, model)) {
+        const WeaponProfile& profile = model.weapons[s.weapon_index].profiles[s.profile_index];
+        // Both exceptions: a [CLOSE-QUARTERS] weapon at a unit this unit is engaged with.
+        std::optional<bool> cq_at_engaged;
+        const auto close_quarters_at_engaged = [&] {
+            if (!cq_at_engaged) cq_at_engaged = is_close_quarters(profile) && engaged_with(state, unit, s.target);
+            return *cq_at_engaged;
+        };
+        if (type == ShootingType::CloseQuarters && is_monster_or_vehicle(unit, model) && !close_quarters_at_engaged()) {
             // 10.06 MONSTER/VEHICLE Models: -1 to hit unless a [CLOSE-QUARTERS] weapon targets a unit this
             // unit is engaged with.
-            const WeaponProfile& profile = model.weapons[s.weapon_index].profiles[s.profile_index];
-            if (!(is_close_quarters(profile) && engaged_with(state, unit, s.target))) {
-                sel.hit_modifier = -1;
-            }
+            sel.hit_modifier -= 1;
+            sel.hit_modifier_rules.push_back(HitModifierRule::CloseQuartersMonster);
+        }
+        const Unit* target = state.find_unit(s.target);
+        if (target != nullptr && unit_is_monster_or_vehicle(*target) && is_engaged(state, *target) &&
+            !close_quarters_at_engaged()) {
+            // 17.03: -1 to hit a ranged attack at an engaged enemy MONSTER/VEHICLE unit, excluding attacks made with
+            // [CLOSE-QUARTERS] weapons by models in a unit engaged with the target. Both modifiers count; D-011 caps
+            // the net at the hit roll (D-073).
+            sel.hit_modifier -= 1;
+            sel.hit_modifier_rules.push_back(HitModifierRule::EngagedMonsterTarget);
         }
         out.push_back(sel);
     }

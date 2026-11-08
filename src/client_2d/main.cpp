@@ -24,6 +24,8 @@
 //   are given. A missing or unreadable file, or one that fails to load, exits with code 2.
 //   M61: --pick-dice <i,j,...>: pick those wound dice (0-based) in the first re-roll pop-up, as clicks would (for
 //   screenshots); it submits nothing.
+//   M63: --click-units <id,id,...>: click those units on the board in the first decision it handles, as clicks would
+//   (a shooter, then a target, opens the target's weapon menu next to it); it stops before a click that submits.
 
 #include <imgui.h>
 #include <raylib.h>
@@ -391,6 +393,8 @@ public:
     void pick_dice(std::vector<std::size_t> dice) { cli_dice_picks_ = std::move(dice); }
     // --pick-models (M62): the models the first casualty decision picks on the board, as clicks would.
     void pick_models(std::vector<unsigned> models) { cli_model_picks_ = std::move(models); }
+    // --click-units (M63): the units clicked on the board in the first decision it handles, as clicks would.
+    void click_units(std::vector<unsigned> units) { cli_unit_clicks_ = std::move(units); }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
         if (unit) selected_unit_ = core::UnitId{*unit};
@@ -636,6 +640,26 @@ private:
             const core::UnitId target = picks->target();
             for (const unsigned id : cli_model_picks_) board_.click_model(session_->state(), target, core::ModelId{id});
             cli_model_picks_.clear();
+        }
+        // --click-units (M63): clicks, once, as a player's would (screenshots of a target menu, D-073). A click that
+        // would submit an action ends them, so nothing is submitted. A menu opens next to the last unit clicked.
+        if (board_.active() && !cli_unit_clicks_.empty()) {
+            for (const unsigned id : cli_unit_clicks_) {
+                const core::UnitId unit{id};
+                const ClickResult r = board_.click(session_->state(), unit);
+                if (r.submit) break;
+                selected_unit_ = unit;
+                if (!r.menu.empty()) {
+                    menu_ = r.menu;
+                    cli_menu_frames_ = 2;  // opened a frame later: the first frames' windows would close it
+                    const core::Unit* u = session_->state().find_unit(unit);
+                    if (u != nullptr && !u->models.empty()) {
+                        menu_anchor_ = u->models.front().position;
+                        cli_menu_at_anchor_ = true;  // no mouse to open it at
+                    }
+                }
+            }
+            cli_unit_clicks_.clear();
         }
     }
 
@@ -1341,14 +1365,20 @@ private:
 
     // D-029: the menu a board click offers (move types, weapons, fight types).
     void draw_unit_menu() {
+        if (cli_menu_frames_ > 0 && --cli_menu_frames_ == 0 && !menu_.empty()) open_menu_ = true;  // --click-units
         if (open_menu_) {
             ImGui::OpenPopup("##unit_menu");
             open_menu_ = false;
         }
+        if (cli_menu_at_anchor_ && menu_anchor_) {  // --click-units (M63): at the unit, as a click there would
+            const Vector2 at = camera_.to_screen(*menu_anchor_);
+            ImGui::SetNextWindowPos(ImVec2(at.x, at.y));
+        }
         if (!ImGui::BeginPopup("##unit_menu")) {
-            if (!menu_.empty()) {
+            if (!menu_.empty() && cli_menu_frames_ == 0) {
                 menu_.clear();  // closed by a click off it, or Esc
                 menu_anchor_.reset();
+                cli_menu_at_anchor_ = false;
                 menu_unit_.reset();
                 tidy_selection();  // D-043
             }
@@ -1365,6 +1395,7 @@ private:
         if (picked) {
             menu_.clear();
             menu_anchor_.reset();
+            cli_menu_at_anchor_ = false;
             if (picked->cancel) clear_selection();  // D-041: as before the click
             menu_unit_.reset();
             apply(board_.choose(state(), *picked));
@@ -2174,6 +2205,9 @@ private:
     bool quit_ = false;            // the start screen's Quit
     std::vector<std::size_t> cli_dice_picks_;  // --pick-dice (M61), applied once
     std::vector<unsigned> cli_model_picks_;    // --pick-models (M62), applied once
+    std::vector<unsigned> cli_unit_clicks_;    // --click-units (M63), applied once
+    bool cli_menu_at_anchor_ = false;          // --click-units opened the menu: draw it at its anchor
+    int cli_menu_frames_ = 0;                  // --click-units: frames until its menu opens
 };
 
 }  // namespace
@@ -2237,6 +2271,7 @@ int main(int argc, char** argv) {
     app.select(options.select_unit, options.select_model);
     app.pick_dice(options.pick_dice);  // M61
     app.pick_models(options.pick_models);  // M62
+    app.click_units(options.click_units);  // M63
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;
