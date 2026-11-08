@@ -195,3 +195,115 @@ TEST(R02_04_Weapons, RangedWeaponWithoutRangeIsDataError) {
 TEST(R02_Datasheet, MissingFileIsDataError) {
     EXPECT_THROW((void)load_datasheet(repo_root() / "data/units/does_not_exist.json"), DataError);
 }
+
+// ---- D-070 (M59): per-profile weapon type, oval bases, conditional profiles, unreadable bases ----
+
+namespace {
+
+nlohmann::json one_model_sheet(const nlohmann::json& base, const nlohmann::json& weapons) {
+    nlohmann::json j = nlohmann::json::parse(R"({
+        "name": "Test Unit",
+        "composition": {"min_models": 1, "max_models": 1},
+        "model_types": [{"name": "Test Model", "min": 1, "max": 1,
+                         "stats": {"M": 6, "T": 4, "Sv": 3, "InSv": null, "W": 2, "Ld": 6, "OC": 1},
+                         "default_weapons": [], "weapon_options": []}]
+    })");
+    j["model_types"][0]["base"] = base;
+    j["weapons"] = weapons;
+    return j;
+}
+
+const nlohmann::json kRound32 = nlohmann::json::parse(R"({"shape": "round", "diameter_mm": 32.0})");
+
+}  // namespace
+
+TEST(R02_04_Weapons, EachProfileCanCarryItsOwnType) {
+    // D-070: a weapon with a ranged and a melee profile; each profile's "type" wins over the weapon's.
+    const auto j = one_model_sheet(kRound32, nlohmann::json::parse(R"({
+        "Combo": {"type": "ranged", "profiles": [
+            {"type": "ranged", "name": "Combo - shot", "range_in": 12, "A": 1, "skill": 3, "S": 4, "AP": 0, "D": 1,
+             "abilities": []},
+            {"type": "melee", "name": "Combo - blade", "range_in": null, "A": 3, "skill": 3, "S": 5, "AP": -1, "D": 1,
+             "abilities": []}]}})"));
+    const Datasheet ds = parse_datasheet(j);
+    const Weapon& w = ds.weapons.at(0);
+    EXPECT_EQ(w.kind, WeaponKind::Ranged);  // the first profile's, as the tool writes it
+    ASSERT_EQ(w.profiles.size(), 2u);
+    EXPECT_EQ(w.profiles[0].kind, WeaponKind::Ranged);
+    EXPECT_FLOAT_EQ(*w.profiles[0].range_mm, in(12));
+    EXPECT_EQ(w.profiles[1].kind, WeaponKind::Melee);
+    EXPECT_FALSE(w.profiles[1].range_mm.has_value());
+}
+
+TEST(R02_04_Weapons, AProfileTypeStillNeedsAMatchingRange) {
+    // 02.04: a melee profile has no range, a ranged one needs one, whichever type the weapon has.
+    const auto j = one_model_sheet(kRound32, nlohmann::json::parse(R"({
+        "Combo": {"type": "ranged", "profiles": [
+            {"type": "melee", "name": "Combo - blade", "range_in": 12, "A": 3, "skill": 3, "S": 5, "AP": -1, "D": 1,
+             "abilities": []}]}})"));
+    EXPECT_THROW((void)parse_datasheet(j), DataError);
+}
+
+TEST(R02_04_Weapons, ProfilesWithoutTypeTakeTheWeaponsType) {
+    // Backward compatible: the V1 files have no per-profile type.
+    const Weapon* w = intercessors().find_weapon("Bolt Rifle");
+    ASSERT_NE(w, nullptr);
+    for (const WeaponProfile& p : w->profiles) EXPECT_EQ(p.kind, WeaponKind::Ranged);
+}
+
+TEST(R02_02_Profiles, OvalBaseReadsWidthAndLength) {
+    // D-070: "120x92mm" is written as diameter_mm 92 (the width) and length_mm 120 (the length).
+    const auto j = one_model_sheet(nlohmann::json::parse(R"({"shape": "oval", "diameter_mm": 92, "length_mm": 120})"),
+                                   nlohmann::json::object());
+    const Datasheet ds = parse_datasheet(j);
+    EXPECT_EQ(ds.model_types.at(0).base, (Base{BaseShape::Oval, 92.0f, 120.0f}));
+}
+
+TEST(R02_02_Profiles, OvalBaseShorterThanItsWidthIsDataError) {
+    const auto j = one_model_sheet(nlohmann::json::parse(R"({"shape": "oval", "diameter_mm": 120, "length_mm": 92})"),
+                                   nlohmann::json::object());
+    EXPECT_THROW((void)parse_datasheet(j), DataError);
+    const auto no_length = one_model_sheet(nlohmann::json::parse(R"({"shape": "oval", "diameter_mm": 92})"),
+                                           nlohmann::json::object());
+    EXPECT_THROW((void)parse_datasheet(no_length), DataError);
+}
+
+TEST(R02_02_Profiles, NullBaseIsDataError) {
+    // D-070: the fetch tool writes null for a base it can't read ("Hull", "~40mm", "32mm Flying").
+    const auto j = one_model_sheet(nlohmann::json(nullptr), nlohmann::json::object());
+    try {
+        (void)parse_datasheet(j);
+        FAIL() << "expected DataError";
+    } catch (const DataError& e) {
+        EXPECT_NE(std::string(e.what()).find("D-070"), std::string::npos) << e.what();
+    }
+}
+
+TEST(R02_04_Weapons, ConditionalProfileIsLeftOutAndListed) {
+    // D-070: a "Hunter: Monster/Vehicle" profile is not implemented: never selectable, recorded.
+    const auto j = one_model_sheet(kRound32, nlohmann::json::parse(R"({
+        "Chainfist": {"type": "melee", "profiles": [
+            {"name": "Chainfist - Standard", "range_in": null, "A": 2, "skill": 4, "S": 8, "AP": -2, "D": 2,
+             "abilities": []},
+            {"name": "Chainfist - Hunter: Monster/Vehicle", "range_in": null, "A": 3, "skill": 3, "S": 12, "AP": -2,
+             "D": 3, "abilities": [], "condition": "Hunter: Monster/Vehicle"}]}})"));
+    const Datasheet ds = parse_datasheet(j);
+    const Weapon* w = ds.find_weapon("Chainfist");
+    ASSERT_NE(w, nullptr);
+    ASSERT_EQ(w->profiles.size(), 1u);
+    EXPECT_EQ(w->profiles[0].name, "Chainfist - Standard");
+    ASSERT_EQ(ds.conditional_profiles.size(), 1u);
+    EXPECT_EQ(ds.conditional_profiles[0].weapon, "Chainfist");
+    EXPECT_EQ(ds.conditional_profiles[0].profile, "Chainfist - Hunter: Monster/Vehicle");
+    EXPECT_EQ(ds.conditional_profiles[0].condition, "Hunter: Monster/Vehicle");
+}
+
+TEST(R02_04_Weapons, WeaponWithOnlyConditionalProfilesCannotBeEquipped) {
+    const auto j = one_model_sheet(kRound32, nlohmann::json::parse(R"({
+        "Odd claw": {"type": "melee", "profiles": [
+            {"name": "Odd claw - Hunter: Vehicle", "range_in": null, "A": 3, "skill": 3, "S": 12, "AP": -2,
+             "D": 3, "abilities": [], "condition": "Hunter: Vehicle"}]}})"));
+    const Datasheet ds = parse_datasheet(j);
+    EXPECT_EQ(ds.find_weapon("Odd claw"), nullptr);
+    EXPECT_EQ(ds.conditional_profiles.size(), 1u);
+}

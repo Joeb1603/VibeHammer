@@ -88,11 +88,14 @@ WeaponKind weapon_kind(const Json& j, const std::string& where) {
     fail(where, "unknown weapon type '" + s + "'");
 }
 
-WeaponProfile parse_profile(const Json& j, WeaponKind kind, const std::string& weapon_where) {
+// D-070: a profile may carry its own "type" (a weapon with ranged and melee profiles); without one it
+// takes the weapon's.
+WeaponProfile parse_profile(const Json& j, WeaponKind weapon_kind_default, const std::string& weapon_where) {
     WeaponProfile p;
     p.name = require_string(j, "name", weapon_where);
     const std::string where = weapon_where + " profile '" + p.name + "'";
-    p.kind = kind;
+    p.kind = j.contains("type") ? weapon_kind(j, where) : weapon_kind_default;
+    const WeaponKind kind = p.kind;
 
     const Json& range = require(j, "range_in", where);
     if (kind == WeaponKind::Ranged) {
@@ -129,23 +132,32 @@ Characteristics parse_stats(const Json& j, const std::string& where) {
     return c;
 }
 
+// D-070: a round base has diameter_mm; an oval ("120x92mm") has diameter_mm = its width (the short
+// axis, 92) and length_mm = its length (the long axis, 120). A null base is one the fetch tool could
+// not read ("Hull", "~40mm", ...).
 Base parse_base(const Json& j, const std::string& where) {
+    if (j.is_null()) {
+        fail(where, "D-070: base is null (the fetch tool could not read the datasheet's base size)");
+    }
     const std::string shape = require_string(j, "shape", where);
     Base b;
-    if (shape == "round") {
-        b.shape = BaseShape::Round;
-    } else if (shape == "oval") {
-        b.shape = BaseShape::Oval;
-        const Json& len = require(j, "length_mm", where);
-        b.length_mm = len.get<float>();
-    } else {
-        fail(where, "unknown base shape '" + shape + "'");
-    }
     const Json& d = require(j, "diameter_mm", where);
     if (!d.is_number() || d.get<float>() <= 0.0f) {
         fail(where, "diameter_mm must be a positive number");
     }
     b.diameter_mm = d.get<float>();
+    if (shape == "round") {
+        b.shape = BaseShape::Round;
+    } else if (shape == "oval") {
+        b.shape = BaseShape::Oval;
+        const Json& len = require(j, "length_mm", where);
+        if (!len.is_number() || len.get<float>() < b.diameter_mm) {
+            fail(where, "D-070: an oval base's length_mm must be a number no smaller than its diameter_mm (width)");
+        }
+        b.length_mm = len.get<float>();
+    } else {
+        fail(where, "unknown base shape '" + shape + "'");
+    }
     return b;
 }
 
@@ -224,11 +236,23 @@ Datasheet parse_datasheet_impl(const Json& j) {
         Weapon w;
         w.name = weapon_name;
         w.kind = weapon_kind(wj, weapon_where);
-        for (const Json& pj : require(wj, "profiles", weapon_where)) {
+        const Json& profiles = require(wj, "profiles", weapon_where);
+        if (profiles.empty()) {
+            fail(weapon_where, "weapon has no profiles");
+        }
+        for (const Json& pj : profiles) {
+            if (pj.contains("condition")) {
+                // D-070: a profile that applies only against some targets ("Hunter: Monster/Vehicle")
+                // is not implemented; it is left out so it can never be selected, and recorded.
+                ds.conditional_profiles.push_back(
+                    ConditionalProfile{weapon_name, require_string(pj, "name", weapon_where),
+                                       require_string(pj, "condition", weapon_where)});
+                continue;
+            }
             w.profiles.push_back(parse_profile(pj, w.kind, weapon_where));
         }
         if (w.profiles.empty()) {
-            fail(weapon_where, "weapon has no profiles");
+            continue;  // D-070: only conditional profiles; the weapon can't be equipped (02.04 at load)
         }
         ds.weapons.push_back(std::move(w));
     }

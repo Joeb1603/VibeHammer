@@ -25,6 +25,14 @@ struct ModelTypeSheet {
     std::vector<std::string> weapon_options;
 };
 
+// D-070: a weapon profile that applies only in some circumstances ("Hunter: Monster/Vehicle"). Not
+// implemented: the loader leaves it out of the weapon's profiles and lists it here.
+struct ConditionalProfile {
+    std::string weapon;
+    std::string profile;
+    std::string condition;
+};
+
 // A unit datasheet (02), parsed from data/units/*.json (BSData via tools/fetch_bsdata.py).
 // Loader-side only: GameState carries copies of what each model needs, not the datasheet.
 struct Datasheet {
@@ -37,6 +45,7 @@ struct Datasheet {
     int max_models = 0;
     std::vector<ModelTypeSheet> model_types;
     std::vector<Weapon> weapons;                // 02.04
+    std::vector<ConditionalProfile> conditional_profiles;  // D-070: left out of `weapons`
 
     [[nodiscard]] const ModelTypeSheet* find_model_type(std::string_view name) const;
     [[nodiscard]] const Weapon* find_weapon(std::string_view name) const;

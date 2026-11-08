@@ -1952,7 +1952,7 @@ milestone per session" and "agree each milestone first" for these milestones onl
 
 ---
 
-## M59: Fetch tool fixes and the nine new datasheets
+## M59: Fetch tool fixes and the nine new datasheets ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 02.04–02.07 · **Decision:** D-070
 
 > **`tools/fetch_bsdata.py` fixes:**
@@ -1984,6 +1984,79 @@ milestone per session" and "agree each milestone first" for these milestones onl
 - D-004 random play over the fixture scenarios, with weapons not implemented yet refused cleanly (the D-026
   exception backup is never hit).
 - Old play and replays unchanged.
+
+**Results (2026-11-08):** design in D-070.
+- **Fetch tool** (`tools/fetch_bsdata.py`):
+  - *Composition* comes from the model types and the groups holding them, champions counted (Legionaries and
+    Terminators 5–10, Havocs 5–5, Genestealers 5–10, Tyrant Guard 3–6). Single models are 1–1.
+  - *Wargear* is read recursively, skipping the Crusade, Weapon Modifications, Enhancements and Crusade Relic
+    Upgrades subtrees. Weapon profiles behind `infoLinks` are read.
+  - *Weapon type* is per profile: a mixed weapon writes `"type"` on each profile.
+  - *Default weapons* come from min-1 entries and required groups' defaults, at any depth.
+  - *Bases:* "AxBmm" is an oval (`diameter_mm` = width B, `length_mm` = length A); other unreadable bases become
+    `null` with a warning.
+  - *Hunter profiles* are marked with `"condition"`.
+  - *Also added:* `set` modifiers conditioned only on the unit's or model's identity are applied (the Havocs'
+    chainsword is A5, as in the roster), and Abilities profiles behind infoLinks get their text.
+  - *Robustness:* no crash on about twenty other units (vehicles with "Hull", "32mm Flying", ...).
+- **Datasheets:** the nine files are in `data/units/` at `0f90355`. Re-running the tool on `intercessor_squad.json`
+  and `termagants.json` gives identical content apart from the `fetched` date, so they were left untouched.
+  - Every roster stats row (M/T/Sv/W/Ld/OC/InSv/base) and weapon profile with its abilities matches.
+  - The differences (an extra LEADER keyword, duplicate "Leader" abilities, Deadly Demise/Scouts without their
+    value, the Genestealers' Stealth) are display-only and recorded in D-070.
+- **Loader** (`unit_loader.cpp`):
+  - an optional per-profile `"type"`;
+  - ovals checked (`length_mm` ≥ `diameter_mm`);
+  - a null base refused with a D-070 reason;
+  - conditional profiles left out of the weapon and listed in `Datasheet::conditional_profiles` (a weapon with only
+    those is dropped).
+  - `scenario_loader.cpp` still refuses non-round bases at placement.
+- **Fixtures** (`tests/data/scenarios/`, not listed by the client or packaged):
+  - `rosters_no_tyrannofex_44x60.json`: 13 units, 72 models, the roster loadouts, 12" zones on the short edges
+    36" apart;
+  - `havocs_vs_hive_tyrant_24x24.json`: the two 8" apart.
+  - `test_helpers.hpp` gains `load_rosters_fixture()` and `load_rosters_fixture_closer(in)` (the Tyranids moved
+    south, for random play that reaches shooting and fighting).
+- **Replay** `tests/replays/m59_rosters_fixture_round1.json` (112 steps): round 1 movement for both sides, then in
+  round 2 a boltgun volley at the front Genestealers (3 slain, 1 wounded). It stops at Side B's first Move Units
+  decision of round 2. It embeds its initial state, so the client's replay list and the package load it without
+  `tests/data` (checked under `xvfb-run`, as is the fixture via `--scenario`).
+- **Tests** (all new):
+  - `tests/roster_datasheet_test.cpp`: `R02_Datasheet.*` for the nine files plus Termagants (stats, InSv, base,
+    every roster weapon profile with its abilities, composition, model types and defaults), and no conditional
+    profiles in any shipped file.
+  - `datasheet_test.cpp`: `R02_04_Weapons.EachProfileCanCarryItsOwnType`, `AProfileTypeStillNeedsAMatchingRange`,
+    `ProfilesWithoutTypeTakeTheWeaponsType`, `ConditionalProfileIsLeftOutAndListed`,
+    `WeaponWithOnlyConditionalProfilesCannotBeEquipped`; and `R02_02_Profiles.OvalBaseReadsWidthAndLength`,
+    `OvalBaseShorterThanItsWidthIsDataError`, `NullBaseIsDataError`.
+  - `scenario_test.cpp`: `R02_06_UnitComposition.RostersFixtureLoadsThirteenUnitsWithTheRosterModelCounts`,
+    `R02_07_WargearOptions.RostersFixtureCarriesTheRosterLoadouts`, `R03_02_SetUp.RostersFixtureIsALegalSetUp`,
+    `R03_02_SetUp.HavocsVsHiveTyrantFixtureLoads`, `D008_Formation.TheTyrannofexOvalBaseIsStillRefusedAtPlacement`.
+  - `engine_property_test.cpp`:
+    - `D004_LegalActions.RandomPlayFromTheRostersFixture`: the full D-004 checks on 4 games (36", 10" and 0.5"
+      apart). Each game ends, the state round-trips, and every fired or fought profile has fixed A/D and no
+      [TWIN-LINKED]/[DEVASTATING WOUNDS].
+    - `D004_LegalActions.RandomGamesFromTheRostersFixtureFinish`: 10 more games.
+    - `D026_UnimplementedAbilities.RosterWeaponsTheEngineCantResolveAreRefusedWithARuleCitedReason`: neither the
+      lascannon nor the bonesword is offered, and declaring them is refused with "D-002: ..." and "24.38: ...".
+  - `replay_test.cpp`: `Replay.RandomGamesFromTheRostersFixtureReplayIdentically`.
+  - No existing test changed. ctest (Debug): 789 → 817 tests, all pass.
+- **Acceptance:**
+  - *Datasheets and loader tests:* **met** (above).
+  - *D-004 random play on the fixtures, with unimplemented weapons refused cleanly:* **met**.
+    - Random A/D (D-002) and [TWIN-LINKED] (D-026) are refused by validation. The D-026 rollback is never needed:
+      no test throws.
+    - *Accepted silently until M60, as expected:* the Hive Tyrant's scything talons (Extra Attacks, an Unknown
+      ability) and the plasma pistol / plasma gun supercharge profiles ([HAZARDOUS], not implemented). Random play
+      uses both.
+  - *Old play and replays unchanged:* **met**.
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave every existing replay byte-identical;
+      only the new file is added.
+    - The arena `--per-game` hashes of a Release build match `baseline/main` for every game on V1, both bot
+      scenarios and Strike (24 pairings).
+- **Open:** a datasheet view of a mixed ranged/melee weapon would list all its profiles under the first profile's
+  type (none of the roster weapons is mixed). Ability-name modifiers (Deadly Demise X, Scouts X) and hidden-ability
+  conditions are not evaluated.
 
 ---
 

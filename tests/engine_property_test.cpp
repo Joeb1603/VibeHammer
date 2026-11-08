@@ -4,13 +4,22 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
+#include <set>
+#include <string>
 #include <vector>
 
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
+#include "core/geometry/distance.hpp"
+#include "core/rules/attacks.hpp"
+#include "core/rules/fight.hpp"
+#include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 
@@ -38,8 +47,11 @@ void check_rejection(const ValidationResult& r) {
     }
 }
 
+// Called with each action random play is about to apply (M59: checks which weapons get used).
+using ActionHook = std::function<void(const GameState&, const GameAction&)>;
+
 // Random play until GameOver or `max_actions`, checking the D-004 properties at every decision.
-PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions) {
+PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions, const ActionHook& before_apply = {}) {
     PlayStats stats;
     while (gs.pending && stats.actions < max_actions) {
         const Side side = decider(gs);
@@ -76,6 +88,7 @@ PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions) {
         }
 
         const GameAction pick = wh40k::test::random_action(gs, rng);
+        if (before_apply) before_apply(gs, pick);
         apply_action(gs, side, pick);
         ++stats.actions;
         EXPECT_EQ(gs.pending, compute_decision(gs));
@@ -200,4 +213,145 @@ TEST(D004_LegalActions, RandomPlayFromTheStrikeScenario) {
         moves_proposed += stats.path_fills;
     }
     EXPECT_GT(moves_proposed, 0);
+}
+
+// ---- M59 / D-070: the roster fixture (tests/data/scenarios) ----
+
+namespace {
+
+// D-002 / D-026: a profile the engine can resolve today: fixed A and D, no [TWIN-LINKED] or
+// [DEVASTATING WOUNDS]. Unknown abilities (Extra Attacks, Sustained Hits, ...) and [HAZARDOUS] are not
+// refused until M60; they are loaded and ignored.
+bool resolvable(const WeaponProfile& p) {
+    return p.attacks.is_fixed() && p.damage.is_fixed() && !unimplemented_ability_problem(p);
+}
+
+struct WeaponUse {
+    std::set<std::string> used;  // profile names fired or fought with
+    int shoots = 0;
+    int fights = 0;
+};
+
+// Records every Shoot / Fight random play applies, and checks each selected profile is one the engine
+// can resolve (so the D-026 exception backup in apply_action is never needed).
+ActionHook record_weapons(WeaponUse& use) {
+    return [&use](const GameState& gs, const GameAction& a) {
+        auto profile_of = [&](ModelId id, std::size_t w, std::size_t p) -> const WeaponProfile& {
+            return find_model(gs, id)->weapons.at(w).profiles.at(p);
+        };
+        if (const auto* sh = std::get_if<action::Shoot>(&a)) {
+            ++use.shoots;
+            for (const ShotDeclaration& d : sh->shots) {
+                const WeaponProfile& p = profile_of(d.model, d.weapon_index, d.profile_index);
+                EXPECT_TRUE(resolvable(p)) << p.name;
+                use.used.insert(p.name);
+            }
+        } else if (const auto* fi = std::get_if<action::Fight>(&a)) {
+            ++use.fights;
+            for (const MeleeDeclaration& d : fi->declarations) {
+                const WeaponProfile& p = profile_of(d.model, d.weapon_index, d.profile_index);
+                EXPECT_TRUE(resolvable(p)) << p.name;
+                use.used.insert(p.name);
+            }
+        }
+    };
+}
+
+}  // namespace
+
+TEST(D004_LegalActions, RandomPlayFromTheRostersFixture) {
+    // The D-004 properties with the two rosters (13 units, D-070) on the 44"x60" board. Every game ends,
+    // the state round-trips, and no weapon the engine can't resolve yet is ever fired or fought with:
+    // random A or D (D-002) and [TWIN-LINKED] (D-026) are refused by validation, never by the engine
+    // throwing into the D-026 rollback.
+    WeaponUse use;
+    for (std::uint64_t seed = 1; seed <= 2; ++seed) {
+        GameState gs = wh40k::test::load_rosters_fixture();
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, record_weapons(use));
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;  // state round-trips
+    }
+    // The armies 10" apart (the Tyranids moved 26" south), so random play shoots and charges, and 0.5"
+    // apart (engaged from the start: everyone fights in the first Fight phase).
+    for (std::uint64_t seed = 3; seed <= 4; ++seed) {
+        GameState gs = wh40k::test::load_rosters_fixture_closer(seed == 3 ? 26.0f : 35.5f);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, record_weapons(use));
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;  // state round-trips
+    }
+    EXPECT_GT(use.shoots, 0);
+    EXPECT_GT(use.fights, 0);
+    for (const char* refused : {"Havoc lascannon", "Bio-plasmic scream", "Monstrous bonesword and lash whip"}) {
+        EXPECT_EQ(use.used.count(refused), 0u) << refused;
+    }
+}
+
+TEST(D004_LegalActions, RandomGamesFromTheRostersFixtureFinish) {
+    // Cheaper than the full D-004 check: more seeds of plain random play to the end.
+    WeaponUse use;
+    const ActionHook hook = record_weapons(use);
+    for (std::uint64_t seed = 5; seed <= 14; ++seed) {
+        GameState gs = wh40k::test::load_rosters_fixture_closer(seed % 3 == 0 ? 26.0f : seed % 3 == 1 ? 20.0f : 35.5f);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        int actions = 0;
+        while (gs.pending && actions < 6000) {
+            const GameAction a = wh40k::test::random_action(gs, rng);
+            hook(gs, a);
+            apply_action(gs, decider(gs), a);
+            ++actions;
+        }
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << actions << " actions";
+    }
+    EXPECT_GT(use.shoots, 0);
+    EXPECT_GT(use.fights, 0);
+}
+
+TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWithARuleCitedReason) {
+    // Side A's first Shooting phase on the roster fixture: the Havoc lascannons (D6+1 damage, D-002) are
+    // in range of the east Termagants (48") but never offered, and declaring them is a rule-cited refusal.
+    GameState gs = wh40k::test::load_rosters_fixture();
+    start_game(gs);
+    for (std::uint32_t id = 1; id <= 5; ++id) {
+        apply_action(gs, Side::A, action::StartMove{UnitId{id}, MoveType::RemainStationary, std::nullopt});
+    }
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::Shoot{}}));
+    const Unit& havocs = *gs.find_unit(UnitId{5});
+    const UnitId east_gants{8};
+    for (const ShotDeclaration& d : shot_options(gs, havocs, ShootingType::Normal)) {
+        EXPECT_NE(find_model(havocs, d.model)->weapons.at(d.weapon_index).name, "Havoc lascannon");
+    }
+    const Model& gunner = havocs.models.at(1);
+    ASSERT_EQ(gunner.weapons.at(0).name, "Havoc lascannon");
+    ASSERT_TRUE(target_within_range(gunner, gunner.weapons[0].profiles[0], *gs.find_unit(east_gants)));
+    const action::Shoot lascannon{havocs.id, ShootingType::Normal, {ShotDeclaration{gunner.id, 0, 0, east_gants}}};
+    const ValidationResult r = validate_action(gs, Side::A, lascannon);
+    ASSERT_FALSE(r.ok());
+    EXPECT_TRUE(std::any_of(r.reasons.begin(), r.reasons.end(),
+                            [](const std::string& s) { return s.rfind("D-002: ", 0) == 0; }))
+        << r.reasons.front();
+    for (const auto& reason : r.reasons) EXPECT_TRUE(is_rule_cited(reason)) << reason;
+
+    // Melee: the Hive Tyrant's bonesword ([TWIN-LINKED], D-026) is refused. (Its scything talons, Extra
+    // Attacks, are an Unknown ability that M60 handles; D-070 notes they are accepted as plain attacks until then.)
+    GameState close = load_scenario(wh40k::test::repo_root() / wh40k::test::kHavocsVsTyrantFixture,
+                                    wh40k::test::repo_root());
+    Unit& tyrant = close.units[1];
+    const Model& target = close.units[0].models[2];
+    tyrant.models[0].position = Position{target.position.x,
+                                         target.position.y + base_radius(target.base) + base_radius(tyrant.models[0].base),
+                                         0.0f};  // base contact
+    const std::vector<MeleeDeclaration> bonesword{
+        MeleeDeclaration{tyrant.models[0].id, 0, 0, {MeleeTarget{close.units[0].id, 6}}}};
+    const auto problems = melee_problems(close, tyrant, bonesword);
+    ASSERT_FALSE(problems.empty());
+    EXPECT_EQ(problems.front().rfind("24.38: ", 0), 0u) << problems.front();
+    for (const MeleeDeclaration& d : melee_options(close, tyrant)) EXPECT_NE(d.weapon_index, 0u);  // never offered
 }

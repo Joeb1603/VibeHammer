@@ -84,6 +84,20 @@ TEST(Replay, RandomGamesFromTheStrikeScenarioReplayIdentically) {
     }
 }
 
+TEST(Replay, RandomGamesFromTheRostersFixtureReplayIdentically) {
+    // M59 / D-070: the two rosters (13 units) from an embedded initial state, 36" and 10" apart.
+    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        GameState initial = seed == 1 ? wh40k::test::load_rosters_fixture()
+                                      : wh40k::test::load_rosters_fixture_closer(seed == 2 ? 26.0f : 35.5f);
+        initial.dice.seed = seed;
+        Match match(initial);
+        TestRng rng(seed);
+        random_play(match, rng, 6000);
+        EXPECT_EQ(match.state().flow.stage, Stage::GameOver) << "seed " << seed;
+        expect_replays_identically(match);
+    }
+}
+
 TEST(Replay, AttackFlowGamesReplayIdentically) {
     int steps = 0;
     for (std::uint64_t seed = 1; seed <= 20; ++seed) {
@@ -532,4 +546,95 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_EQ(g53.flow.battle_round, 2);
     strike.expect = replay_expectation(g53);
     save_if_clean(strike, kReplayDir / "m53_strike_round1.json");
+
+    // M59: the roster fixture (D-070), from an embedded initial state so the file needs no scenario under
+    // tests/data (the client's replay list and the package load it as is). Movement in battle round 1 and
+    // one boltgun volley in battle round 2; stops at Side B's first Move Units decision of battle round 2,
+    // before anything M60-M70 change (no Hazardous, random, Twin-linked or Extra Attacks weapon is used).
+    Replay rosters;
+    rosters.description =
+        "M59: the two New Recruit rosters without the Tyrannofex on the 44\" x 60\" portrait board (D-070). "
+        "Units 1-5 Chaos Space Marines (Chaos Lord, Legionaries with chainswords, Legionaries with boltguns, "
+        "Chaos Terminators, Havocs), 6-13 Tyranids (Hive Tyrant, Termagants west and east, Genestealers front "
+        "and held back, Tyrant Guard, Screamer-killers west and east). Round 1: the Lord moves 5\" north, both "
+        "Legionaries squads 6\", the Terminators 5\"; the Havocs remain stationary; nothing is in range to "
+        "shoot. The Hive Tyrant moves 6\" south, the west Termagants 6\", the east Termagants advance 3\", the "
+        "front Genestealers 8\" and the held-back ones 6\", the Tyrant Guard 5\"; the Screamer-killers remain "
+        "stationary. Round 2: the boltgun Legionaries move 6\" north and fire their boltguns at the front "
+        "Genestealers (16\" away); casualties in unit order (D-013). Every other unit remains stationary and "
+        "every other decision takes the first legal action. Stops at Side B's first Move Units decision of "
+        "battle round 2.";
+    rosters.initial.state = wh40k::test::load_rosters_fixture();
+    rosters.initial.state->dice.seed = 59;
+    GameState g59 = replay_initial_state(rosters, repo_root());
+    start_game(g59);
+    auto r_act = [&](const GameAction& a) {
+        const Side side = decider(g59);
+        const auto v = validate_action(g59, side, a);
+        ASSERT_TRUE(v.ok()) << v.reasons[0];
+        rosters.steps.push_back(ReplayStep{side, a});
+        apply_action(g59, side, a);
+    };
+    auto r_first_legal = [&]() -> GameAction {
+        GameAction a = legal_actions(g59, decider(g59)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g59.find_unit(oc->target));
+        }
+        return a;
+    };
+    auto r_unit = [&](std::uint32_t id) -> const Unit& { return *g59.find_unit(UnitId{id}); };
+    auto r_move = [&](std::uint32_t id, MoveType type, float dy_in) {
+        r_act(action::StartMove{UnitId{id}, type, std::nullopt});
+        if (type == MoveType::RemainStationary) return;
+        for (const Model& m : r_unit(id).models) {  // the front rank first
+            const Position p = *move_start_position(g59, m.id);
+            r_act(action::ProposeModelMove{m.id, {Position{p.x, p.y + wh40k::test::in(dy_in), 0}}});
+        }
+        r_act(action::CommitUnitMove{});
+    };
+    auto r_until = [&](Side side) {
+        while (!(g59.pending && *g59.pending == PendingDecision{side, decision::MoveUnits{}})) r_act(r_first_legal());
+    };
+    r_move(1, MoveType::Normal, 5);
+    r_move(2, MoveType::Normal, 6);
+    r_move(3, MoveType::Normal, 6);
+    r_move(4, MoveType::Normal, 5);
+    r_move(5, MoveType::RemainStationary, 0);
+    for (std::uint32_t id = 1; id <= 5; ++id) {
+        ASSERT_TRUE(shot_options(g59, r_unit(id), ShootingType::Normal).empty()) << "unit " << id;
+    }
+    r_act(action::EndShootStep{});
+    r_act(action::EndChargeStep{});
+    r_until(Side::B);
+    r_move(6, MoveType::Normal, -6);
+    r_move(7, MoveType::Normal, -6);
+    r_move(8, MoveType::Advance, -3);
+    r_move(9, MoveType::Normal, -8);
+    r_move(10, MoveType::Normal, -6);
+    r_move(11, MoveType::Normal, -5);
+    r_move(12, MoveType::RemainStationary, 0);
+    r_move(13, MoveType::RemainStationary, 0);
+    r_act(action::EndShootStep{});
+    r_act(action::EndChargeStep{});
+    r_until(Side::A);
+    ASSERT_EQ(g59.flow.battle_round, 2);
+    r_move(3, MoveType::Normal, 6);
+    for (const std::uint32_t id : {1u, 2u, 4u, 5u}) r_move(id, MoveType::RemainStationary, 0);
+    {
+        const Unit& bolters = r_unit(3);
+        action::Shoot volley{bolters.id, ShootingType::Normal, {}};
+        for (const ShotDeclaration& d : shot_options(g59, bolters, ShootingType::Normal)) {
+            const Model& m = *find_model(bolters, d.model);
+            if (m.weapons[d.weapon_index].name == "Boltgun" && d.target == UnitId{9}) volley.shots.push_back(d);
+        }
+        ASSERT_EQ(volley.shots.size(), 9u);
+        r_act(volley);
+        while (g59.flow.attack) r_act(r_first_legal());
+    }
+    r_act(action::EndShootStep{});
+    r_act(action::EndChargeStep{});
+    r_until(Side::B);
+    ASSERT_EQ(g59.flow.battle_round, 2);
+    rosters.expect = replay_expectation(g59);
+    save_if_clean(rosters, kReplayDir / "m59_rosters_fixture_round1.json");
 }
