@@ -24,6 +24,8 @@ If the app wording is obtained later and contradicts this, update this entry and
 Loaders parse dice expressions (`D3`, `D6+1`, ...) into a `DiceExpr` value and store it, but the engine
 does not roll random characteristics. Attempting to resolve an attack with an unrolled random
 characteristic is a programmer error (an exception) until the rule wording is supplied and implemented.
+- **Replaced by D-069 (M62)** for A and D, the only characteristics that can be random: a random A is rolled per
+  model and weapon when its batch is resolved, and a random D after the model is selected.
 
 ## D-003: No deployment step in V1
 **Decided:** 2026-11-02
@@ -208,6 +210,8 @@ models is therefore exactly as expressive as answering each Select Model step se
   `OrderCasualties` as a **template** with an empty `priority`; any permutation of the target unit's
   models fills it.
 - Revisit if a rule adds dice during 05.04 (e.g. Feel No Pain, 24.12; not in V1).
+- **Amended by D-069 (M62):** a random D is rolled during 05.04, so new information does appear. By the user's choice
+  the decision stays one order per batch, and each damage roll lands on the model the order picks at that step.
 
 ## D-014: Event log and replay files (engine design)
 **Decided:** 2026-11-02 (M5 plan)
@@ -1024,6 +1028,9 @@ change.
   outline, so they show on red bases.
 - **Replaces D-032's casualty bar:** the "Custom order..." grid is gone. Without the board (no board
   interaction), the sidebar offers only "Use default order".
+- **Amended by D-069 (M62):** with a random D, the decision check and the preview use the D's maximum as a stand-in
+  and roll no dice. The preview marks its damage as a maximum and the steps after the first random roll as
+  provisional; the picks then cover every model the real rolls can reach.
 
 ## D-052: "Fix illegal moves": a refused drop goes to the nearest spot it can go (M36)
 **Decided:** 2026-11-06 (agreed with the user). Client only (`drop_fix`); no rule, state or replay change.
@@ -2283,6 +2290,173 @@ replay or JSON change; the engine API gains one overload. The test of "the same"
   backup_)` (the bot's own dice, and now its reused backup) instead of the 4-argument form.
 - **Not changed (open for M57):** the Hard chain table build (`ChainTable::build_half_turn`, about a quarter of a V1
   Hard game; its sums' order fixes its values), `has_line_of_sight` itself, Normal's move scoring.
+
+## D-069: Random characteristics: A rolled per model and weapon when its batch is resolved, D after the model is selected (M62; replaces D-002, amends D-013 and D-051)
+**Decided:** 2026-11-08 (M62 of the pre-approved M59–M70 batch). The wording and "one casualty order per batch" were
+agreed with the user in planning; other ambiguities take the conservative choice. Written before any code (design
+first), and placed before D-070 to keep the numbers in order.
+- **Wording** ("Random Characteristics" is an app-only rule; supplied by the user, AI-sourced and **not verified against
+  the app**, so it is a working assumption, as D-011 is):
+  > **Attacks:** each time a model attacks with a weapon whose A is random, roll it for that model and weapon (Blast
+  > bonus added after).
+  > **Damage:** each time an attack with a random D is allocated to a model after a failed save, roll the damage for
+  > that attack.
+  > **Random damage keeps one casualty order per batch:** the defender still answers `OrderCasualties` once per batch,
+  > and each damage roll lands on the next model the order (and 05.04's wounded-model-first rule) picks.
+- **Scope: A and D only.** They are the only characteristics the unit loader reads as dice expressions (`DiceExpr`).
+  Every other characteristic must be a whole number (a dice string there is a data error), and an ability with a
+  random X (e.g. [SUSTAINED HITS D3]) stays an unknown ability, refused under D-071. So D-002's refusal is gone for A
+  and D, and nothing else can be random.
+- **Rolling (01.05).** `roll_characteristic(dice, expr)` rolls one D6 per die, in order, halves each for a D3 (rounding
+  up), and adds the modifier, giving `CharacteristicRoll{dice, value}` (the D6 faces and the result). A fixed value is
+  never rolled, so a weapon with fixed A and D consumes exactly the dice it did before: every old replay and bot game
+  is unchanged.
+- **Random A (04.03 Gather Attack Dice).**
+  - *When (agreed in planning):* when the batch is gathered for resolution. That is after the attacker selects it
+    (`SelectAttackBatch`, or the only batch left) and before its hit rolls, not when the unit's attacks start.
+    - `gather_attack_batches` (Select Targets facts, D-006 batching) leaves each random-A selection unrolled in
+      `AttackBatch::random_attacks` (`{selection, model, A, bonus}`).
+    - `attack_dice` counts only the dice already known: the fixed-A selections with their bonuses.
+  - *Per model and weapon:* one roll per selection, in selection order. A model selects each weapon once, and a
+    random-A melee weapon can't split (below), so a selection is one (model, weapon).
+    - Two weapons with the same expression (e.g. two D6+3) are still identical attacks: A is not one of 04.03's
+      compared characteristics (D-006). They share a batch, and each model rolls its own A.
+  - *Bonus after the roll:* [BLAST] dice (24.05, per five models in the target at Select Targets) and [RAPID FIRE X]
+    dice (24.30, target within half range at Select Targets) are added to that selection's roll. Neither depends on A,
+    so the order only shows in the display, which follows the wording.
+  - *Events:* `AttackDiceRolled{batch, rolls, attack_dice}` (04.03; each roll `{selection, model, A, dice, value,
+    bonus}`), then `AttackBatchSelected` with the full count, then the hit rolls (05.01).
+    - The batch's `random_attacks` is then emptied and its `attack_dice` holds the total. From there on the batch looks
+      like a fixed one (allocation, saves, [TWIN-LINKED] re-rolls, D-072, as before).
+  - *D-012:* a batch whose target is gone before it is gathered is lost unrolled. `AttacksLost` lists its unrolled
+    random A (`random_attacks`) next to the known `attack_dice`; no dice are rolled for it.
+  - *[TORRENT] with a random A* (flamers; the Tyrannofex's acid spray, M65) hits automatically with the rolled number of
+    attacks.
+  - *Melee (conservative; agreed in planning):* 04.02 splits "that weapon's attacks" by declaring how many go to each
+    target, which needs a known A.
+    - A melee weapon with a random A selects exactly one target. A split is refused: "D-069 (04.02): '<profile>' has a
+      random A (D3), so its attacks can't be split between targets".
+    - Its one `MeleeTarget` declares `attacks` 0, meaning all of its attacks, rolled when they are gathered; any other
+      number is refused with a D-069 reason. `melee_options` offers it that way.
+    - 04.02's "no more targets than A" can't be broken with one target (every random A is at least 1).
+    - No melee profile in the data has a random A, so the tests use a stand-in.
+- **Random D (05.04 Resolve Damage).**
+  - `inflict_damage` takes a `DamageRoller` (called with the profile's D). At each save roll that inflicts damage, in
+    05.04's order (lowest first):
+    1. the model is selected (05.04 Select Model: a wounded model if possible);
+    2. the D is rolled for that attack: from the engine's `DiceSource` when `OrderCasualties` is applied;
+    3. the model loses that many wounds.
+  - A saved attack rolls nothing. When the model is destroyed, the excess damage is lost (05.04, Appendix: Destroyed).
+    Attacks left after the unit is destroyed are lost without a roll.
+  - `SaveStep::damage_roll` records the roll (`{dice, value}`); `DamageResult::damage` is the rolled value.
+  - *Dice order:* the save rolls (05.03) as before; then, as the casualty order is applied, one roll per damaging step,
+    lowest save roll first.
+  - *One order per batch (amends D-013, the user's answer):* the defender still answers one `OrderCasualties` per
+    batch. Each roll's damage goes to the model the priority picks at that step: the first legal model in the order,
+    a wounded one forced. D-013's argument (no new information appears while 05.04 resolves) no longer holds for a
+    random D; the user chose to keep one order anyway.
+  - *Who rolls:* the dice cards name the attacking side as the roller, as for its hit and wound rolls (the D is its
+    weapon's). This is presentation only.
+- **The stand-in (amends D-051).** `casualty_decision_needed` and `preview_casualties` run 05.04 on a copy of the
+  target with `damage_stand_in`: the expression's maximum (D6+1: 7; D3: 3). It never touches the dice.
+  - *Why the maximum:* whatever the rolls, the models take damage in the same order, so the picks cover every model any
+    roll could reach.
+    - The order is: the picks, in pick order, a wounded model forced until it is destroyed (05.04 Select Model; at most
+      one model per group is wounded at a time).
+    - A lower roll only reaches the next model later, or not at all.
+    - So with the maximum, D-051's "no model takes damage without being picked" still holds. The expected value would
+      leave some reachable models to the default order.
+  - The decision check gives the same answer with any stand-in: the first damaging save roll always selects a model.
+  - *What the preview says:*
+    - `CasualtyPreview::random_damage` (the D expression, when it is random): the preview's damage, `next_damage` and
+      `damage_left` are maxima ("up to").
+    - `provisional_from`: the results from that index on, and the next pick, are provisional. It is 1 once a random
+      roll is in the results: if that roll is lower, the model it hit survives and takes the next attack instead.
+  - *D-051's exactness:* "picks + the rest gives exactly the preview's results" still holds for a fixed D. For a random
+    D, the models the resolution damages are always among the picks, in pick order (tested).
+  - *Bots:* Normal's `casualty_order` and Hard's `decide_casualties` read the same preview, so they plan for the
+    maximum. That is a documented approximation, and it only matters on the fixtures.
+- **Weapons this makes usable** (no other refused ability):
+  - *In the rosters:* the Havocs' Havoc lascannon (D D6+1) and the Screamer-killers' bio-plasmic scream (A D6+3,
+    [ASSAULT], [BLAST]).
+  - *Datasheet options and fixture variants:*
+    - the Hive Tyrant's heavy venom cannon (A D3, D3, [BLAST]; the m60 replay's Tyrant carries one) and stranglethorn
+      cannon (A D6+1, [BLAST]);
+    - the Havoc missile launcher's frag (A D6, [BLAST]) and krak (D D6) profiles;
+    - the Legionaries' lascannon (D D6+1, [HEAVY]) and missile launcher frag and krak ([HEAVY]);
+    - the Termagants' shardlauncher (A D3, [BLAST], [HEAVY]);
+    - the Tyrannofex's rupture cannon (D D6+6, [HEAVY]) and acid spray (A D6+6, [TORRENT]), from M65.
+  - *Still refused for another ability:* meltaguns ([MELTA 2], D-071), flamers and the heavy flamer ([IGNORES COVER],
+    D-071), and the strangleweb ([DEVASTATING WOUNDS], D-026).
+  - None of these is equipped in V1, the two bot scenarios or Strike (a test checks), so their play is unchanged.
+- **The refusal is removed.**
+  - The D-002 checks are gone from `shot_problems` / `profile_selectable`, the fight's `declaration_problem` /
+    `usable_melee_profile`, and the bots' `profile_supported`.
+  - `DiceExpr::fixed_value` still throws (a programmer error). Each caller checks `is_fixed()` first or works on known
+    fixed data:
+    - `gather_attack_dice` requires a fixed A (a random A goes through `selection_dice` and the batch);
+    - `inflict_damage` with a random D and no roller is a programmer error.
+- **`resolve_attack_batch`** (the pure 05 function the bots sample with) follows the engine's dice order: a batch's
+  random A, the hit and wound rolls, [TWIN-LINKED] re-rolls, the save rolls, then the damage rolls. With the same dice it
+  gives the engine's result (tested).
+- **JSON.** New fields are omitted when they hold their default, and the new event is appended to its variant, so every
+  old file and the bots' state hash are unchanged.
+  - `AttackBatch`: `"random_attacks": [{"selection", "model", "A", "bonus"}]`.
+  - Event `{"kind": "AttackDiceRolled", "rule": "04.03", "batch", "rolls": [{"selection", "model", "A", "dice", "value",
+    "bonus"}], "attack_dice"}`.
+  - `AttacksLost`: `"random_attacks"`.
+  - `SaveStep`: `"damage_roll": {"dice", "value"}`.
+  - A save can stop between the start of the attacks and an A roll, or at a casualty decision before its damage rolls.
+- **Client.**
+  - *Dice cards:*
+    - "Attack dice" (04.03), before the hit rolls, one line per model: "Bio-plasmic scream: D6+3 -> 4+3 = 7, +2
+      [BLAST] = 9".
+    - "Damage rolls" (05.04, D-069), after the casualties are confirmed: per attack that inflicts damage, its dice,
+      damage and model ("4+1 = 5 -> model 23", "(destroyed, 2 lost)").
+    - The hit card's "N attack dice" counts the rolled dice.
+  - *Text:*
+    - Log text for `AttackDiceRolled`, the damage rolls in `SavesResolved` and an unrolled `AttacksLost`.
+    - `is_roll_event` includes `AttackDiceRolled` and a `SavesResolved` with a damage roll.
+  - *Expressions where the client counts attacks:* a random A shows its expression: the melee editor ("Termagants x
+    D3"), the log's start-of-attacks line ("4 + D6+3 attack dice"), lost attacks, and an attack-dice line in the weapon
+    menus' effects. The melee editor has no "Split..." for a random-A weapon.
+  - *Help:* "Random A (D6+3)" and "Random D (D6+1)" entries citing D-069, in the weapon menus' tooltips and the
+    datasheet window (hovering A or D).
+  - *Casualty picking:*
+    - The hint names the expression ("the next D6+1 damage, up to 7, rolled when you confirm").
+    - The box reads "Damage left to allocate: up to N".
+    - A mark from a stand-in reads "-7?", and the provisional marks have a thin ring.
+    - The board still offers only the preview's options.
+  - *Undo:* the damage rolls are part of the `OrderCasualties` answer, so Undo restores the dice position (D-025) and
+    the same order gives the same rolls. A different order can put the same rolls on other models (as D-072 notes for
+    re-rolls).
+- **Bots.**
+  - `profile_supported` lets random A and D through.
+  - *Odds (`analysis/odds.cpp`):*
+    - A `VolleyBatch` carries its random A expressions (`random_attacks`); their bonus dice are in `attack_dice`.
+    - `expected_outcome` mixes exactly over A: the fixed dice first, then one die at a time up to the most the random A
+      can give, each count weighted by its probability (the convolution of the expressions).
+    - It mixes exactly over D too: each damaging transition branches over the D's values.
+    - Both distributions come from core's `roll_characteristic` on every face of one die, then convolution.
+    - Fixed A and D take the old code path, with the same arithmetic.
+  - `sample_outcome` resolves through `resolve_attack_batch`, which rolls the random A and D with the bot's own dice
+    (D-054), never the game's.
+  - *Other places that assumed a fixed A or D:*
+    - Hard's chain tables multiply the random expressions with the models (n copies) as they do the fixed dice.
+    - Normal's batch order, when there are too many batches to permute, sorts by mean damage (a fixed D sorts as
+      before).
+    - Threat, volley and melee values come from `expected_outcome`.
+    - `representative` compares loadouts, not values, so it needs no change.
+  - *Cost:* only batches with a random value pay. A random A adds one die step per possible extra die (D6+3: up to 9
+    instead of a fixed count). A D6-based D makes each damaging transition six branches.
+  - *Easy's default plans (D-071)* now fire the Havocs' lascannons. That changes Easy on the fixtures only.
+- **This batch's replays.**
+  - `m59`: its steps and dice don't change, so it regenerates byte-identically. Its generator's check that nothing can shoot in Side A's first Shooting phase
+    now excludes the Havoc lascannons, which reach the Tyranids (48") and don't fire. The description's "nothing is in
+    range to shoot" was written under D-002; it is kept as it is so the file stays byte-identical.
+  - `m60`'s Tyrant carries a heavy venom cannon, now usable. The replay answers its Shoot step with `EndShootStep`, so
+    the file is unchanged.
+  - `m61`'s Tyrant has no ranged weapon, so it is unchanged.
 
 ## D-070: Fetch tool fixes, the nine roster datasheets and the roster fixtures (M59)
 **Decided:** 2026-11-08 (M59 of the pre-approved M59–M70 batch; ambiguities take the conservative choice).
