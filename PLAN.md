@@ -1817,7 +1817,7 @@ games), not lowered.
 
 ---
 
-## M58: Tuning, bot-game replay, docs
+## M58: Tuning, bot-game replay, docs ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-07) · **Decision:** D-067
 
 > - Tune `BotWeights` for several units with `--weights` sweeps on the new scenario, without making V1 worse;
@@ -1832,6 +1832,53 @@ games), not lowered.
 - Clean Debug and Release builds, all of ctest, `git diff main -- tests/replays` shows only the two new files.
 - Screenshot of a bot-vs-bot game on the new scenario mid-game.
 - Manual check left for the user: play the new scenario by mouse on Windows.
+
+**Results (2026-11-08):**
+- **Tuning (D-067 "Tuning (M58)"): `BotWeights{}` unchanged.**
+  - **The sweep:** Release arena, Strike, 200 seeds per value, with `--weights` one value at a time.
+  - **The values swept:** tempo 0.1 and 0.4, material 0.02 and 0.15, share 0.3, survival 0.5 and 2.0, delay 0.25,
+    edge 0.15, tempo 0.4 with material 0.02, and twice the rollout budget.
+  - **The Tyranid seat** (Normal against Hard, the main target): every value came out at 1–4 draws in 200, against 3
+    for the defaults, and a mean end round of 3.62–3.71, against 3.67.
+  - **The Space Marine seat** (Hard against Normal): Hard won all 200 games every time, with a mean end round of
+    3.50–3.62, against 3.58.
+  - **The two best values over 1000 seeds** were both level with the defaults within the noise:
+    - Tyranid seat: material 0.02 gave 13 draws and a mean end round of 3.698; tempo 0.4 gave 13 draws and 3.663. The
+      defaults gave 11 draws and 3.692.
+    - Space Marine seat: tempo 0.4 gave a mean end round of 3.533, against 3.550 for the defaults. It is under one
+      standard error better there and worse in the Tyranid seat.
+  - **Effect on other scenarios:** none, so V1, the two bot scenarios and `m45_bot_game.json` are untouched. No army-only
+    weight was added. The Tyranid seat's 60% target stays open, as at M57.
+  - **Runs:** every run was clean (0 rejected, reverted, fallbacks or unfinished). Hard's p95 was at most 83 ms and its
+    slowest decision 2.0 s.
+- **Bot-game replay** `tests/replays/m58_strike_bot_game.json`:
+  - **The game:** Hard against Hard on `strike_44x60.json` with dice seed 11. It runs 159 steps and ends in battle round
+    3 with a Space Marine wipe-out (D-007), not at the step cap. Both sides shoot and take casualties (the Marines lose
+    4 wounds), and there is a charge, pile-ins on both sides and a fight.
+  - **Choosing the seed:** Hard against Hard over seeds 1–200 (`--per-game 1`). Side A won every game, with 183 steps on
+    average and the longest at 294.
+  - **Regeneration:** regenerating twice gives a byte-identical file. The four older regenerations leave `tests/replays`
+    unchanged, and `Replay.SavedReplayFilesPass` and `M38_Lists` pick the new file up.
+- **Tests** (new, ai, `tests/ai/m58_test.cpp`):
+  - `M58_Replay.TheStrikeBotGameReplaysToItsResultWithCoreOnly` replays the whole file through the engine twice: the
+    expect block, the result, 3 + 4 units.
+  - `M58_Replay.TheSavedFileMatchesTheGame` checks that Hard against Hard with seed 11 plays exactly the saved actions
+    through battle round 1, 64 of the 159 steps. The whole game is about 30 s in Debug; the prefix is about 14 s alone
+    and 26 s under `ctest -j8`.
+  - `M58_Replay.DISABLED_TheWholeSavedFileMatchesTheGame` checks the whole game.
+  - `M58_Replay.DISABLED_RegenerateStrikeBotGameReplay` writes the file.
+  - No existing test changed. ctest (Debug): 787 → 789 tests, all pass.
+- **Docs:** CLAUDE.md lists the Strike scenario (D-064), the M58 regeneration command and
+  `M58_Replay.TheSavedFileMatchesTheGame`, the arena's `--step-cap` default (5000; a Strike game takes at most about
+  300 steps), `--per-game 1` and the hidden `easy-m55` / `normal-m55` levels, and the `apply_action` backup overload
+  (D-068). README and the README text `tools/package.ps1` writes describe the Strike scenario and how to pick it
+  (`package.ps1` already copies every scenario and replay).
+- **Final verification (Linux):** clean rebuilds of Debug and Release (no warnings outside third-party raylib);
+  ctest 789 of 789 pass; all five regenerations (`Replay`, `M45_`, `M46_`, `M47_`, `M58_Replay`) leave
+  `tests/replays` unchanged, and against `main` the only replay files added are `m53_strike_round1.json` and
+  `m58_strike_bot_game.json`. Screenshot under `xvfb-run` of Hard vs Hard on Strike after 60 bot steps (round 1,
+  the Tyranid move): seven numbered, tinted units, every one in its zone at the start. **Open for the user:** play
+  the Strike scenario by mouse on Windows.
 
 ---
 

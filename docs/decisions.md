@@ -2178,6 +2178,51 @@ that only Hard calls); no rule, core, state, replay or JSON change. Amends D-054
   round 1, before they can act, then 13 and 10; they can deal about 2 wounds a game), so the measure there is the
   draw (D-007). Hard's Tyranids lose a model to coherency in 1 of 200 games (Hard against Hard: 3), Normal's in none:
   a casualty order the army value chose over Normal's in a unit about to be wiped out anyway.
+- **Tuning (M58).** **Outcome: `BotWeights{}` unchanged**, and no army-only weight added, since no value was clearly
+  better on Strike. The rule set for a change: clearly better on Strike beyond the noise, checked over 1000 seeds, and
+  V1 and the two bot scenarios no worse. A default that changes 1v1 play would change `m45_bot_game.json`, so any
+  change had to be scoped to the army path. With no change there was nothing to re-measure on V1, Termagants first or
+  20 Termagants: their code paths are untouched, and the four replay regenerations leave `tests/replays` unchanged.
+  - **What was swept.** M57 had already swept rollouts 10, share 0.7, margin 0.005 / 0.02, static_plans 6 and plans 5.
+    M58 swept the weights it had left alone, the chain's tempo and material and M43's move weights, plus a larger
+    lookahead budget, one at a time with `--weights`.
+  - **The Tyranid seat** (Release arena, Strike 44x60, Normal as the Space Marines against Hard, seeds 1–200; the main
+    target, M57's open item). Each row gives draws, then mean end round, then Marine wounds lost:
+    - defaults: 3, 3.67, 2.12.
+    - tempo 0.1: 1, 3.62, 2.15. tempo 0.4: 4, 3.65, 2.11.
+    - material 0.02: 4, 3.71, 2.16. material 0.15: 3, 3.67, 2.27.
+    - share 0.3: 1, 3.62, 2.08.
+    - survival 2.0: 3, 3.65, 2.10. survival 0.5: 2, 3.66, 2.10.
+    - delay 0.25: 3, 3.65, 2.15. edge 0.15: 2, 3.64, 2.08.
+    - tempo 0.4 with material 0.02: 3, 3.65, 2.15.
+    - rollout_actions 800 with budget_actions 12000: identical to the defaults in every count, because the budget
+      never binds on Strike.
+    - No Tyranid win anywhere.
+  - **The Space Marine seat** (Hard against Normal, seeds 1–200). Hard won all 200 games in every run. Each row gives
+    mean end round, then wounds lost:
+    - defaults: 3.58, 2.29.
+    - tempo 0.1: 3.62, 2.23. tempo 0.4: 3.50, 2.36.
+    - material 0.02: 3.58, 2.25. share 0.3: 3.56, 2.28.
+    - survival 2.0: 3.58, 2.29. edge 0.15: 3.58, 2.29.
+    - delay 0.25: 3.62, 2.23.
+  - **Over 1000 seeds** (the two values that looked best).
+    - The Tyranid seat: material 0.02 gave 13 draws, mean end round 3.698 and 2.12 Marine wounds lost; tempo 0.4 gave
+      13 draws, 3.663 and 2.17, with 13 Termagants removed for coherency. The defaults (M57, the same code) gave 11
+      draws, 3.692 and 2.14. All are within the noise: one standard error is about 0.019 rounds and about 3 draws.
+    - The Space Marine seat: tempo 0.4 gave 1000 wins, mean end round 3.533 and 2.19 wounds lost. The defaults gave
+      999 wins with 1 draw, 3.550 and 2.31. The difference is under one standard error, and tempo 0.4 is worse in the
+      Tyranid seat.
+    - Every run of the sweep was clean: 0 rejected, 0 `UnitMoveReverted`, 0 fallbacks and 0 unfinished. Hard's p95
+      stayed at most 83 ms and its slowest decision at 2.0 s (seeds 501–750 of Hard against Normal; under M57's 3 s).
+  - **The bot-game replay** `tests/replays/m58_strike_bot_game.json` is Hard against Hard on Strike with dice seed 11.
+    - Choosing the seed: the arena's `--per-game 1` run over seeds 1–200. Side A won all 200 games, clean. Games ended
+      in battle round 2 (1 game), 3 (86), 4 (106) or 5 (7), with 183 steps on average and the longest at 294.
+    - Seed 11 is 159 steps and a wipe-out in battle round 3. Both sides shoot and take casualties (the Space Marines
+      lose 4 wounds), and there is a charge, pile-ins on both sides and a fight.
+    - The shortest game, seed 12 (89 steps), has no charge and no Space Marine losses.
+    - In a Debug build the whole game takes about 30 s, so `M58_Replay.TheSavedFileMatchesTheGame` checks the bots'
+      actions through battle round 1 (64 of the 159 steps, about 14 s). The whole file is covered by the replay test
+      and by `DISABLED_TheWholeSavedFileMatchesTheGame`.
 
 ## D-068: Speed-ups that keep every decision and roll the same (M54)
 **Decided:** 2026-11-07 (M54 is pre-approved; numbered after D-065–D-067, which PLAN.md reserves for M55–M57).
