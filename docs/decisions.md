@@ -2967,3 +2967,183 @@ engine, client and bots still call the round-only functions, and `base_radius()`
   sine, cosine (Taylor series after reduction to +-45 degrees) and atan2 are polynomials in `oval_detail`, so results
   are the same on every platform (no libm transcendental results feed a decision). Iterations are capped, valid inputs
   never give NaN or an exception, and a degenerate oval (length = width) gives the circle's results within 0.001 mm.
+
+### Part 2 (M65): the engine
+**Decided:** 2026-11-08 (M65 of the pre-approved M59–M70 batch). Written before any code (design first), for review
+against the rules text. Readings marked *agreed* were agreed with the user in planning; *conservative* marks the reading
+that permits less.
+- **The facing lives on the model, not in `Position`** (amends PLAN.md's `Position::facing_deg`).
+  - `Model::facing_deg` (float, default 0). `Position` stays a plain 12-byte point. It is also a path vertex, a
+    `ReachCircle` centre, `MoveReach::start` / `from`, a mouse or ruler point, a centroid and a bot's candidate end,
+    where a facing means nothing; `BasePose` and `PosedModel` (part 1) would carry two facings; and every caller that
+    builds a path from coordinates (the client's drags, the auto moves, the bots, the D-004 fills) would silently turn an
+    oval to facing 0 at each vertex. On the model, a path given without facings keeps the model's facing: the safe
+    default for every caller until M66. `sizeof(Position)` (the bots' hot loops, M54) is unchanged. The cost:
+    `ProposeModelMove` gains a vector, so the `GameAction` variant grows from 40 to 64 bytes (`GameEvent` stays 72);
+    the speed check below covers it.
+  - The move carries what 03.01 needs ("returned to their positions at the start of that move": facings included):
+    - `ModelStart::facing_deg`, the facing when the move started; `revert_move` restores it with the position;
+    - `action::ProposeModelMove::facings`: empty (no turn), or exactly one per `path` vertex: `facings[k]` is the facing
+      while moving along the line to `path[k]` and at `path[k]`;
+    - `ModelPath::facings` and `event::ModelMoveProposed::facings`: empty when the proposal turns the model nowhere,
+      otherwise one per point, the start included (normalised, below).
+  - `operator==` is defaulted on all of them, so a turn changes the state and the action wherever they are compared.
+    Nothing in the engine decides "has it moved" by comparing positions: a model is moved when it has a proposal in the
+    move (11.04, 12.03, 12.08 "each model that is moved"; a turn-only proposal is a move, 03.01 "by moving it in a
+    straight line and/or rotating it"), and the distance moved is the centre's path length (09.05–09.07 maxima,
+    24.16 [HEAVY]: 03.01 "rotating a model does not count towards the distance it has moved"), both unchanged.
+- **One facing per footprint (modulo 180)** (part 1's open note).
+  - An oval's footprint at f and f + 180 is the same, and no core rule gives a model a front: every rule measures
+    bases (01.04), and 06.01's "every part of another model that is facing the observing model" is about which parts
+    face the observer, for "fully visible", which is not implemented (D-017).
+  - The engine stores an oval's facing modulo 180, in (-90, 90] (`footprint_facing_deg`, `geometry/pose.hpp`; exact for
+    float inputs, a non-finite input gives 0, never -0). The kernel's (-180, 180] normalisation is unchanged.
+  - A turn between two vertices goes the shorter way between the footprints, at most 90 degrees
+    (`footprint_turn_deg(from, to)` in (-90, 90]; a quarter turn is +90, counter-clockwise, as the kernel's half turn
+    is +180). The engine gives the kernel one facing per point, unwrapped (each the previous one plus that turn), so the
+    kernel's own "shorter way" sweeps exactly that turn.
+  - *The longer way round* (03.01: "turn it any amount"): intermediate vertices at the same point; 0 -> 60 -> 120 ->
+    170 at one point is a 170-degree turn. Zero-length segments are already accepted (nothing refuses them, and
+    `path_length` adds 0).
+  - Any finite facing is accepted in an action or a scenario and normalised when applied; the state JSON holds only the
+    normalised form (below).
+- **A round base has no facing.** Its facing is always 0. A non-zero facing on a round base is refused: in validation
+  ("D-074: model X has a round base, which has no facing; its facings must be 0"), by the state JSON and by the scenario
+  loader (`DataError`, below). Zeros are accepted for a round base; they change nothing.
+- **Moves (03.01).**
+  - Part 1's path semantics: between two vertices the model first turns in place, then moves in a straight line. The
+    distance moved is the sum of the centre's straight lines; a turn adds nothing.
+  - *A turn without moving* is `path = [start]` (one vertex at the move's start position, where every proposal's path
+    begins) with `facings = [f]`. *A last turn after the last line* (the 03.01 diagram's "D) Rotates") repeats the last
+    vertex with the new facing.
+  - The kernel's `check_model_path(model, base, points, facings, PosedPathContext)` checks every turn and line against
+    the enemy models and the battlefield edge and the end against every model (D-027), with its 03.01 messages: "03.01:
+    model X's base cannot be turned through enemy model Y (before segment k)" and "03.01: model X's base cannot cross
+    the edge of the battlefield while it turns (before segment k)" (*agreed*: a turn must clear enemy bases and the
+    edge).
+  - A turn may pass through friendly models (03.01), friendly MONSTERS included (D-073), but not end on any model. 09.07
+    Desperate Escape: "each model that is moved can be moved through enemy models", its turns too. 17.01 (D-073): in a
+    Normal or Advance move a MONSTER/VEHICLE model may turn through enemy models that are not MONSTER/VEHICLE models
+    (`passable_enemy`), but not through an enemy MONSTER/VEHICLE.
+  - Oval against oval the kernel's turn check is conservative (it refuses a turn that comes within EPS/2 of
+    overlapping, part 1). The rosters have one oval, the Tyrannofex, so this needs an oval on each side.
+  - *Validation order* of a `ProposeModelMove`: the model is in the moving unit; the path is not empty; then (D-074) the
+    facings are none or one per vertex, every one finite, and 0 for a round base, each failure its single reason, as the
+    empty path is; then the existing checks in their order (M '-', the maximum distance, the path, the charge's
+    "closer", base contact, the pile-in's and consolidation's "closer").
+- **Which moves may turn.** Every move type, since each "moves as described in Moving (03)".
+  - *09.04 Remain Stationary* ("No models are moved (either in straight lines or rotated)", *agreed*): it starts no
+    move, so no proposal, turns included, is possible (unchanged).
+  - *02.02* M '-': such a model can't be moved, so the existing check refuses its turns too.
+  - *12.03 / 12.08 Ongoing* "Models in base-contact with one or more enemy models cannot be moved": moving includes
+    rotating (03.01; 09.04's own wording), so such a model can't be turned either (the existing check, at its start
+    pose).
+- **"Closer" and "engaged" with a turn (11.04, 12.03, 12.08; D-018, D-022).**
+  - *Closer* (*agreed*: a rotation does not count as moving closer; formalised *conservatively*): a moved model ends
+    closer to a unit when its end distance (end position, end facing) is "more than" EPS below its start distance
+    measured from the start position **both** at the start facing **and** at the end facing: `after < min(before(start
+    facing), before(end facing)) - EPS`. So the straight lines must do the work. A turn in place gains nothing: a
+    turn-only move is never closer, so it is refused in a charge, a pile-in and a consolidation. A turn that swings the
+    near end away must be made up by the lines. A round base measures the same at every facing, so this is today's
+    test, bit for bit.
+    - 11.04 While Moving: closer to one or more charge targets, each so measured.
+    - 12.03 / 12.08 While Moving (D-022 as written): the closest target is judged from the start position at the start
+      facing (ties: any of them, D-010), and the model must end closer to it, so measured.
+  - *Start and end states* are measured on the poses as they stand: 11.04 After Moving (engaged with every charge
+    target and no other enemy unit); 12.03 After Moving (the unit engaged; each model that started engaged with a unit,
+    at its start position and facing, still engaged with it); 12.08 Ongoing and Engaging After Moving; 09.05–09.07
+    After Moving (unengaged). A turn alone can change engagement: in a Normal, Advance or Fall-back move, a turn that
+    brings the base within 2" of an enemy model makes the commit revert the move. In a charge, pile-in or consolidation
+    a turn alone can't make a moved model legal, since it must also end closer.
+  - The TODO(if-possible) spots stay as they are: 11.04 "within 1" / engaged if it can", 12.03 / 12.08 "and engaged
+    with it if possible".
+- **Every measurement in `wh40k_core` takes the facing.** Engagement (03.04: who may fight, charge, shoot or fall back;
+  Desperate Escape; ending engaged or unengaged), coherency (03.03, Regaining Coherency too), the closest model and
+  unit (D-010), within and wholly within (D-009: the deployment zones and the battlefield; the engine has no Strategic
+  Reserves), range and half range (04.02, 24.30), line of sight (06.01, part 1's oval overload), charge targets and
+  charge distance (11.02, 11.04), pile-in and consolidation targets and moves (12.03, 12.08), the 5" pass (Appendix),
+  base contact (`dist <= EPS_MM`), the set-up checks and `move_reach` use the pose-aware kernel with each model's facing
+  (`pose_of(model)`, `posed_models(unit)`). [BLAST] only counts models.
+  - The round-only functions (`base_radius`, `base_distance` / `bases_overlap` / `within_area` / `wholly_within` on
+    `Position` and `Base`, the `PlacedModel` overloads, `check_model_path(... PathContext)`, `CoherencyWithOneMoved`)
+    keep throwing for an oval and are left to the client and the bots until M66, so a site M66 misses stays loud. No
+    core path reachable with an oval calls them: D-004 random play over the Tyrannofex fixture checks it.
+  - Queries that take a `Position` for a model (`model_distance_to_unit`, `enemy_units_engaged_with_model`,
+    `in_base_contact_with_enemy`, `ends_closer_to_a_charge_target`, `ends_closer_to_closest_target`) keep their
+    signatures, meaning the model at that point with its current facing (what their client, bot and test callers mean),
+    and gain `BasePose` overloads, which the engine uses.
+  - *Speed* (the round-round path stays bit-identical and cheap): the round-round case of `base_distance`,
+    `signed_base_distance` and `bases_overlap` on `BasePose`s moves inline into `oval.hpp` (the same calls, so the same
+    results); the posed `check_model_path` keeps the round-only inner loop for a round pair; the posed
+    `has_line_of_sight` runs D-017's code on its spans without copying the blockers. Target: the Release arena's wall
+    time (Strike, Normal vs Normal, 60 games, run alternately with the M64 binary) within 5% of M64. If it is not met,
+    the engine's hottest calls (the ProposeModelMove path check, `is_engaged`) dispatch to the old round-only code when
+    every base in the state is round.
+- **`MoveReach` (D-040, D-041, D-044, D-046, D-053).** `move_reach(state, model)` is for the model's current facing;
+  `move_reach(state, model, facing_deg)` for the facing being dragged (normalised; a round base ignores it). The next
+  straight line starts at `from` after the model turns there to `facing_deg`.
+  - *Round-to-round pairs* keep their `ReachCircle`s exactly. A state with only round bases gives exactly today's
+    `MoveReach`: every new field at its default.
+  - *Any other pair* (an oval mover, or an oval other model) is a `ReachShape{mover_base, mover_facing_deg, obstacle
+    (BasePose), threshold_mm, engagement, model}` instead, in `forbidden_shapes`, `required_any_shapes` and
+    `blocking_shapes`. `required_any_shapes` is empty (no group has a shape), or has one group per `required_any`
+    group: group i is `required_any[i]` and `required_any_shapes[i]` together.
+  - *Meaning:* the moving model's centre c is in a shape when `signed_base_distance(BasePose{c, mover_base,
+    mover_facing_deg}, obstacle) < threshold_mm` (`reach_shape_contains`). A round pair's circle is exactly that set
+    with radius both radii + threshold, so the thresholds are the circles' radii less both radii: not on a model 0; an
+    engagement range 2" + EPS; closer `before - EPS`, with `before` the smaller of the start distances at the start
+    facing and at `facing_deg` (the rule above); still engaged 2" + EPS; blocking -EPS (the line's swept base would
+    overlap the model by more than EPS, as `translation_crosses`).
+  - *For shading by rays (M66):* at a fixed facing a shape is convex (the signed distance to a convex set, here the
+    Minkowski difference of the two bases, is a convex function of c), so on any ray it is one interval, possibly
+    empty, whose ends bisection on `reach_shape_contains` finds. It contains the disc round `obstacle.position` of
+    radius `inscribed_radius(mover) + inscribed_radius(obstacle) + threshold` and lies inside the disc of radius
+    `circumscribed_radius(mover) + circumscribed_radius(obstacle) + threshold`, for culling and brackets. A blocking
+    shape's shadow (D-044) is, on each ray from `from`, everything beyond the ray's first point in the shape.
+  - `centre_bounds`: the battlefield shrunk by `base_extents(base, facing_deg)` (for a round base its radius: the same
+    Rect). `facing_deg`: the facing the reach is for. `turn_blocked`: turning at `from` to `facing_deg` would pass
+    through a blocking enemy model or cross the edge (03.01), so nothing is reachable at that facing; false when no
+    turn is needed.
+- **Set-up (03.02) and formations (D-008, D-064).** M59's refusal of non-round bases at placement goes.
+  - `place_formation` uses each model's half extents along x and y at the formation's facing (`base_extents`, exactly
+    the radius for a round base, so round formations are bit-identical): a rank is as wide as its models' x extents
+    plus the gaps, and the rank pitch is the largest y extent in the unit plus the gap. Tilted ovals side by side stand
+    at least the gap apart (their widest points need not be level).
+  - New optional `formation.facing_deg` (degrees, default 0, any finite value, normalised modulo 180), given to every
+    model of the unit. A non-zero value for a unit with a round-based model is corrupt data ("D-074: model type 'X' has
+    a round base, which has no facing (formation.facing_deg must be 0)"). At 0 an oval's length runs south to north,
+    towards the enemy on every north/south scenario.
+  - The 03.02 checks measure the poses: coherency (03.03), wholly within the zone (D-009, by the extents), no model on
+    another (D-064, `bases_overlap`), unengaged (03.04).
+- **JSON** (every new field omitted at its default, so every existing file loads the same and saves byte-identically).
+  - `Model`: `"facing_deg"` when non-zero. On load it must be a finite number, 0 for a round base and in (-90, 90] for
+    an oval (the stored form); otherwise `DataError` ("state JSON: D-074: ...").
+  - `ModelStart`: `"facing_deg"` when non-zero (finite, in (-90, 90]). `ModelPath`: `"facings"` when non-empty (one per
+    point, each in (-90, 90]).
+  - `ProposeModelMove` and `ModelMoveProposed`: `"facings"` when non-empty. An action keeps an explicit list even when
+    it is all 0: for an oval at a non-zero start facing, `[0]` turns it to 0 where `[]` keeps its facing.
+  - A replay's `expect` models: `"facing_deg"` when non-zero.
+  - Scenario files: `formation.facing_deg` (above).
+- **Hashes.** `state_hash` (D-054) adds a model's and a `ModelStart`'s facing after its position only when it is
+  non-zero, and a `ModelPath`'s facings only when present, each behind a tag (as M60–M62 did), so every round-only
+  state hashes as before and the bots' own dice and plan memo are unchanged. The arena's `--per-game` hashes (the
+  actions' JSON, the final state's JSON, the trace) follow from the JSON rule and unchanged play. Every replay
+  regenerates byte-identically.
+- **No new action, event or decision**, so there is no new log text, dice card, undo group or bot fallback answer; the
+  existing `ProposeModelMove` and `ModelMoveProposed` gain their facings.
+- **The auto moves and other move builders.** Core builds no move but the D-004 template (`ProposeModelMove{model, {}}`,
+  no facings). `auto_fight_move` (D-050; the bots' fight moves, D-057) and `auto_charge_move` (D-056; the bots'
+  charges) are client logic on round-only geometry, converted in M66. Until then they refuse cleanly: with any non-round
+  base in the state they return no arrangement, with the reason "D-074: Auto move does not handle oval bases yet", so
+  they never throw or produce a move for an oval (a bot then makes no charge or fight move instead).
+- **Left for M66 (part 3).** Client drawing and input (ovals are drawn and hit-tested as circles of their width; there
+  is no rotation input); the client logic on round-only geometry (`fight_move_skip`, `casualty_order` and
+  `casualty_picks`, `overlay_plan`, `reach_area`, `drop_fix`, `ring_outline`; `move_plan`, which drops
+  `ModelPath::facings`, so extending a turned model's path undoes its turn; the log and action text for a turn); and the
+  bots' own geometry (Normal's movement planner, move scoring and defence, Hard's lookahead, evaluator and coherency,
+  the charge odds), which throws from `base_radius` with an oval on the battlefield. No scenario under `data/` has an
+  oval until M67.
+- **Fixture.** `tests/data/scenarios/rosters_tyrannofex_44x60.json`: the M59 roster fixture plus the Tyrannofex (unit
+  14, Side B, the roster loadout: powerful limbs, stinger salvoes, fleshborer hive), behind the west Screamer-killer
+  (`centre_x_in` 23, `depth_in` 4, facing 0). `tests/support/monster_fixtures.hpp` gains a hand-placed Tyrannofex
+  layout for focused tests and the replay `m65_oval_tyrannofex.json`.
