@@ -74,6 +74,11 @@ struct Unit {
     std::vector<AbilityText> abilities;
     std::vector<Model> models;
     int starting_strength = 0;  // number of models when added to the army (Rules Appendix)
+    // D-076 (M67): the unit's points (scenario "points"; 0: none given) and its starting wounds, the sum of the W
+    // characteristic of every model as set up (Starting Strength, Rules Appendix; 0 when it has no points). Both are
+    // fixed for the game and omitted from the JSON at 0, so older files are unchanged.
+    int points = 0;
+    int starting_wounds = 0;
     bool battle_shocked = false;  // 01.07
     UnitTurnFlags turn_flags;
     UnitPhaseFlags phase_flags;

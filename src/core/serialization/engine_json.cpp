@@ -420,6 +420,7 @@ void to_json(Json& j, const GameEvent& v) {
             } else if constexpr (std::is_same_v<T, GameOver>) {
                 put_opt(j, "winner", e.winner);
                 j["reason"] = e.reason;
+                if (e.points) j["points"] = *e.points;  // D-076: omitted unless the game was decided on points
             } else if constexpr (std::is_same_v<T, WoundRollsRerolled>) {
                 j["batch"] = e.batch;  // 24.38 (D-072)
                 j["rerolls"] = e.rerolls;
@@ -533,6 +534,7 @@ void from_json(const Json& j, GameEvent& v) {
         GameOver g;
         get_opt(j, "winner", g.winner);
         j.at("reason").get_to(g.reason);
+        if (j.contains("points")) g.points = j.at("points").get<PointsTally>();  // D-076
         v = g;
     } else if (kind == "WoundRollsRerolled") {
         v = WoundRollsRerolled{j.at("batch").get<std::size_t>(), j.at("rerolls").get<std::vector<WoundReroll>>(),

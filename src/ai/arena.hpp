@@ -22,6 +22,7 @@ struct GameRecord {
     std::uint64_t seed = 0;
     bool finished = false;              // state().result is set
     std::optional<core::Side> winner;   // nullopt: a draw (or unfinished)
+    bool on_points = false;             // M67 (D-076): decided on points destroyed after the last battle round
     int end_round = 0;
     std::array<int, 2> surviving_models{};  // indexed by side_index
     std::array<int, 2> wounds_lost{};       // M41: wounds each side's models lost (destroyed models count all theirs)
@@ -52,6 +53,8 @@ struct ArenaResult {
     std::vector<GameRecord> games;
     std::array<int, 2> wins{};  // by side
     int draws = 0;
+    std::array<int, 2> points_wins{};  // M67 (D-076): of those, the wins and draws decided on points destroyed
+    int points_draws = 0;
     int unfinished = 0;
     std::size_t rejected = 0;
     std::size_t reverted = 0;

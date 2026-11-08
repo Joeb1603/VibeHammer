@@ -66,7 +66,16 @@ std::string_view event_name(const GameEvent& e) {
 }
 
 std::string_view event_rule(const GameEvent& e) {
-    return std::visit([](const auto& x) { return name_rule<std::decay_t<decltype(x)>>().rule; }, e);
+    return std::visit(
+        [](const auto& x) -> std::string_view {
+            using T = std::decay_t<decltype(x)>;
+            // D-076 (M67): a game decided on points destroyed cites D-076 (it amends D-007).
+            if constexpr (std::is_same_v<T, event::GameOver>) {
+                if (x.points) return "D-076";
+            }
+            return name_rule<T>().rule;
+        },
+        e);
 }
 
 }  // namespace wh40k::core

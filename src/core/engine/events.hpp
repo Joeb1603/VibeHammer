@@ -235,6 +235,8 @@ struct AttacksLost {  // D-012: the target is no longer eligible; the batch's at
 struct GameOver {  // D-007
     std::optional<Side> winner;  // nullopt: a draw
     std::string reason;
+    // D-076 (M67): both sides' points destroyed, when the scenario decides the game on them (JSON omitted otherwise).
+    std::optional<PointsTally> points{};
     friend bool operator==(const GameOver&, const GameOver&) = default;
 };
 struct WoundRollsRerolled {  // 24.38 [TWIN-LINKED], D-011 (D-072): the attacker's re-rolls of a batch's wound rolls

@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -19,6 +21,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
+#include "core/state/points_destroyed.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
@@ -392,6 +395,70 @@ TEST(D004_LegalActions, RandomPlayOnTheTyrannofexFixture) {
     EXPECT_TRUE(faced_away);
     EXPECT_GT(tyrannofex_shots, 0);
     EXPECT_GT(tyrannofex_fights, 0);
+}
+
+TEST(D004_LegalActions, RandomPlayOnTheRostersScenario) {
+    // M67 (D-076): the D-004 properties on the playable roster scenario (data/scenarios/rosters_44x60.json, every unit
+    // with its points, decided on points destroyed after round 5), 36", 10" and 0.5" apart, Side A first. Every game
+    // ends and round-trips; a game decided on points carries the totals of its final state and the side with more
+    // wins (equal: a draw); any other end is a D-007 wipe-out.
+    WeaponUse use;
+    const ActionHook hook = record_weapons(use);
+    int on_points = 0;
+    int wiped_out = 0;
+    auto check_end = [&](const GameState& gs, std::uint64_t seed) {
+        ASSERT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed;
+        ASSERT_TRUE(gs.result.has_value());
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;  // the state round-trips, points and result too
+        if (gs.result->points) {
+            ++on_points;
+            EXPECT_EQ(gs.flow.battle_round, gs.battle_rounds);
+            PointsTally recount = points_destroyed(gs);
+            EXPECT_EQ(*gs.result->points, recount) << "seed " << seed;
+            const std::int64_t a = recount.destroyed[0];
+            const std::int64_t b = recount.destroyed[1];
+            EXPECT_EQ(gs.result->winner, a > b ? std::optional<Side>(Side::A)
+                                         : b > a ? std::optional<Side>(Side::B)
+                                                 : std::nullopt)
+                << "seed " << seed;
+            EXPECT_EQ(gs.result->reason.rfind("D-076: ", 0), 0u) << gs.result->reason;
+        } else {
+            ++wiped_out;
+            EXPECT_EQ(gs.result->reason.rfind("D-007: ", 0), 0u) << gs.result->reason;
+            ASSERT_TRUE(gs.result->winner.has_value());
+            for (const Unit& u : gs.units) {
+                if (u.side != *gs.result->winner) EXPECT_TRUE(u.models.empty()) << "unit " << u.id.v;
+            }
+        }
+    };
+    std::uint64_t seed = 670;
+    for (const float closer : {0.0f, 26.0f, 35.5f}) {
+        ++seed;
+        GameState gs = wh40k::test::load_rosters_scenario_closer(closer);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, hook);
+        EXPECT_GT(stats.template_fills, 0);
+        check_end(gs, seed);
+    }
+    // Cheaper than the full check: more seeds of plain random play to the end.
+    for (std::uint64_t s = 1; s <= 9; ++s) {
+        GameState gs = wh40k::test::load_rosters_scenario_closer(s % 3 == 0 ? 0.0f : s % 3 == 1 ? 20.0f : 30.0f);
+        gs.dice.seed = 680 + s;
+        start_game(gs);
+        TestRng rng(680 + s);
+        for (int actions = 0; gs.pending && actions < 6000; ++actions) {
+            const GameAction a = wh40k::test::random_action(gs, rng);
+            hook(gs, a);
+            apply_action(gs, decider(gs), a);
+        }
+        check_end(gs, 680 + s);
+    }
+    EXPECT_GT(on_points, 0);
+    EXPECT_GT(use.shoots, 0);
+    EXPECT_GT(use.fights, 0);
+    std::printf("roster scenario random play: %d games decided on points, %d wipe-outs\n", on_points, wiped_out);
 }
 
 TEST(D004_LegalActions, RandomPlayRollsTheRostersRandomAttacksAndDamage) {

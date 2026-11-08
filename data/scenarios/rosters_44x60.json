@@ -1,0 +1,349 @@
+{
+  "name": "Incursion - Chaos Space Marines vs Tyranids (44x60 portrait)",
+  "battlefield": {
+    "width_in": 44,
+    "depth_in": 60
+  },
+  "battle_rounds": 5,
+  "first_turn": "A",
+  "result": "points_destroyed",
+  "sides": {
+    "A": {
+      "name": "Chaos Space Marines",
+      "deployment_zone": {
+        "edge": "south",
+        "depth_in": 12
+      },
+      "units": [
+        {
+          "unit_file": "data/units/legionaries.json",
+          "points": 180,
+          "models": [
+            {
+              "type": "Aspiring Champion",
+              "count": 1,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "type": "Legionary w/ chainsword",
+              "count": 9,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 7,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/chaos_lord.json",
+          "points": 95,
+          "models": [
+            {
+              "type": "Chaos Lord",
+              "count": 1,
+              "weapons": [
+                "Plasma pistol",
+                "Astartes chainblade"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 13,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/chaos_terminator_squad.json",
+          "points": 370,
+          "models": [
+            {
+              "type": "Terminator Champion",
+              "count": 1,
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            },
+            {
+              "type": "Accursed weapon and combi-bolter",
+              "count": 9,
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 20.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/havocs.json",
+          "points": 135,
+          "models": [
+            {
+              "type": "Havoc Champion",
+              "count": 1,
+              "weapons": [
+                "Plasma gun",
+                "Astartes chainsword"
+              ]
+            },
+            {
+              "type": "Havoc w/ lascannon",
+              "count": 4,
+              "weapons": [
+                "Havoc lascannon",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 29.5,
+            "depth_in": 3,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/legionaries.json",
+          "points": 180,
+          "models": [
+            {
+              "type": "Aspiring Champion",
+              "count": 1,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "type": "Legionary w/ boltgun",
+              "count": 9,
+              "weapons": [
+                "Boltgun",
+                "Bolt pistol",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 37.5,
+            "anchor": "zone_front"
+          }
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": {
+        "edge": "north",
+        "depth_in": 12
+      },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "points": 55,
+          "models": [
+            {
+              "type": "Termagants",
+              "count": 10,
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 4,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/genestealers.json",
+          "points": 75,
+          "models": [
+            {
+              "type": "Genestealer",
+              "count": 5,
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 11,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/screamer_killer.json",
+          "points": 125,
+          "models": [
+            {
+              "type": "Screamer-killer",
+              "count": 1,
+              "weapons": [
+                "Bio-plasmic scream",
+                "Screamer-killer talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 16.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/tyrant_guard.json",
+          "points": 80,
+          "models": [
+            {
+              "type": "Tyrant Guard",
+              "count": 3,
+              "weapons": [
+                "Scything talons and rending claws"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 19.25,
+            "depth_in": 4,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/hive_tyrant.json",
+          "points": 195,
+          "models": [
+            {
+              "type": "Hive Tyrant",
+              "count": 1,
+              "weapons": [
+                "Monstrous bonesword and lash whip",
+                "Monstrous scything talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 22,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/tyrannofex.json",
+          "points": 170,
+          "models": [
+            {
+              "type": "Tyrannofex",
+              "count": 1,
+              "weapons": [
+                "Powerful limbs",
+                "Stinger salvoes",
+                "Fleshborer hive"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 24.75,
+            "depth_in": 4,
+            "facing_deg": 0,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/screamer_killer.json",
+          "points": 125,
+          "models": [
+            {
+              "type": "Screamer-killer",
+              "count": 1,
+              "weapons": [
+                "Bio-plasmic scream",
+                "Screamer-killer talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 27.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/genestealers.json",
+          "points": 75,
+          "models": [
+            {
+              "type": "Genestealer",
+              "count": 5,
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 33,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/termagants.json",
+          "points": 55,
+          "models": [
+            {
+              "type": "Termagants",
+              "count": 10,
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 40,
+            "anchor": "zone_front"
+          }
+        }
+      ]
+    }
+  },
+  "notes": "M67 scenario (D-076, D-070, D-064, D-074): the two New Recruit rosters (Incursion, 960 and 955 points) on a 44\" wide by 60\" deep battlefield with 12\"-deep deployment zones on the short south (A) and north (B) edges, so 36\" between the front lines; agreed with the user 2026-11-08. No terrain, no objectives, fixed deployment (D-003). Result (D-076, amends D-007): a side with no models left loses at once; otherwise, after battle round 5, the side that destroyed more points wins (each enemy unit's full points if it is destroyed, else its points x wounds lost / starting wounds, compared exactly) and equal points is a draw. Each unit's points are the roster's. Units are numbered west to east on each side (the file's order, so the board numbers read left to right). Side A, Chaos Space Marines: 1 Legionaries with chainswords and bolt pistols (x = 7\", 180 pts), 2 Chaos Lord (x = 13\", 95 pts), 3 Chaos Terminator Squad (x = 20.5\", 370 pts), 4 Havocs (x = 29.5\", 135 pts; held back with depth_in 3), 5 Legionaries with boltguns and bolt pistols (x = 37.5\", 180 pts). Side B, Tyranids: 6 Termagants (x = 4\", 55 pts), 7 Genestealers (x = 11\", 75 pts), 8 Screamer-killer (x = 16.5\", 125 pts), 9 Tyrant Guard (x = 19.25\", 80 pts; held back with depth_in 4, behind the west Screamer-killer and the Hive Tyrant), 10 Hive Tyrant (x = 22\", 195 pts), 11 Tyrannofex (x = 24.75\", 170 pts; 120x92 mm oval at facing 0, its length south to north; held back with depth_in 4), 12 Screamer-killer (x = 27.5\", 125 pts), 13 Genestealers (x = 33\", 75 pts), 14 Termagants (x = 40\", 55 pts). Formation (D-008, D-064): the 10-model units in two ranks of 5, the others in one rank, every unit in base contact; the front rank of every unit not held back touches its zone's front line. Stratagems, unit abilities (Synapse, Shadow in the Warp, Skulking Horrors, Death Scream, ...), Leader and attached units (the characters are separate units), Deep Strike, Scouts, Feel No Pain, Deadly Demise and Damaged profiles are not used; their text is in the unit data. Only the unit points and loadouts are taken from the rosters (docs/datasheets/, Games Workshop copyright, not copied here)."
+}

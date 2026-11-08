@@ -61,6 +61,13 @@ void add(Fnv1a& h, const core::Unit& u) {
     }
     add_opt_int(h, p.advance_roll);
     add_opt_int(h, p.charge_roll);
+    // M67 (D-076): a unit's points and starting wounds only when it has points, behind a tag, so a state without
+    // them (every scenario before M67) hashes as before.
+    if (u.points != 0 || u.starting_wounds != 0) {
+        h.u64(0x706e7473ull);  // "pnts": apart from the fields around it
+        h.i32(u.points);
+        h.i32(u.starting_wounds);
+    }
     h.u64(u.models.size());
     for (const core::Model& m : u.models) {
         add(h, m.id);
@@ -207,6 +214,11 @@ std::uint64_t state_hash(const core::GameState& state) {
     if (state.pending) add(h, *state.pending);
     h.flag(state.result.has_value());
     if (state.result) add_opt_int(h, state.result->winner);
+    // M67 (D-076): the result rule only when it isn't D-007's, so older states hash as before.
+    if (state.result_rule != core::ResultRule::D007Draw) {
+        h.u64(0x72756c65ull);  // "rule"
+        h.u64(static_cast<std::uint64_t>(state.result_rule));
+    }
     // state.dice is deliberately not hashed (D-054: the bot never peeks at the rolls to come).
     return h.value();
 }

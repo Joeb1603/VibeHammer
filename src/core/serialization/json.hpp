@@ -130,6 +130,8 @@ void to_json(Json& j, const AttackFlow& v);
 void from_json(const Json& j, AttackFlow& v);
 void to_json(Json& j, const FlowState& v);
 void from_json(const Json& j, FlowState& v);
+void to_json(Json& j, const PointsTally& v);
+void from_json(const Json& j, PointsTally& v);
 void to_json(Json& j, const GameResult& v);
 void from_json(const Json& j, GameResult& v);
 void to_json(Json& j, const PendingDecision& v);

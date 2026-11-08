@@ -6,10 +6,12 @@ namespace wh40k::client {
 
 namespace {
 
-// D-065: six shades per side, in the order they are handed out. Shade 1 is the pre-M55 side colour; the next
+// D-065: ten shades per side, in the order they are handed out. Shade 1 is the pre-M55 side colour; the next
 // ones change lightness first (light, then a hue step, then dark), so the first three or four units of a side
 // are the easiest to tell apart. Every shade stays clear of the board (46,58,48), of its own greyed "can't act"
-// look and of the white selection outline (checked in M55_UnitTint).
+// look and of the white selection outline (checked in M55_UnitTint). Shades 7-10 (M67) were chosen, each in turn,
+// to be the furthest from the shades before them under simulated protanopia, deuteranopia and tritanopia, keeping
+// A's cool and B's warm (checked in M67_UnitShades).
 constexpr std::array<Rgb, kUnitShades> kShadesA{{
     {52, 110, 200},   // 1: side blue
     {130, 180, 245},  // 2: light blue
@@ -17,6 +19,10 @@ constexpr std::array<Rgb, kUnitShades> kShadesA{{
     {28, 62, 140},    // 4: navy
     {120, 110, 225},  // 5: periwinkle
     {175, 215, 250},  // 6: pale blue
+    {85, 45, 175},    // 7: indigo (M67)
+    {160, 240, 240},  // 8: pale cyan
+    {155, 125, 205},  // 9: lavender
+    {200, 130, 255},  // 10: light violet
 }};
 constexpr std::array<Rgb, kUnitShades> kShadesB{{
     {190, 60, 60},    // 1: side red
@@ -25,6 +31,10 @@ constexpr std::array<Rgb, kUnitShades> kShadesB{{
     {125, 28, 40},    // 4: maroon
     {205, 60, 140},   // 5: crimson pink
     {245, 180, 170},  // 6: pale pink
+    {250, 225, 145},  // 7: cream (M67)
+    {185, 105, 110},  // 8: dusty rose
+    {110, 55, 0},     // 9: brown
+    {245, 165, 10},   // 10: amber
 }};
 
 }  // namespace

@@ -65,6 +65,21 @@ inline core::GameState load_tyrannofex_fixture_closer(float closer_in) {
     return gs;
 }
 
+// M67 / D-076: the playable portrait scenario: both rosters, every unit with its points, decided on points destroyed
+// after round 5 unless a side is wiped out. Units 1-5 Chaos Space Marines, 6-14 Tyranids, each side west to east.
+inline constexpr const char* kRostersScenario = "data/scenarios/rosters_44x60.json";
+inline core::GameState load_rosters_scenario() { return core::load_scenario(repo_root() / kRostersScenario, repo_root()); }
+
+// The roster scenario with every Tyranid model moved `closer_in` inches south, as load_rosters_fixture_closer.
+inline core::GameState load_rosters_scenario_closer(float closer_in) {
+    core::GameState gs = load_rosters_scenario();
+    for (auto& u : gs.units) {
+        if (u.side != core::Side::B) continue;
+        for (auto& m : u.models) m.position.y -= in(closer_in);
+    }
+    return gs;
+}
+
 // The V1 scenario with the Termagants moved 1" towards the Intercessors, so every Intercessor is
 // within 12" (half Bolt Rifle range) of the Termagant unit. At the D-008 start positions only the
 // centre Intercessor is (the others are 0.01-0.07 mm further than 12").

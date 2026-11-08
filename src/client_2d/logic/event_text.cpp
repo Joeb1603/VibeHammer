@@ -205,6 +205,15 @@ std::string body(const core::GameEvent& e) {
                 return attack_count_text(x.attack_dice, x.random_attacks) + " attacks against " + unit(x.target) +
                        " are lost" + (x.random_attacks.empty() ? "" : " (not rolled)");
             } else if constexpr (std::is_same_v<T, ev::GameOver>) {
+                if (x.points) {
+                    // D-076: "Battle round 5 ends: Side A wins on points destroyed (412.5 to 380)", the winner's first.
+                    const core::PointsTally& p = *x.points;
+                    const std::string round = "Battle round " + std::to_string(p.battle_round) + " ends: ";
+                    if (!x.winner) return round + "a draw on points destroyed (" + p.display[0] + " each)";
+                    const std::size_t w = core::side_index(*x.winner);
+                    return round + side(*x.winner) + " wins on points destroyed (" + p.display[w] + " to " +
+                           p.display[1 - w] + ")";
+                }
                 return "Game over: " + x.reason;
             } else if constexpr (std::is_same_v<T, ev::WoundRollsRerolled>) {
                 // 24.38 (D-072): each re-rolled die, old -> new, then the batch's new total.

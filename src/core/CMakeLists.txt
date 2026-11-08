@@ -43,6 +43,7 @@ add_library(wh40k_core STATIC
     state/decision.cpp
     state/flow.cpp
     state/game_state.cpp
+    state/points_destroyed.cpp
     state/queries.cpp)
 
 # Consumers include core headers as "core/....hpp".
