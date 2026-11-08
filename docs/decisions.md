@@ -2855,3 +2855,115 @@ planning; the others take the conservative choice.
   planner asks the engine (`shot_options`) whether an engaged enemy can be shot, so it sees 17.03.
 - **Out of scope.** 17.02 FRAME (no unit in the data has the keyword); Deadly Demise and damaged profiles (the batch's
   out-of-scope list); oval bases (M64–M66: until then the Tyrannofex's oval base is refused by the scenario loader).
+
+## D-074: Oval bases with a facing (M64 part 1: the geometry kernel; M65 part 2: the engine; M66 part 3: client and bots)
+**Decided:** 2026-11-08 (M64 of the pre-approved M59–M70 batch). The conventions below are the M64 brief's recommended
+ones, unchanged. Conservative choices are marked *conservative*.
+
+### Part 1 (M64): the geometry kernel
+Pure functions in `src/core/geometry/` (`pose.hpp`, `oval.hpp/.cpp`, `visibility_oval.cpp`, and pose-aware overloads
+added to `engagement`, `coherency`, `closest`, `path` and `visibility`). No state, caller or behaviour changes: the
+engine, client and bots still call the round-only functions, and `base_radius()` (so `base_distance(Position, Base,
+...)`, `bases_overlap(...)` and `check_model_path(... PathContext)`) still throws for an oval until M65 converts them.
+- **Oval base.** `Base{shape = Oval, diameter_mm = width (minor axis), length_mm = length (major axis)}` with
+  `length_mm >= diameter_mm` (the loader's D-070 check). The Tyrannofex is 92 x 120.
+- **Facing.** `facing_deg`, a float in degrees, normalised to (-180, 180] (`normalise_facing_deg`; a non-finite value
+  gives 0, and never -0).
+  - At 0 the major axis lies along the battlefield's y axis (south-north): a 0-degree Tyrannofex is 120 mm along y and
+    92 mm along x, so an oval facing the enemy across the portrait board needs no facing field.
+  - Positive angles turn counter-clockwise seen from above with y pointing north (from +y towards -x): at facing f the
+    major axis points along (-sin f, cos f). At 90 the length lies along x.
+  - A round base ignores facing. (M65 will refuse a non-zero facing on a round base.)
+  - `rotation_delta_deg(from, to)`: the turn the shorter way, in (-180, 180]; a half turn is +180 (counter-clockwise).
+  - *Open for M65:* an oval's footprint is the same at f and f + 180. The kernel turns from the given facing to the
+    given facing the shorter way, so a turn from 0 to 170 sweeps 170 degrees, although the footprint at 170 is also
+    reached by 10 degrees the other way. Whether facings 180 apart are the same facing is M65's call.
+- **Types.** `BasePose{position, base, facing_deg}`; `PosedModel{id, position, base, facing_deg}` (PlacedModel plus a
+  facing, with `pose()`). `PlacedModel` and every existing signature are unchanged; the new overloads take
+  `BasePose` / `PosedModel` / `PosedPathContext`, so existing calls keep resolving to the round-only functions.
+- **01.04 distance.** `base_distance(BasePose, BasePose)`: between the closest parts of the bases, clamped at 0.
+  `signed_base_distance`: the gap, or minus the penetration depth (how far one must move to separate them).
+  - *Round to round:* the existing inline float code (`base_distance(Position, Base, Position, Base)`), called first,
+    so the result is bit-identical.
+  - *Round to oval:* the signed distance from the circle's centre to the ellipse, minus r. Eberly's robust bisection
+    ("Distance from a Point to an Ellipse"), in double, at most 1100 halvings, bisected in w = s + 1 rather than s: next
+    to the major axis inside the evolute the root is s = -1 + 1e-13, and bisecting s left the closest point off by up to
+    0.13 mm (found by the M64 tests). Exact to double rounding.
+  - *Oval to oval* (and the swept and rectangle shapes below): sd(A, B) is the signed distance from c_B - c_A to
+    K = A0 - B0, the Minkowski difference of the centred shapes, given by its support function. When separated, GJK on
+    the support functions until its bracket (the support-plane lower bound, the simplex upper bound) is below 1e-9 mm
+    (at most 128 iterations). Otherwise (overlapping, touching, or GJK not certain) a bracket:
+    - an inner polygon of support points (inside K, so it bounds sd from above) and an outer polygon of support lines
+      (round K, so it bounds sd from below);
+    - for two plain ellipses also a curvature bound: with S(n) = h_K(n) - n . x, sd = -min S, and S'' + S = rho_K (K's
+      radius of curvature, the sum of the two ellipses' a^2 b^2 / s(n)^3), so from each end of an interval of normals
+      S(d) >= (S0 - rho_lo) cos d + S0' sin d + rho_lo. This is tight where the inner polygon converges slowly (deep,
+      nearly concentric overlaps);
+    - refined at the features that bind either bound until the bracket is below 1e-9 mm, at most 96 refinements. The
+      value returned always lies in the certified bracket (inside: the best separation found along a sampled normal).
+    - Measured over 100,000 random oval pairs (10% concentric): within 1e-9 mm of the support-function brute force,
+      the widest bracket 1e-9 mm, at most 31 iterations (GJK or bracket; 16 on average).
+- **Overlap (D-027, 03.01 "on another model").** `bases_overlap(BasePose, BasePose)`: the bases still intersect after
+  each is shrunk by EPS_MM/2.
+  - For a convex base whose radius of curvature is at least EPS/2 everywhere (an ellipse's smallest is b^2/a, 35.3 mm
+    for the Tyrannofex), shrinking by d lowers its support function by exactly d. The shrunk bases intersect iff
+    h_A(n) + h_B(-n) >= EPS for every direction n, i.e. iff the penetration depth is at least EPS; their interiors meet
+    iff it is more than EPS. So overlap is `signed distance < -EPS_MM`.
+  - *The round case is unchanged:* discs of radius r1 - EPS/2 and r2 - EPS/2 have meeting interiors iff the centre
+    distance is less than r1 + r2 - EPS, which is `bases_overlap(Position, ...)`'s formula. The round-round case still
+    calls it (bit-identical, tested). Bases in contact do not overlap.
+- **D-009 areas.** `within_area(Rect, BasePose)`: some part of the base within EPS of the rectangle (the distance from
+  the rectangle to the base, by the same support-function method). `wholly_within(Rect, BasePose)`: the half extents
+  along x and y, `base_extents` (sqrt(a^2 sin^2 f + b^2 cos^2 f) along x, sqrt(a^2 cos^2 f + b^2 sin^2 f) along y),
+  inside with the EPS tolerance. Round bases take the old functions.
+- **03.01 straight lines.** A convex base translating with a fixed facing sweeps the convex hull of its start and end
+  placements (its support is the larger of the two).
+  - `translation_crosses(start, end, obstacle)`: the swept area and the obstacle overlap by the EPS/2 rule. Shrinking
+    commutes with sweeping, so this is the same as "some placement along the line overlaps the obstacle", which the
+    tests check by dense sampling. Round to round: `check_model_path`'s float capsule formula, bit-identical.
+  - `translation_stays_within(battlefield, start, end)`: both ends wholly within (the battlefield is convex).
+  - `translation_signed_distance`: the swept area's signed distance.
+- **03.01 rotating a model.** The turn from the start facing to the target the shorter way; a round base's turn is
+  its static check. `RotationCheck{blocked, facing_deg, clearance_mm, exact}`: the facing of the closest approach (or
+  of the first facing not shown clear) and the smallest clearance, for M65's messages.
+  - *Against the battlefield edge (exact):* the extent along x is largest at an end of the turn or at facing 90 mod
+    180 (the length along x), along y at an end or at 0 mod 180.
+  - *Against a round base (exact):* for a point at a fixed distance from the oval's centre, the signed distance grows
+    from the major axis to the minor axis in each quadrant (envelope theorem: its derivative is proportional to
+    x* y* (1/b^2 - 1/a^2) >= 0, inside and outside, x* the closest point). So over the turn it is smallest at an end or
+    where the major axis points at the circle's centre (that facing found with atan2).
+  - *Against an oval (conservative):* turning an oval by t radians moves its outline by at most (a - b) t in Hausdorff
+    distance (its support radius has |s'| <= a - b, because (a + b)^2 c (1 - c) <= b^2 + (a^2 - b^2) c is
+    (b - (a + b) c)^2 >= 0), so the signed distance is (a - b)-Lipschitz in the turn. Conservative advancement from the
+    start facing: at each facing the certified lower bound s; blocked as soon as s < -EPS/2; else step
+    (s + 3 EPS/4) / (a - b) radians, so the distance stays above -3 EPS/4 until the next facing tried. It never reports
+    clear when the bases overlap at some facing of the turn; it reports blocked only when they come within EPS/2 of
+    overlapping (intersect by more than EPS/2), *conservative*. The smallest step is EPS / (4 (a - b)): at most
+    17,600 facings for a Tyrannofex's half turn (a budget of 10^6, never reached; exhausting it would report blocked).
+- **Model-level overloads** (`PosedModel`): `models_engaged`, `units_engaged`, `engaged_models`, `check_coherency`,
+  `PosedCoherencyWithOneMoved`, `closest_distance`, `closest_models`, `closest_units`, `has_line_of_sight` and
+  `check_model_path(mover, base, points, facings, PosedPathContext)`. On round bases each gives exactly the round-only
+  function's result (tested over random units and paths).
+  - *Path semantics for M65:* `facings[i]` is the facing at `points[i]` (empty: 0 everywhere). Between points i and
+    i + 1 the model first turns in place at points[i] from facings[i] to facings[i + 1], then moves straight to
+    points[i + 1] keeping facings[i + 1]. Each turn and line is checked against the enemy models and the edge, and the
+    end against every model (D-027). A turn that hits is `TurnCrossesEnemyModel` ("03.01: model X's base cannot be
+    turned through enemy model Y (before segment k)") or `TurnLeavesBattlefield` ("03.01: model X's base cannot cross
+    the edge of the battlefield while it turns (before segment k)"), new `PathViolationKind`s.
+- **06.01 line of sight (extends D-017).** Inputs with only round bases take D-017's code, bit-identical. With an oval
+  anywhere:
+  - a line crosses an oval base along a closed-form chord (the quadratic of the ellipse's equation);
+  - an oval blocker blocks a line that comes within 0.5 mm - EPS of it (it overlaps the 1 mm line by more than EPS, as
+    D-017), by the closed-form segment-to-ellipse distance (the line's closest approach, else Eberly at the nearer end);
+  - the candidate lines are D-017's: centre to centre; every pair of sample points on the two bases (64 on an oval,
+    32 on a round base, plus the centre); and every common tangent of two of the shapes. Two circles: D-017's closed
+    form. With an oval, the support-line tangents: outer tangents where h_X(n) = h_Y(n), bracketed every degree and
+    bisected; inner tangents at the two ends of the single arc of normals where the support function of X - Y is
+    negative, found from its minimum (golden-section search) so a gap far narrower than a degree is still found.
+  - As D-017, this is not a proof of exactness.
+- **Bounding circles (for M66's bots).** `circumscribed_radius(base)` (half the length) and `inscribed_radius(base)`
+  (half the width); half the diameter for a round base.
+- **Numerics.** Double inside the oval code, float results. Only + - * /, sqrt, fmod and floor on the decision paths:
+  sine, cosine (Taylor series after reduction to +-45 degrees) and atan2 are polynomials in `oval_detail`, so results
+  are the same on every platform (no libm transcendental results feed a decision). Iterations are capped, valid inputs
+  never give NaN or an exception, and a degenerate oval (length = width) gives the circle's results within 0.001 mm.

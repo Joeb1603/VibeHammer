@@ -2561,7 +2561,7 @@ random-A melee weapons were made refused rather than declared with a sentinel `a
 
 ---
 
-## M64: Oval geometry kernel
+## M64: Oval geometry kernel ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 01.04, 03.01 · **Decision:** D-074 (part 1)
 
 > Pure `geometry/` functions, with no change to the state.
@@ -2582,6 +2582,94 @@ random-A melee weapons were made refused rather than declared with a sentinel `a
 **Acceptance**
 - Within 0.01 mm of brute-force sampling over 10,000 random poses.
 - Round-to-round results bit-identical. Arena wall time on Strike within 5%.
+
+**Results (2026-11-08):** decision D-074 part 1. No design stop (pre-approved). Nothing in the state, the engine, the
+client or the bots changes: they still call the round-only functions, and `base_radius()` still throws for an oval.
+- **Kernel** (`src/core/geometry/pose.hpp`, `oval.hpp/.cpp`):
+  - *Types and facing:*
+    - `BasePose{position, base, facing_deg}`, `PosedModel` (PlacedModel plus `facing_deg`), `BaseExtents`, `RotationCheck`;
+    - `normalise_facing_deg` ((-180, 180], never -0, non-finite to 0), `rotation_delta_deg` (the shorter way, a half
+      turn +180), `circumscribed_radius` / `inscribed_radius`.
+  - *01.04:* `base_distance(BasePose, BasePose)` and `signed_base_distance`.
+    - Round to round: the old inline code, called first (bit-identical).
+    - Round to oval: Eberly's point-to-ellipse bisection minus r. It is bisected in w = s + 1: bisecting s lost up to
+      0.13 mm next to the major axis inside the evolute, which the tests found.
+    - Oval to oval: GJK on the support functions when apart. Otherwise a certified bracket refined to 1e-9 mm, between
+      an inner polygon of support points and an outer polygon of support lines, plus a curvature bound for two
+      ellipses (D-074).
+  - *Overlap:* `bases_overlap(BasePose, BasePose)`. Shrunk by EPS/2 each the bases still intersect, i.e. the
+    penetration depth is more than EPS. The round case is today's formula (derived in D-074).
+  - *D-009:* `within_area`, `wholly_within`, `base_extents`.
+  - *03.01:*
+    - straight lines: `translation_crosses`, `translation_signed_distance`, `translation_stays_within`;
+    - turns: `rotation_against_edge` (exact), and `rotation_against_base` (exact against a round base; against an
+      oval, conservative advancement with the (a - b) Hausdorff bound).
+  - *`oval_detail`:* polynomial sine, cosine and atan2 (the same results on every platform), Eberly, the convex support
+    shapes and `convex_signed_distance` (with a decide-at overload for the boolean queries).
+- **Pose-aware overloads for M65.** They are added next to the round-only functions, which are untouched (the diff to
+  the existing geometry files only adds lines):
+  - `models_engaged`, `units_engaged`, `engaged_models`, `check_coherency`, `PosedCoherencyWithOneMoved`,
+    `closest_distance`, `closest_models`, `closest_units`;
+  - `has_line_of_sight` (`visibility_oval.cpp`: closed-form chords, 64 boundary samples on an oval, support-line
+    tangents);
+  - `check_model_path(mover, base, points, facings, PosedPathContext)`: a turn in place at each point, then the
+    straight line. `PathViolationKind` gains `TurnCrossesEnemyModel` and `TurnLeavesBattlefield`.
+- **Tests** (29 new, all pass; brute force in `tests/support/oval_brute_force.hpp`, which shares no code with the
+  kernel):
+  - `tests/m64_oval_distance_test.cpp` (14):
+    - `R01_04_OvalDistance.*` (4): round-oval and oval-oval over 10,000 random poses each; touching, overlapping,
+      nested and far cases; the degenerate oval.
+    - `D074_OvalBases.*` (10): round-round bit-identical to a copy of the old formulas (200,000 poses, including the
+      touching and EPS thresholds); the posed model functions equal to the round ones; ovals in them; the EPS/2
+      overlap rule; the facing convention; normalisation and the turn delta; bounding circles; the round-only
+      functions still throw; the trigonometry; determinism and the bracket.
+  - `tests/m64_oval_sweep_test.cpp` (10):
+    - `R03_01_OvalSweeps.*` (9): translation against dense sampling along the segment, and examples; edge crossing;
+      turns against the edge (dense angle sampling, and examples); turns against a round base (the same); oval
+      against oval never clear when dense sampling finds contact; oval path violations.
+    - `D074_OvalBases.PosedPathCheckOfRoundBasesIsTheOldCheck`.
+  - `tests/m64_oval_visibility_test.cpp` (5):
+    - `R06_01_OvalLineOfSight.*`: an oval blocker blocks; the line just past its tip (1.05 / 0.95 mm gaps, square on
+      and slanted) and between two tips; an oval observer sees around a blocker; round-only inputs give D-017's answer;
+      the degenerate oval.
+    - Plus the disabled benchmark `D074_Benchmark.DISABLED_OvalKernel`.
+  - No existing test changed.
+  - ctest (Debug and Release): 996 -> 1025 tests, all pass.
+- **Acceptance:**
+  - *Within 0.01 mm of brute-force sampling over 10,000 random poses:* **met.**
+    - Round to oval: worst error 6e-5 mm, against boundary sampling (float rounding of the result).
+    - Oval to oval: worst error 6e-5 mm for the signed distance, against the support-function duality. For the 01.04
+      distance against boundary sampling it is 0.0041 mm, which is the sampling's own error where the boundaries cross.
+    - Beyond the tests: over 100,000 pairs (10% concentric) the double values are within 1e-9 mm of the duality, the
+      bracket at most 1e-9 mm wide, after at most 31 iterations.
+    - Translation, edge-turn and round-turn sweeps agree with dense sampling within 0.01 mm. The oval-oval turn is
+      never clear when sampling finds contact, and it is blocked only within its EPS/2 margin.
+  - *Round-to-round results bit-identical:* **met.**
+    - The `D074_` tests compare against copies of the old formulas, the path check and LoS.
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave all 17 replays byte-identical (M64 adds
+      no replay: there is no flow to record).
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line for all 24 pairings of V1,
+      both bot scenarios and Strike.
+  - *Arena wall time on Strike within 5%:* **met.** Strike Normal vs Normal, 60 games, the M63 and M64 Release binaries
+    run alternately four times each:
+    - M63: 8.67, 8.49, 8.72, 8.74 s (mean 8.66);
+    - M64: 8.50, 8.90, 8.45, 8.77 s (mean 8.66);
+    - p95 5.43-5.55 ms against 5.37-5.61 ms. Nothing calls the new code yet.
+  - *Micro-benchmark* (Release, ns a call):
+    - round-round `base_distance`: 4.4 for the old inline, 5.2 through `BasePose`;
+    - round-oval: 511;
+    - oval-oval: 7654 on average, most of it the overlapping poses (`bases_overlap` 424);
+    - a capsule or a swept oval against an oval: 421 / 438;
+    - turns against a round base 1085, an oval 9583, the edge 111;
+    - line of sight past an oval blocker: 1121.
+- **Open (for M65):**
+  - Facings 180 degrees apart give the same footprint. The kernel turns to the facing it is given, the shorter way,
+    so M65 decides whether 0 -> 170 is a 170-degree turn or the same footprint 10 degrees the other way (D-074).
+  - The posed overloads take `PosedModel`. If M65 puts the facing in `Position`, as planned, the round-only functions
+    can dispatch to the `BasePose` kernel with the round case first. `CoherencyWithOneMoved` (client) and the bots'
+    own geometry are M66's.
+  - Round-oval distance costs about 0.5 us (Eberly's bisection runs to the last bit). That is fine for the engine's
+    checks; a Newton finish would speed it up if M65's `move_reach` or M66's sampling call it in bulk.
 
 ---
 

@@ -20,8 +20,10 @@ add_library(wh40k_core STATIC
     geometry/coherency.cpp
     geometry/distance.cpp
     geometry/engagement.cpp
+    geometry/oval.cpp
     geometry/path.cpp
     geometry/visibility.cpp
+    geometry/visibility_oval.cpp
     model/dice_expr.cpp
     model/keywords.cpp
     model/weapon.cpp

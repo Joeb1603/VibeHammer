@@ -1,6 +1,7 @@
 #include "core/geometry/engagement.hpp"
 
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
 
 namespace wh40k::core {
 
@@ -25,6 +26,36 @@ std::vector<ModelId> engaged_models(std::span<const PlacedModel> unit,
     std::vector<ModelId> out;
     for (const PlacedModel& a : unit) {
         for (const PlacedModel& b : enemies) {
+            if (models_engaged(a, b)) {
+                out.push_back(a.id);
+                break;
+            }
+        }
+    }
+    return out;
+}
+
+// ---- D-074: posed models ----
+
+bool models_engaged(const PosedModel& a, const PosedModel& b) {
+    return within(base_distance(a.pose(), b.pose()), kEngagementRangeMm);
+}
+
+bool units_engaged(std::span<const PosedModel> unit, std::span<const PosedModel> enemy) {
+    for (const PosedModel& a : unit) {
+        for (const PosedModel& b : enemy) {
+            if (models_engaged(a, b)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+std::vector<ModelId> engaged_models(std::span<const PosedModel> unit, std::span<const PosedModel> enemies) {
+    std::vector<ModelId> out;
+    for (const PosedModel& a : unit) {
+        for (const PosedModel& b : enemies) {
             if (models_engaged(a, b)) {
                 out.push_back(a.id);
                 break;

@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
 
 namespace wh40k::core {
 
@@ -84,6 +85,81 @@ std::vector<PathViolation> check_model_path(ModelId mover, const Base& base,
                 out.push_back({PathViolationKind::EndsOnModel, m.id, std::nullopt,
                                "03.01: " + model_name(mover) + " cannot end its move on " +
                                    model_name(m.id)});
+            }
+        }
+    };
+    check_end(context.friendly);
+    check_end(context.enemy);
+    check_end(context.passable_enemy);  // 17.01 passes through them, but a move still can't end on them (D-073)
+    return out;
+}
+
+std::vector<PathViolation> check_model_path(ModelId mover, const Base& base, std::span<const Position> points,
+                                            std::span<const float> facings, const PosedPathContext& context) {
+    if (points.empty()) {
+        throw std::logic_error("check_model_path: a path needs at least its start position");
+    }
+    if (!facings.empty() && facings.size() != points.size()) {
+        throw std::logic_error("check_model_path: give one facing per path point (or none)");
+    }
+    const auto facing = [&](std::size_t i) { return facings.empty() ? 0.0f : facings[i]; };
+    const bool round_base = base.shape == BaseShape::Round;  // a round base ignores facing (D-074)
+    // An oval turns at point i when its facing changes (03.01 Rotating a Model).
+    const auto turns = [&](std::size_t i) { return !round_base && rotation_delta_deg(facing(i), facing(i + 1)) != 0.0f; };
+    std::vector<PathViolation> out;
+
+    // 03.01: its base cannot be moved through enemy models: neither the turn at each point nor the straight line.
+    if (!context.may_move_through_enemy_models) {
+        for (const PosedModel& e : context.enemy) {
+            if (e.id == mover) {
+                continue;
+            }
+            const BasePose obstacle = e.pose();
+            for (std::size_t s = 0; s + 1 < points.size(); ++s) {
+                if (turns(s) && rotation_against_base(BasePose{points[s], base, facing(s)}, facing(s + 1), obstacle).blocked) {
+                    out.push_back({PathViolationKind::TurnCrossesEnemyModel, e.id, s,
+                                   "03.01: " + model_name(mover) + "'s base cannot be turned through enemy " +
+                                       model_name(e.id) + " (before segment " + std::to_string(s + 1) + ")"});
+                    break;  // one report per enemy model
+                }
+                if (translation_crosses(BasePose{points[s], base, facing(s + 1)}, points[s + 1], obstacle)) {
+                    out.push_back({PathViolationKind::CrossesEnemyModel, e.id, s,
+                                   "03.01: " + model_name(mover) + "'s base cannot be moved through enemy " +
+                                       model_name(e.id) + " (segment " + std::to_string(s + 1) + ")"});
+                    break;  // one report per enemy model
+                }
+            }
+        }
+    }
+
+    // 03.01: its base cannot cross the edge of the battlefield. The battlefield is convex, so a straight line keeps
+    // the base on it iff it is wholly on it at both ends; a turn is checked over its facings.
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        if (!wholly_within(context.battlefield, BasePose{points[i], base, facing(i)})) {
+            std::optional<std::size_t> seg;
+            if (i > 0) {
+                seg = i - 1;
+            }
+            out.push_back({PathViolationKind::LeavesBattlefield, std::nullopt, seg,
+                           "03.01: " + model_name(mover) + "'s base cannot cross the edge of the battlefield"});
+            break;
+        }
+        if (i + 1 < points.size() && turns(i) &&
+            rotation_against_edge(context.battlefield, BasePose{points[i], base, facing(i)}, facing(i + 1)).blocked) {
+            out.push_back({PathViolationKind::TurnLeavesBattlefield, std::nullopt, i,
+                           "03.01: " + model_name(mover) + "'s base cannot cross the edge of the battlefield while it "
+                           "turns (before segment " + std::to_string(i + 1) + ")"});
+            break;
+        }
+    }
+
+    // 03.01 Ending a Move: no model may be on another model.
+    const BasePose end{points.back(), base, facing(points.size() - 1)};
+    auto check_end = [&](std::span<const PosedModel> models) {
+        for (const PosedModel& m : models) {
+            if (m.id != mover && bases_overlap(end, m.pose())) {
+                out.push_back({PathViolationKind::EndsOnModel, m.id, std::nullopt,
+                               "03.01: " + model_name(mover) + " cannot end its move on " + model_name(m.id)});
             }
         }
     };

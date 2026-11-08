@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/geometry/coherency.hpp"  // PlacedModel
+#include "core/geometry/pose.hpp"       // PosedModel
 #include "core/geometry/primitives.hpp"
 #include "core/types/ids.hpp"
 
@@ -24,6 +25,9 @@ enum class PathViolationKind : std::uint8_t {
     CrossesEnemyModel,  // 03.01: its base cannot be moved through enemy models
     LeavesBattlefield,  // 03.01: its base cannot cross the edge of the battlefield
     EndsOnModel,        // 03.01 Ending a Move: no model may be on another model
+    // D-074 (M64): an oval's turn in place (03.01 Rotating a Model) hits an enemy model or crosses the edge.
+    TurnCrossesEnemyModel,
+    TurnLeavesBattlefield,
 };
 
 struct PathViolation {
@@ -54,5 +58,29 @@ struct PathContext {
 [[nodiscard]] std::vector<PathViolation> check_model_path(ModelId mover, const Base& base,
                                                           std::span<const Position> points,
                                                           const PathContext& context);
+
+// D-074 (M64): PathContext for posed models.
+struct PosedPathContext {
+    Rect battlefield;
+    std::span<const PosedModel> friendly;
+    std::span<const PosedModel> enemy;
+    bool may_move_through_enemy_models = false;
+    std::span<const PosedModel> passable_enemy{};
+};
+
+// D-074 (M64): check_model_path for a base of any shape with a facing at each path point.
+// - `facings[i]` is the facing at `points[i]` (empty: 0 everywhere; otherwise it must be as long as `points`,
+//   std::logic_error if not).
+// - Between points i and i+1 the model first turns in place at points[i] from facings[i] to facings[i+1] (the
+//   shorter way, 03.01 Rotating a Model), then moves in a straight line to points[i+1] keeping facings[i+1].
+// - Each turn and each straight line is checked against the enemy models (rotation_against_base,
+//   translation_crosses) and the battlefield edge (rotation_against_edge, wholly_within); the end against every model
+//   (bases_overlap, D-027). A turn that hits reports TurnCrossesEnemyModel / TurnLeavesBattlefield for segment i.
+// - A round base ignores facings: its result is exactly check_model_path's above (the same checks, violations and
+//   reasons, in the same order).
+[[nodiscard]] std::vector<PathViolation> check_model_path(ModelId mover, const Base& base,
+                                                          std::span<const Position> points,
+                                                          std::span<const float> facings,
+                                                          const PosedPathContext& context);
 
 }  // namespace wh40k::core
