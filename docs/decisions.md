@@ -3566,3 +3566,162 @@ untouched.
 - **Arena (`arena.*`):** for a points scenario the report adds the mean points each side destroyed by the end (D-076's
   tally, whatever decided the game), and every report the decision times of each side's bot alone (Normal's own p95 and
   maximum against Easy). `--per-game` lines are unchanged.
+
+## D-078: Hard for the roster units: one chain cache per game under a memory cap, the coarse wounds grid and compact tables, loadout groups, [HAZARDOUS] and 17.01, the points tiebreak in the army value, the rollout budget by units (M69; amends D-067)
+**Decided:** 2026-11-08 (M69 of the pre-approved M59–M70 batch; design written before the code and stopped for review, as the
+batch's run note asks; the conservative choices are marked *conservative*). Bot only (`src/ai`): no rule, core, state,
+action, event or JSON change, no new decision. Amends D-067 (Hard across several units) and the M44 notes of D-054 where
+stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-game` hashes, below).
+- **Measured first** (the M68 binary, Release, `rosters_44x60.json`, this machine; PLAN.md M69 has the full numbers):
+  - *One game each seat (seed 1, `--trace`):* Hard as the Chaos Space Marines against Normal: 275 Hard decisions, p50
+    0.0 ms, p95 20.3 s, max 36.7 s, 555 s a game, peak RSS 2.87 GB, lost on points. Hard as the Tyranids: 274 decisions,
+    p95 24.2 s, max 33.7 s, 852 s, 2.59 GB, lost on points. Every Hard reason reads "win 0%, draw 100%, loss 0%": D-007's
+    army value can't tell a points win from a points loss, so every option is worth about 0.
+  - *Where the time goes:* the chain tables. The rosters have 5 x 6 = 30 pairs of unit types; the cache keeps 8 tables
+    (`kMaxTables`), and every Evaluator asks for all 30 in the same order, so least-recently-used eviction misses every
+    time: the first decision (a MoveUnits) constructed 8 Evaluators, built 240 tables (232 evicted, 0 hits) in 35.7 of its
+    36.0 s. A full set of 30 tables takes 4.0–5.4 s and about 1.45 GB (10 half-turns x 780 line positions x the wounds
+    grid, 24-byte nodes; the largest, Chaos Terminators (30 wounds) against the Tyrannofex (16), 525 ms and 108 MB). In a
+    table build 97% is `build_half_turn` (the shooting sums 44%, the move choices 37%, the charges 10%); the volleys'
+    distributions are 2%.
+  - *With the cache fixed* (a scratch build keeping 64 tables, nothing else changed): the same two games, play unchanged,
+    take 18.6 s and 25.0 s of Hard decisions; the first decision 5.2 s (the 30 builds), then at most 1.18 s; p95 about
+    400 ms (as A) and 470 ms (as B); peak RSS 1.41 GB. A callgrind profile of 60 decisions of round 2 then puts 65% of
+    the instructions in core's line of sight (06.01): with the Tyrannofex on the board every check takes D-074's oval path,
+    which samples both bases. Two callers dominate: the army value's half-turn in progress (`pair_node` calls
+    `best_shooting` once per pair, and each call computes `shot_options` against every enemy unit and keeps one: 33%) and
+    the rollouts' shooting (Normal's `choose_shooting`, 39%). The Monte Carlo is 54% of a decision; its budgets never bind
+    (a roster rollout is 60–130 simulated actions against the 400 cap, a Monte Carlo 400–600 against 6000; Strike's at
+    most 87 and 443), so a decision's cost is set by its 6 Monte Carlos x 6 rollouts and by the cost of a simulated action
+    (about 150 µs on the rosters, 50 µs on Strike).
+  - *Hard's candidates per MoveUnits decision:* Normal's plan and up to 4 standing M43 candidates plus the furthest move
+    for the Normal move, the same per D6 result for the Advance (7 `hard_plan_unit_move` calls, about 35 plans valued with
+    the chain), 6 Monte Carlos of 6 rollouts (2,000–3,500 simulated actions).
+- **1. One chain cache per game, sized to every pair of unit types in play, under a memory cap.**
+  - *One cache per game:* the `ChainCache` lives with the bot for the whole game and serves every Hard decision of it. The
+    client already plays both sides with one `Bot`; the arena's two Hard bots (Hard vs Hard) now share one cache (tables
+    don't depend on the side evaluating; a cache never changes a value, D-054).
+  - *Sized to every pair:* the cache's capacity in tables is the larger of 8 (as before, for the duel's many small tables)
+    and the number of pairs the latest army Evaluator needed (30 on the rosters at the start).
+  - *Memory cap: 640 MiB* of table storage per cache, counted exactly from each table's arrays. When a table must be built,
+    least-recently-used tables are evicted first until the cache plus the tables to build fit under the cap; a table held
+    by a live Evaluator is never evicted (if the working set alone is over the cap, the cache holds only it). Use order is
+    a counter of lookups, so eviction is a function of the sequence of requests: deterministic.
+  - *Trimming:* at the start of each Hard decision every cached table not in use drops its half-turns before the
+    decision's (no evaluation of this or a later decision reads them; an undo to an earlier half-turn rebuilds). Memory
+    falls as the game goes on.
+  - *Never a source of behaviour:* a state's value is the same whichever table answers (unchanged, tested since M44), so
+    the cap, the eviction and the trimming change only time and memory.
+- **2. The tables' form.**
+  - *Exact (as today):* every wound a grid point, 8-byte values. Every table of V1, the bot scenarios and Strike.
+  - *The coarse wounds grid (the plan's "only above 20 wounds per side"):* for one side of a pair table, when that unit
+    type's starting wounds exceed 20 (a side of the table, not an army: Strike's sides are 10 wounds; 20 Termagants are
+    20, so they stay exact). Grid levels every s = ceil(W / 20) wounds, plus W itself: the Chaos Terminators (30) get 16
+    levels (0, 2, ..., 30). A volley's exact outcome between two levels is split between them in proportion (the expected
+    wounds left kept; destroyed stays exact); a coarse level's models alive are ceil(level / W); a lookup at wounds between
+    two levels interpolates linearly, as positions between bands already are.
+  - *Compact storage:* the stored nodes (start, fight, reply) as 4-byte floats, the arithmetic still in double, when the
+    game's tables at full precision would take more than 256 MiB (estimated from the specs of the pairs of the root's
+    unit types; Strike's one table is 23 MB, the rosters' 30 about 1.45 GB). The form is part of a table's key, so a
+    compact table never answers an exact spec.
+  - *Sizes on the rosters:* the never-read rows of 0 wounds are dropped from every table (values unchanged); with the
+    coarse grid and compact storage the 30 tables take about 525 MB at the first decision (10 half-turns) instead of
+    1.45 GB. Peak resident memory per Hard bot is then expected near 0.6 GB (target: well under 1 GB).
+- **3. Building the tables faster, with the same values** (D-068: the same expressions in the same order).
+  - *Position-major layout:* a half-turn's nodes stored by line position, then by wounds cell, so each sum reads one
+    position's grid (at most 12.6 KB) instead of rows scattered across the table; each pmf's nonzero range is found once;
+    a [HEAVY]-free unit's moved and stationary shooting rows, which are the same sums, are computed once and copied.
+    Prototyped in the scratchpad: the fingerprints of every stored value of the four old scenarios' tables (V1, both bot
+    scenarios, Strike, along Normal games) and of the rosters' 30 tables are bit-identical to M68's; it saves 15–20% of
+    the build time (the sums are compute-bound, not memory-bound).
+  - *Parallel builds:* the tables an Evaluator needs that the cache doesn't have are built by up to min(4, hardware
+    threads) workers, each with its own `OddsCache` (whose values never depend on its contents, M40), and inserted in pair
+    order, so the cache's contents and order are the same as a serial build's. A table is a pure function of its spec, so
+    no value depends on the threads (tested: serial and parallel builds give the same fingerprints). Estimated from the
+    prototype and the per-table times (to be measured): the rosters' 30 tables, coarse and compact, about 2.6 s of work
+    single-threaded, so a first decision near 3 s without the workers (the target's limit) and near 1 s with them.
+- **4. A unit's volley is the sum of its loadout groups.** The chain's unit was copies of its most common model. Now:
+  - *The unit at full strength:* its models in the order the defender keeps them, the most valuable against the pair's
+    other unit type first (Normal's `model_worth`: the model's best shooting at 0" and its best melee weapon; ties in the
+    unit's order), padded with copies of its most common loadout up to its starting strength (the models lost so far
+    taken as rank and file, so the composition, and the table, stay the same while rank and file die).
+  - *n models alive:* the first n of that order; their volley is the engine-shaped sum of each model's own picks
+    (`unit_ranged_volley` / `unit_melee_volley` on those models, identical attacks merged, D-006), and the unit as a
+    target is the same first n.
+  - *Kept as before (conservative):* a unit whose models share one loadout keeps the representative arithmetic exactly
+    (every unit of V1, the bot scenarios and Strike, and the Tyranids); a unit whose models differ in W keeps the
+    representative (the chain needs one W per model; no roster unit is mixed). The type key of a mixed unit hashes its
+    full-strength composition.
+- **5. [HAZARDOUS] and 17.01 in Hard's own code.**
+  - *[HAZARDOUS] (24.15, D-077):* the chain's volleys and the half-turn in progress (`best_shooting`) price a [HAZARDOUS]
+    profile at Normal's `hazard_rate`, so the Havoc champion supercharges in the chain only where Normal would. As in
+    Normal's move score, the firer's own expected loss is priced in the choice of profile, not taken off the chain's
+    wounds (*conservative*). The rates are part of a table's key when a profile is hazardous.
+  - *17.01:* the rollouts' translations (`translation_ok`) let a MONSTER/VEHICLE model's Normal or Advance move pass enemy
+    models that aren't MONSTER/VEHICLE models (core's `moves_through_non_monster_enemies`, as Normal's `segment_clear`);
+    ends stay off every model and out of Engagement Range, and the engine still decides.
+- **6. The points tiebreak in the army value (D-076), the engine's tally.** Only under `"result": "points_destroyed"`:
+  - *The end is exact:* a game over takes the engine's result (which already holds the points decision); every half-turn
+    played without a result is decided by `core::points_destroyed` (the larger numerator wins, equal is a draw), not
+    D-007's draw. A wipe-out still wins at once.
+  - *Otherwise:* V = P(A wipes B out) - P(B wipes A out) + P(neither) x T, where T = P(A ahead on points at the end) -
+    P(B ahead). Each unit is wiped out by the end with its D-067 fate (independent, as there); then it counts its full
+    points, otherwise its losses now. In the engine's own units (numerators over D, its formula: a unit's increment if
+    destroyed is points x D / starting wounds x wounds remaining, with core's `wounds_lost`), the expected margin is
+    mu = (A's tally - B's tally now) + sum over B's units of P(wiped) x increment - the same over A's, its variance
+    sigma^2 = sum of P(1 - P) x increment^2, and T = erf(mu / (sigma sqrt 2)) (Abramowitz and Stegun 7.1.28: arithmetic
+    only, no libm, so Windows and Linux agree), the exact sign when sigma = 0 (0 for an exact tie, then a draw). The
+    win, draw and loss shown in the reasons are these probabilities. The tempo and material terms are unchanged.
+  - *The duel:* under the points rule Hard keeps the army path even with one unit per side (M44's duel is D-007's).
+  - *Left out (conservative):* surviving units' future partial losses (the rollouts play the next turn on the engine,
+    whose tally is exact); the pair chains still choose their moves on D-007 terms (each is a duel of two units).
+- **7. The rollout budget scales with the number of units, counted in simulated actions.** With n the units with models
+  when a Monte Carlo starts: up to 7 units (V1, the bot scenarios, Strike) the budget is as before, 6 rollouts of at most
+  400 simulated actions and 6000 a Monte Carlo; above 7 both the rollouts and the Monte Carlo's action budget scale by
+  7 / n (rounded down; at least 3 rollouts): 14 units 3 rollouts and 3000 actions, 10 units 4 and 4200. Each simulated
+  action costs more with more units (measured 150 µs against 50 µs), so a 14-unit MoveUnits decision runs about 1,000–1,800
+  simulated actions instead of 2,000–3,500. Every option of a decision gets the same number of rollouts and the same seeds
+  (as before). A new weight `LookaheadWeights::full_budget_units = 7` holds the threshold (`--weights` can change it).
+- **8. Other savings with the same values.** The army value's half-turn in progress computes each shooting unit's
+  `shot_options` once per evaluation and picks each pair's declaration from them (`best_shooting` on shared options:
+  the same options in the same order, filtered by target, so the same plan); measured as a third of a round-2 decision.
+  Core is not touched: its line of sight is shared with Normal, which must play exactly as at M68.
+- **9. The old scenarios play exactly as before.** Every change acts only through facts V1, the bot scenarios and Strike
+  don't have: more than 7 units with models (7), a table over 256 MiB or a side over 20 wounds (2), a mixed loadout (4), a
+  [HAZARDOUS] weapon or a MONSTER/VEHICLE (5), the points rule (6). Where code is shared (the layout, the cache, the shared
+  options, the parallel builds) it gives bit-identical values: checked by table fingerprints against the M68 code, the
+  arena's `--per-game` hashes against `baseline/m60` on all 24 files, the replays (`m45_bot_game.json`,
+  `m58_strike_bot_game.json` included) and the `TheSavedFileMatchesTheGame` tests. Normal's roster play: `--per-game` on
+  the rosters for Easy–Easy, Normal–Easy, Easy–Normal and Normal–Normal (seeds 1–200) against the M68 binary, and the
+  M68 replay regenerated byte-identical.
+- **10. Items left for M69, checked.** Done here: the representative model (4), [HAZARDOUS] (5), 17.01 in the
+  translations (5), the points tiebreak (6), Hard's speed on the roster scenario and fixture (1–3, 7, 8). Left, with the
+  reason: the chain has no state for a third unit, so an engaged target's 17.03 -1 or a MONSTER's close-quarters shot at
+  another unit enter only the half-turn in progress (the engine's `best_shooting` applies them there); ovals are not
+  turned (D-077's measure found no cost); the Desperate Escape guard checks one to three failed rolls (as Normal's);
+  Strike's Tyranid seat (M57) can't change (Strike must play as before).
+- **Ambiguities and the readings taken:**
+  - "One cache per game": one cache serving every decision of the game, both sides where one bot plays both (the client)
+    and shared by the arena's two Hard bots; not one per decision.
+  - "Sized to every pair of unit types in play": its table capacity is at least the pairs the current army needs; the
+    memory cap still bounds it.
+  - "A coarser wounds grid only when a side's maximum wounds exceed 20": a side of a pair table, i.e. one unit type's
+    starting wounds (an army side's total would make Strike coarse); the grid is at most 21 levels.
+  - "The sum of its loadout groups" for a unit that has lost models: the defender keeps its most valuable models (as
+    Normal's casualty order); the lost ones are taken as rank and file.
+  - "Exactly as the engine computes it": the engine's tally for the current losses and the end of the game, its formula
+    for what destroying a unit adds; the forecast between now and the end is the fates' (an estimate).
+  - "Counted in simulated actions": the action budgets stay the unit of D-054's budgets; the number of rollouts scales
+    with them, since the action budgets alone never bind.
+  - Compact storage is not in the brief: it is the only way found to keep the rosters' tables well under 1 GB (the coarse
+    grid alone leaves about 955 MB); it is gated on size so no old table changes.
+  - Parallel builds are not in the brief either: the first decision's 30 builds are about 2.6 s of single-threaded work
+    after the other savings, against a 3 s maximum; they are deterministic by construction.
+- **Tests (`M69_*`, `tests/ai/m69_test.cpp`):** the cache (its capacity for the rosters, deterministic eviction order,
+  the cap respected, trimming, serial and parallel builds alike, the old scenarios' tables equal to the M68 code's by
+  fingerprint); the coarse grid only above 20 wounds per side (and exact below); the volley as the sum of the loadout
+  groups (the Havocs, the Legionaries, at full strength and with models lost); the tiebreak in the army value (the end
+  exact by `core::points_destroyed`, the increments against the engine's tally of a copy with the unit destroyed, the
+  sign and a tie, D-007 untouched without the rule); the rollout budget's scaling (7 units unchanged, 14 units 3
+  rollouts and 3000 actions, the cap respected); 17.01 in the translations; legality: Hard vs Normal and Normal vs Hard
+  on the rosters, a few games in ctest, more in a disabled test and the arena.
