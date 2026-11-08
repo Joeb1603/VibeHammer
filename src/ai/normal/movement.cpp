@@ -11,6 +11,7 @@
 #include <variant>
 
 #include "analysis/charge_odds.hpp"
+#include "bounds.hpp"
 #include "core/dice/dice.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
@@ -100,17 +101,26 @@ Position centroid_of(const std::vector<Position>& ps) {
 
 // ---- the geometry of the move in progress, for the cheap checks (the engine still decides) ----
 
+// D-074 part 3 (M66): an oval keeps its facing (`facings`, from the move's start) through the whole move; the checks
+// use bounding circles and extents (bounds.hpp).
 struct MoveGeometry {
     core::UnitId unit;
     core::MoveType type = core::MoveType::Normal;
     bool through_enemies = false;  // 09.07 Desperate Escape
     std::vector<core::ModelId> ids;
     std::vector<core::Base> bases;
+    std::vector<float> facings;
     std::vector<Position> starts;
     std::vector<float> max_mm;
     float unit_max_mm = 0.0f;  // the slowest model's maximum
-    std::vector<core::PlacedModel> enemies;
-    std::vector<core::PlacedModel> others;  // friendly models of other units
+    std::vector<core::PosedModel> enemies;
+    std::vector<core::PosedModel> others;  // friendly models of other units
+    // The circumscribed radii (avoid_radius_mm) of `bases`, `enemies` and `others`, worked out once (the same floats).
+    std::vector<float> radius;
+    std::vector<float> enemy_radius;
+    std::vector<float> other_radius;
+    std::vector<core::BaseExtents> extents;  // of `bases` at `facings` (round: the radius both ways)
+    bool all_round = true;  // every model here is round: coherency by the old round-only check
     float width = 0.0f;
     float depth = 0.0f;
     bool has_enemy = false;
@@ -135,14 +145,15 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin) {
         if (!start || !max) return std::nullopt;
         g.ids.push_back(m.id);
         g.bases.push_back(m.base);
+        g.facings.push_back(core::move_start_facing_deg(origin, m.id).value_or(m.facing_deg));
         g.starts.push_back(*start);
         g.max_mm.push_back(*max);
         g.unit_max_mm = g.unit_max_mm < 0.0f ? *max : std::min(g.unit_max_mm, *max);
     }
-    g.enemies = core::enemy_models(origin, u->side);
+    g.enemies = core::posed_enemy_models(origin, u->side);
     for (const core::Unit& other : origin.units) {
         if (other.side != u->side || other.id == u->id) continue;
-        for (const core::PlacedModel& p : core::placed_models(other)) g.others.push_back(p);
+        for (const core::Model& m : other.models) g.others.push_back(core::posed_of(m));
     }
     if (const core::Unit* e = closest_enemy(origin, *u)) {
         std::vector<Position> ps;
@@ -150,43 +161,63 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin) {
         g.enemy_centroid = centroid_of(ps);
         g.has_enemy = true;
     }
+    for (const core::Base& b : g.bases) g.radius.push_back(avoid_radius_mm(b));
+    for (std::size_t i = 0; i < g.bases.size(); ++i) g.extents.push_back(edge_extents(g.bases[i], g.facings[i]));
+    for (const core::PosedModel& e : g.enemies) g.enemy_radius.push_back(avoid_radius_mm(e.base));
+    for (const core::PosedModel& o : g.others) g.other_radius.push_back(avoid_radius_mm(o.base));
+    g.all_round = std::all_of(g.bases.begin(), g.bases.end(),
+                              [](const core::Base& b) { return b.shape == core::BaseShape::Round; });
     return g;
 }
 
+// D-074 part 3: by the base's half extents at its facing (round: its radius both ways, as before).
 bool on_battlefield(const MoveGeometry& g, std::size_t i, const Position& p) {
-    const float r = core::base_radius(g.bases[i]) + kEdgeMarginMm;
-    return p.x >= r && p.x <= g.width - r && p.y >= r && p.y <= g.depth - r;
+    const float rx = g.extents[i].half_x_mm + kEdgeMarginMm;
+    const float ry = g.extents[i].half_y_mm + kEdgeMarginMm;
+    return p.x >= rx && p.x <= g.width - rx && p.y >= ry && p.y <= g.depth - ry;
 }
 
-// 03.01: the straight line from `a` to `b` doesn't pass through an enemy model (unless the move may).
+// 03.01: the straight line from `a` to `b` doesn't pass through an enemy model (unless the move may). D-074 part 3:
+// by the circumscribed circles (avoid).
 bool segment_clear(const MoveGeometry& g, std::size_t i, const Position& a, const Position& b) {
     if (g.through_enemies) return true;
-    const float r = core::base_radius(g.bases[i]);
-    for (const core::PlacedModel& e : g.enemies) {
-        if (client::point_segment_distance(e.position, a, b) < r + core::base_radius(e.base)) return false;
+    const float r = g.radius[i];
+    for (std::size_t k = 0; k < g.enemies.size(); ++k) {
+        if (client::point_segment_distance(g.enemies[k].position, a, b) < r + g.enemy_radius[k]) return false;
     }
     return true;
 }
 
 // The end positions: on the battlefield, not on another model, out of engagement range (09.05-09.07 After Moving)
-// and in coherency (03.03).
+// and in coherency (03.03). D-074 part 3: Engagement Range and other models by the circumscribed circles (avoid),
+// coherency by core's pose-aware check (each model at its facing).
 bool ends_ok(const MoveGeometry& g, const std::vector<Position>& ends) {
     for (std::size_t i = 0; i < ends.size(); ++i) {
         if (!on_battlefield(g, i, ends[i])) return false;
-        for (const core::PlacedModel& e : g.enemies) {
-            const float d = core::base_distance(ends[i], g.bases[i], e.position, e.base);
+        const float r = g.radius[i];
+        for (std::size_t k = 0; k < g.enemies.size(); ++k) {
+            // avoid_gap_mm (base_distance's formula with the circumscribed radii)
+            const float d = std::max(0.0f, core::centre_distance(ends[i], g.enemies[k].position) - r - g.enemy_radius[k]);
             if (!(d > core::kEngagementRangeMm + core::EPS_MM + kEngagedMarginMm)) return false;
         }
-        for (const core::PlacedModel& o : g.others) {
-            if (core::bases_overlap(ends[i], g.bases[i], o.position, o.base)) return false;
+        for (std::size_t k = 0; k < g.others.size(); ++k) {
+            // avoid_overlap (bases_overlap's formula with the circumscribed radii)
+            if (core::centre_distance(ends[i], g.others[k].position) < r + g.other_radius[k] - core::EPS_MM) return false;
         }
         for (std::size_t j = i + 1; j < ends.size(); ++j) {
-            if (core::bases_overlap(ends[i], g.bases[i], ends[j], g.bases[j])) return false;
+            if (core::centre_distance(ends[i], ends[j]) < r + g.radius[j] - core::EPS_MM) return false;
         }
     }
-    std::vector<core::PlacedModel> placed;
-    for (std::size_t i = 0; i < ends.size(); ++i) placed.push_back(core::PlacedModel{g.ids[i], ends[i], g.bases[i]});
-    return core::check_coherency(placed).ok();
+    if (g.all_round) {  // the round-only check, as before
+        std::vector<core::PlacedModel> placed;
+        for (std::size_t i = 0; i < ends.size(); ++i) placed.push_back(core::PlacedModel{g.ids[i], ends[i], g.bases[i]});
+        return core::check_coherency(placed).ok();
+    }
+    std::vector<core::PosedModel> placed;
+    for (std::size_t i = 0; i < ends.size(); ++i) {
+        placed.push_back(core::PosedModel{g.ids[i], ends[i], g.bases[i], g.facings[i]});
+    }
+    return core::check_coherency(std::span<const core::PosedModel>(placed)).ok();
 }
 
 // "3\" back", "2\" obliquely towards": the centroid's move relative to the line to the enemy.
@@ -258,8 +289,9 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_proposals(const 
     const auto free_at = [&](std::size_t i, const Position& p, bool avoid_slots) {
         for (std::size_t j = 0; j < n; ++j) {
             if (j == i) continue;
-            if (core::bases_overlap(p, g.bases[i], now[j], g.bases[j])) return false;
-            if (avoid_slots && !done[j] && core::bases_overlap(p, g.bases[i], ends[j], g.bases[j])) return false;
+            const float touching = g.radius[i] + g.radius[j] - core::EPS_MM;  // avoid_overlap
+            if (core::centre_distance(p, now[j]) < touching) return false;
+            if (avoid_slots && !done[j] && core::centre_distance(p, ends[j]) < touching) return false;
         }
         return true;
     };
@@ -286,7 +318,8 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_proposals(const 
         bool parked_one = false;
         for (const std::size_t i : order) {
             if (done[i] || parked[i]) continue;
-            const float step = core::base_radius(g.bases[i]) * 2.0f + kParkMm;
+            // D-075: clear of its own start at every facing (the circumscribed circle: room for a 120 mm oval).
+            const float step = g.radius[i] * 2.0f + kParkMm;
             for (const client::UnitVector& d : client::kDirections16) {
                 const Position p{g.starts[i].x + d.x * step, g.starts[i].y + d.y * step, g.starts[i].z};
                 if (!on_battlefield(g, i, p) || core::more_than(step, g.max_mm[i]) ||
@@ -294,10 +327,12 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_proposals(const 
                     continue;
                 }
                 bool clear_of_others = true;
-                for (const core::PlacedModel& o : g.others)
-                    clear_of_others = clear_of_others && !core::bases_overlap(p, g.bases[i], o.position, o.base);
-                for (const core::PlacedModel& e : g.enemies)
-                    clear_of_others = clear_of_others && !core::bases_overlap(p, g.bases[i], e.position, e.base);
+                for (std::size_t k = 0; k < g.others.size(); ++k) {
+                    clear_of_others = clear_of_others && !avoid_overlap(p, g.bases[i], g.others[k].position, g.others[k].base);
+                }
+                for (std::size_t k = 0; k < g.enemies.size(); ++k) {
+                    clear_of_others = clear_of_others && !avoid_overlap(p, g.bases[i], g.enemies[k].position, g.enemies[k].base);
+                }
                 if (!clear_of_others) continue;
                 out.push_back(core::action::ProposeModelMove{g.ids[i], {p}});
                 now[i] = p;
@@ -329,8 +364,9 @@ std::optional<MoveCandidate> formation(const MoveGeometry& g, int ranks, float o
     float spacing = 0.0f;
     float radius = 0.0f;
     for (const core::Base& b : g.bases) {
-        spacing = std::max(spacing, b.diameter_mm + kSlotGapMm);
-        radius = std::max(radius, core::base_radius(b));
+        // D-074 part 3: slots by the circumscribed circles (round: the diameter and the radius, as before).
+        spacing = std::max(spacing, 2.0f * avoid_radius_mm(b) + kSlotGapMm);
+        radius = std::max(radius, avoid_radius_mm(b));
     }
     const std::size_t per_rank = (n + static_cast<std::size_t>(ranks) - 1) / static_cast<std::size_t>(ranks);
     // Slots relative to the centre: rank 0 is the front (towards the enemy).
@@ -685,6 +721,13 @@ std::vector<MoveCandidate> move_candidates(const GameState& origin) {
     return out;
 }
 
+std::optional<std::vector<core::action::ProposeModelMove>> slot_moves(const GameState& origin,
+                                                                      const std::vector<Position>& ends) {
+    const std::optional<MoveGeometry> geo = geometry_of(origin);
+    if (!geo || ends.size() != geo->starts.size()) return std::nullopt;
+    return slot_proposals(*geo, ends);
+}
+
 std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const GameState& origin, Generation gen) {
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
@@ -722,7 +765,7 @@ std::optional<PlannedMove> furthest_standing_move(const GameState& origin) {
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
-    const std::vector<core::PlacedModel> enemies = core::enemy_models(origin, u->side);
+    const std::vector<core::PosedModel> enemies = core::posed_enemy_models(origin, u->side);
     if (enemies.empty()) return std::nullopt;
     const std::vector<MoveCandidate> cands = move_candidates(origin);
     // Each candidate's closest approach to an enemy model, edge to edge; the furthest first (stable: ties keep the
@@ -732,8 +775,9 @@ std::optional<PlannedMove> furthest_standing_move(const GameState& origin) {
     for (std::size_t i = 0; i < cands.size(); ++i) {
         float closest = std::numeric_limits<float>::max();
         for (std::size_t k = 0; k < cands[i].ends.size() && k < u->models.size(); ++k) {
-            for (const core::PlacedModel& e : enemies) {
-                const float d = core::base_distance(cands[i].ends[k], u->models[k].base, e.position, e.base);
+            const core::BasePose at{cands[i].ends[k], u->models[k].base, u->models[k].facing_deg};  // D-074 part 3
+            for (const core::PosedModel& e : enemies) {
+                const float d = core::base_distance(at, e.pose());
                 closest = std::min(closest, d);
             }
         }

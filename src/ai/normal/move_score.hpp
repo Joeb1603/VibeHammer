@@ -58,6 +58,8 @@
 #include "analysis/odds.hpp"
 #include "analysis/threat.hpp"
 #include "core/geometry/coherency.hpp"
+#include "core/geometry/oval.hpp"
+#include "core/geometry/pose.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/state/game_state.hpp"
@@ -170,6 +172,8 @@ public:
 
     [[nodiscard]] const core::GameState& origin() const noexcept { return origin_; }
     [[nodiscard]] const core::Unit& unit() const noexcept { return us_; }
+    // D-074 part 3: every model of unit() has a round base (the round-only code paths, as before M66).
+    [[nodiscard]] bool unit_round() const noexcept { return us_round_; }
     [[nodiscard]] const core::Unit* enemy() const noexcept { return enemy_ ? &*enemy_ : nullptr; }
     [[nodiscard]] analysis::OddsCache& cache() noexcept { return cache_; }
     [[nodiscard]] const MoveWeights& weights() const noexcept { return weights_; }
@@ -251,7 +255,11 @@ private:
     Generation generation_ = Generation::Current;
     core::Unit us_;
     std::optional<core::Unit> enemy_;
-    std::vector<core::PlacedModel> enemy_models_;
+    std::vector<core::PosedModel> enemy_models_;  // D-074 part 3: with facings
+    bool us_round_ = true;     // D-074 part 3: every model of ours is round (the round-only code, as before)
+    bool enemy_round_ = true;  // every model of enemy() is round
+    std::vector<core::BaseExtents> us_extents_;     // D-074 part 3: our models' half extents at their facings
+    std::vector<core::BaseExtents> enemy_extents_;  // enemy()'s models' half extents at their facings
     core::Position enemy_centroid_;
     analysis::TargetSnapshot enemy_snap_;
     std::vector<float> our_ranges_;  // distinct usable ranged ranges (band_of)
@@ -277,7 +285,8 @@ private:
     // D-066: an enemy unit other than enemy(), with its rates against us and ours against it.
     struct Other {
         core::Unit unit;
-        std::vector<core::PlacedModel> models;
+        std::vector<core::PosedModel> models;
+        bool round = true;  // D-074 part 3: every model of it is round
         analysis::TargetSnapshot snap;
         analysis::ThreatRanges threat;
         std::vector<float> ranges;  // its distinct usable ranged ranges (bands of its shooting at us)

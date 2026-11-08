@@ -126,8 +126,9 @@ void apply_results(GameState& gs, core::UnitId unit, const std::vector<core::Dam
     std::erase_if(u->models, [](const core::Model& m) { return m.wounds_remaining <= 0; });
 }
 
-int coherency_problem_count(const std::vector<core::PlacedModel>& models) {
-    const core::CoherencyResult c = core::check_coherency(models);
+// D-074 part 3 (M66): each model at its facing (round bases: check_coherency's round result).
+int coherency_problem_count(const std::vector<core::PosedModel>& models) {
+    const core::CoherencyResult c = core::check_coherency(std::span<const core::PosedModel>(models));
     return static_cast<int>(c.isolated.size() + c.too_far.size());
 }
 
@@ -137,12 +138,12 @@ void restore_coherency(GameState& gs, core::UnitId unit) {
     core::Unit* u = gs.find_unit(unit);
     if (u == nullptr) return;
     while (u->models.size() > 1) {
-        const std::vector<core::PlacedModel> placed = core::placed_models(*u);
+        const std::vector<core::PosedModel> placed = core::posed_models(*u);
         if (coherency_problem_count(placed) == 0) return;
         std::size_t best = 0;
         int best_problems = -1;
         for (std::size_t i = 0; i < placed.size(); ++i) {
-            std::vector<core::PlacedModel> rest = placed;
+            std::vector<core::PosedModel> rest = placed;
             rest.erase(rest.begin() + static_cast<std::ptrdiff_t>(i));
             const int p = coherency_problem_count(rest);
             if (best_problems < 0 || p < best_problems) {

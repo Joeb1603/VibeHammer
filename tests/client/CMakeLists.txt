@@ -30,6 +30,7 @@ add_executable(wh40k_client_tests
     m62_test.cpp
     m63_test.cpp
     m65_test.cpp
+    m66_test.cpp
     rules_help_test.cpp
     client_logic_test.cpp)
 

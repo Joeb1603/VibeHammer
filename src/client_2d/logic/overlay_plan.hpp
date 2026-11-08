@@ -38,11 +38,17 @@ struct Ring {
 // Preview positions for models being dragged (D-028): their rings follow the cursor (a ring with a fixed
 // `centre` stays put).
 using PositionOverrides = std::vector<std::pair<core::ModelId, core::Position>>;
+// D-074 part 3 (M66): preview facings for a dragged oval being turned: its rings turn with it.
+using FacingOverrides = std::vector<std::pair<core::ModelId, float>>;
 
 // The circles of `rings`: centred on each model (or its override), radius = base radius + the ring's
 // distance (edge to edge, 01.04). Rings of models no longer on the battlefield are skipped.
+// D-074 part 3: round an oval base, the Engagement Range, coherency and weapon range rings are the ellipse's offset
+// outline at the model's facing (Circle::oval); the movement and charge rings stay circles of its circumscribed radius
+// plus the distance (exact: a model may turn freely, 03.01, so some part of its base can reach all of that disc).
 [[nodiscard]] std::vector<Circle> ring_circles(const core::GameState& state, const std::vector<Ring>& rings,
-                                               const PositionOverrides& overrides = {});
+                                               const PositionOverrides& overrides = {},
+                                               const FacingOverrides& facings = {});
 
 // The ring's name and what it means in full, for the board tooltip and the legend's hover tooltip.
 [[nodiscard]] std::string_view ring_name(RingKind kind);

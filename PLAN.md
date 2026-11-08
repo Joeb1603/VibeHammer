@@ -2854,7 +2854,7 @@ client or the bots changes: they still call the round-only functions, and `base_
 
 ---
 
-## M66: Oval bases in the client and bots; big-base polish
+## M66: Oval bases in the client and bots; big-base polish ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Decision:** D-074 (part 3), D-075
 
 > **Client.**
@@ -2876,6 +2876,140 @@ client or the bots changes: they still call the round-only functions, and `base_
 - Client `M66_` tests.
 - Screenshots of the Tyrannofex at several facings, mid-rotation and with its reach area.
 - Old play and replays unchanged.
+
+**Results (2026-11-08):** decisions D-074 part 3 (client and bots) and D-075 (big-base polish). No design stop
+(pre-approved). Nothing in `wh40k_core` changes: the client logic and the bots move from the round-only functions to
+core's pose-aware ones (D-074 part 2), and every move they build is still checked by the engine.
+- **Client logic** (`wh40k_client_logic`):
+  - *New `base_shape.hpp/.cpp`:* the outline of a base at its facing and the ring a distance out from its edge (the
+    ellipse's offset curve), `base_contains` / `offset_contains` (hit-testing), `turn_swept_outline` (the turn's swept
+    area, exact per direction), `contact_ring` / `ring_spot` / `distance_until_gap` (contact round an oval: closed form
+    for a round–oval pair, bisection for two ovals), D-075's `contact_direction_count` and `direction_table`, and
+    `wound_display`.
+  - *Shaded area (`reach_area`):* `ReachRegion` carries core's `ReachShape`s (`inside_any_shapes`, `outside_shapes`,
+    `outside_shape_shadows`); `in_region` tests them exactly (core's `reach_shape_contains`, the engine's line test for
+    a shape's shadow); `reach_spans` bisects each shape's (convex) row interval to 0.5 mm; `unit_region`,
+    `trimmed_region` and `RayRefusals` handle shapes; `turn_blocked` empties the area.
+  - *Fix illegal moves (`drop_fix`):* engagement shapes become "not on it", shapes become chains of edge points for the
+    nearest-spot search (0.05 mm on the legal side), shadows get tangent lines, the drag line is cut at the chains.
+  - *Rings:* `Circle::oval` (`OvalRing`), `ring_contains`, `outline_paths`; `outline_arcs` hides a circle's rim inside
+    a same-kind oval ring; `ring_circles` gives an oval its offset ring for Engagement Range, coherency and weapon
+    range, at its facing or the dragged one (`FacingOverrides`).
+  - *Moves (`move_plan`):* `extend_path` keeps `ModelPath::facings`; `model_path_facings`, `extend_path_turned`,
+    `turned_drop` (turn then move, else move then turn by core's validation, else turn then move), `describe_path`,
+    `Ruler::turned_deg`, D-075's `drag_drop`.
+  - *Auto moves:* M65's guard removed; `auto_charge_move` / `auto_fight_move` keep an oval's facing, measure every pair
+    with the pose-aware distance, sample contact round big bases more finely (D-075), share each target's contact
+    spots across a unit's models, and keep the old code for round-only problems.
+  - *`fight_move_skip`, `casualty_order` (and so `casualty_picks`, Normal's and Hard's casualty orders):* posed;
+    `coherency_losses` gains a `PosedModel` overload.
+  - *Text:* the log ("model 73 turns 45° then moves 3.00\"") and the action label ("Move model 73 (turns 45° then
+    moves 3.00\")"); paths without facings keep the old text.
+  - *Flags:* `--turn <model>:<deg>[:<dx>,<dy>]` (`CliTurn`, a scripted turned drag for screenshots).
+- **Client** (`src/client_2d`): ovals drawn at their facing (`fill_base`, `draw_base_outline`, `draw_base_cross`:
+  models, start ghosts, the drag ghost, selection and target outlines, the D-042 / D-051 crosses and rings);
+  `model_at` hit-tests the ellipse; Q / E turn a dragged oval 15°, Shift+wheel 5° a notch; a drag without moving
+  turns in place; the turn preview (the swept area where the turn is made, the start footprint, the ghost at the new
+  facing); the ruler reads "turned 60° then 3.61\" / 9.00\""; the shaded area and the fix region follow the dragged
+  facing (the spans of an area with shapes are cached until the move, model, facing, zoom or grab changes); oval
+  rings drawn as paths; the drag keeps its grab offset; wounds past W 6 as a bar and "11/16"; the tooltip names the
+  oval and its facing; the help line and the move hint give the turn keys. In a `--screenshot` run `--zoom` is applied
+  every frame (a late window resize used to undo it).
+- **Bots** (`src/ai`): no level turns an oval (proposals without facings). New `bounds.hpp` (circumscribed circles
+  where a site avoids something, exact pose distances where it must reach something, exact half extents at the fixed
+  facing for the battlefield edge; each the old formula for a round base). Converted: Normal's `movement.cpp`
+  (geometry, `segment_clear`, `ends_ok`, slots, the parking step, formations, the furthest standing move; precomputed
+  radii and extents; the round-only coherency check for an all-round unit), `move_score` (posed enemies and other
+  units, facings from the move's start, extents for the room to back away, round fast paths), `defense` (posed
+  coherency losses), Hard's `lookahead` (`translation_ok`), `evaluator` (`room_away`), `hard_bot` (posed coherency),
+  `charge_odds` (posed charge reach). `normal::slot_moves` exposes the slot proposals for the parking test.
+- **Tests** (all pass):
+  - `tests/client/m66_test.cpp` (20): `M66_BaseShape` (3: hit-testing at facings 0/30/45/90/-60 and the round test
+    unchanged; the outline on the ellipse and the ring its offset curve, not a scaled ellipse; the turn's swept area
+    holds the base at every facing of the turn), `M66_MovePlan` (2: extending a turned path keeps the turn; turn then
+    move, the move-then-turn fallback by the battlefield edge, refused both ways, the turn in place, a 180° turn is no
+    turn), `M66_ReachArea` (2: an oval's shading at facings 30 and 90 against `validate_action` plus
+    `move_end_problems` — `in_region` agrees at every sample, and the spans outside a 1 mm band; a round model's area
+    round the Tyrannofex, and `trimmed_region` with shapes), `M66_DropFix` (1), `M66_AutoMoves` (4: the Tyrannofex
+    charging at facings 0/45/90 and rolls 6/9/12; units charging it at four facings; pile-ins with it as mover and as
+    target; D-075's direction counts, perimeters and contact rings), `M66_Casualties` (1, every frame of the M65
+    replay), `M66_FightMoveSkip` (1), `M66_Rings` (1), `M66_Text` (1), `M66_Drag` (1), `M66_Wounds` (1),
+    `M66_LaunchOptions` (1), and `M66_RoundOnly.TheClientLogicGivesTheM65OutputsOnRoundOnlyStates`: FNV hashes of the
+    reach spans, engaged spans, `in_region` and trimmed regions, drop problems and fixed drops, ring circles and arcs,
+    move plans and their text, the default casualty order and coherency losses, the auto charge and fight moves and
+    step skipping on round-only states (V1, Strike, the round monster fixture, charges, pile-ins, a consolidation)
+    equal the values the M65 code (5f8fd78, built from `git archive` in the scratchpad) gave for the same probe (on
+    Linux x86-64 with glibc; skipped elsewhere, since some outputs go through libm).
+  - `tests/ai/m66_test.cpp` (6, plus 2 disabled): `M66_Bounds` (2: the circles bound the exact distance at every
+    facing; every round formula is the old one to the bit), `M66_Park.TheParkStepFindsRoomForA120mmOval` (two
+    Tyrannofexes swapping places: parked 121 mm, every proposal accepted, facings kept),
+    `M66_Bots.EasyAndNormalDecideLegallyAtTheTyrannofexsDecisions`, `M66_Bots.HardDecidesLegallyAtTheTyrannofexsDecisions`
+    (its move, its Normal move, its charge, a charge into it), `M66_Bots.EasyAndNormalPlayTheTyrannofexClean` (the
+    hand-placed fixture either side first and the roster fixture: 18 games), and the disabled
+    `DISABLED_EasyAndNormalThirtyGamesEachPairingOnTheRosterFixture` (the four 30-game pairings: passes in Release in
+    88 s) and `DISABLED_HardPlaysTheTyrannofexClean` (four Hard games on the hand-placed fixture, either side first;
+    the roster fixture's Hard games are the arena's, below).
+  - **Existing test changed:** `M65_AutoMove.OvalBasesAreRefusedCleanlyUntilM66` is now
+    `M65_AutoMove.OvalBasesArePlannedSinceM66`: the same set-up, now asserting that both auto moves plan the Tyrannofex
+    and that the engine accepts every move. M66 removes the limitation (the temporary guard) the test asserted; nothing
+    is weakened. No other test changed.
+  - ctest (Debug and Release): 1075 -> 1101 tests, all pass.
+- **No replay:** engine replays exercise neither the client nor the bots, the engine's oval flow is already
+  `m65_oval_tyrannofex.json`, and a bot game on the Tyrannofex fixture would record Easy's play of the roster units,
+  which M68 changes.
+- **Acceptance:**
+  - *Every site on M65's list converted or made correct:* **met** (the list's files above; nothing on the bots' or the
+    client logic's paths calls a round-only function with an oval any more: the fixture runs below throw nothing, and
+    the live client under `xvfb-run` with `--scenario tests/data/scenarios/rosters_tyrannofex_44x60.json --seed 1 --bot
+    both --bot-level normal --bot-steps 600` plays the whole game, 538 bot actions, to its end; M65's client threw at
+    the first casualty decision).
+  - *The temporary auto-move guard removed:* **met.**
+  - *Client `M66_` tests:* **met** (20).
+  - *Every level plays the Tyrannofex fixture with zero rejected actions, reverts and fallbacks:* **met** for every
+    level (Hard slowly). Easy and Normal: the Release arena on `tests/data/scenarios/rosters_tyrannofex_44x60.json`, 30
+    games each of Easy–Easy, Normal–Normal, Easy–Normal and Normal–Easy (seeds 1–30): 120 games, all finished, rejected
+    0, reverted 0, fallbacks 0; decision p95 0.6–8.9 ms, max 1.0 s (the same four pairings also pass as the disabled ai
+    test in Release). Hard: the disabled `M66_Bots.DISABLED_HardPlaysTheTyrannofexClean` (four games on the five-unit
+    hand-placed fixture, either side first, Hard against Hard, Normal and Easy) passes in Release (17 s); Hard against
+    Hard there (seeds 661 and 662, either side first: 4 games, all clean): 653 decisions, p50 0.0 ms, p95 132–145 ms
+    (two runs), max 1.9 s (Release, with other games running). On the roster fixture
+    (`tests/data/scenarios/rosters_tyrannofex_44x60.json`: 14 units, 73 models) the Release arena, Hard against Hard,
+    seeds 1–4, one game each: all four finished, rejected 0, reverted 0, fallbacks 0; 509, 525, 506 and 478 decisions;
+    p50 0.01 ms; p95 23.5, 23.4, 23.2 and 23.2 s; max 43.8, 45.3, 37.2 and 38.3 s; 1317–1511 s a game (two to four games
+    at once on four cores). Each game's process holds about 2.8 GB (four at once next to a build ran out of memory; the
+    two games killed were run again). Stack samples of a fifth game (gdb, 14 samples): 13 in
+    `ChainTable::build_half_turn` and 1 in `ChainTable::pmf` (Hard's chain tables, built from `hard_plan_unit_move`),
+    none in M66's geometry: the time is Hard's search over 14 units, which M69 owns. At over 20 minutes a game, the
+    roster fixture's Hard games are the arena's; the disabled ai test plays the hand-placed fixture.
+  - *Old play and replays unchanged:*
+    - **met:** `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave all 18 replays byte-identical
+      (no new replay);
+    - **met:** the final Release arena's `--per-game` output matches `baseline/m60` on every `game` line for all 24
+      pairings of V1, both bot scenarios and Strike (4,380 games; also with two earlier builds);
+    - **met:** `M66_RoundOnly` (above) for the client logic.
+    - *Changed on purpose:* D-075's finer contact sampling changes the auto moves round round bases bigger than 32 mm,
+      so round-only play on the roster fixtures changes (no base in the 24 files is bigger than 32 mm): Normal vs
+      Normal on `tests/data/scenarios/rosters_no_tyrannofex_44x60.json`, seeds 1–10: 5 of the 10 games differ from
+      M65's, all clean, decision p95 6.08 ms against 6.04 ms. The parking step is the old one for a round base.
+  - *Strike timing within 5% of M65* (`verify_arena_m65`, Normal vs Normal, 60 games, run alternately four times
+    each): **met**, M65 9.04, 9.56, 8.69, 9.22 s (mean 9.13), M66 9.19, 9.29, 9.55, 8.88 s (mean 9.23): +1.1%; decision
+    p95 5.73–5.97 ms against 5.82–6.06 ms. callgrind on a 3-game run: 4.519e9 instructions against 4.487e9 (+0.7%).
+    (A first build was +4.6%; precomputing the bounding radii and extents and keeping the round-only calls in the
+    hot loops brought it back.)
+  - *Screenshots* (scratchpad `m66/`): the Tyrannofex at facings 0, 45 and 90 (`tyrannofex_facing_*.png`,
+    `tyrannofex_facings_0_45_90.png`); mid-rotation with the turn preview (`turn_in_place_75.png`,
+    `turn_and_drag_60.png`); its reach area at facings 60 and 90 with the Engagement Range band
+    (`turn_and_drag_60.png`, `reach_area_facing_90.png`); an auto charge into it (`auto_charge_into_tyrannofex.png`:
+    10 Legionaries engaged, 7 in base contact); the wound display (`wounds_big_models.png`: 11/16 and 7/10 bars,
+    a W 4 Tyrant Guard's pips); a turned move's path and start ghost (`turned_then_moved_path.png`). Saves made by a
+    scratch tool (`m66/tool/make_saves.cpp`) and loaded with `--load`.
+- **Open:**
+  - The bots never turn an oval (D-074 part 3): turning candidates for the Tyrannofex are M68 / M69's.
+  - Hard on the roster fixture is slow (above); M69 owns Hard's speed. Normal's worst decision on the fixture is 1.0 s
+    (the Tyrannofex's own move planning was 0.75 s before the closed-form contact ring, now 0.25 s); M68 owns Normal's
+    time targets.
+  - The shading of an area with shapes may be off by up to 0.5 mm at a shape's edge, and miss a shadow sliver narrower
+    than its 0.5 mm samples (documented in D-074 part 3); what is accepted is decided exactly.
 
 ---
 

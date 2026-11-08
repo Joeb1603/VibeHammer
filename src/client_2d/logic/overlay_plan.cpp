@@ -95,7 +95,7 @@ std::vector<Ring> plan_overlays(const core::GameState& state, std::optional<core
 }
 
 std::vector<Circle> ring_circles(const core::GameState& state, const std::vector<Ring>& rings,
-                                 const PositionOverrides& overrides) {
+                                 const PositionOverrides& overrides, const FacingOverrides& facings) {
     std::vector<Circle> out;
     for (const Ring& ring : rings) {
         const core::Unit* unit = nullptr;
@@ -107,10 +107,19 @@ std::vector<Circle> ring_circles(const core::GameState& state, const std::vector
         }
         // D-074 (M65): the base's circumscribed radius (for a round base its radius, as before). For an oval it is half
         // its length: exact for the movement and charge rings (a model may turn freely, 03.01, so some part of its base
-        // can reach all of that disc); round the other rings it is the circle through the oval's ends, at most
-        // (length - width) / 2 wider than the range across its width.
-        // TODO(M66): draw the oval's own offset outline for the engagement, coherency and weapon range rings.
-        out.push_back(Circle{centre, core::circumscribed_radius(m->base) + ring.distance_mm, ring.kind});
+        // can reach all of that disc), and the bound of its other rings.
+        Circle c{centre, core::circumscribed_radius(m->base) + ring.distance_mm, ring.kind, std::nullopt};
+        const bool turns_with_it = ring.kind == RingKind::Engagement || ring.kind == RingKind::Coherency ||
+                                   ring.kind == RingKind::WeaponRange;
+        if (m->base.shape != core::BaseShape::Round && turns_with_it && !ring.centre) {
+            // D-074 part 3: the ellipse's offset outline at the model's facing (or the facing it is being turned to).
+            float facing = m->facing_deg;
+            for (const auto& [id, f] : facings) {
+                if (id == ring.model) facing = f;
+            }
+            c.oval = OvalRing{m->base, facing, ring.distance_mm};
+        }
+        out.push_back(c);
     }
     return out;
 }

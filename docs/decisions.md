@@ -3163,3 +3163,136 @@ agreed with the user in planning; *conservative* marks the reading that permits 
   14, Side B, the roster loadout: powerful limbs, stinger salvoes, fleshborer hive), behind the west Screamer-killer
   (`centre_x_in` 23, `depth_in` 4, facing 0). `tests/support/monster_fixtures.hpp` gains a hand-placed Tyrannofex
   layout for focused tests and the replay `m65_oval_tyrannofex.json`.
+
+### Part 3 (M66): the client and the bots
+**Decided:** 2026-11-08 (M66 of the pre-approved M59–M70 batch; no design stop). Conservative choices are marked
+*conservative*. Nothing in `wh40k_core` changes: the client logic and the bots move off the round-only functions onto
+core's pose-aware ones (part 2), and every move they build is still checked by the engine.
+- **Drawing** (`src/client_2d`; the geometry in client logic `base_shape.hpp`). An oval is drawn at its facing: the
+  model (fill and outline, D-065's shade), its ghosts (where it started the move, at its start facing; the drag preview,
+  at the dragged facing), the selection and target outlines (offset outlines of the ellipse), the removal and casualty
+  crosses (along its axes) and the D-051 marks. The unit's number stays at the centroid. The replay viewer and the board
+  under the dice pop-ups (D-033) draw through the same code. The model tooltip says "base 92 x 120 mm oval, facing 45°".
+- **Rings (D-028).** Round an oval, the Engagement Range, coherency and weapon range rings are the ellipse's offset curve
+  at its facing (`offset_outline`: e(t) + d n(t), not a scaled ellipse), carried as `Circle::oval` with the
+  circumscribed radius plus the distance as its bound. The movement and charge rings stay circles of the circumscribed
+  radius (exact, part 2). Merging keeps D-028's rule: an oval ring hides the parts of a same-kind circle's rim inside it
+  (sampled every degree, edges bisected) and shows only its own points outside the other rings (`outline_paths`). The
+  ring tooltip tests the oval ring itself (`ring_contains`). While an oval is turned in a drag its rings turn with it.
+  Round-only rings give exactly M65's arcs.
+- **Hit-testing** (clicks, right-click datasheets, drags, hover): inside the ellipse at the model's facing
+  (`base_contains`); a round base keeps the old test.
+- **Turning while dragging (03.01 Rotating a Model: "turn it any amount around the centre of its base"; rotating does
+  not count towards the distance).**
+  - Q and E turn the dragged oval 15 degrees counter-clockwise and clockwise; Shift+wheel turns it 5 degrees a notch
+    (the wheel still zooms without Shift, or for a round base, which has no facing). The help line and the move hint
+    say so.
+  - The drag keeps its facing: the shaded area and the fix-illegal-move region are `move_reach(state, model, facing)`.
+  - The turn preview: the area the turn sweeps (`turn_swept_outline`, exact per direction: the largest radius of the
+    base over the turn), drawn where the turn is made, with the footprint it started from, and the ghost at the new
+    facing. The ruler reads "turned 45° then 1.50\" / 9.00\"".
+  - A turn in place: drag without moving past the click threshold, turn, let go (path {where it is}, one facing).
+  - The drop (`turned_drop`): turn then move (`path {to}`, `facings {f}`, the turn at the line's start) is tried first;
+    if core's validation refuses it but accepts move then turn (`path {to, to}`, `facings {now, f}`: the line at its
+    facing, then the turn at its end, 03.01's diagram "B) Rotates"), that; if it refuses both, turn then move, so the
+    engine's reasons show. With no turn (the same footprint, or a round base) it is `extend_path`, as before. The
+    client never turns a model the player didn't turn (*conservative*: no automatic rotation to make a drop fit).
+  - `move_plan`: `extend_path` keeps `ModelPath::facings` (a proposal replaces the whole path, and one without facings
+    returns the model to its start facing), so extending a turned model's path keeps its turns, the new line at its
+    facing now; the whole-unit handle keeps every facing; `model_path_facings`, `Ruler::turned_deg`.
+  - Text: the log says "model 73 turns 45° then moves 3.00\"" ("moves 3.00\" then turns 45°", "turns 90° and moves
+    ...", "turns 30°"), the action label "Move model 73 (turns 45° then moves 3.00\")" (`describe_path`, the turn
+    summed the shorter way between footprints, part 2). A path without facings keeps the old text exactly.
+- **The shaded area (D-040, D-041, D-044, D-046, D-053) with shapes.** `ReachRegion` gains `inside_any_shapes`
+  (empty, or one group per `inside_any` group), `outside_shapes` and `outside_shape_shadows` from `MoveReach`'s shapes;
+  `turn_blocked` empties the region.
+  - `in_region` is exact: a shape by core's `reach_shape_contains` (decided by its inner and outer discs first, outside
+    a 0.001 mm margin), a shape's shadow by the engine's own line test (`translation_crosses` at the blocking threshold;
+    for another threshold, an inset region of D-052, `translation_signed_distance < threshold`, the same set because
+    shrinking a convex base commutes with sweeping it, part 1).
+  - `reach_spans`: each shape crosses a row in one interval (convex, part 2), and so does a shape's shadow (the shadow
+    of a convex set from a point outside it, {f + t (k - f): k in the set, t >= 1}, is convex: a convex combination of
+    two such points is f + T (k - f) with T >= 1 and k a convex combination of the two k's). Each interval is found by
+    bisection from a part known to be inside (the inner disc's chord, or the golden-section minimum of the signed
+    distance along the row; for a shadow the inner disc's shadow, the ray beyond the obstacle's centre, or samples every
+    0.5 mm) out to the outer disc, to within 0.5 mm (or half a row step). *The documented band:* the shading may differ
+    from the exact area by that much at a shape's edge, and a sliver of a shadow narrower than the samples may be
+    missed on a row; what is accepted is decided by the engine and `in_region`, never by the spans. The client keeps
+    the spans of an area with shapes until the move, the model, the facing, the zoom or the grab point changes.
+  - `unit_region` moves the shapes with the other areas; `trimmed_region` drops shapes by their outer discs;
+    `RayRefusals` counts a group's shapes as "perhaps inside" by their outer discs, so it still never refuses a spot
+    `in_region` accepts (M54).
+- **Fix illegal moves (D-052) with shapes.** `fix_region` turns an engagement shape into "not on it" (threshold 0) and
+  drops a "still engaged" group whose circles and shapes are all engagement ones; `inset` adds to a shape's threshold
+  (a signed distance, so exact); `drop_problem` tests the shapes. The nearest spot: each shape near the drop becomes a
+  chain of segments between points on its edge every 2 degrees round the obstacle (windowed to the directions that can
+  be within 1" of the drop), at a threshold 0.05 mm on the legal side so the chords stay legal; the projections onto
+  them, their crossings with the circles, lines and other chains, and a shape shadow's tangent lines from `from`
+  (through its chain's extreme points) join the candidates, each checked by `in_region` as before. Along the drag, the
+  chains' crossings cut the line. A round-only region takes exactly the old steps.
+- **The auto moves (D-050, D-056).** M65's guard is removed. An oval mover keeps its facing (its proposals give no
+  facings); with an oval on either side, contact uses the pose-aware distance:
+  - the contact rings (and the charges' 1" and engaged rings) are `contact_ring`: for a round base and an oval, exact
+    and closed form: by central symmetry the moving centre is r + gap from the oval centred on the target (whichever
+    of the two is the oval), so it lies on that oval's offset curve, sampled evenly in the ellipse's parameter; for two
+    ovals `ring_spot`, a bisection along each direction from the target's centre on core's `signed_base_distance` (its
+    outside end, within 1e-4 mm). Either way the gap is the ring's, so a contact spot (0.005 mm) is in base contact.
+    The spots are worked out once per target, moving base, facing and ring, and shared by the unit's models;
+  - the direct line into contact is `distance_until_gap`, a bisection along the line;
+  - gaps, engagement, coherency and the quick overlap test of two movers use the pose-aware distance.
+  Round pairs, and a charge or fight move with only round bases, keep the old code (the same closed forms and the
+  round-only coherency checks). The engine still checks every proposal and the end of the move.
+- **Step skipping (D-047, D-048):** `could_make_new_contact` by the circumscribed radii (generous, as D-047 wants);
+  `nearly_in_base_contact` by the pose-aware distance at the start pose.
+- **Casualties (D-051, D-058):** the coherency table and the "closest enemy" and "engaged" keys measure each model at its
+  facing; `coherency_losses` gains a `PosedModel` overload (the `PlacedModel` one is the same at facing 0, for round
+  bases). The default order, the coherency removal, `CasualtyPicks`, Normal's casualty order and Hard's candidates work
+  with an oval on the battlefield (M65's throw at the first casualty decision is gone).
+- **The bots (D-054, D-066, D-067).**
+  - *No bot level turns an oval:* every proposal a bot makes gives no facings, so a model keeps its facing from the
+    start of the move. **Known limitation, for M68 / M69:** a bot's Tyrannofex can't turn to fit through a gap, to
+    reach contact along its length or to present its narrow side; turning candidates are left to those milestones.
+  - Bounding circles in the bots' own geometry (`src/ai/bounds.hpp`), chosen per site so the bot rarely plans a move the
+    engine refuses:
+    - *avoid* sites by the circumscribed circle (it holds the base at every facing): straight lines clear of enemy
+      bases (Normal's `segment_clear`, Hard's `translation_ok`), ending out of Engagement Range, not ending on another
+      model, the D-027 slot order and the parking step (D-075);
+    - *reach* sites by core's exact pose-aware distances: range and half range and the gaps in Normal's move scoring,
+      the charge reach (`kth_closest_model_distance`), the furthest standing move, coherency (Normal's slots, Hard's
+      coherency estimate);
+    - the battlefield edge by the base's exact half extents at its fixed facing (`base_extents`): Normal's
+      `on_battlefield`, Hard's `translation_ok`, and the room to back away in the move score and Hard's evaluator.
+    - For a round base every helper is the old formula and gives the same float (`avoid_gap_mm` is `base_distance`'s
+      expression, `avoid_overlap` is `bases_overlap`'s, `base_extents` is the radius; tested bit for bit), so round-only
+      play is unchanged. In the hot loops (Normal's move geometry, Hard's translations, the move score) the radii and
+      extents are worked out once per move, and with only round bases the old round-only calls are made (the round
+      fast path), so the round-only speed is M65's.
+  - Every plan is still simulated on the engine first, and a refused or reverted plan is dropped (the existing path).
+  - Hard's speed on the roster fixture is not tuned here (M69).
+- **Client flags (screenshots).** `--turn <model>:<deg>[:<dx>,<dy>]` starts a scripted drag of that model in the first
+  decision that moves it, turned `deg` degrees, the cursor `dx`, `dy` inches from it (it submits nothing). In a
+  `--screenshot` run `--zoom` is applied every frame (a late window resize used to fit the board again).
+- **Unchanged:** the state, the actions, the events, JSON and hashes (no new field); every round-only output of the
+  client logic (M66's tests hash them against the M65 code's) and of the bots (the arena's `--per-game` hashes).
+
+## D-075: Big-base polish: the grab offset, wounds past W 6, finer contact sampling, parking large models (M66)
+**Decided:** 2026-11-08 (M66 of the pre-approved M59–M70 batch). Client and bot conveniences, no rule changes.
+- **A drag keeps the grab offset.** A dragged model's centre keeps the offset from the cursor it was grabbed with
+  (`drag_drop`): it moves exactly as the cursor does and no longer jumps, when the drag starts, so that its centre is
+  under the cursor (up to 60 mm for the Tyrannofex). Kept for every base: for a 32 mm base the jump it removes is at most
+  16 mm, and a model grabbed at its centre moves as before. The fixed-drop cue (D-052) is drawn at the raw drop, the
+  model's spot plus the offset, instead of at the cursor. The whole-unit handle already moved by the cursor's offset.
+- **Wounds past W 6.** Up to W 6 a damaged model keeps one pip per wound (D-028). Past W 6 (the Tyrannofex W 16, the
+  Hive Tyrant and the Screamer-killers W 10) the pips would overrun the base: a bar filled to the wounds left, with
+  "11/16" under it, below the unit's number (`wound_display`). A model at full wounds still shows nothing.
+- **Finer contact sampling.** The auto moves' contact spots round a target model (D-050's contact ring, D-056's contact,
+  1" and engaged rings) number 72 × ceil(perimeter / (π × 32 mm)), so they are no further apart round the target than
+  72 round a 32 mm base (Ramanujan's second formula for an oval's perimeter): 72 round every base up to 32 mm, as before
+  (every model of the four older scenarios), 144 round 40, 50 and 60 mm bases, 216 round a 90 mm base and 288 round the
+  Tyrannofex. Round a round pair they lie along directions: 72 are the old ones; more come from core's platform-independent
+  sine and cosine (`direction_table`) in charges, and from the same `std::cos` / `std::sin` expression as the 72 in fight
+  moves (M54). Round a round–oval pair they are spread evenly in the oval's ellipse parameter (D-074 part 3's
+  `contact_ring`). This changes the auto moves round the roster's bases bigger than 32 mm (on purpose).
+- **The bots can park large models.** Normal's parking step (M43: breaking a D-027 cycle by moving one model beside
+  its start first) moves it its circumscribed diameter plus 1 mm, clear of its start at every facing (121 mm for the
+  Tyrannofex), to a spot clear of every model by the circumscribed circles.

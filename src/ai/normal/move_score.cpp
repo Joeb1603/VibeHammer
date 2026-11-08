@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "analysis/charge_odds.hpp"
+#include "bounds.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/units.hpp"
@@ -189,8 +190,13 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         };
         for (std::size_t i = 0; i < n; ++i) {
             for (std::size_t j = i + 1; j < n; ++j) {
-                const float d =
-                    core::base_distance(plan.positions[i], us.models[i].base, plan.positions[j], us.models[j].base);
+                // D-074 part 3: each model at its (fixed) facing (round bases: the old call).
+                const float d = ctx.unit_round()
+                                    ? core::base_distance(plan.positions[i], us.models[i].base, plan.positions[j],
+                                                          us.models[j].base)
+                                    : core::base_distance(
+                                          core::BasePose{plan.positions[i], us.models[i].base, us.models[i].facing_deg},
+                                          core::BasePose{plan.positions[j], us.models[j].base, us.models[j].facing_deg});
                 if (core::within(d, kCoherencyMm)) group[root(i)] = root(j);
             }
         }
@@ -223,17 +229,24 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
     if (origin.flow.move && origin.flow.move->unit == unit) {
         for (core::Model& m : us_.models) {
             for (const core::ModelStart& st : origin.flow.move->starts) {
-                if (st.model == m.id) m.position = st.position;
+                if (st.model == m.id) {
+                    m.position = st.position;
+                    m.facing_deg = st.facing_deg;  // D-074 part 3 (0 for a round base)
+                }
             }
         }
     }
+    us_round_ = all_round(us_.models);
+    for (const core::Model& m : us_.models) us_extents_.push_back(edge_extents(m.base, m.facing_deg));
     us_threat_ = analysis::threat_ranges(us_);
     our_ranges_ = ranged_ranges(us_);
     turns_ = turns_left(origin);
     start_engaged_ = core::is_engaged(origin, us_);
     if (const core::Unit* e = closest_enemy(origin, us_)) {
         enemy_ = *e;
-        enemy_models_ = core::placed_models(*e);
+        enemy_models_ = core::posed_models(*e);
+        enemy_round_ = all_round(enemy_models_);
+        for (const core::PosedModel& m : enemy_models_) enemy_extents_.push_back(edge_extents(m.base, m.facing_deg));
         enemy_centroid_ = centroid_of(positions_of(*e));
         enemy_snap_ = analysis::snapshot_of(*e);
         them_threat_ = analysis::threat_ranges(*e);
@@ -264,7 +277,8 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 if (o->id == e->id) continue;
                 Other x;
                 x.unit = *o;
-                x.models = core::placed_models(*o);
+                x.models = core::posed_models(*o);
+                x.round = all_round(x.models);
                 x.snap = analysis::snapshot_of(*o);
                 x.threat = analysis::threat_ranges(*o);
                 x.ranges = ranged_ranges(*o);
@@ -373,8 +387,13 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
     for (std::size_t i = 0; i < us_.models.size(); ++i) {
         const core::Model& m = us_.models[i];
         float gap = kFar;
-        for (const core::PlacedModel& e : enemy_models_) {
-            gap = std::min(gap, core::base_distance(positions[i], m.base, e.position, e.base));
+        if (us_round_ && enemy_round_) {  // the round-only code, as before
+            for (const core::PosedModel& e : enemy_models_) {
+                gap = std::min(gap, core::base_distance(positions[i], m.base, e.position, e.base));
+            }
+        } else {
+            const core::BasePose at{positions[i], m.base, m.facing_deg};  // D-074 part 3: range, exactly
+            for (const core::PosedModel& e : enemy_models_) gap = std::min(gap, core::base_distance(at, e.pose()));
         }
         float longest = 0.0f;
         for (const core::Weapon& w : m.weapons) {
@@ -407,12 +426,24 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
 std::vector<float> MoveScoreContext::enemy_gaps(const std::vector<core::Position>& positions) const {
     std::vector<float> out;
     out.reserve(enemy_models_.size());
-    for (const core::PlacedModel& e : enemy_models_) {
-        float gap = kFar;
-        for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
-            gap = std::min(gap, core::base_distance(positions[i], us_.models[i].base, e.position, e.base));
+    if (us_round_ && enemy_round_) {  // the round-only code, as before
+        for (const core::PosedModel& e : enemy_models_) {
+            float gap = kFar;
+            for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
+                gap = std::min(gap, core::base_distance(positions[i], us_.models[i].base, e.position, e.base));
+            }
+            out.push_back(gap);
         }
-        out.push_back(gap);
+    } else {  // D-074 part 3: each model at its facing
+        for (const core::PosedModel& e : enemy_models_) {
+            float gap = kFar;
+            for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
+                gap = std::min(gap, core::base_distance(
+                                        core::BasePose{positions[i], us_.models[i].base, us_.models[i].facing_deg},
+                                        e.pose()));
+            }
+            out.push_back(gap);
+        }
     }
     std::sort(out.begin(), out.end());
     return out;
@@ -435,14 +466,16 @@ float MoveScoreContext::room_away(const std::vector<core::Position>& positions, 
         if (dot < 0.5f) continue;  // within 60 degrees of straight away
         float t = kFar;
         for (std::size_t i = 0; i < positions.size(); ++i) {
-            const core::Base& b = ours ? us_.models[std::min(i, us_.models.size() - 1)].base
-                                       : enemy_models_[std::min(i, enemy_models_.size() - 1)].base;
-            const float r = core::base_radius(b);
+            // D-074 part 3: the edge by the base's half extents at its facing (round: its radius, as before).
+            const core::BaseExtents& ext = ours ? us_extents_[std::min(i, us_extents_.size() - 1)]
+                                                : enemy_extents_[std::min(i, enemy_extents_.size() - 1)];
+            const float rx = ext.half_x_mm;
+            const float ry = ext.half_y_mm;
             const core::Position& p = positions[i];
-            if (d.x > 1e-6f) t = std::min(t, (w - r - p.x) / d.x);
-            if (d.x < -1e-6f) t = std::min(t, (r - p.x) / d.x);
-            if (d.y > 1e-6f) t = std::min(t, (h - r - p.y) / d.y);
-            if (d.y < -1e-6f) t = std::min(t, (r - p.y) / d.y);
+            if (d.x > 1e-6f) t = std::min(t, (w - rx - p.x) / d.x);
+            if (d.x < -1e-6f) t = std::min(t, (rx - p.x) / d.x);
+            if (d.y > 1e-6f) t = std::min(t, (h - ry - p.y) / d.y);
+            if (d.y < -1e-6f) t = std::min(t, (ry - p.y) / d.y);
         }
         best = std::max(best, std::max(0.0f, t) * dot);
     }
@@ -594,7 +627,7 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
         }
         // Keep away from us, as far as the battlefield lets it.
         std::vector<core::Position> theirs;
-        for (const core::PlacedModel& e : enemy_models_) theirs.push_back(e.position);
+        for (const core::PosedModel& e : enemy_models_) theirs.push_back(e.position);
         const float room = std::min(m, room_away(theirs, false, our_centroid));
         if (room > 0.5f * core::MM_PER_INCH) {
             const float away = gap_mm + room;
@@ -690,9 +723,14 @@ std::pair<double, double> MoveScoreContext::other_ranged(Other& o, bool heavy, f
 float MoveScoreContext::gap_to_other(const Other& o, const std::vector<core::Position>& positions) const {
     float gap = kFar;
     for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
-        for (const core::PlacedModel& e : o.models) {
-            gap = std::min(gap, core::base_distance(positions[i], us_.models[i].base, e.position, e.base));
+        if (us_round_ && o.round) {  // the round-only code, as before
+            for (const core::PosedModel& e : o.models) {
+                gap = std::min(gap, core::base_distance(positions[i], us_.models[i].base, e.position, e.base));
+            }
+            continue;
         }
+        const core::BasePose at{positions[i], us_.models[i].base, us_.models[i].facing_deg};  // D-074 part 3
+        for (const core::PosedModel& e : o.models) gap = std::min(gap, core::base_distance(at, e.pose()));
     }
     return gap;
 }
@@ -707,8 +745,13 @@ double MoveScoreContext::our_shooting_at_other(std::size_t index, const std::vec
     bool any = false;
     for (std::size_t i = 0; i < us_.models.size(); ++i) {
         float gap = kFar;
-        for (const core::PlacedModel& e : o.models) {
-            gap = std::min(gap, core::base_distance(positions[i], us_.models[i].base, e.position, e.base));
+        if (us_round_ && o.round) {  // the round-only code, as before
+            for (const core::PosedModel& e : o.models) {
+                gap = std::min(gap, core::base_distance(positions[i], us_.models[i].base, e.position, e.base));
+            }
+        } else {
+            const core::BasePose at{positions[i], us_.models[i].base, us_.models[i].facing_deg};  // D-074 part 3
+            for (const core::PosedModel& e : o.models) gap = std::min(gap, core::base_distance(at, e.pose()));
         }
         gaps[i] = gap;
         bands[i] = band_of(true, gap);

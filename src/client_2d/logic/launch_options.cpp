@@ -1,6 +1,7 @@
 #include "launch_options.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <stdexcept>
 #include <system_error>
@@ -46,6 +47,33 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
             } else if (key == "--load") {
                 if (value.empty()) throw std::invalid_argument("empty");
                 o.load = value;
+            } else if (key == "--turn") {
+                // M66: <model>:<deg>[:<dx>,<dy>]
+                CliTurn t;
+                const std::size_t c1 = value.find(':');
+                if (c1 == std::string::npos) throw std::invalid_argument("expected model:deg");
+                const std::string model = value.substr(0, c1);
+                if (model.empty() || model.find_first_not_of("0123456789") != std::string::npos) {
+                    throw std::invalid_argument("not a model id");
+                }
+                t.model = static_cast<unsigned>(std::stoul(model));
+                const std::size_t c2 = value.find(':', c1 + 1);
+                std::size_t used = 0;
+                const std::string deg = value.substr(c1 + 1, c2 == std::string::npos ? std::string::npos : c2 - c1 - 1);
+                t.deg = std::stof(deg, &used);
+                if (used != deg.size() || !std::isfinite(t.deg)) throw std::invalid_argument("not a number of degrees");
+                if (c2 != std::string::npos) {
+                    const std::string offset = value.substr(c2 + 1);
+                    const std::size_t comma = offset.find(',');
+                    if (comma == std::string::npos) throw std::invalid_argument("expected dx,dy");
+                    const std::string dx = offset.substr(0, comma);
+                    const std::string dy = offset.substr(comma + 1);
+                    t.dx_in = std::stof(dx, &used);
+                    if (used != dx.size()) throw std::invalid_argument("not a number");
+                    t.dy_in = std::stof(dy, &used);
+                    if (used != dy.size()) throw std::invalid_argument("not a number");
+                }
+                o.turn = t;
             } else if (key == "--pick-dice" || key == "--pick-models" || key == "--click-units") {
                 std::vector<std::size_t> items;
                 std::size_t start = 0;

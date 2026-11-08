@@ -34,4 +34,13 @@ void draw_overlays(const BoardCamera& cam, const std::vector<Arc>& arcs, float u
     }
 }
 
+void draw_ring_paths(const BoardCamera& cam, const std::vector<RingPath>& paths, float ui_scale) {
+    const float thickness = 1.5f * ui_scale;
+    for (const RingPath& path : paths) {
+        for (std::size_t i = 1; i < path.points.size(); ++i) {
+            DrawLineEx(cam.to_screen(path.points[i - 1]), cam.to_screen(path.points[i]), thickness, ring_color(path.kind));
+        }
+    }
+}
+
 }  // namespace wh40k::client
