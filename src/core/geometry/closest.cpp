@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
 
 namespace wh40k::core {
 
@@ -14,6 +15,23 @@ bool tied(float a, float b) { return std::abs(a - b) <= EPS_MM; }
 
 float distance(const PlacedModel& a, const PlacedModel& b) {
     return base_distance(a.position, a.base, b.position, b.base);
+}
+
+float distance(const PosedModel& a, const PosedModel& b) { return base_distance(a.pose(), b.pose()); }
+
+// D-074: the posed versions repeat the round ones' steps, in the same order (the round ones are unchanged).
+template <class M>
+std::optional<float> closest_distance_of(std::span<const M> a, std::span<const M> b) {
+    std::optional<float> best;
+    for (const M& ma : a) {
+        for (const M& mb : b) {
+            const float d = distance(ma, mb);
+            if (!best || d < *best) {
+                best = d;
+            }
+        }
+    }
+    return best;
 }
 
 }  // namespace
@@ -55,6 +73,53 @@ std::vector<std::size_t> closest_units(std::span<const PlacedModel> from,
     std::optional<float> best;
     for (const auto& unit : candidates) {
         const std::optional<float> d = closest_distance(from, unit);
+        dists.push_back(d);
+        if (d && (!best || *d < *best)) {
+            best = d;
+        }
+    }
+    std::vector<std::size_t> out;
+    if (!best) {
+        return out;
+    }
+    for (std::size_t i = 0; i < dists.size(); ++i) {
+        if (dists[i] && tied(*dists[i], *best)) {
+            out.push_back(i);
+        }
+    }
+    return out;
+}
+
+// ---- D-074: posed models ----
+
+std::optional<float> closest_distance(std::span<const PosedModel> a, std::span<const PosedModel> b) {
+    return closest_distance_of(a, b);
+}
+
+std::vector<ModelId> closest_models(const PosedModel& from, std::span<const PosedModel> candidates) {
+    std::vector<ModelId> out;
+    if (candidates.empty()) {
+        return out;
+    }
+    float best = distance(from, candidates.front());
+    for (const PosedModel& c : candidates) {
+        best = std::min(best, distance(from, c));
+    }
+    for (const PosedModel& c : candidates) {
+        if (tied(distance(from, c), best)) {
+            out.push_back(c.id);
+        }
+    }
+    return out;
+}
+
+std::vector<std::size_t> closest_units(std::span<const PosedModel> from,
+                                       std::span<const std::vector<PosedModel>> candidates) {
+    std::vector<std::optional<float>> dists;
+    dists.reserve(candidates.size());
+    std::optional<float> best;
+    for (const auto& unit : candidates) {
+        const std::optional<float> d = closest_distance_of(from, std::span<const PosedModel>(unit));
         dists.push_back(d);
         if (d && (!best || *d < *best)) {
             best = d;

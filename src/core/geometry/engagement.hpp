@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/geometry/coherency.hpp"  // PlacedModel
+#include "core/geometry/pose.hpp"       // PosedModel
 #include "core/geometry/units.hpp"
 #include "core/types/ids.hpp"
 
@@ -24,5 +25,12 @@ constexpr float kEngagementRangeMm = 2.0f * MM_PER_INCH;
 // `unit` is unengaged when this is empty.
 [[nodiscard]] std::vector<ModelId> engaged_models(std::span<const PlacedModel> unit,
                                                   std::span<const PlacedModel> enemies);
+
+// D-074 (M64): the same for models of any base shape with a facing, measured with base_distance(BasePose, BasePose).
+// Round bases give the same answers as the functions above.
+[[nodiscard]] bool models_engaged(const PosedModel& a, const PosedModel& b);
+[[nodiscard]] bool units_engaged(std::span<const PosedModel> unit, std::span<const PosedModel> enemy);
+[[nodiscard]] std::vector<ModelId> engaged_models(std::span<const PosedModel> unit,
+                                                  std::span<const PosedModel> enemies);
 
 }  // namespace wh40k::core

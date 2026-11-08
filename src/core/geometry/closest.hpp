@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/geometry/coherency.hpp"  // PlacedModel
+#include "core/geometry/pose.hpp"       // PosedModel
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -28,5 +29,12 @@ namespace wh40k::core {
 // Empty candidate units are ignored.
 [[nodiscard]] std::vector<std::size_t> closest_units(
     std::span<const PlacedModel> from, std::span<const std::vector<PlacedModel>> candidates);
+
+// D-074 (M64): the same for models of any base shape with a facing, measured with base_distance(BasePose, BasePose).
+// Round bases give the same answers as the functions above.
+[[nodiscard]] std::optional<float> closest_distance(std::span<const PosedModel> a, std::span<const PosedModel> b);
+[[nodiscard]] std::vector<ModelId> closest_models(const PosedModel& from, std::span<const PosedModel> candidates);
+[[nodiscard]] std::vector<std::size_t> closest_units(std::span<const PosedModel> from,
+                                                     std::span<const std::vector<PosedModel>> candidates);
 
 }  // namespace wh40k::core
