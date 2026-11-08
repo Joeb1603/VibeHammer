@@ -701,8 +701,24 @@ std::vector<TargetOutcome> evaluate_melee(OddsCache& cache, const core::GameStat
     return evaluate_batches(cache, state, batches);
 }
 
+std::vector<ShotOptionSet> shot_option_sets(const core::GameState& state, const core::Unit& shooter) {
+    std::vector<ShotOptionSet> out;
+    for (const core::ShootingType type : core::eligible_shooting_types(state, shooter)) {
+        out.push_back(ShotOptionSet{type, core::shot_options(state, shooter, type)});
+    }
+    return out;
+}
+
 std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameState& state, core::UnitId shooter,
                                           core::UnitId target, double hazard_rate) {
+    const core::Unit* unit = state.find_unit(shooter);
+    const core::Unit* enemy = state.find_unit(target);
+    if (unit == nullptr || enemy == nullptr || core::is_destroyed(*enemy)) return std::nullopt;
+    return best_shooting(cache, state, shooter, target, hazard_rate, shot_option_sets(state, *unit));
+}
+
+std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameState& state, core::UnitId shooter,
+                                          core::UnitId target, double hazard_rate, std::span<const ShotOptionSet> sets) {
     const core::Unit* unit = state.find_unit(shooter);
     const core::Unit* enemy = state.find_unit(target);
     if (unit == nullptr || enemy == nullptr || core::is_destroyed(*enemy)) return std::nullopt;
@@ -719,8 +735,9 @@ std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameStat
     };
     std::optional<ShootingPlan> best;
     double best_value = 0.0;
-    for (const core::ShootingType type : core::eligible_shooting_types(state, *unit)) {
-        const auto options = core::shot_options(state, *unit, type);
+    for (const ShotOptionSet& set : sets) {
+        const core::ShootingType type = set.type;
+        const std::vector<core::ShotDeclaration>& options = set.options;
         std::vector<core::ShotDeclaration> chosen;
         bool any_hazardous = false;
         for (const core::Model& model : unit->models) {

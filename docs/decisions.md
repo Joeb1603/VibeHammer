@@ -3567,7 +3567,7 @@ untouched.
   tally, whatever decided the game), and every report the decision times of each side's bot alone (Normal's own p95 and
   maximum against Easy). `--per-game` lines are unchanged.
 
-## D-078: Hard for the roster units: one chain cache per game under a memory cap, the coarse wounds grid and compact tables, loadout groups, [HAZARDOUS] and 17.01, the points tiebreak in the army value, the rollout budget by units (M69; amends D-067)
+## D-078: Hard for the roster units: one chain cache per game under a memory cap, the coarse wounds grid and compact tables, loadout groups, [HAZARDOUS] and 17.01, the points tiebreak in the army value, the rollout budget by units, Normal's moves for a side of more than 7 units (M69; amends D-067)
 **Decided:** 2026-11-08 (M69 of the pre-approved M59–M70 batch; design written before the code and stopped for review, as the
 batch's run note asks; the conservative choices are marked *conservative*). Bot only (`src/ai`): no rule, core, state,
 action, event or JSON change, no new decision. Amends D-067 (Hard across several units) and the M44 notes of D-054 where
@@ -3626,7 +3626,8 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
     compact table never answers an exact spec.
   - *Sizes on the rosters:* the never-read rows of 0 wounds are dropped from every table (values unchanged); with the
     coarse grid and compact storage the 30 tables take about 525 MB at the first decision (10 half-turns) instead of
-    1.45 GB. Peak resident memory per Hard bot is then expected near 0.6 GB (target: well under 1 GB).
+    1.45 GB. Peak resident memory per Hard bot is then expected near 0.6 GB (target: well under 1 GB). Measured
+    (`/usr/bin/time -v`, 200-game arena runs): 651–662 MB for Hard against Normal, 574–610 MB for Hard vs Hard.
 - **3. Building the tables faster, with the same values** (D-068: the same expressions in the same order).
   - *Position-major layout:* a half-turn's nodes stored by line position, then by wounds cell, so each sum reads one
     position's grid (at most 12.6 KB) instead of rows scattered across the table; each pmf's nonzero range is found once;
@@ -3634,12 +3635,23 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
     Prototyped in the scratchpad: the fingerprints of every stored value of the four old scenarios' tables (V1, both bot
     scenarios, Strike, along Normal games) and of the rosters' 30 tables are bit-identical to M68's; it saves 15–20% of
     the build time (the sums are compute-bound, not memory-bound).
-  - *Parallel builds:* the tables an Evaluator needs that the cache doesn't have are built by up to min(4, hardware
-    threads) workers, each with its own `OddsCache` (whose values never depend on its contents, M40), and inserted in pair
-    order, so the cache's contents and order are the same as a serial build's. A table is a pure function of its spec, so
-    no value depends on the threads (tested: serial and parallel builds give the same fingerprints). Estimated from the
-    prototype and the per-table times (to be measured): the rosters' 30 tables, coarse and compact, about 2.6 s of work
-    single-threaded, so a first decision near 3 s without the workers (the target's limit) and near 1 s with them.
+  - *Parallel builds (approved at the design stop with conditions, all met):* the tables an Evaluator needs that the
+    cache doesn't have are built by up to `LookaheadWeights::table_workers` threads (0, the default: min(4, the
+    hardware's)), plain `std::thread`s (wh40k_ai already links `Threads::Threads`). Each worker uses its own `OddsCache`
+    (whose values never depend on its contents, M40) and writes only its own output table; the calling thread works too,
+    joins every worker before the Evaluator's constructor returns (nothing is detached or left running, whatever the
+    client does next), and then rethrows the first error in spec order (a worker catches its own). The shared cache is
+    changed only on the calling thread after the join, the new tables inserted in pair order, so its contents and order
+    are a serial build's. One table to build, or one worker: built on the calling thread with the caller's `OddsCache`,
+    as before M69 (every old scenario's case). A mixed unit's keep order (4) is worked out before the workers start, on
+    the calling thread. A table is a pure function of its spec, so no value depends on the threads (tested: 1 and 4
+    workers give the same table fingerprints and the same Hard decisions). Measured on a quiet machine: the first Hard
+    decision of a roster game takes 0.75–0.93 s with the default 4 workers and 2.73–2.92 s with 1.
+  - *The client's bot path, checked:* `BotDriver` runs one decision at a time on its `std::async` worker (a new job starts
+    only when the previous future is ready; the destructor waits for it), and the client reaches the bot only through the
+    driver, whose `set_config` / `invalidate` are applied in `start_job` or `decide_now`, when no worker runs. So nothing
+    else touches the bot's cache while a decision (and its table workers) runs; the table workers join before `decide`
+    returns.
 - **4. A unit's volley is the sum of its loadout groups.** The chain's unit was copies of its most common model. Now:
   - *The unit at full strength:* its models in the order the defender keeps them, the most valuable against the pair's
     other unit type first (Normal's `model_worth`: the model's best shooting at 0" and its best melee weapon; ties in the
@@ -3676,9 +3688,11 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
   - *Left out (conservative):* surviving units' future partial losses (the rollouts play the next turn on the engine,
     whose tally is exact); the pair chains still choose their moves on D-007 terms (each is a duel of two units).
 - **7. The rollout budget scales with the number of units, counted in simulated actions.** With n the units with models
-  when a Monte Carlo starts: up to 7 units (V1, the bot scenarios, Strike) the budget is as before, 6 rollouts of at most
-  400 simulated actions and 6000 a Monte Carlo; above 7 both the rollouts and the Monte Carlo's action budget scale by
-  7 / n (rounded down; at least 3 rollouts): 14 units 3 rollouts and 3000 actions, 10 units 4 and 4200. Each simulated
+  in the state each Monte Carlo starts from (counted afresh for every Monte Carlo, so the budget rises again as units are
+  destroyed during a game: 3 rollouts at 14 to 11 units, 4 at 10 and 9, 5 at 8, the full 6 from 7 down): up to 7 units
+  (V1, the bot scenarios, Strike) the budget is as before, 6 rollouts of at most 400 simulated actions and 6000 a Monte
+  Carlo; above 7 both the rollouts and the Monte Carlo's action budget scale by 7 / n (rounded down; at least 3
+  rollouts): 14 units 3 rollouts and 3000 actions, 10 units 4 and 4200 (`hard::rollout_budget`). Each simulated
   action costs more with more units (measured 150 µs against 50 µs), so a 14-unit MoveUnits decision runs about 1,000–1,800
   simulated actions instead of 2,000–3,500. Every option of a decision gets the same number of rollouts and the same seeds
   (as before). A new weight `LookaheadWeights::full_budget_units = 7` holds the threshold (`--weights` can change it).
@@ -3688,7 +3702,8 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
   Core is not touched: its line of sight is shared with Normal, which must play exactly as at M68.
 - **9. The old scenarios play exactly as before.** Every change acts only through facts V1, the bot scenarios and Strike
   don't have: more than 7 units with models (7), a table over 256 MiB or a side over 20 wounds (2), a mixed loadout (4), a
-  [HAZARDOUS] weapon or a MONSTER/VEHICLE (5), the points rule (6). Where code is shared (the layout, the cache, the shared
+  [HAZARDOUS] weapon or a MONSTER/VEHICLE (5), the points rule (6, and 11's keep-away move), more than 7 units with
+  models on one side (11). Where code is shared (the layout, the cache, the shared
   options, the parallel builds) it gives bit-identical values: checked by table fingerprints against the M68 code, the
   arena's `--per-game` hashes against `baseline/m60` on all 24 files, the replays (`m45_bot_game.json`,
   `m58_strike_bot_game.json` included) and the `TheSavedFileMatchesTheGame` tests. Normal's roster play: `--per-game` on
@@ -3700,6 +3715,37 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
   another unit enter only the half-turn in progress (the engine's `best_shooting` applies them there); ovals are not
   turned (D-077's measure found no cost); the Desperate Escape guard checks one to three failed rolls (as Normal's);
   Strike's Tyranid seat (M57) can't change (Strike must play as before).
+- **11. Strength on the rosters: two changes made after the design, gated as the go-ahead allows** (only on facts the
+  old scenarios don't have; no weight that V1, the bot scenarios or Strike read was changed). Release arena against
+  Normal, seeds 1–60 unless stated.
+  - *The design as built:* over 200 seeds Hard won 159 and lost 41 as the Chaos Space Marines (79.5%), but won only 93
+    and lost 107 as the Tyranids (46.5%): below Normal's own 140 of 200 from that seat against Normal (M68).
+  - *Where it lost* (a scratch build, never in the repo, letting Hard answer only some decision kinds and Normal the
+    rest): with Hard's charges, casualties, coherency and consolidations but Normal's moves the Tyranids won 45 of 60,
+    with Hard's moves only 28 (both: 29); the Chaos Space Marines with Normal's moves won 13 of 60. Hard's move search
+    is what wins the Chaos Space Marine seat and what lost the Tyranid one. Traced Tyranid games show the pattern: the
+    army value rates the Tyranids' position high early (a win at 60–100% in battle round 1), the move search then holds
+    units back (Remain Stationary for MONSTERS and infantry alike in rounds 2 and 3) while the Chaos Space Marines shoot
+    them, and the estimate is under 10% by round 4; Normal's moves close in. The calibration of the chain for these
+    units is left open (M70's tuning, or later).
+  - *Kept, 1: no keep-away move under the points rule.* D-067's extra candidate, the move ending furthest from every
+    enemy model, plays for D-007's draw; under the points tiebreak there is no draw to play for, so it is not offered
+    there (`hard_plan_unit_move`). Tyranids 29 -> 35 of 60; the Chaos Space Marines won 54 of 60, and over seeds 1–200
+    159 with the move and 159 without it.
+  - *Kept, 2: a side with more than 7 units with models moves as Normal* (`BotWeights::move_search_units = 7`, counted
+    at each decision as the rollout budget's n is). At MoveUnits and at a unit move's MoveModels Hard then answers as
+    Normal does (its move type and plan, from `normal_policy`); it still makes its own charge, casualty, coherency and
+    consolidation decisions, and searches its moves again once its side is down to 7 units. Tyranids 35 -> 44 of 60
+    (counting the side's destroyed units too, so Normal's moves all game: 45, the same within noise; not kept); the
+    Chaos Space Marines (5 units) play exactly as before; every side of V1, the bot scenarios and Strike has at most 4
+    units. Hard's Tyranid decisions also get faster (p95 9.3 ms over seeds 1–200, against 258 ms as first built).
+  - *With both, over seeds 1–200:* the Chaos Space Marines 159 wins and 41 losses (79.5%), the Tyranids 137 and 63
+    (68.5%, against Normal's own 140 of 200 from that seat), every game on points (PLAN.md M69 has the times and memory).
+  - *Tried and not kept* (each a scratch weight or build, removed): `margin` 0.05 (Tyranids 27 of 60 before change 1 and
+    32 after it; the Chaos Space Marines 39 of 60 after it, against 54); the pair chains' payoffs on points (each pair's
+    terminal valued by the points lead instead of D-007's duel terms: Tyranids 14, Chaos Space Marines 48); a wider
+    points lead (0.25 x the half-turns left / all x the sum of the squared increments added to the variance: Tyranids
+    29); 6 rollouts at every size (Tyranids 30, decision p95 354 ms, max 3.28 s); `share` 0.8 (Tyranids 33).
 - **Ambiguities and the readings taken:**
   - "One cache per game": one cache serving every decision of the game, both sides where one bot plays both (the client)
     and shared by the arena's two Hard bots; not one per decision.
@@ -3717,11 +3763,23 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
     grid alone leaves about 955 MB); it is gated on size so no old table changes.
   - Parallel builds are not in the brief either: the first decision's 30 builds are about 2.6 s of single-threaded work
     after the other savings, against a 3 s maximum; they are deterministic by construction.
+  - "Hard beats Normal in at least 60% of games in each seat": Hard's wins over all 200 games of the seat (a draw or a
+    loss is not a win); the seat's result is reported beside Normal's own from that seat (M68), since the scenario is
+    not even (Normal vs Normal: Tyranids 140 of 200).
+  - "Tune behaviour or weights inside M69 only where the change is gated on facts the old scenarios don't have": part 11's
+    two changes are gated on the points rule and on more than 7 units with models on the deciding side; no default
+    that V1, the bot scenarios or Strike read changed (the 24-file hashes).
+  - "Hard vs Hard on Strike no slower than M68's by more than 5%": the run's wall time, alternating runs; the decision
+    p95 is reported beside it.
+  - The standing brief's replay for each milestone: none for M69 (*conservative*). Its flow is Hard's play on the
+    rosters, which M70's weight sweep will change, and M70's plan adds the Hard vs Hard rosters replay; M57's bot-game
+    replay likewise came in M58.
 - **Tests (`M69_*`, `tests/ai/m69_test.cpp`):** the cache (its capacity for the rosters, deterministic eviction order,
   the cap respected, trimming, serial and parallel builds alike, the old scenarios' tables equal to the M68 code's by
   fingerprint); the coarse grid only above 20 wounds per side (and exact below); the volley as the sum of the loadout
   groups (the Havocs, the Legionaries, at full strength and with models lost); the tiebreak in the army value (the end
   exact by `core::points_destroyed`, the increments against the engine's tally of a copy with the unit destroyed, the
   sign and a tie, D-007 untouched without the rule); the rollout budget's scaling (7 units unchanged, 14 units 3
-  rollouts and 3000 actions, the cap respected); 17.01 in the translations; legality: Hard vs Normal and Normal vs Hard
-  on the rosters, a few games in ctest, more in a disabled test and the arena.
+  rollouts and 3000 actions, the cap respected); 17.01 in the translations; no keep-away move under the points rule;
+  Normal's moves for a side of more than 7 units (and Hard's own for the 5-unit side); legality: Hard vs Normal and
+  Normal vs Hard on the rosters, a few games in ctest, more in a disabled test and the arena.

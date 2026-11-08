@@ -56,6 +56,17 @@
 //   unit (every later state of any unit of those types) on a fixed line: the battlefield's diagonal in 2" bands
 //   (kMaxLine covers a 60"x44" board's 74.4"). A pair's position on that line: its real gap and the smaller of its
 //   two rooms exactly, the rest of the line to the larger room (the side with room to spare).
+//
+// M69 (D-078): the roster units.
+// - One cache for the game (ChainCache) holds every pair of unit types in play (30 on the rosters) under a cap on its
+//   bytes, evicting the least recently used table no Evaluator holds; missing tables are built by several workers.
+// - A side whose unit type starts with more than 20 wounds gets a coarser wounds grid (a level every ceil(W / 20)
+//   wounds; lookups between levels interpolate); an army whose tables would take more than 256 MiB at full precision
+//   stores them as floats. Neither applies to any table of V1, the bot scenarios or Strike (their values are M68's).
+// - A unit whose models differ in loadout is its own models in the chain (n alive: the n the defender keeps), not
+//   copies of one; [HAZARDOUS] is priced at Normal's rate.
+// - Under the points tiebreak (D-076) the army value plays for points: a finished game is the engine's result, and
+//   otherwise P(neither side wiped out) x (P(ahead on points) - P(behind)) is added to D-007's terms (duel_play: no duel).
 
 #include <array>
 #include <cstddef>
@@ -77,9 +88,23 @@ struct Duel {
     std::array<core::UnitId, 2> units;  // indexed by side_index
 };
 [[nodiscard]] std::optional<Duel> duel_of(const core::GameState& state);
+// D-078: the duel Hard plays as M44's: duel_of, and D-007's result. Under the points tiebreak (D-076) Hard keeps the army
+// path even with one unit each (the duel's chain plays for D-007's draw).
+[[nodiscard]] std::optional<Duel> duel_play(const core::GameState& state);
+
+// D-078: the points tiebreak in the army value. What destroying `unit` adds to its destroyer's points destroyed, in the
+// engine's units (numerators over `denominator`, core::points_denominator): its points x (denominator / starting wounds)
+// x the wounds it has left (core::points_destroyed counts its full points once it is destroyed, its losses so far before).
+// 0 for a unit without points or already destroyed.
+[[nodiscard]] std::int64_t points_increment(const core::Unit& unit, std::int64_t denominator);
+// D-078: T = P(side A ahead on points at the end) - P(side B ahead), from the expected margin `mu` (A's points destroyed
+// minus B's) and its variance: erf(mu / sqrt(2 variance)) by Abramowitz and Stegun 7.1.28 (arithmetic only, so the same
+// on every platform); the exact sign of mu when the variance is 0 (0 for an exact tie).
+[[nodiscard]] double points_lead(double mu, double variance) noexcept;
 
 // D-067: the longest line a chain table has, in 2" bands (76": a 60"x44" board's diagonal, 74.4", fits).
 [[nodiscard]] int max_line_buckets() noexcept;
+
 
 // D-067: the eligible charge target closest to `unit` (within 12", 11.04 Before Moving; D-010, a tie to the first in
 // unit order), nullptr if none.
@@ -97,18 +122,60 @@ struct Evaluation {
 class ChainTable;
 struct Spec;  // evaluator.cpp: a table's static description and region
 
-// Built tables, most recently used last (a bounded cache of a pure function; D-054: never a source of behaviour).
+// D-078: what a table is (tests and diagnostics).
+struct ChainTableInfo {
+    std::uint64_t key = 0;
+    int h0 = 0;          // its first half-turn
+    int half_turns = 0;  // the game's
+    int line = 0;        // buckets
+    std::array<int, 2> max_wounds{};  // the region's top, by side index
+    std::array<int, 2> levels{};      // wounds grid levels (0 included), by side index
+    std::array<bool, 2> exact{};      // every wound a level (else the coarse grid: over 20 starting wounds)
+    bool compact = false;             // stored as floats (the game's tables at full precision over 256 MiB)
+    std::size_t bytes = 0;            // its stored values
+};
+
+// Built tables, most recently used last (a cache of a pure function; D-054: never a source of behaviour). D-078: one
+// cache serves the whole game (the arena's two Hard bots share one, share_with); it holds at least every pair of unit
+// types the latest army evaluation needed, under a cap on its tables' bytes, evicting the least recently used table that
+// no live Evaluator holds; at each decision every table not in use drops the half-turns before it (trim_before). A copy
+// shares the same tables.
 class ChainCache {
 public:
-    [[nodiscard]] std::size_t size() const noexcept { return tables_.size(); }
-    [[nodiscard]] std::size_t builds() const noexcept { return builds_; }
-    void clear() noexcept { tables_.clear(); }
+    ChainCache();
+    [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] std::size_t builds() const noexcept;
+    void clear() noexcept;
+    // The stored bytes of every table kept.
+    [[nodiscard]] std::size_t bytes() const noexcept;
+    // D-078: the cap on bytes() (640 MiB).
+    [[nodiscard]] static std::size_t cap_bytes() noexcept;
+    // The table capacity now: at least 8, and every pair the latest army evaluation needed.
+    [[nodiscard]] std::size_t capacity() const noexcept;
+    // D-078: from now on this cache and `other` hold the same tables (the arena's two Hard bots).
+    void share_with(ChainCache& other);
+    // D-078: the threads that build missing tables (0: min(4, the hardware's)); never changes a value.
+    void set_workers(std::size_t workers) noexcept;
+    [[nodiscard]] std::size_t workers() const noexcept;
+    // D-078: every table no Evaluator holds drops its half-turns before `half_turn` (no later evaluation reads them).
+    void trim_before(int half_turn);
+    [[nodiscard]] std::vector<ChainTableInfo> info() const;
+    // D-078 (tests): each table's FNV-1a hash of every value it holds from half-turn `from` on (its nodes by half-turn,
+    // wounds and position, read through its lookups), combined in sorted order.
+    [[nodiscard]] std::uint64_t fingerprint(int from = 0) const;
+    // D-078 (tests): another cap on bytes() than cap_bytes() (0: back to it).
+    void set_cap_bytes(std::size_t cap) noexcept;
+
+    struct Store;  // evaluator.cpp
 
 private:
     friend class Evaluator;
-    std::vector<std::shared_ptr<const ChainTable>> tables_;
-    std::size_t builds_ = 0;
+    std::shared_ptr<Store> store_;
 };
+
+// D-078 (tests): the tables an Evaluator at `root` would read (their keys, regions, grids and forms; `bytes` the
+// estimate), without building them.
+[[nodiscard]] std::vector<ChainTableInfo> plan_chain_tables(const core::GameState& root, ChainWeights weights);
 
 // The chain's view of one unit in a real state.
 struct UnitView {
@@ -199,6 +266,13 @@ public:
 
     [[nodiscard]] UnitView view(const core::GameState& state, core::Side of) const;
     [[nodiscard]] int line_buckets() const noexcept;
+    // D-078 (tests): the tables this evaluator reads (the duel's, or the army's in pair order).
+    [[nodiscard]] std::vector<ChainTableInfo> tables_info() const;
+    // D-078 (tests): the chain's outcome of one volley in the table of `attacker`'s and `target`'s unit types:
+    // [l] = P(the target is left at grid level l) after `attacker`'s models alive with `attacker_wounds` shoot without
+    // moving at line bucket `g` (melee: fight) at `target` with `target_wounds` (a grid level's). Empty if no table.
+    [[nodiscard]] std::vector<double> volley_outcome(const core::Unit& attacker, const core::Unit& target, bool melee,
+                                                     int g, int attacker_wounds, int target_wounds) const;
     [[nodiscard]] static constexpr float bucket_mm() noexcept { return kBucketMm; }
 
 private:
@@ -230,6 +304,10 @@ private:
                                            std::vector<UnitFate>* fates = nullptr) const;
     // The cached table covering `spec`, else a new one (kept in the cache, most recently used last).
     [[nodiscard]] std::shared_ptr<const ChainTable> find_or_build(Spec spec, ChainCache* cache) const;
+    // D-078: the same for several specs at once, the missing tables built by the cache's workers (each with its own odds
+    // cache) and kept in spec order.
+    [[nodiscard]] std::vector<std::shared_ptr<const ChainTable>> find_or_build(std::vector<Spec> specs,
+                                                                             ChainCache* cache) const;
 
     analysis::OddsCache& odds_;
     core::Side side_;

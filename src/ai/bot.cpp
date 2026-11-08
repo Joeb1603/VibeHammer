@@ -80,6 +80,16 @@ void Bot::set_config(BotConfig config) {
 
 std::size_t Bot::chain_tables_built() const noexcept { return hard_ ? hard_->chains.builds() : 0; }
 
+void Bot::share_chain_cache(Bot& other) {
+    for (Bot* b : {this, &other}) {
+        if (!b->hard_) {
+            b->hard_ = std::make_unique<hard::HardContext>();
+            b->hard_->weights = b->config_.hard;
+        }
+    }
+    hard_->chains.share_with(other.hard_->chains);
+}
+
 void Bot::forget() noexcept {
     memo_.clear();
     guard_.clear();

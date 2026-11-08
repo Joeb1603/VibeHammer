@@ -9,8 +9,9 @@
 //   didn't finish within the step cap (default 5000); 2 for a bad flag. --trace plays the one game with that
 //   seed and prints every bot decision, its reason and (M44) its time instead. --weights (M44, for tuning) overrides the Hard
 //   level's weights (hard/weights.hpp) for both sides: tempo, material, share, plans, rollouts, rollout_actions,
-//   budget_actions, static_plans, margin, delay, survival, edge, coherency. --per-game 1 (M54, to show that an
-//   optimisation changes no play) prints one line per game instead of the totals: its result, its counts and FNV-1a
+//   budget_actions, full_budget_units and table_workers (M69), static_plans, margin, move_search_units (M69), delay,
+//   survival, edge, coherency. --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
+//   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
 //   then the decision times and the run's wall time.
 
@@ -84,10 +85,16 @@ void apply_weights(const std::string& text, wh40k::ai::hard::BotWeights& w) {
             w.lookahead.rollout_actions = count();
         } else if (key == "budget_actions") {
             w.lookahead.budget_actions = count();
+        } else if (key == "full_budget_units") {
+            w.lookahead.full_budget_units = count();
+        } else if (key == "table_workers") {
+            w.lookahead.table_workers = count();
         } else if (key == "static_plans") {
             w.static_plans = count();
         } else if (key == "margin") {
             w.margin = d;
+        } else if (key == "move_search_units") {
+            w.move_search_units = count();
         } else if (key == "delay") {
             w.move.delay = d;
         } else if (key == "survival") {

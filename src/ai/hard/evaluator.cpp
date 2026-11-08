@@ -1,9 +1,15 @@
 #include "hard/evaluator.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <bit>
 #include <cmath>
+#include <exception>
 #include <limits>
+#include <map>
 #include <stdexcept>
+#include <thread>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -13,8 +19,10 @@
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/model/keywords.hpp"
 #include "core/rules/charge.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
 #include "normal/value.hpp"
@@ -35,6 +43,16 @@ constexpr int kMinLine = 2;   // buckets
 // D-067 (M57): 38 buckets (76"), so a line as long as a 60"x44" battlefield's diagonal (74.4") fits. Before M57: 24
 // (48"); no line on the 24"x24" boards (at most their 34" diagonal, 17 buckets) ever reached either.
 constexpr int kMaxLine = 38;
+// D-078 (M69): a side of a table whose unit type starts with more wounds than this gets the coarse wounds grid (at most
+// 21 levels); every unit of V1, the bot scenarios and Strike starts with 20 or fewer.
+constexpr int kExactWounds = 20;
+// D-078: the army's tables are stored as floats when, at full precision, the game's pairs would take more than this
+// (Strike's one table: 23 MB; the rosters' 30: about 1.45 GB).
+constexpr std::size_t kCompactAboveBytes = std::size_t{256} << 20;
+// D-078: the cap on a cache's stored bytes.
+constexpr std::size_t kCacheCapBytes = std::size_t{640} << 20;
+// D-078: at most this many threads build missing tables.
+constexpr std::size_t kMaxWorkers = 4;
 
 enum Kind : std::size_t { kHeavy = 0, kMoved = 1, kAssault = 2, kCloseQuarters = 3, kMelee = 4, kKinds = 5 };
 
@@ -145,6 +163,35 @@ core::Unit prototype(const core::Unit& u, int n) {
     return p;
 }
 
+// D-078: a unit whose models differ in loadout but share one W: the chain counts its loadout groups (each model's own
+// weapons) instead of copies of its most common model. Every unit of V1, the bot scenarios and Strike has one loadout.
+bool mixed_loadouts(const core::Unit& u) {
+    if (u.models.empty()) return false;
+    bool differ = false;
+    for (const core::Model& m : u.models) {
+        if (m.characteristics.wounds != u.models.front().characteristics.wounds) return false;  // one W, or the old way
+        differ = differ || !same_loadout(m, u.models.front());
+    }
+    return differ;
+}
+
+// D-078: a mixed unit at full strength for the chain: its models (in unit order), then copies of its most common
+// loadout up to `n` (the models lost so far taken as rank and file), unwounded, ids 1..n. Not yet in keep order.
+core::Unit mixed_prototype(const core::Unit& u, int n) {
+    core::Unit p = u;
+    p.models.clear();
+    const core::Model rep = representative(u);
+    for (int i = 0; i < n; ++i) {
+        core::Model m = i < static_cast<int>(u.models.size()) ? u.models[static_cast<std::size_t>(i)] : rep;
+        m.id = core::ModelId{static_cast<std::uint32_t>(i + 1)};
+        m.wounds_remaining = m.characteristics.wounds;
+        m.position = core::Position{};
+        m.facing_deg = 0.0f;
+        p.models.push_back(std::move(m));
+    }
+    return p;
+}
+
 std::vector<float> usable_ranges(const core::Model& m) {
     std::vector<float> out;
     for (const core::Weapon& w : m.weapons) {
@@ -159,19 +206,68 @@ std::vector<float> usable_ranges(const core::Model& m) {
     return out;
 }
 
+// D-078: every model's usable ranges (a mixed unit's bands come from all its loadouts).
+std::vector<float> usable_ranges(const core::Unit& u) {
+    std::vector<float> out;
+    for (const core::Model& m : u.models) {
+        const std::vector<float> r = usable_ranges(m);
+        out.insert(out.end(), r.begin(), r.end());
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+bool has_hazardous(const core::Unit& u) {
+    for (const core::Model& m : u.models) {
+        for (const core::Weapon& w : m.weapons) {
+            for (const core::WeaponProfile& p : w.profiles) {
+                if (p.has<core::ability::Hazardous>()) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// D-078: one side's wounds grid from its unit type's starting wounds: every wound (exact), or above kExactWounds a level
+// every ceil(W / 20) wounds and at W itself. [0] is 0. `top`: the region's highest wounds (the grid up to the first
+// level at or above it).
+std::vector<int> grid_levels(int wounds_start, int top) {
+    std::vector<int> out;
+    if (wounds_start <= kExactWounds) {
+        for (int w = 0; w <= top; ++w) out.push_back(w);
+        return out;
+    }
+    const int step = (wounds_start + kExactWounds - 1) / kExactWounds;
+    for (int w = 0; w < wounds_start; w += step) {
+        out.push_back(w);
+        if (w >= top) return out;
+    }
+    out.push_back(wounds_start);
+    return out;
+}
+
+// A non-negative double's FNV-1a key part (as the weights are keyed).
+std::uint64_t rate_key(double r) { return static_cast<std::uint64_t>(std::llround(r * 1e9)); }
+
 }  // namespace
 
 // ---- the static description of a duel (the table's key) ----
 
 struct SideSpec {
-    core::Unit proto;          // max_models copies of the representative model
+    core::Unit proto;          // max_models models: copies of the representative, or (D-078) the unit's loadout groups
     int wounds_per_model = 1;  // W
     int wounds_start = 1;      // starting strength x W (material is a share of it)
-    int max_wounds = 0;        // the region: wounds left at the root
+    int max_wounds = 0;        // the region: wounds left at the root (D-078: the grid level at or above them)
     int max_models = 0;
     int move_buckets = 0;                // M
     std::array<int, 7> advance_buckets{};  // [f]: M + f (09.06)
     std::vector<float> ranges;           // usable ranged profiles' ranges (the bands)
+    // D-078 (M69):
+    std::vector<int> levels;   // the wounds grid of the region ([0] = 0, back() = max_wounds)
+    bool exact = true;         // levels[i] == i
+    bool mixed = false;        // proto holds the unit's loadout groups, in keep order once finalized
+    double hazard_rate = 0.0;  // its [HAZARDOUS] profiles priced at this rate against the other side (D-077)
 };
 
 struct Spec {
@@ -182,6 +278,7 @@ struct Spec {
     int line = 10;  // buckets
     ChainWeights weights;
     std::uint64_t key = 0;  // everything but the region (h0, max wounds)
+    bool compact = false;   // D-078: stored as floats
 };
 
 namespace {
@@ -190,18 +287,24 @@ float bucket_gap_mm(int g, float bucket) {
     return std::max(static_cast<float>(g) * bucket, kJustOutsideMm);
 }
 
+int level_count(const SideSpec& s) { return static_cast<int>(s.levels.size()); }
+
 }  // namespace
 
 // ---- the table ----
 
+// D-078 (M69): the nodes are stored by half-turn, then by line position, then by wounds cell (both sides' grid levels
+// above 0; a side at 0 wounds is a decided game and is never stored), three values a node: as doubles (exact, every
+// table of V1, the bot scenarios and Strike) or, for an army whose tables would be too big, as floats (compact). The
+// arithmetic is in double either way, and on the exact form it is the M68 arithmetic: the same terms in the same order.
 class ChainTable {
 public:
     explicit ChainTable(analysis::OddsCache& odds, Spec spec, float bucket);
 
     [[nodiscard]] const Spec& spec() const noexcept { return spec_; }
     [[nodiscard]] bool covers(const Spec& s) const noexcept {
-        return s.key == spec_.key && s.h0 >= spec_.h0 && s.sides[0].max_wounds <= spec_.sides[0].max_wounds &&
-               s.sides[1].max_wounds <= spec_.sides[1].max_wounds;
+        return s.key == spec_.key && s.compact == spec_.compact && s.h0 >= spec_.h0 &&
+               s.sides[0].max_wounds <= spec_.sides[0].max_wounds && s.sides[1].max_wounds <= spec_.sides[1].max_wounds;
     }
     [[nodiscard]] int line() const noexcept { return spec_.line; }
     [[nodiscard]] int half_turns() const noexcept { return spec_.half_turns; }
@@ -209,8 +312,8 @@ public:
         return h % 2 == 0 ? spec_.first : core::opponent(spec_.first);
     }
 
-    // Grid lookups (side A's view). Positions: engaged (g = 0) rA in [0, L]; unengaged g in [1, L], rA in
-    // [0, L - g].
+    // Lookups (side A's view) at any wounds: an exact side's are grid points, a coarse side's (D-078) interpolated
+    // between the levels around them. Positions: engaged (g = 0) rA in [0, L]; unengaged g in [1, L], rA in [0, L - g].
     [[nodiscard]] Node start(int h, int wa, int wb, int g, int ra) const;
     [[nodiscard]] Node end_turn(int h, int wa, int wb, int g, int ra) const { return start(h + 1, wa, wb, g, ra); }
     [[nodiscard]] Node fight(int h, int wa, int wb, int ra) const;  // engaged, the side whose turn it is first
@@ -218,7 +321,7 @@ public:
     [[nodiscard]] Node win(core::Side winner, int h, int wa, int wb) const;
     [[nodiscard]] Node draw(int wa, int wb) const;
 
-    // The pieces of a half-turn, on the grid (computed from the stored nodes).
+    // The pieces of a half-turn, on the grid (computed from the stored nodes; wounds at grid levels).
     [[nodiscard]] Node charge_best(int h, int wa, int wb, int g, int ra) const;
     [[nodiscard]] Node shoot_then(int h, Kind kind, int wa, int wb, int g, int ra) const;
     [[nodiscard]] double p_charge(int g) const { return p_charge_[static_cast<std::size_t>(g)]; }
@@ -230,62 +333,107 @@ public:
         const int w = std::max(1, side(s).wounds_per_model);
         return (wounds + w - 1) / w;
     }
-    // [w'] = P(the target is left with w' wounds) when `attacker`'s models alive with `attacker_wounds` attack
-    // a target with `target_wounds` left.
+    // [l] = P(the target is left at grid level l) when `attacker`'s models alive with `attacker_wounds` attack a target
+    // at the level with `target_wounds` (a level's wounds; on an exact side any wounds, levels being wounds).
     [[nodiscard]] const double* pmf(core::Side attacker, Kind kind, int g, int attacker_wounds,
                                     int target_wounds) const;
+    // D-078: grid levels. The level of `wounds` (a level's wounds), the wounds of `level`, and the level nearest to
+    // `wounds` (a tie to the lower): an exact side's are the wounds themselves.
+    [[nodiscard]] int level_of(core::Side s, int wounds) const;
+    [[nodiscard]] int level_wounds(core::Side s, int level) const {
+        return side(s).levels[static_cast<std::size_t>(level)];
+    }
+    [[nodiscard]] int snap(core::Side s, int wounds) const;
     // D-067: the wounds one volley of `attacker` (`attacker_wounds` left) takes from a whole unit of the other side,
     // the better of its shooting at close range after a move and its fight: its pace in each of its turns once a
     // target is in reach (the army's attention timeline).
     [[nodiscard]] double volley_wounds(core::Side attacker, int attacker_wounds) const {
-        const int full = std::max(1, side(core::opponent(attacker)).max_wounds);
+        const core::Side target = core::opponent(attacker);
+        const int full = std::max(1, side(target).max_wounds);
+        const int levels = level_of(target, full);
         const auto removed = [&](Kind kind) {
             const double* p = pmf(attacker, kind, 1, attacker_wounds, full);
             double left = 0.0;
-            for (int l = 0; l <= full; ++l) left += p[l] * static_cast<double>(l);
+            for (int l = 0; l <= levels; ++l) left += p[l] * static_cast<double>(level_wounds(target, l));
             return static_cast<double>(full) - left;
         };
         return std::max(removed(kMoved), removed(kMelee));
     }
 
+    // D-078: memory, trimming, tests.
+    [[nodiscard]] std::size_t bytes() const noexcept;
+    [[nodiscard]] static std::size_t estimate_bytes(const Spec& s) noexcept;
+    void trim_before(int h);
+    [[nodiscard]] std::uint64_t fingerprint(int from) const;
+    [[nodiscard]] ChainTableInfo info() const;
+    [[nodiscard]] static ChainTableInfo info_of(const Spec& s);
+
 private:
     struct DistSet {
         int max_n = 0;
-        int max_w = 0;
-        std::vector<std::size_t> offset;  // (n - 1) * max_w + (w - 1)
-        std::vector<double> data;
+        int max_t = 0;  // D-078: target levels above 0
+        std::vector<std::size_t> offset;  // (n - 1) * max_t + (t - 1)
+        std::vector<double> data;         // over target levels 0..t
     };
+    // A half-turn's stored nodes, three values each (one of the two vectors is used).
+    struct Stored {
+        std::vector<double> d;
+        std::vector<float> f;
+    };
+    template <typename T>
+    static std::vector<T>& values(Stored& s) {
+        if constexpr (std::is_same_v<T, double>) {
+            return s.d;
+        } else {
+            return s.f;
+        }
+    }
+    template <typename T>
+    static const std::vector<T>& values(const Stored& s) {
+        if constexpr (std::is_same_v<T, double>) {
+            return s.d;
+        } else {
+            return s.f;
+        }
+    }
+    [[nodiscard]] Node node(const Stored& s, std::size_t i) const {
+        if (spec_.compact) return Node{s.f[3 * i], s.f[3 * i + 1], s.f[3 * i + 2]};
+        return Node{s.d[3 * i], s.d[3 * i + 1], s.d[3 * i + 2]};
+    }
     [[nodiscard]] std::size_t pos_index(int g, int ra) const {
         if (g == 0) return static_cast<std::size_t>(ra);
         return static_cast<std::size_t>(spec_.line + 1) + row_offset_[static_cast<std::size_t>(g)] +
                static_cast<std::size_t>(ra);
     }
-    [[nodiscard]] std::size_t idx(int wa, int wb, int g, int ra) const {
-        return (static_cast<std::size_t>(wa) * static_cast<std::size_t>(spec_.sides[1].max_wounds + 1) +
-                static_cast<std::size_t>(wb)) *
-                   positions_ +
-               pos_index(g, ra);
+    // A wounds cell: both sides' level indices, each at least 1.
+    [[nodiscard]] std::size_t cell(int ia, int ib) const {
+        return static_cast<std::size_t>(ia - 1) * nb_ + static_cast<std::size_t>(ib - 1);
     }
-    [[nodiscard]] std::size_t eidx(int wa, int wb, int ra) const {
-        return (static_cast<std::size_t>(wa) * static_cast<std::size_t>(spec_.sides[1].max_wounds + 1) +
-                static_cast<std::size_t>(wb)) *
-                   static_cast<std::size_t>(spec_.line + 1) +
-               static_cast<std::size_t>(ra);
-    }
+    // A position and level indices (a side at level 0 has won or lost): the node.
+    [[nodiscard]] Node start_at(int h, int ia, int ib, int g, int ra) const;
+    [[nodiscard]] Node engaged_at(const std::vector<Stored>& rows, int h, int ia, int ib, int ra) const;
+    // D-078: a lookup at any wounds from one at level indices: exact sides directly, coarse ones interpolated.
+    template <class F>
+    [[nodiscard]] Node at_wounds(int wa, int wb, F at_levels) const;
+    [[nodiscard]] const double* pmf_level(core::Side attacker, Kind kind, int g, int attacker_wounds,
+                                          int target_level) const;
     void build_distributions(analysis::OddsCache& odds, float bucket);
+    template <typename T>
     void build_half_turn(int h);
 
     Spec spec_;
     std::size_t positions_ = 0;
+    std::size_t nb_ = 0;    // side B's levels above 0 (the cell stride)
+    std::size_t grid_ = 0;  // cells: side A's levels above 0 x nb_
     std::vector<std::size_t> row_offset_;  // [g]: positions before row g among the unengaged ones
     std::vector<double> p_charge_;         // [g]
     std::array<std::vector<int>, 2> band_of_;  // [side][g]: the shooting band (0..)
     // [side][kind][band] -> an index into pool_ (attacks with the same volley share one set).
     std::array<std::array<std::vector<std::size_t>, kKinds>, 2> dist_index_;
     std::vector<DistSet> pool_;
-    std::vector<std::vector<Node>> start_;  // [h - h0][idx]
-    std::vector<std::vector<Node>> fight_;  // [h - h0][eidx]
-    std::vector<std::vector<Node>> reply_;
+    std::vector<Stored> start_;  // [h - h0]
+    std::vector<Stored> fight_;
+    std::vector<Stored> reply_;
 };
 
 ChainTable::ChainTable(analysis::OddsCache& odds, Spec spec, float bucket) : spec_(std::move(spec)) {
@@ -297,6 +445,8 @@ ChainTable::ChainTable(analysis::OddsCache& odds, Spec spec, float bucket) : spe
         unengaged += static_cast<std::size_t>(line - g + 1);
     }
     positions_ = static_cast<std::size_t>(line + 1) + unengaged;
+    nb_ = static_cast<std::size_t>(std::max(0, level_count(spec_.sides[1]) - 1));
+    grid_ = static_cast<std::size_t>(std::max(0, level_count(spec_.sides[0]) - 1)) * nb_;
     p_charge_.assign(static_cast<std::size_t>(line + 1), 0.0);
     for (int g = 1; g <= line; ++g) {
         p_charge_[static_cast<std::size_t>(g)] = analysis::p_charge_roll_covers(bucket_gap_mm(g, bucket));
@@ -307,7 +457,13 @@ ChainTable::ChainTable(analysis::OddsCache& odds, Spec spec, float bucket) : spe
     start_.resize(count);
     fight_.resize(count);
     reply_.resize(count);
-    for (int h = spec_.half_turns - 1; h >= h0; --h) build_half_turn(h);
+    for (int h = spec_.half_turns - 1; h >= h0; --h) {
+        if (spec_.compact) {
+            build_half_turn<float>(h);
+        } else {
+            build_half_turn<double>(h);
+        }
+    }
 }
 
 void ChainTable::build_distributions(analysis::OddsCache& odds, float bucket) {
@@ -336,38 +492,54 @@ void ChainTable::build_distributions(analysis::OddsCache& odds, float bucket) {
             }
         }
         if (keys.empty()) band_gap.push_back(kJustOutsideMm);
-        core::Unit one = prototype(sx.proto, 1);
         const core::Unit& target = sy.proto;
-        const auto volleys_for = [&](Kind kind, float gap) {
+        // The attackers: one copy of the representative (its volley times n models), or (D-078) for a unit of loadout
+        // groups the first n of its models, each n its own volley (each model's own picks, identical attacks merged).
+        const int max_n = std::max(1, sx.max_models);
+        std::vector<core::Unit> attackers;
+        if (sx.mixed) {
+            for (int n = 1; n <= max_n; ++n) {
+                core::Unit a = sx.proto;
+                a.models.resize(static_cast<std::size_t>(std::min<int>(n, static_cast<int>(sx.proto.models.size()))));
+                attackers.push_back(std::move(a));
+            }
+        } else {
+            attackers.push_back(prototype(sx.proto, 1));
+        }
+        const auto volleys_for = [&](const core::Unit& one, Kind kind, float gap) {
+            analysis::ShotContext ctx;
             switch (kind) {
                 case kHeavy:
-                    return analysis::unit_ranged_volley(odds, one, target,
-                                                        analysis::ShotContext{core::ShootingType::Normal, true, gap});
+                    ctx = analysis::ShotContext{core::ShootingType::Normal, true, gap};
+                    break;
                 case kMoved:
-                    return analysis::unit_ranged_volley(odds, one, target,
-                                                        analysis::ShotContext{core::ShootingType::Normal, false, gap});
+                    ctx = analysis::ShotContext{core::ShootingType::Normal, false, gap};
+                    break;
                 case kAssault:
-                    return analysis::unit_ranged_volley(odds, one, target,
-                                                        analysis::ShotContext{core::ShootingType::Assault, false, gap});
+                    ctx = analysis::ShotContext{core::ShootingType::Assault, false, gap};
+                    break;
                 case kCloseQuarters:
-                    return analysis::unit_ranged_volley(
-                        odds, one, target, analysis::ShotContext{core::ShootingType::CloseQuarters, false, 0.0f});
+                    ctx = analysis::ShotContext{core::ShootingType::CloseQuarters, false, 0.0f};
+                    break;
                 case kMelee:
-                case kKinds: break;
+                case kKinds:
+                    return analysis::unit_melee_volley(odds, one, target, sx.hazard_rate);
             }
-            return analysis::unit_melee_volley(odds, one, target);
+            ctx.hazard_rate = sx.hazard_rate;  // D-078: [HAZARDOUS] priced as Normal prices it (0: as before)
+            return analysis::unit_ranged_volley(odds, one, target, ctx);
         };
-        // The target with w wounds left (the wounded model first, 05.04), for w = 1..max.
+        // The target at each grid level t (its wounds, the wounded model first, 05.04).
         const int wpm = std::max(1, sy.wounds_per_model);
-        const int max_w = std::max(1, sy.max_wounds);
+        const int max_t = std::max(1, level_count(sy) - 1);
         std::vector<analysis::TargetSnapshot> snaps;
-        snaps.reserve(static_cast<std::size_t>(max_w));
-        for (int w = 1; w <= max_w; ++w) {
+        snaps.reserve(static_cast<std::size_t>(max_t));
+        for (int t = 1; t <= max_t; ++t) {
+            const int w = sy.levels[static_cast<std::size_t>(t)];
             analysis::TargetSnapshot snap = analysis::snapshot_with_models(sy.proto, (w + wpm - 1) / wpm);
             if (w % wpm != 0 && !snap.slots.empty()) snap.slots.front().wounds_left = w % wpm;
             snaps.push_back(std::move(snap));
         }
-        std::vector<std::pair<analysis::Volley, std::size_t>> seen;  // this side's volleys and their sets
+        std::vector<std::pair<std::vector<analysis::Volley>, std::size_t>> seen;  // this side's volleys and their sets
         for (std::size_t k = 0; k < kKinds; ++k) {
             const Kind kind = static_cast<Kind>(k);
             const bool banded = kind == kHeavy || kind == kMoved || kind == kAssault;
@@ -375,33 +547,66 @@ void ChainTable::build_distributions(analysis::OddsCache& odds, float bucket) {
             std::vector<std::size_t>& index = dist_index_[si(x)][k];
             index.assign(bands, 0);
             for (std::size_t b = 0; b < bands; ++b) {
-                const analysis::Volley single = volleys_for(kind, banded ? band_gap[b] : 0.0f);
-                const auto same = std::find_if(seen.begin(), seen.end(), [&](const auto& v) { return v.first == single; });
+                std::vector<analysis::Volley> singles;
+                for (const core::Unit& a : attackers) singles.push_back(volleys_for(a, kind, banded ? band_gap[b] : 0.0f));
+                const auto same =
+                    std::find_if(seen.begin(), seen.end(), [&](const auto& v) { return v.first == singles; });
                 if (same != seen.end()) {
                     index[b] = same->second;
                     continue;
                 }
                 index[b] = pool_.size();
-                seen.emplace_back(single, pool_.size());
+                seen.emplace_back(singles, pool_.size());
                 DistSet& set = pool_.emplace_back();
-                set.max_n = std::max(1, sx.max_models);
-                set.max_w = max_w;
-                set.offset.assign(static_cast<std::size_t>(set.max_n * set.max_w), 0);
+                set.max_n = max_n;
+                set.max_t = max_t;
+                set.offset.assign(static_cast<std::size_t>(set.max_n * set.max_t), 0);
                 for (int n = 1; n <= set.max_n; ++n) {
-                    analysis::Volley volley = single;  // n copies of the representative model
-                    for (analysis::VolleyBatch& vb : volley) {
-                        vb.attack_dice *= n;
-                        // D-069: each copy rolls its own random A.
-                        const std::vector<core::DiceExpr> one = vb.random_attacks;
-                        for (int i = 1; i < n; ++i) vb.random_attacks.insert(vb.random_attacks.end(), one.begin(), one.end());
+                    analysis::Volley volley;
+                    if (sx.mixed) {
+                        volley = singles[static_cast<std::size_t>(n - 1)];  // D-078: the first n models' own volley
+                    } else {
+                        volley = singles.front();  // n copies of the representative model
+                        for (analysis::VolleyBatch& vb : volley) {
+                            vb.attack_dice *= n;
+                            // D-069: each copy rolls its own random A.
+                            const std::vector<core::DiceExpr> one = vb.random_attacks;
+                            for (int i = 1; i < n; ++i) {
+                                vb.random_attacks.insert(vb.random_attacks.end(), one.begin(), one.end());
+                            }
+                        }
                     }
-                    for (int w = 1; w <= set.max_w; ++w) {
+                    for (int t = 1; t <= set.max_t; ++t) {
                         const analysis::AttackOutcome out =
-                            analysis::expected_outcome(odds, volley, snaps[static_cast<std::size_t>(w - 1)]);
-                        set.offset[static_cast<std::size_t>((n - 1) * set.max_w + (w - 1))] = set.data.size();
-                        for (int left = 0; left <= w; ++left) {
+                            analysis::expected_outcome(odds, volley, snaps[static_cast<std::size_t>(t - 1)]);
+                        set.offset[static_cast<std::size_t>((n - 1) * set.max_t + (t - 1))] = set.data.size();
+                        if (sy.exact) {
+                            for (int left = 0; left <= t; ++left) {
+                                const auto l = static_cast<std::size_t>(left);
+                                set.data.push_back(l < out.wounds_left_pmf.size() ? out.wounds_left_pmf[l] : 0.0);
+                            }
+                            continue;
+                        }
+                        // D-078: a coarse target's outcome on its grid: wounds left between two levels split between
+                        // them in proportion (the expected wounds kept; destroyed and each level exact).
+                        const std::size_t base = set.data.size();
+                        set.data.resize(base + static_cast<std::size_t>(t + 1), 0.0);
+                        int i = 0;
+                        const int w_t = sy.levels[static_cast<std::size_t>(t)];
+                        for (int left = 0; left <= w_t; ++left) {
                             const auto l = static_cast<std::size_t>(left);
-                            set.data.push_back(l < out.wounds_left_pmf.size() ? out.wounds_left_pmf[l] : 0.0);
+                            const double q = l < out.wounds_left_pmf.size() ? out.wounds_left_pmf[l] : 0.0;
+                            if (q == 0.0) continue;
+                            while (i < t && sy.levels[static_cast<std::size_t>(i + 1)] <= left) ++i;
+                            const int lo = sy.levels[static_cast<std::size_t>(i)];
+                            if (left == lo || i >= t) {
+                                set.data[base + static_cast<std::size_t>(i)] += q;
+                                continue;
+                            }
+                            const int hi = sy.levels[static_cast<std::size_t>(i + 1)];
+                            const double up = static_cast<double>(left - lo) / static_cast<double>(hi - lo);
+                            set.data[base + static_cast<std::size_t>(i + 1)] += q * up;
+                            set.data[base + static_cast<std::size_t>(i)] += q * (1.0 - up);
                         }
                     }
                 }
@@ -410,15 +615,40 @@ void ChainTable::build_distributions(analysis::OddsCache& odds, float bucket) {
     }
 }
 
-const double* ChainTable::pmf(core::Side attacker, Kind kind, int g, int attacker_wounds, int target_wounds) const {
+int ChainTable::level_of(core::Side s, int wounds) const {
+    const SideSpec& sp = side(s);
+    if (sp.exact) return std::clamp(wounds, 0, level_count(sp) - 1);
+    const auto it = std::lower_bound(sp.levels.begin(), sp.levels.end(), wounds);
+    if (it == sp.levels.end()) return level_count(sp) - 1;
+    return static_cast<int>(it - sp.levels.begin());
+}
+
+int ChainTable::snap(core::Side s, int wounds) const {
+    const SideSpec& sp = side(s);
+    if (sp.exact) return wounds;
+    const int top = sp.levels.back();
+    if (wounds >= top) return top;
+    if (wounds <= 0) return 0;
+    const auto it = std::upper_bound(sp.levels.begin(), sp.levels.end(), wounds);  // the first level above
+    const int hi = *it;
+    const int lo = *(it - 1);
+    return wounds - lo <= hi - wounds ? lo : hi;
+}
+
+const double* ChainTable::pmf_level(core::Side attacker, Kind kind, int g, int attacker_wounds,
+                                    int target_level) const {
     const bool banded = kind == kHeavy || kind == kMoved || kind == kAssault;
     const std::size_t band =
         banded ? static_cast<std::size_t>(band_of_[si(attacker)][static_cast<std::size_t>(std::clamp(g, 1, spec_.line))])
                : 0;
     const DistSet& set = pool_[dist_index_[si(attacker)][kind][band]];
     const int n = std::clamp(models_of(attacker, attacker_wounds), 1, set.max_n);
-    const int w = std::clamp(target_wounds, 1, set.max_w);
-    return &set.data[set.offset[static_cast<std::size_t>((n - 1) * set.max_w + (w - 1))]];
+    const int t = std::clamp(target_level, 1, set.max_t);
+    return &set.data[set.offset[static_cast<std::size_t>((n - 1) * set.max_t + (t - 1))]];
+}
+
+const double* ChainTable::pmf(core::Side attacker, Kind kind, int g, int attacker_wounds, int target_wounds) const {
+    return pmf_level(attacker, kind, g, attacker_wounds, level_of(core::opponent(attacker), target_wounds));
 }
 
 Node ChainTable::win(core::Side winner, int h, int wa, int wb) const {
@@ -442,24 +672,72 @@ Node ChainTable::draw(int wa, int wb) const {
     return n;
 }
 
+template <class F>
+Node ChainTable::at_wounds(int wa, int wb, F at_levels) const {
+    if (spec_.sides[0].exact && spec_.sides[1].exact) return at_levels(wa, wb);  // levels are wounds: grid points
+    struct Span {
+        int lo = 0;
+        int hi = 0;
+        double up = 0.0;  // the weight of hi
+    };
+    const auto span = [&](core::Side s, int w) {
+        const SideSpec& sp = side(s);
+        Span out;
+        if (sp.exact) {
+            out.lo = out.hi = w;
+            return out;
+        }
+        const int l = level_of(s, w);  // the first level at or above w
+        if (l == 0 || sp.levels[static_cast<std::size_t>(l)] == w || w >= sp.levels.back()) {
+            out.lo = out.hi = w >= sp.levels.back() ? level_count(sp) - 1 : l;
+            return out;
+        }
+        out.lo = l - 1;
+        out.hi = l;
+        const int lw = sp.levels[static_cast<std::size_t>(l - 1)];
+        const int hw = sp.levels[static_cast<std::size_t>(l)];
+        out.up = static_cast<double>(w - lw) / static_cast<double>(hw - lw);
+        return out;
+    };
+    const Span a = span(core::Side::A, wa);
+    const Span b = span(core::Side::B, wb);
+    const auto along_b = [&](int ia) {
+        if (b.lo == b.hi) return at_levels(ia, b.lo);
+        return mix(at_levels(ia, b.hi), at_levels(ia, b.lo), b.up);
+    };
+    if (a.lo == a.hi) return along_b(a.lo);
+    return mix(along_b(a.hi), along_b(a.lo), a.up);
+}
+
+Node ChainTable::start_at(int h, int ia, int ib, int g, int ra) const {
+    if (ia <= 0) return win(core::Side::B, h, 0, level_wounds(core::Side::B, ib));
+    if (ib <= 0) return win(core::Side::A, h, level_wounds(core::Side::A, ia), 0);
+    const int hh = std::max(h, spec_.h0) - spec_.h0;
+    return node(start_[static_cast<std::size_t>(hh)], pos_index(g, ra) * grid_ + cell(ia, ib));
+}
+
+Node ChainTable::engaged_at(const std::vector<Stored>& rows, int h, int ia, int ib, int ra) const {
+    if (ia <= 0) return win(core::Side::B, h, 0, level_wounds(core::Side::B, ib));
+    if (ib <= 0) return win(core::Side::A, h, level_wounds(core::Side::A, ia), 0);
+    const int hh = std::max(h, spec_.h0) - spec_.h0;
+    return node(rows[static_cast<std::size_t>(hh)], static_cast<std::size_t>(ra) * grid_ + cell(ia, ib));
+}
+
 Node ChainTable::start(int h, int wa, int wb, int g, int ra) const {
     if (h >= spec_.half_turns) return draw(wa, wb);
     if (wa <= 0) return win(core::Side::B, h, wa, wb);
     if (wb <= 0) return win(core::Side::A, h, wa, wb);
-    const int hh = std::max(h, spec_.h0) - spec_.h0;
-    return start_[static_cast<std::size_t>(hh)][idx(wa, wb, g, ra)];
+    return at_wounds(wa, wb, [&](int ia, int ib) { return start_at(h, ia, ib, g, ra); });
 }
 
 Node ChainTable::fight(int h, int wa, int wb, int ra) const {
     if (h >= spec_.half_turns) return draw(wa, wb);
-    const int hh = std::max(h, spec_.h0) - spec_.h0;
-    return fight_[static_cast<std::size_t>(hh)][eidx(wa, wb, ra)];
+    return at_wounds(wa, wb, [&](int ia, int ib) { return engaged_at(fight_, h, ia, ib, ra); });
 }
 
 Node ChainTable::reply(int h, int wa, int wb, int ra) const {
     if (h >= spec_.half_turns) return draw(wa, wb);
-    const int hh = std::max(h, spec_.h0) - spec_.h0;
-    return reply_[static_cast<std::size_t>(hh)][eidx(wa, wb, ra)];
+    return at_wounds(wa, wb, [&](int ia, int ib) { return engaged_at(reply_, h, ia, ib, ra); });
 }
 
 Node ChainTable::charge_best(int h, int wa, int wb, int g, int ra) const {
@@ -474,247 +752,386 @@ Node ChainTable::charge_best(int h, int wa, int wb, int g, int ra) const {
 
 Node ChainTable::shoot_then(int h, Kind kind, int wa, int wb, int g, int ra) const {
     const core::Side x = side_at(h);
+    const core::Side y = core::opponent(x);
     const bool xa = x == core::Side::A;
     const int wx = xa ? wa : wb;
     const int wy = xa ? wb : wa;
     const double* p = pmf(x, kind, g, wx, wy);
+    const int ty = level_of(y, wy);
     Node out;
-    for (int left = 0; left <= wy; ++left) {
+    for (int left = 0; left <= ty; ++left) {
         const double q = p[left];
         if (q == 0.0) continue;
         if (left == 0) {
             add(out, win(x, h, wa, wb), q);
             continue;
         }
-        const int na = xa ? wa : left;
-        const int nb = xa ? left : wb;
+        const int lw = level_wounds(y, left);
+        const int na = xa ? wa : lw;
+        const int nb = xa ? lw : wb;
         add(out, kind == kAssault ? end_turn(h, na, nb, g, ra) : charge_best(h, na, nb, g, ra), q);
     }
     return out;
 }
 
+// One half-turn's nodes, built from the next half-turn's (D-078: position-major; the sums of M68's build in the same
+// order, so an exact table holds the same values to the bit). T is the stored type: double (exact) or float (compact).
+template <typename T>
 void ChainTable::build_half_turn(int h) {
     const core::Side x = side_at(h);
     const core::Side y = core::opponent(x);
     const bool xa = x == core::Side::A;
     const int line = spec_.line;
-    const int wa_max = spec_.sides[0].max_wounds;
-    const int wb_max = spec_.sides[1].max_wounds;
+    const SideSpec& sa = spec_.sides[0];
+    const SideSpec& sb = spec_.sides[1];
+    const int na_levels = level_count(sa);
+    const int nb_levels = level_count(sb);
     const auto hh = static_cast<std::size_t>(h - spec_.h0);
-    const std::size_t grid = static_cast<std::size_t>(wa_max + 1) * static_cast<std::size_t>(wb_max + 1);
-    std::vector<Node>& start = start_[hh];
-    std::vector<Node>& fight = fight_[hh];
-    std::vector<Node>& reply = reply_[hh];
-    start.assign(grid * positions_, Node{});
-    fight.assign(grid * static_cast<std::size_t>(line + 1), Node{});
-    reply.assign(fight.size(), Node{});
+    const std::size_t grid = grid_;
+    const std::size_t E = static_cast<std::size_t>(line + 1);  // engaged positions: pos_index(0, ra) == ra
+    std::vector<T>& start = values<T>(start_[hh]);
+    std::vector<T>& fight = values<T>(fight_[hh]);
+    std::vector<T>& reply = values<T>(reply_[hh]);
+    start.assign(3 * grid * positions_, T{});
+    fight.assign(3 * grid * E, T{});
+    reply.assign(3 * grid * E, T{});
+    const bool last = h + 1 >= spec_.half_turns;
+    const T* next = last ? nullptr : values<T>(start_[hh + 1]).data();
+    const auto load = [](const T* v, std::size_t i) {
+        return Node{static_cast<double>(v[3 * i]), static_cast<double>(v[3 * i + 1]), static_cast<double>(v[3 * i + 2])};
+    };
+    const auto put = [](std::vector<T>& v, std::size_t i, const Node& n) {
+        v[3 * i] = static_cast<T>(n.j);
+        v[3 * i + 1] = static_cast<T>(n.pw);
+        v[3 * i + 2] = static_cast<T>(n.pl);
+    };
+    const auto wa_of = [&](int ia) { return sa.levels[static_cast<std::size_t>(ia)]; };
+    const auto wb_of = [&](int ib) { return sb.levels[static_cast<std::size_t>(ib)]; };
+    // A pmf and its nonzero range (the original sums skip the zeros; the range keeps the same terms).
+    struct Pm {
+        const double* p = nullptr;
+        int lo = 0;
+        int hi = -1;
+    };
+    const auto pm_of = [](const double* p, int top) {
+        Pm m;
+        m.p = p;
+        m.lo = 0;
+        m.hi = top;
+        while (m.lo <= top && p[m.lo] == 0.0) ++m.lo;
+        while (m.hi >= m.lo && p[m.hi] == 0.0) --m.hi;
+        return m;
+    };
+    std::vector<Pm> pm(grid);
+    std::vector<Node> draws(grid);
+    std::vector<Node> won(grid);
+    for (int ia = 1; ia < na_levels; ++ia) {
+        for (int ib = 1; ib < nb_levels; ++ib) {
+            draws[cell(ia, ib)] = draw(wa_of(ia), wb_of(ib));
+            won[cell(ia, ib)] = win(x, h, wa_of(ia), wb_of(ib));
+        }
+    }
 
     // The other side strikes back in the fight (engaged; the next half-turn starts engaged).
-    for (int wa = 1; wa <= wa_max; ++wa) {
-        for (int wb = 1; wb <= wb_max; ++wb) {
-            const int wx = xa ? wa : wb;
-            const int wy = xa ? wb : wa;
-            const double* p = pmf(y, kMelee, 1, wy, wx);
-            for (int ra = 0; ra <= line; ++ra) {
+    for (int ia = 1; ia < na_levels; ++ia) {
+        for (int ib = 1; ib < nb_levels; ++ib) {
+            pm[cell(ia, ib)] = pm_of(pmf_level(y, kMelee, 1, xa ? wb_of(ib) : wa_of(ia), xa ? ia : ib), xa ? ia : ib);
+        }
+    }
+    for (std::size_t ra = 0; ra < E; ++ra) {
+        for (int ia = 1; ia < na_levels; ++ia) {
+            for (int ib = 1; ib < nb_levels; ++ib) {
+                const std::size_t c = cell(ia, ib);
+                const Pm& m = pm[c];
                 Node out;
-                for (int left = 0; left <= wx; ++left) {
-                    const double q = p[left];
+                for (int left = m.lo; left <= m.hi; ++left) {
+                    const double q = m.p[left];
                     if (q == 0.0) continue;
                     if (left == 0) {
-                        add(out, win(y, h, xa ? 0 : wa, xa ? wb : 0), q);
+                        add(out, win(y, h, xa ? 0 : wa_of(ia), xa ? wb_of(ib) : 0), q);
                         continue;
                     }
-                    add(out, end_turn(h, xa ? left : wa, xa ? wb : left, 0, ra), q);
+                    const std::size_t to = xa ? cell(left, ib) : cell(ia, left);
+                    add(out, last ? draws[to] : load(next, ra * grid + to), q);
                 }
-                reply[eidx(wa, wb, ra)] = out;
+                put(reply, ra * grid + c, out);
             }
         }
     }
     // The side whose turn it is fights first (after a charge, 11.04; or as the player whose turn it is, 12.04).
-    for (int wa = 1; wa <= wa_max; ++wa) {
-        for (int wb = 1; wb <= wb_max; ++wb) {
-            const int wx = xa ? wa : wb;
-            const int wy = xa ? wb : wa;
-            const double* p = pmf(x, kMelee, 1, wx, wy);
-            for (int ra = 0; ra <= line; ++ra) {
+    for (int ia = 1; ia < na_levels; ++ia) {
+        for (int ib = 1; ib < nb_levels; ++ib) {
+            pm[cell(ia, ib)] = pm_of(pmf_level(x, kMelee, 1, xa ? wa_of(ia) : wb_of(ib), xa ? ib : ia), xa ? ib : ia);
+        }
+    }
+    for (std::size_t ra = 0; ra < E; ++ra) {
+        for (int ia = 1; ia < na_levels; ++ia) {
+            for (int ib = 1; ib < nb_levels; ++ib) {
+                const std::size_t c = cell(ia, ib);
+                const Pm& m = pm[c];
                 Node out;
-                for (int left = 0; left <= wy; ++left) {
-                    const double q = p[left];
+                for (int left = m.lo; left <= m.hi; ++left) {
+                    const double q = m.p[left];
                     if (q == 0.0) continue;
                     if (left == 0) {
-                        add(out, win(x, h, wa, wb), q);
+                        add(out, won[c], q);
                         continue;
                     }
-                    add(out, reply[eidx(xa ? wa : left, xa ? left : wb, ra)], q);
+                    add(out, load(reply.data(), ra * grid + (xa ? cell(ia, left) : cell(left, ib))), q);
                 }
-                fight[eidx(wa, wb, ra)] = out;
+                put(fight, ra * grid + c, out);
             }
         }
     }
-    // Shooting then (unless it advanced) a charge, per band reached; then the start of the half-turn. The same
-    // sums as shoot_then / charge_best (the same terms in the same order, so the same values), with the charge
-    // decision and the next half-turn's nodes looked up once per position.
-    const SideSpec& sx = side(x);
-    const int dm = sx.move_buckets;
-    const std::size_t wb_stride = static_cast<std::size_t>(wb_max + 1);
-    const bool last = h + 1 >= spec_.half_turns;
-    const Node* next = last ? nullptr : start_[hh + 1].data();
-    std::vector<Node> draws;
-    if (last) {
-        draws.resize(grid);
-        for (int wa = 0; wa <= wa_max; ++wa) {
-            for (int wb = 0; wb <= wb_max; ++wb) {
-                draws[static_cast<std::size_t>(wa) * wb_stride + static_cast<std::size_t>(wb)] = draw(wa, wb);
-            }
-        }
-    }
-    const auto end_at = [&](std::size_t cell, std::size_t pos) -> const Node& {
-        return last ? draws[cell] : next[cell * positions_ + pos];
-    };
-    const Node* fight_data = fight.data();
-    const std::size_t engaged_positions = static_cast<std::size_t>(line + 1);
-    std::vector<Node> charge(grid * positions_, Node{});
-    for (int wa = 1; wa <= wa_max; ++wa) {
-        for (int wb = 1; wb <= wb_max; ++wb) {
-            const std::size_t cell = static_cast<std::size_t>(wa) * wb_stride + static_cast<std::size_t>(wb);
-            for (int g = 1; g <= line; ++g) {
-                const double p = p_charge_[static_cast<std::size_t>(g)];
-                for (int ra = 0; ra <= line - g; ++ra) {
-                    const std::size_t pos = pos_index(g, ra);
-                    const Node& hold = end_at(cell, pos);
-                    Node best = hold;
-                    if (p > 0.0) {
-                        const int ra_after = xa ? std::min(line, ra + g) : ra;
-                        const Node charged =
-                            mix(fight_data[cell * engaged_positions + static_cast<std::size_t>(ra_after)], hold, p);
-                        if (better_for(x, charged, hold)) best = charged;
-                    }
-                    charge[cell * positions_ + pos] = best;
+    // A charge from each band, if the side whose turn it is wants one (11.02: P from the roll covering the gap).
+    std::vector<Node> charge(grid * positions_);
+    for (int g = 1; g <= line; ++g) {
+        const double p = p_charge_[static_cast<std::size_t>(g)];
+        for (int ra = 0; ra <= line - g; ++ra) {
+            const std::size_t pos = pos_index(g, ra);
+            const std::size_t fight_row = static_cast<std::size_t>(xa ? std::min(line, ra + g) : ra) * grid;
+            for (std::size_t c = 0; c < grid; ++c) {
+                const Node hold = last ? draws[c] : load(next, pos * grid + c);
+                Node best = hold;
+                if (p > 0.0) {
+                    const Node charged = mix(load(fight.data(), fight_row + c), hold, p);
+                    if (better_for(x, charged, hold)) best = charged;
                 }
+                charge[pos * grid + c] = best;
             }
         }
     }
+    // Shooting then (unless it advanced) a charge, per band reached. A kind with the same volley as the stationary
+    // shooting (a unit without [HEAVY] weapons) makes the same sums: copied.
     std::vector<Node> shoot[3];
     for (auto& s : shoot) s.assign(grid * positions_, Node{});
+    std::vector<const double*> heavy(grid);
     for (std::size_t k = 0; k < 3; ++k) {
         const bool advanced = k == kAssault;
-        Node* out_data = shoot[k].data();
-        for (int wa = 1; wa <= wa_max; ++wa) {
-            for (int wb = 1; wb <= wb_max; ++wb) {
-                const std::size_t cell = static_cast<std::size_t>(wa) * wb_stride + static_cast<std::size_t>(wb);
-                const int wx = xa ? wa : wb;
-                const int wy = xa ? wb : wa;
-                const Node won = win(x, h, wa, wb);
-                for (int g = 1; g <= line; ++g) {
-                    const double* p = pmf(x, static_cast<Kind>(k), g, wx, wy);
-                    for (int ra = 0; ra <= line - g; ++ra) {
-                        const std::size_t pos = pos_index(g, ra);
-                        Node out;
-                        for (int left = 0; left <= wy; ++left) {
-                            const double q = p[left];
+        for (int g = 1; g <= line; ++g) {
+            bool as_heavy = k == kMoved;
+            for (int ia = 1; ia < na_levels; ++ia) {
+                for (int ib = 1; ib < nb_levels; ++ib) {
+                    const std::size_t c = cell(ia, ib);
+                    const int ty = xa ? ib : ia;
+                    const double* p = pmf_level(x, static_cast<Kind>(k), g, xa ? wa_of(ia) : wb_of(ib), ty);
+                    if (k == kHeavy) heavy[c] = p;
+                    if (as_heavy && p != heavy[c]) as_heavy = false;
+                    pm[c] = pm_of(p, ty);
+                }
+            }
+            for (int ra = 0; ra <= line - g; ++ra) {
+                const std::size_t pos = pos_index(g, ra);
+                Node* out = shoot[k].data() + pos * grid;
+                if (as_heavy) {
+                    const Node* same = shoot[kHeavy].data() + pos * grid;
+                    std::copy(same, same + grid, out);
+                    continue;
+                }
+                for (int ia = 1; ia < na_levels; ++ia) {
+                    for (int ib = 1; ib < nb_levels; ++ib) {
+                        const std::size_t c = cell(ia, ib);
+                        const Pm& m = pm[c];
+                        Node acc;
+                        for (int left = m.lo; left <= m.hi; ++left) {
+                            const double q = m.p[left];
                             if (q == 0.0) continue;
                             if (left == 0) {
-                                add(out, won, q);
+                                add(acc, won[c], q);
                                 continue;
                             }
-                            const std::size_t to = xa ? static_cast<std::size_t>(wa) * wb_stride + static_cast<std::size_t>(left)
-                                                      : static_cast<std::size_t>(left) * wb_stride + static_cast<std::size_t>(wb);
-                            add(out, advanced ? end_at(to, pos) : charge[to * positions_ + pos], q);
+                            const std::size_t to = xa ? cell(ia, left) : cell(left, ib);
+                            if (advanced) {
+                                add(acc, last ? draws[to] : load(next, pos * grid + to), q);
+                            } else {
+                                add(acc, charge[pos * grid + to], q);
+                            }
                         }
-                        out_data[cell * positions_ + pos] = out;
+                        out[c] = acc;
                     }
                 }
             }
         }
     }
-    const auto& d6 = analysis::d6_pmf();
-    for (int wa = 0; wa <= wa_max; ++wa) {
-        for (int wb = 0; wb <= wb_max; ++wb) {
-            if (wa == 0 || wb == 0) {
-                const Node t = wa == 0 ? win(core::Side::B, h, wa, wb) : win(core::Side::A, h, wa, wb);
-                for (std::size_t p = 0; p < positions_; ++p) {
-                    start[(static_cast<std::size_t>(wa) * static_cast<std::size_t>(wb_max + 1) +
-                           static_cast<std::size_t>(wb)) *
-                              positions_ +
-                          p] = t;
-                }
-                continue;
-            }
-            const int wx = xa ? wa : wb;
-            const int wy = xa ? wb : wa;
-            // Engaged: stay (close-quarters shooting, then fight first) or Fall Back (09.07).
-            const double* cq = pmf(x, kCloseQuarters, 1, wx, wy);
-            for (int ra = 0; ra <= line; ++ra) {
+    // Engaged: stay (close-quarters shooting, then fight first) or Fall Back (09.07).
+    const SideSpec& sx = side(x);
+    const int dm = sx.move_buckets;
+    for (int ia = 1; ia < na_levels; ++ia) {
+        for (int ib = 1; ib < nb_levels; ++ib) {
+            const int ty = xa ? ib : ia;
+            Pm& m = pm[cell(ia, ib)];
+            m.p = pmf_level(x, kCloseQuarters, 1, xa ? wa_of(ia) : wb_of(ib), ty);
+            m.lo = 0;
+            m.hi = ty;
+        }
+    }
+    for (int ra = 0; ra <= line; ++ra) {
+        const std::size_t row = static_cast<std::size_t>(ra) * grid;
+        const int room = xa ? ra : line - ra;
+        const int d = std::min(dm, room);
+        const std::size_t back_pos = d >= 1 ? pos_index(d, xa ? ra - d : ra) : 0;
+        for (int ia = 1; ia < na_levels; ++ia) {
+            for (int ib = 1; ib < nb_levels; ++ib) {
+                const std::size_t c = cell(ia, ib);
+                const Pm& m = pm[c];
                 Node stay;
-                for (int left = 0; left <= wy; ++left) {
-                    const double q = cq[left];
+                for (int left = 0; left <= m.hi; ++left) {
+                    const double q = m.p[left];
                     if (q == 0.0) continue;
                     if (left == 0) {
-                        add(stay, win(x, h, wa, wb), q);
+                        add(stay, won[c], q);
                         continue;
                     }
-                    add(stay, fight[eidx(xa ? wa : left, xa ? left : wb, ra)], q);
+                    add(stay, load(fight.data(), row + (xa ? cell(ia, left) : cell(left, ib))), q);
                 }
                 Node best = stay;
-                const int room = xa ? ra : line - ra;
-                const int d = std::min(dm, room);
                 if (d >= 1) {
-                    const Node back = end_turn(h, wa, wb, d, xa ? ra - d : ra);
+                    const Node back = last ? draws[c] : load(next, back_pos * grid + c);
                     if (better_for(x, back, best)) best = back;
                 }
-                start[idx(wa, wb, 0, ra)] = best;
+                put(start, row + c, best);
             }
-            // Unengaged: a Normal move to any band in reach, or an Advance.
-            for (int g = 1; g <= line; ++g) {
-                for (int ra = 0; ra <= line - g; ++ra) {
-                    const int room = xa ? ra : line - g - ra;
-                    const auto at = [&](std::size_t kind, int d) {  // d > 0: towards the enemy
-                        return shoot[kind][idx(wa, wb, g - d, xa ? ra + d : ra)];
-                    };
-                    Node best = at(kHeavy, 0);
-                    const int towards = std::min(dm, g - 1);
-                    const int back = std::min(dm, room);
-                    for (int step = 1; step <= std::max(towards, back); ++step) {
-                        const std::size_t kind =
-                            static_cast<float>(step) * Evaluator::bucket_mm() <= kHeavyMoveMm + core::EPS_MM
-                                ? static_cast<std::size_t>(kHeavy)
-                                : static_cast<std::size_t>(kMoved);
-                        if (step <= towards) {
-                            const Node v = at(kind, step);
-                            if (better_for(x, v, best)) best = v;
-                        }
-                        if (step <= back) {
-                            const Node v = at(kind, -step);
-                            if (better_for(x, v, best)) best = v;
-                        }
+        }
+    }
+    // Unengaged: a Normal move to any band in reach, or an Advance; the same choices as before for every cell, in the
+    // same order (the bounds depend on the position only).
+    const auto& d6 = analysis::d6_pmf();
+    std::vector<Node> best(grid);
+    std::vector<Node> advance(grid);
+    std::vector<Node> best_so_far(grid);
+    const auto take = [&](std::vector<Node>& acc, const Node* src) {
+        for (std::size_t c = 0; c < grid; ++c) {
+            if (better_for(x, src[c], acc[c])) acc[c] = src[c];
+        }
+    };
+    for (int g = 1; g <= line; ++g) {
+        for (int ra = 0; ra <= line - g; ++ra) {
+            const int room = xa ? ra : line - g - ra;
+            const auto at = [&](std::size_t kind, int dd) {  // dd > 0: towards the enemy
+                return shoot[kind].data() + pos_index(g - dd, xa ? ra + dd : ra) * grid;
+            };
+            {
+                const Node* r0 = at(kHeavy, 0);
+                std::copy(r0, r0 + grid, best.begin());
+            }
+            const int towards = std::min(dm, g - 1);
+            const int back = std::min(dm, room);
+            for (int step = 1; step <= std::max(towards, back); ++step) {
+                const std::size_t kind = static_cast<float>(step) * Evaluator::bucket_mm() <= kHeavyMoveMm + core::EPS_MM
+                                             ? static_cast<std::size_t>(kHeavy)
+                                             : static_cast<std::size_t>(kMoved);
+                if (step <= towards) take(best, at(kind, step));
+                if (step <= back) take(best, at(kind, -step));
+            }
+            if (dm > 0) {
+                // 09.06: the band it likes best for each D6 result (the reach only grows with the roll).
+                std::fill(advance.begin(), advance.end(), Node{});
+                {
+                    const Node* r0 = at(kAssault, 0);
+                    std::copy(r0, r0 + grid, best_so_far.begin());
+                }
+                int reach = 0;
+                for (std::size_t f = 1; f <= 6; ++f) {
+                    const int r = sx.advance_buckets[f];
+                    for (int step = reach + 1; step <= r; ++step) {
+                        if (step <= g - 1) take(best_so_far, at(kAssault, step));
+                        if (step <= room) take(best_so_far, at(kAssault, -step));
                     }
-                    if (dm > 0) {
-                        // 09.06: the band it likes best for each D6 result (the reach only grows with the roll).
-                        Node advance;
-                        Node best_so_far = at(kAssault, 0);
-                        int reach = 0;
-                        for (std::size_t f = 1; f <= 6; ++f) {
-                            const int r = sx.advance_buckets[f];
-                            for (int step = reach + 1; step <= r; ++step) {
-                                if (step <= g - 1) {
-                                    const Node v = at(kAssault, step);
-                                    if (better_for(x, v, best_so_far)) best_so_far = v;
-                                }
-                                if (step <= room) {
-                                    const Node v = at(kAssault, -step);
-                                    if (better_for(x, v, best_so_far)) best_so_far = v;
-                                }
-                            }
-                            reach = std::max(reach, r);
-                            add(advance, best_so_far, d6[f]);
-                        }
-                        if (better_for(x, advance, best)) best = advance;
-                    }
-                    start[idx(wa, wb, g, ra)] = best;
+                    reach = std::max(reach, r);
+                    for (std::size_t c = 0; c < grid; ++c) add(advance[c], best_so_far[c], d6[f]);
+                }
+                take(best, advance.data());
+            }
+            const std::size_t row = pos_index(g, ra) * grid;
+            for (std::size_t c = 0; c < grid; ++c) put(start, row + c, best[c]);
+        }
+    }
+}
+
+std::size_t ChainTable::estimate_bytes(const Spec& s) noexcept {
+    const int line = s.line;
+    const std::size_t positions =
+        static_cast<std::size_t>(line + 1) + static_cast<std::size_t>(line) * static_cast<std::size_t>(line + 1) / 2;
+    const std::size_t cells = static_cast<std::size_t>(std::max(0, level_count(s.sides[0]) - 1)) *
+                              static_cast<std::size_t>(std::max(0, level_count(s.sides[1]) - 1));
+    const std::size_t per_half_turn = 3 * cells * (positions + 2 * static_cast<std::size_t>(line + 1));
+    const std::size_t half_turns = static_cast<std::size_t>(std::max(0, s.half_turns - std::max(0, s.h0)));
+    return per_half_turn * half_turns * (s.compact ? sizeof(float) : sizeof(double));
+}
+
+std::size_t ChainTable::bytes() const noexcept {
+    std::size_t total = 0;
+    for (const std::vector<Stored>* rows : {&start_, &fight_, &reply_}) {
+        for (const Stored& r : *rows) total += r.d.size() * sizeof(double) + r.f.size() * sizeof(float);
+    }
+    for (const DistSet& d : pool_) total += d.data.size() * sizeof(double) + d.offset.size() * sizeof(std::size_t);
+    return total;
+}
+
+void ChainTable::trim_before(int h) {
+    const int to = std::min(h, spec_.half_turns - 1);
+    if (to <= spec_.h0) return;
+    const auto drop = static_cast<std::ptrdiff_t>(to - spec_.h0);
+    for (std::vector<Stored>* rows : {&start_, &fight_, &reply_}) rows->erase(rows->begin(), rows->begin() + drop);
+    spec_.h0 = to;
+}
+
+std::uint64_t ChainTable::fingerprint(int from) const {
+    // By the lookups, so the layout and the form don't matter: an exact table's values at every grid point.
+    Fnv1a f;
+    const auto put = [&](const Node& n) {
+        f.u64(std::bit_cast<std::uint64_t>(n.j));
+        f.u64(std::bit_cast<std::uint64_t>(n.pw));
+        f.u64(std::bit_cast<std::uint64_t>(n.pl));
+    };
+    const int line = spec_.line;
+    const SideSpec& sa = spec_.sides[0];
+    const SideSpec& sb = spec_.sides[1];
+    const int first = std::max(std::max(0, spec_.h0), from);
+    for (int h = first; h < spec_.half_turns; ++h) {
+        for (std::size_t ia = 1; ia < sa.levels.size(); ++ia) {
+            for (std::size_t ib = 1; ib < sb.levels.size(); ++ib) {
+                const int wa = sa.levels[ia];
+                const int wb = sb.levels[ib];
+                for (int ra = 0; ra <= line; ++ra) put(start(h, wa, wb, 0, ra));
+                for (int g = 1; g <= line; ++g) {
+                    for (int ra = 0; ra <= line - g; ++ra) put(start(h, wa, wb, g, ra));
+                }
+                for (int ra = 0; ra <= line; ++ra) {
+                    put(fight(h, wa, wb, ra));
+                    put(reply(h, wa, wb, ra));
                 }
             }
         }
     }
+    f.i32(from > 0 ? first : spec_.h0);
+    f.i32(spec_.half_turns);
+    f.i32(line);
+    f.i32(sa.max_wounds);
+    f.i32(sb.max_wounds);
+    return f.value();
+}
+
+ChainTableInfo ChainTable::info_of(const Spec& spec) {
+    ChainTableInfo i;
+    i.key = spec.key;
+    i.h0 = spec.h0;
+    i.half_turns = spec.half_turns;
+    i.line = spec.line;
+    for (std::size_t s = 0; s < 2; ++s) {
+        i.max_wounds[s] = spec.sides[s].max_wounds;
+        i.levels[s] = level_count(spec.sides[s]);
+        i.exact[s] = spec.sides[s].exact;
+    }
+    i.compact = spec.compact;
+    i.bytes = estimate_bytes(spec);
+    return i;
+}
+
+ChainTableInfo ChainTable::info() const {
+    ChainTableInfo i = info_of(spec_);
+    i.bytes = bytes();
+    return i;
 }
 
 // ---- duels and the evaluator ----
@@ -729,6 +1146,34 @@ std::optional<Duel> duel_of(const core::GameState& state) {
     }
     if (count[0] != 1 || count[1] != 1) return std::nullopt;
     return d;
+}
+
+std::optional<Duel> duel_play(const core::GameState& state) {
+    if (state.result_rule == core::ResultRule::PointsDestroyed) return std::nullopt;  // D-078: the army path
+    return duel_of(state);
+}
+
+std::int64_t points_increment(const core::Unit& unit, std::int64_t denominator) {
+    if (unit.points <= 0 || unit.starting_wounds <= 0 || core::is_destroyed(unit) || denominator <= 0) return 0;
+    // D-076's formula: a destroyed unit counts points x (D / starting wounds) x starting wounds, a unit on the
+    // battlefield points x (D / starting wounds) x wounds lost; the difference is its wounds remaining.
+    const std::int64_t scale = denominator / unit.starting_wounds;
+    const std::int64_t remaining = std::int64_t{unit.starting_wounds} - std::int64_t{core::wounds_lost(unit)};
+    return std::int64_t{unit.points} * scale * remaining;
+}
+
+double points_lead(double mu, double variance) noexcept {
+    if (!(variance > 0.0)) return mu > 0.0 ? 1.0 : (mu < 0.0 ? -1.0 : 0.0);
+    const double x = std::fabs(mu) / std::sqrt(2.0 * variance);
+    // Abramowitz and Stegun 7.1.28: erf(x) = 1 - 1 / (1 + a1 x + ... + a6 x^6)^16, |error| <= 3e-7, x >= 0.
+    const double p = 1.0 + x * (0.0705230784 + x * (0.0422820123 + x * (0.0092705272 +
+                                     x * (0.0001520143 + x * (0.0002765672 + x * 0.0000430638)))));
+    double t = p * p;  // p^2
+    t *= t;            // p^4
+    t *= t;            // p^8
+    t *= t;            // p^16
+    const double e = 1.0 - 1.0 / t;
+    return mu > 0.0 ? e : -e;
 }
 
 int max_line_buckets() noexcept { return kMaxLine; }
@@ -768,17 +1213,34 @@ int half_turn_of(const core::GameState& s) {
     return std::max(0, (s.flow.battle_round - 1) * 2 + s.flow.turn_in_round);
 }
 
+int strength_of(const core::Unit& u) { return std::max(u.starting_strength, static_cast<int>(u.models.size())); }
+
+// D-078: a mixed unit's composition at full strength, as a key: each model's loadout hash, sorted (the order is
+// decided later, against the other unit type), so the key holds while rank and file die.
+void hash_composition(Fnv1a& key, const core::Unit& u) {
+    const core::Unit proto = mixed_prototype(u, strength_of(u));
+    std::vector<std::uint64_t> h;
+    for (const core::Model& m : proto.models) h.push_back(hash_model(m));
+    std::sort(h.begin(), h.end());
+    for (const std::uint64_t v : h) key.u64(v);
+}
+
 // ---- D-067: the army's tables ----
 
-// A unit's type for the army's tables: its representative model, keywords and starting strength (what a duel
-// table's key holds for one side). Units with models only.
+// A unit's type for the army's tables: its representative model (D-078: a mixed unit's composition), keywords and
+// starting strength (what a duel table's key holds for one side). Units with models only.
 std::uint64_t side_key(const core::Unit& u) {
     Fnv1a key;
     const core::Model& rep = representative(u);
-    key.u64(hash_model(rep));
+    if (mixed_loadouts(u)) {
+        key.u64(0x6d69786564ull);  // "mixed"
+        hash_composition(key, u);
+    } else {
+        key.u64(hash_model(rep));
+    }
     for (const std::string& k : u.keywords) key.bytes(k.data(), k.size());
     const int wpm = std::max(1, rep.characteristics.wounds);
-    const int strength = std::max(u.starting_strength, static_cast<int>(u.models.size()));
+    const int strength = strength_of(u);
     key.i32(std::max(1, strength * wpm));
     key.i32(strength);
     return key.value();
@@ -793,6 +1255,52 @@ int army_line(const core::GameState& root, float bucket) {
     return std::clamp(static_cast<int>(std::ceil(diagonal / bucket - 1e-9)), kMinLine, kMaxLine);
 }
 
+// One side of a table spec for unit `u` (against `other`): the static description (D-078: the grid, a mixed unit's
+// composition not yet in keep order, the [HAZARDOUS] rate), the key's part for it, and the region's top `max_wounds`.
+void side_spec(SideSpec& s, Fnv1a& key, const core::GameState& root, const core::Unit& u, const core::Unit& other,
+               int max_wounds) {
+    const core::Model& rep = representative(u);
+    s.wounds_per_model = std::max(1, rep.characteristics.wounds);
+    const int strength = strength_of(u);
+    s.wounds_start = std::max(1, strength * s.wounds_per_model);
+    s.levels = grid_levels(s.wounds_start, std::max(1, max_wounds));
+    s.exact = s.wounds_start <= kExactWounds;
+    s.max_wounds = s.levels.back();
+    s.max_models = (s.max_wounds + s.wounds_per_model - 1) / s.wounds_per_model;
+    s.mixed = mixed_loadouts(u);
+    // The prototype (and so each model's profile choice against it) has the unit's starting strength, not what is
+    // left now, so a state's value is the same whichever table answers it.
+    const int count = std::max(strength, s.max_models);
+    s.proto = s.mixed ? mixed_prototype(u, count) : prototype(u, count);
+    const analysis::ThreatRanges t = analysis::threat_ranges(s.proto);
+    s.move_buckets = static_cast<int>(std::floor((t.move_mm + core::EPS_MM) / Evaluator::bucket_mm()));
+    for (std::size_t f = 1; f <= 6; ++f) {
+        s.advance_buckets[f] = static_cast<int>(std::floor((t.advance_mm[f] + core::EPS_MM) / Evaluator::bucket_mm()));
+    }
+    s.ranges = s.mixed ? usable_ranges(s.proto) : usable_ranges(rep);
+    // D-078: [HAZARDOUS] at Normal's exchange rate (D-077), only for a unit that has such a profile (else 0, as before).
+    s.hazard_rate = has_hazardous(u) ? normal::hazard_rate(root, u, other) : 0.0;
+    if (s.mixed) {
+        key.u64(0x6d69786564ull);
+        hash_composition(key, u);
+    } else {
+        key.u64(hash_model(rep));
+    }
+    for (const std::string& k : u.keywords) key.bytes(k.data(), k.size());
+    key.i32(s.wounds_start);
+    key.i32(static_cast<int>(s.proto.models.size()));
+    if (s.hazard_rate > 0.0) key.u64(rate_key(s.hazard_rate));
+}
+
+void spec_key_tail(Spec& spec, Fnv1a& key) {
+    key.i32(spec.half_turns);
+    key.i32(spec.first == core::Side::A ? 0 : 1);
+    key.i32(spec.line);
+    key.u64(static_cast<std::uint64_t>(std::llround(spec.weights.tempo * 1e9)));
+    key.u64(static_cast<std::uint64_t>(std::llround(spec.weights.material * 1e9)));
+    spec.key = key.value();
+}
+
 // The table's spec for units of the types of `ua` (side A) and `ub` (side B): the whole unit (every later state of
 // a unit of that type), from the root's half-turn on, on the army's line.
 Spec army_spec(const core::GameState& root, const core::Unit& ua, const core::Unit& ub, const ChainWeights& weights,
@@ -805,72 +1313,304 @@ Spec army_spec(const core::GameState& root, const core::Unit& ua, const core::Un
     spec.line = line;
     Fnv1a key;
     for (const core::Unit* u : {&ua, &ub}) {
-        SideSpec& s = spec.sides[si(u->side)];
-        const core::Model& rep = representative(*u);
-        s.wounds_per_model = std::max(1, rep.characteristics.wounds);
-        const int strength = std::max(u->starting_strength, static_cast<int>(u->models.size()));
-        s.wounds_start = std::max(1, strength * s.wounds_per_model);
-        s.max_wounds = s.wounds_start;
-        s.max_models = (s.max_wounds + s.wounds_per_model - 1) / s.wounds_per_model;
-        s.proto = prototype(*u, std::max(strength, s.max_models));
-        const analysis::ThreatRanges t = analysis::threat_ranges(s.proto);
-        s.move_buckets = static_cast<int>(std::floor((t.move_mm + core::EPS_MM) / Evaluator::bucket_mm()));
-        for (std::size_t f = 1; f <= 6; ++f) {
-            s.advance_buckets[f] =
-                static_cast<int>(std::floor((t.advance_mm[f] + core::EPS_MM) / Evaluator::bucket_mm()));
-        }
-        s.ranges = usable_ranges(rep);
-        key.u64(hash_model(rep));
-        for (const std::string& k : u->keywords) key.bytes(k.data(), k.size());
-        key.i32(s.wounds_start);
-        key.i32(static_cast<int>(s.proto.models.size()));
+        const core::Unit& other = u == &ua ? ub : ua;
+        const int wounds_start = std::max(1, strength_of(*u) * std::max(1, representative(*u).characteristics.wounds));
+        side_spec(spec.sides[si(u->side)], key, root, *u, other, wounds_start);
     }
-    key.i32(spec.half_turns);
-    key.i32(spec.first == core::Side::A ? 0 : 1);
-    key.i32(spec.line);
-    key.u64(static_cast<std::uint64_t>(std::llround(weights.tempo * 1e9)));
-    key.u64(static_cast<std::uint64_t>(std::llround(weights.material * 1e9)));
-    spec.key = key.value();
+    spec_key_tail(spec, key);
+    return spec;
+}
+
+// D-078: a mixed side's models in keep order: the most valuable against the other side's unit at full strength first
+// (Normal's model_worth, as its casualty order keeps them; a tie keeps the order), so the first n are the n alive.
+void finalize_spec(Spec& spec, analysis::OddsCache& odds) {
+    // Both sides' worth first, each against the other side's models as specified (so neither order depends on the
+    // other's sorting).
+    std::array<std::map<core::ModelId, double>, 2> worth;
+    for (std::size_t s = 0; s < 2; ++s) {
+        if (spec.sides[s].mixed) worth[s] = normal::model_worth(odds, spec.sides[s].proto, spec.sides[1 - s].proto);
+    }
+    for (std::size_t s = 0; s < 2; ++s) {
+        SideSpec& x = spec.sides[s];
+        if (!x.mixed) continue;
+        const std::map<core::ModelId, double>& w = worth[s];
+        std::stable_sort(x.proto.models.begin(), x.proto.models.end(),
+                         [&](const core::Model& a, const core::Model& b) { return w.at(a.id) > w.at(b.id); });
+    }
+}
+
+bool spec_has_mixed(const Spec& s) { return s.sides[0].mixed || s.sides[1].mixed; }
+
+std::size_t default_workers() {
+    const unsigned hw = std::thread::hardware_concurrency();
+    return std::clamp<std::size_t>(hw == 0 ? 1 : hw, 1, kMaxWorkers);
+}
+
+}  // namespace
+
+// ---- D-078: the cache ----
+
+struct ChainCache::Store {
+    std::vector<std::shared_ptr<ChainTable>> tables;  // most recently used last
+    std::size_t builds = 0;
+    std::size_t capacity = kMaxTables;
+    std::size_t workers = 0;  // 0: default_workers()
+    std::size_t cap = kCacheCapBytes;
+};
+
+ChainCache::ChainCache() : store_(std::make_shared<Store>()) {}
+
+std::size_t ChainCache::size() const noexcept { return store_->tables.size(); }
+std::size_t ChainCache::builds() const noexcept { return store_->builds; }
+void ChainCache::clear() noexcept { store_->tables.clear(); }
+std::size_t ChainCache::cap_bytes() noexcept { return kCacheCapBytes; }
+std::size_t ChainCache::capacity() const noexcept { return store_->capacity; }
+void ChainCache::share_with(ChainCache& other) { store_ = other.store_; }
+void ChainCache::set_workers(std::size_t workers) noexcept { store_->workers = workers; }
+void ChainCache::set_cap_bytes(std::size_t cap) noexcept { store_->cap = cap == 0 ? kCacheCapBytes : cap; }
+std::size_t ChainCache::workers() const noexcept {
+    return store_->workers == 0 ? default_workers() : store_->workers;
+}
+
+std::size_t ChainCache::bytes() const noexcept {
+    std::size_t total = 0;
+    for (const auto& t : store_->tables) total += t->bytes();
+    return total;
+}
+
+void ChainCache::trim_before(int half_turn) {
+    for (const auto& t : store_->tables) {
+        if (t.use_count() == 1) t->trim_before(half_turn);  // no Evaluator holds it
+    }
+}
+
+std::vector<ChainTableInfo> ChainCache::info() const {
+    std::vector<ChainTableInfo> out;
+    for (const auto& t : store_->tables) out.push_back(t->info());
+    return out;
+}
+
+std::uint64_t ChainCache::fingerprint(int from) const {
+    std::vector<std::uint64_t> each;
+    for (const auto& t : store_->tables) each.push_back(t->fingerprint(from));
+    std::sort(each.begin(), each.end());
+    Fnv1a f;
+    for (const std::uint64_t v : each) f.u64(v);
+    return f.value();
+}
+
+namespace {
+
+// D-078: room for `adding` tables of `adding_bytes`: the least recently used tables no Evaluator holds are evicted while
+// the cache would hold more tables than its capacity or more bytes than the cap. A function of the requests alone.
+void make_room(ChainCache::Store& s, std::size_t adding, std::size_t adding_bytes) {
+    std::size_t total = 0;
+    for (const auto& t : s.tables) total += t->bytes();
+    for (std::size_t i = 0; i < s.tables.size();) {
+        const bool over = s.tables.size() + adding > s.capacity || total + adding_bytes > s.cap;
+        if (!over) break;
+        if (s.tables[i].use_count() == 1) {
+            total -= s.tables[i]->bytes();
+            s.tables.erase(s.tables.begin() + static_cast<std::ptrdiff_t>(i));
+        } else {
+            ++i;
+        }
+    }
+}
+
+// D-078: the tables of `specs` at the indices `which`, built by up to `workers` threads. Each thread uses its own odds
+// cache (a value never depends on a cache's contents, M40) and writes only its own tables; the calling thread works too
+// and joins every thread before returning, then rethrows the first error in spec order. One table, or one worker: built
+// on the calling thread with `odds`, as before M69.
+std::vector<std::shared_ptr<ChainTable>> build_tables(analysis::OddsCache& odds, const std::vector<Spec>& specs,
+                                                      const std::vector<std::size_t>& which, std::size_t workers,
+                                                      float bucket) {
+    const std::size_t n = which.size();
+    std::vector<std::shared_ptr<ChainTable>> built(n);
+    const std::size_t threads = std::min(std::max<std::size_t>(1, workers), n);
+    if (threads <= 1) {
+        for (std::size_t k = 0; k < n; ++k) built[k] = std::make_shared<ChainTable>(odds, specs[which[k]], bucket);
+        return built;
+    }
+    std::vector<std::exception_ptr> errors(n);
+    std::atomic<std::size_t> next{0};
+    const auto work = [&] {
+        analysis::OddsCache own;
+        for (std::size_t k = next.fetch_add(1); k < n; k = next.fetch_add(1)) {
+            try {
+                built[k] = std::make_shared<ChainTable>(own, specs[which[k]], bucket);
+            } catch (...) {
+                errors[k] = std::current_exception();
+            }
+        }
+    };
+    std::vector<std::thread> pool;
+    pool.reserve(threads - 1);
+    try {
+        for (std::size_t t = 1; t < threads; ++t) pool.emplace_back(work);
+    } catch (...) {
+        // No more threads: the ones started and the calling thread share the work.
+    }
+    work();
+    for (std::thread& t : pool) t.join();
+    for (const std::exception_ptr& e : errors) {
+        if (e) std::rethrow_exception(e);
+    }
+    return built;
+}
+
+}  // namespace
+
+std::vector<std::shared_ptr<const ChainTable>> Evaluator::find_or_build(std::vector<Spec> specs,
+                                                                        ChainCache* cache) const {
+    std::vector<std::shared_ptr<const ChainTable>> out(specs.size());
+    ChainCache::Store* store = cache != nullptr ? cache->store_.get() : nullptr;
+    std::vector<std::size_t> missing;
+    for (std::size_t i = 0; i < specs.size(); ++i) {
+        if (store != nullptr) {
+            const auto it = std::find_if(store->tables.begin(), store->tables.end(),
+                                         [&](const std::shared_ptr<ChainTable>& t) { return t->covers(specs[i]); });
+            if (it != store->tables.end()) {
+                out[i] = *it;
+                std::rotate(it, it + 1, store->tables.end());  // most recently used last
+                continue;
+            }
+        }
+        missing.push_back(i);
+    }
+    if (missing.empty()) return out;
+    for (const std::size_t i : missing) {
+        if (spec_has_mixed(specs[i])) finalize_spec(specs[i], odds_);  // D-078: the keep order, only for a build
+    }
+    if (store != nullptr) {
+        std::size_t adding_bytes = 0;
+        for (const std::size_t i : missing) adding_bytes += ChainTable::estimate_bytes(specs[i]);
+        make_room(*store, missing.size(), adding_bytes);
+    }
+    const std::size_t workers = cache != nullptr ? cache->workers() : default_workers();
+    std::vector<std::shared_ptr<ChainTable>> built = build_tables(odds_, specs, missing, workers, kBucketMm);
+    for (std::size_t k = 0; k < missing.size(); ++k) {
+        out[missing[k]] = built[k];
+        if (store != nullptr) {
+            ++store->builds;
+            store->tables.push_back(std::move(built[k]));
+        }
+    }
+    return out;
+}
+
+std::shared_ptr<const ChainTable> Evaluator::find_or_build(Spec spec, ChainCache* cache) const {
+    std::vector<Spec> one;
+    one.push_back(std::move(spec));
+    return find_or_build(std::move(one), cache).front();
+}
+
+namespace {
+
+// D-067: the army's unit types (each side's, in unit order: units with models) and D-078 the specs of every pair, side
+// A's types outermost; compact storage when the game's tables would be too big at full precision (the whole game, from
+// the pairs present: Strike's one table is far below, the rosters' 30 far above).
+struct ArmyPlan {
+    std::vector<std::pair<std::uint64_t, const core::Unit*>> a_types;
+    std::vector<std::pair<std::uint64_t, const core::Unit*>> b_types;
+    std::vector<std::pair<core::UnitId, std::uint64_t>> unit_keys;
+    std::array<double, 2> start_wounds{};
+    std::vector<Spec> specs;
+};
+
+std::optional<ArmyPlan> army_plan(const core::GameState& root, const ChainWeights& weights, float bucket) {
+    if (root.battle_rounds <= 0) return std::nullopt;
+    std::vector<const core::Unit*> a_units;
+    std::vector<const core::Unit*> b_units;
+    for (const core::Unit& u : root.units) {
+        if (u.models.empty()) continue;
+        (u.side == core::Side::A ? a_units : b_units).push_back(&u);
+    }
+    if (a_units.empty() || b_units.empty()) return std::nullopt;
+    ArmyPlan plan;
+    const int line = army_line(root, bucket);
+    for (const auto& [units, types] : {std::pair{&a_units, &plan.a_types}, std::pair{&b_units, &plan.b_types}}) {
+        for (const core::Unit* u : *units) {
+            const int wpm = std::max(1, representative(*u).characteristics.wounds);
+            plan.start_wounds[si(u->side)] +=
+                std::max(1, std::max(u->starting_strength, static_cast<int>(u->models.size())) * wpm);
+            const std::uint64_t k = side_key(*u);
+            plan.unit_keys.emplace_back(u->id, k);
+            if (std::none_of(types->begin(), types->end(), [&](const auto& t) { return t.first == k; })) {
+                types->emplace_back(k, u);
+            }
+        }
+    }
+    for (const auto& [ka, ua] : plan.a_types) {
+        for (const auto& [kb, ub] : plan.b_types) plan.specs.push_back(army_spec(root, *ua, *ub, weights, line));
+    }
+    std::size_t full = 0;
+    for (const Spec& s : plan.specs) {
+        Spec whole = s;
+        whole.h0 = 0;
+        full += ChainTable::estimate_bytes(whole);
+    }
+    if (full > kCompactAboveBytes) {
+        for (Spec& s : plan.specs) s.compact = true;
+    }
+    return plan;
+}
+
+// The duel's table spec (M44): the two units' wounds now, from the root's half-turn on, on a line as long as the gap
+// and both rooms.
+Spec duel_spec(const core::GameState& root, const core::Unit& ua, const core::Unit& ub, const ChainWeights& weights,
+               float bucket) {
+    Spec spec;
+    spec.half_turns = 2 * root.battle_rounds;
+    spec.first = root.first_turn;
+    spec.h0 = std::min(half_turn_of(root), spec.half_turns - 1);
+    spec.weights = weights;
+    const float gap = core::unit_distance(ua, ub).value_or(0.0f);
+    const float ra = room_away(root, ua, centroid_of(ub));
+    const float rb = room_away(root, ub, centroid_of(ua));
+    spec.line = std::clamp(static_cast<int>(std::lround((gap + ra + rb) / bucket)), kMinLine, kMaxLine);
+    Fnv1a key;
+    for (const core::Unit* u : {&ua, &ub}) {
+        side_spec(spec.sides[si(u->side)], key, root, *u, u == &ua ? ub : ua, std::max(1, wounds_of(*u)));
+    }
+    spec_key_tail(spec, key);
     return spec;
 }
 
 }  // namespace
 
+std::vector<ChainTableInfo> plan_chain_tables(const core::GameState& root, ChainWeights weights) {
+    std::vector<ChainTableInfo> out;
+    if (const std::optional<Duel> d = duel_play(root)) {
+        const core::Unit* ua = root.find_unit(d->units[0]);
+        const core::Unit* ub = root.find_unit(d->units[1]);
+        if (ua != nullptr && ub != nullptr && root.battle_rounds > 0) {
+            out.push_back(ChainTable::info_of(duel_spec(root, *ua, *ub, weights, Evaluator::bucket_mm())));
+        }
+        return out;
+    }
+    if (const std::optional<ArmyPlan> plan = army_plan(root, weights, Evaluator::bucket_mm())) {
+        for (const Spec& s : plan->specs) out.push_back(ChainTable::info_of(s));
+    }
+    return out;
+}
+
 Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, core::Side side, ChainWeights weights,
                      ChainCache* cache, bool force_army)
     : odds_(odds), side_(side), weights_(weights) {
-    const std::optional<Duel> d = duel_of(root);
+    const std::optional<Duel> d = duel_play(root);
     if (!d) {
         // D-067: the army. One table per pair of unit types present (both sides need a unit with models).
-        if (root.battle_rounds <= 0) return;
-        std::vector<const core::Unit*> a_units;
-        std::vector<const core::Unit*> b_units;
-        for (const core::Unit& u : root.units) {
-            if (u.models.empty()) continue;
-            (u.side == core::Side::A ? a_units : b_units).push_back(&u);
-        }
-        if (a_units.empty() || b_units.empty()) return;
+        std::optional<ArmyPlan> plan = army_plan(root, weights, kBucketMm);
+        if (!plan) return;
         army_ = true;
-        const int line = army_line(root, kBucketMm);
-        std::vector<std::pair<std::uint64_t, const core::Unit*>> a_types;
-        std::vector<std::pair<std::uint64_t, const core::Unit*>> b_types;
-        for (const auto& [units, types] : {std::pair{&a_units, &a_types}, std::pair{&b_units, &b_types}}) {
-            for (const core::Unit* u : *units) {
-                const int wpm = std::max(1, representative(*u).characteristics.wounds);
-                start_wounds_[si(u->side)] +=
-                    std::max(1, std::max(u->starting_strength, static_cast<int>(u->models.size())) * wpm);
-                const std::uint64_t k = side_key(*u);
-                unit_keys_.emplace_back(u->id, k);
-                if (std::none_of(types->begin(), types->end(), [&](const auto& t) { return t.first == k; })) {
-                    types->emplace_back(k, u);
-                }
-            }
-        }
-        for (const auto& [ka, ua] : a_types) {
-            for (const auto& [kb, ub] : b_types) {
-                army_tables_.push_back(
-                    PairTable{ka, kb, find_or_build(army_spec(root, *ua, *ub, weights, line), cache)});
-            }
+        unit_keys_ = std::move(plan->unit_keys);
+        start_wounds_ = plan->start_wounds;
+        if (cache != nullptr) cache->store_->capacity = std::max(kMaxTables, plan->specs.size());
+        std::vector<std::shared_ptr<const ChainTable>> tables = find_or_build(std::move(plan->specs), cache);
+        std::size_t k = 0;
+        for (const auto& [ka, ua] : plan->a_types) {
+            for (const auto& [kb, ub] : plan->b_types) army_tables_.push_back(PairTable{ka, kb, tables[k++]});
         }
         return;
     }
@@ -878,45 +1618,7 @@ Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, cor
     const core::Unit* ua = root.find_unit(duel_.units[0]);
     const core::Unit* ub = root.find_unit(duel_.units[1]);
     if (ua == nullptr || ub == nullptr || root.battle_rounds <= 0) return;
-    Spec spec;
-    spec.half_turns = 2 * root.battle_rounds;
-    spec.first = root.first_turn;
-    spec.h0 = std::min(half_turn_of(root), spec.half_turns - 1);
-    spec.weights = weights;
-    const float gap = core::unit_distance(*ua, *ub).value_or(0.0f);
-    const float ra = room_away(root, *ua, centroid_of(*ub));
-    const float rb = room_away(root, *ub, centroid_of(*ua));
-    spec.line = std::clamp(static_cast<int>(std::lround((gap + ra + rb) / kBucketMm)), kMinLine, kMaxLine);
-    Fnv1a key;
-    for (const core::Unit* u : {ua, ub}) {
-        SideSpec& s = spec.sides[si(u->side)];
-        const core::Model& rep = representative(*u);
-        s.wounds_per_model = std::max(1, rep.characteristics.wounds);
-        s.max_wounds = std::max(1, wounds_of(*u));
-        s.max_models = (s.max_wounds + s.wounds_per_model - 1) / s.wounds_per_model;
-        // The prototype (and so each model's profile choice against it) has the unit's starting strength, not what
-        // is left now, so a state's value is the same whichever table answers it.
-        const int strength = std::max(u->starting_strength, static_cast<int>(u->models.size()));
-        s.wounds_start = std::max(1, strength * s.wounds_per_model);
-        s.proto = prototype(*u, std::max(strength, s.max_models));
-        const analysis::ThreatRanges t = analysis::threat_ranges(s.proto);
-        s.move_buckets = static_cast<int>(std::floor((t.move_mm + core::EPS_MM) / kBucketMm));
-        for (std::size_t f = 1; f <= 6; ++f) {
-            s.advance_buckets[f] = static_cast<int>(std::floor((t.advance_mm[f] + core::EPS_MM) / kBucketMm));
-        }
-        s.ranges = usable_ranges(rep);
-        key.u64(hash_model(rep));
-        for (const std::string& k : u->keywords) key.bytes(k.data(), k.size());
-        key.i32(s.wounds_start);
-        key.i32(static_cast<int>(s.proto.models.size()));
-    }
-    key.i32(spec.half_turns);
-    key.i32(spec.first == core::Side::A ? 0 : 1);
-    key.i32(spec.line);
-    key.u64(static_cast<std::uint64_t>(std::llround(weights.tempo * 1e9)));
-    key.u64(static_cast<std::uint64_t>(std::llround(weights.material * 1e9)));
-    spec.key = key.value();
-    table_ = find_or_build(std::move(spec), cache);
+    table_ = find_or_build(duel_spec(root, *ua, *ub, weights, kBucketMm), cache);
     if (force_army && table_) {
         // D-067 (tests): the army's combination over the duel's own table, each pair read the duel's way.
         army_ = true;
@@ -934,31 +1636,31 @@ Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, cor
     }
 }
 
-std::shared_ptr<const ChainTable> Evaluator::find_or_build(Spec spec, ChainCache* cache) const {
-    if (cache != nullptr) {
-        for (auto it = cache->tables_.begin(); it != cache->tables_.end(); ++it) {
-            if ((*it)->covers(spec)) {
-                std::shared_ptr<const ChainTable> found = *it;
-                // Most recently used last.
-                std::rotate(it, it + 1, cache->tables_.end());
-                return found;
-            }
-        }
-    }
-    std::shared_ptr<const ChainTable> table = std::make_shared<const ChainTable>(odds_, std::move(spec), kBucketMm);
-    if (cache != nullptr) {
-        ++cache->builds_;
-        cache->tables_.push_back(table);
-        if (cache->tables_.size() > kMaxTables) cache->tables_.erase(cache->tables_.begin());
-    }
-    return table;
-}
-
 Evaluator::~Evaluator() = default;
 
 int Evaluator::line_buckets() const noexcept {
     if (table_) return table_->line();
     return army_tables_.empty() ? 0 : army_tables_.front().table->line();
+}
+
+std::vector<ChainTableInfo> Evaluator::tables_info() const {
+    std::vector<ChainTableInfo> out;
+    if (table_) out.push_back(table_->info());
+    for (const PairTable& p : army_tables_) out.push_back(p.table->info());
+    return out;
+}
+
+std::vector<double> Evaluator::volley_outcome(const core::Unit& attacker, const core::Unit& target, bool melee, int g,
+                                              int attacker_wounds, int target_wounds) const {
+    if (attacker.side == target.side) return {};
+    const core::Unit& a = attacker.side == core::Side::A ? attacker : target;
+    const core::Unit& b = attacker.side == core::Side::A ? target : attacker;
+    const ChainTable* t = table_ ? table_.get() : table_for(a, b);
+    if (t == nullptr) return {};
+    const core::Side x = attacker.side;
+    const double* p = t->pmf(x, melee ? kMelee : kHeavy, g, attacker_wounds, target_wounds);
+    const int levels = t->level_of(core::opponent(x), target_wounds);
+    return std::vector<double>(p, p + levels + 1);
 }
 
 UnitView Evaluator::view(const core::GameState& state, core::Side of) const {
@@ -1055,6 +1757,8 @@ Evaluation to_eval(const Node& n, core::Side side) {
     return e;
 }
 
+struct ShotMemo;
+
 // How a pair of units is read from a state: the duel's way (M44), or the army's (D-067).
 struct PairMode {
     // D-067: the stage tests look at this pair's units only (a move or an attack in progress may be another
@@ -1062,6 +1766,23 @@ struct PairMode {
     bool army = false;
     // D-067 charge_values: this unit of the side whose turn it is charges no more this phase.
     std::optional<core::UnitId> no_charge;
+    // D-078: each shooting unit's shot options in the state evaluated, worked out once for every pair (the same options in
+    // the same order, so the same plans); nullptr: worked out per pair, as before.
+    ShotMemo* shots = nullptr;
+};
+
+// D-078: the shot options of each unit of the state evaluated (core::shot_options for each shooting type it is eligible
+// for), computed at most once per unit for an army evaluation's pairs.
+struct ShotMemo {
+    const core::GameState* state = nullptr;
+    std::vector<std::pair<core::UnitId, std::vector<analysis::ShotOptionSet>>> by_unit;
+    const std::vector<analysis::ShotOptionSet>& of(const core::Unit& u) {
+        for (const auto& [id, sets] : by_unit) {
+            if (id == u.id) return sets;
+        }
+        by_unit.emplace_back(u.id, analysis::shot_option_sets(*state, u));
+        return by_unit.back().second;
+    }
 };
 
 LinePos pos_on_line(const PairMode& mode, int line, float bucket, bool engaged, float gap_mm, float room_a,
@@ -1119,7 +1840,11 @@ Node pair_node(const ChainTable& t, analysis::OddsCache& odds, const core::GameS
     };
     // The shooting of the side whose turn it is, from the engine (best_shooting), then the charge or the fight.
     const auto before_shoot = [&](bool may_charge) {
-        const std::optional<analysis::ShootingPlan> plan = analysis::best_shooting(odds, state, ux.id, uy.id);
+        // D-078: [HAZARDOUS] priced at Normal's rate (D-077; nothing changes without such a profile); the options shared.
+        const double rate = normal::hazard_rate(state, ux, uy);
+        const std::optional<analysis::ShootingPlan> plan =
+            mode.shots != nullptr ? analysis::best_shooting(odds, state, ux.id, uy.id, rate, mode.shots->of(ux))
+                                  : analysis::best_shooting(odds, state, ux.id, uy.id, rate);
         const int wy = xa ? wb : wa;
         std::vector<double> pmf(static_cast<std::size_t>(wy) + 1, 0.0);
         if (plan && plan->outcome.wounds_left_pmf.size() == pmf.size()) {
@@ -1212,8 +1937,9 @@ Evaluator::TurnChoice pair_turn_choice(const ChainTable& t, const core::GameStat
     const int h = half_turn_of(state);
     const core::Side x = core::turn_side(state);
     const bool xa = x == core::Side::A;
-    const int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
-    const int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    // D-078: a coarse side's wounds at the nearest grid level (a choice, not a value: nothing to interpolate).
+    const int wa = std::max(1, t.snap(core::Side::A, std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds)));
+    const int wb = std::max(1, t.snap(core::Side::B, std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds)));
     const core::Unit& ux = xa ? ua : ub;
     const bool engaged = pair_engaged(mode, state, ux, xa ? ub : ua);
     const float room_a = room_away(state, ua, centroid_of(ub));
@@ -1226,16 +1952,18 @@ Evaluator::TurnChoice pair_turn_choice(const ChainTable& t, const core::GameStat
         // Stay or Fall Back, as the chain's start node does.
         const auto stay = [&] {
             const double* cq = t.pmf(x, kCloseQuarters, 1, xa ? wa : wb, xa ? wb : wa);
-            const int wy = xa ? wb : wa;
+            const core::Side y = core::opponent(x);
+            const int ty = t.level_of(y, xa ? wb : wa);
             Node s;
-            for (int left = 0; left <= wy; ++left) {
+            for (int left = 0; left <= ty; ++left) {
                 if (cq[left] == 0.0) continue;
                 if (left == 0) {
                     add(s, t.win(x, h, wa, wb), cq[left]);
                     continue;
                 }
+                const int lw = t.level_wounds(y, left);  // D-078: the grid level's wounds (an exact side's: left)
                 add(s, interpolate(t.line(), here,
-                                   [&](int, int r) { return t.fight(h, xa ? wa : left, xa ? left : wb, r); }),
+                                   [&](int, int r) { return t.fight(h, xa ? wa : lw, xa ? lw : wb, r); }),
                     cq[left]);
             }
             return s;
@@ -1395,12 +2123,19 @@ std::optional<Evaluation> Evaluator::army_terminal(const core::GameState& state)
     const int h = std::min(half_turn_of(state), half_turns);
     if (state.result) {
         over = true;
-        winner = state.result->winner;
+        winner = state.result->winner;  // D-076: the engine's result, the points decision included
     } else if (!alive[0] || !alive[1]) {
         over = true;
         if (alive[0] != alive[1]) winner = alive[0] ? core::Side::A : core::Side::B;
     } else if (h >= half_turns) {
         over = true;
+        if (state.result_rule == core::ResultRule::PointsDestroyed) {
+            // D-078: every half-turn played: decided on points destroyed exactly as the engine decides it (D-076).
+            const core::PointsTally tally = core::points_destroyed(state);
+            if (tally.destroyed[0] != tally.destroyed[1]) {
+                winner = tally.destroyed[0] > tally.destroyed[1] ? core::Side::A : core::Side::B;
+            }
+        }
     }
     if (!over) return std::nullopt;
     Evaluation e;
@@ -1458,9 +2193,12 @@ const core::Unit* Evaluator::main_enemy(const core::GameState& state, const core
 Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<core::UnitId> no_charge,
                                     const Charged* charged, std::vector<UnitFate>* fates) const {
     if (const std::optional<Evaluation> e = army_terminal(state)) return *e;
+    ShotMemo shots;
+    shots.state = &state;
     PairMode mode;
     mode.army = !duel_reading_;
     mode.no_charge = no_charge;
+    mode.shots = &shots;
     const int h = half_turn_of(state);
     const int half_turns = 2 * state.battle_rounds;
     std::vector<const core::Unit*> alive;
@@ -1670,7 +2408,29 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
     Node army;
     army.pw = p_a;
     army.pl = p_b;
-    army.j = (p_a - p_b) + 0.5 * (terms(*last[0]) + terms(*last[1]));
+    if (state.result_rule == core::ResultRule::PointsDestroyed) {
+        // D-078: the points tiebreak (D-076). With no wipe-out the game is decided on points destroyed: each unit is
+        // destroyed by the end with its fate above (independently), else keeps its losses now. Mean and variance of the
+        // margin (side A's points destroyed minus side B's) in the engine's units, then T = P(A ahead) - P(B ahead).
+        const core::PointsTally tally = core::points_destroyed(state);
+        double mu = static_cast<double>(tally.destroyed[0]) - static_cast<double>(tally.destroyed[1]);
+        double variance = 0.0;
+        for (const Fate& f : fate) {
+            const double inc = static_cast<double>(points_increment(*f.unit, tally.denominator));
+            if (!(inc > 0.0)) continue;
+            const double p = 1.0 - f.survive;
+            mu += f.unit->side == core::Side::B ? p * inc : -p * inc;  // destroying a side B unit adds to A's tally
+            variance += p * (1.0 - p) * inc * inc;
+        }
+        const double rest = std::max(0.0, 1.0 - p_a - p_b);
+        const bool tie = !(variance > 0.0) && mu == 0.0;
+        if (!tie) {
+            const double lead = points_lead(mu, variance);
+            army.pw += rest * 0.5 * (1.0 + lead);
+            army.pl += rest * 0.5 * (1.0 - lead);
+        }
+    }
+    army.j = (army.pw - army.pl) + 0.5 * (terms(*last[0]) + terms(*last[1]));
     return to_eval(army, side_);
 }
 

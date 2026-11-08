@@ -29,6 +29,12 @@ struct LookaheadWeights {
     std::size_t rollout_actions = 400;   // simulated actions per rollout at most
     std::size_t budget_actions = 6000;   // simulated actions per Monte Carlo (all its rollouts) at most
     double share = 0.5;                  // a plan's value: (1 - share) x the chain's value + share x the rollouts'
+    // D-078 (M69): with more units than this with models when a Monte Carlo starts, its rollouts and its action budget
+    // scale by full_budget_units / units (rounded down; at least 3 rollouts): bounded time on a 14-unit game. V1, the
+    // bot scenarios and Strike have at most 7, so their budget is the one above. 0: never scaled.
+    std::size_t full_budget_units = 7;
+    // D-078: the threads that build missing chain tables (0: min(4, the hardware's)). Never changes a value.
+    std::size_t table_workers = 0;
     friend bool operator==(const LookaheadWeights&, const LookaheadWeights&) = default;
 };
 
@@ -41,6 +47,11 @@ struct BotWeights {
     // than `margin` higher (score units; one half-turn of tempo is tempo / 10 in a five-round game). Negative:
     // Normal's answer is just one more candidate.
     double margin = 0.01;
+    // D-078 (M69): Hard searches its own unit moves (the move type and the plan, at MoveUnits and MoveModels) only while
+    // its side has at most this many units with models; with more it moves as Normal (M43) does, and still makes its
+    // own charge, casualty, coherency and consolidation decisions. V1, the bot scenarios and Strike have at most 4 units
+    // a side, so they always search. 0: always searches.
+    std::size_t move_search_units = 7;
 };
 
 }  // namespace wh40k::ai::hard

@@ -238,12 +238,14 @@ std::optional<HardMovePlan> hard_plan_unit_move(HardContext& hc, analysis::OddsC
         if (have_default && pm.candidate.ends == plans.front().candidate.ends) continue;
         plans.push_back(std::move(pm));
     }
-    if (plans.empty() && duel_of(origin)) return std::nullopt;  // M44's order (no table looked up)
+    if (plans.empty() && duel_play(origin)) return std::nullopt;  // M44's order (no table looked up)
     const Evaluator eval(cache, origin, u->side, hc.weights.chain, &hc.chains);
     if (!eval.ok()) return std::nullopt;
-    if (eval.army()) {
+    if (eval.army() && origin.result_rule != core::ResultRule::PointsDestroyed) {
         // D-067: also the move that keeps furthest from every enemy model (playing for the draw, D-007: with several
-        // enemy units M43's cheap score rarely ranks it among the best few).
+        // enemy units M43's cheap score rarely ranks it among the best few). D-078: not under the points tiebreak
+        // (D-076), where there is no draw to play for (measured on the rosters, D-078 part 11: Hard's Tyranids won more
+        // often without it, its Chaos Space Marines as often).
         if (std::optional<normal::PlannedMove> far = normal::furthest_standing_move(origin)) {
             const bool known = std::any_of(plans.begin(), plans.end(), [&](const normal::PlannedMove& pm) {
                 return pm.candidate.ends == far->candidate.ends;
@@ -287,7 +289,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
                                             core::Side side, const std::vector<GameAction>& legal, std::uint64_t seed,
                                             HardTypeValues* values) {
     std::optional<core::UnitId> unit;
-    if (duel_of(gs)) {
+    if (duel_play(gs)) {
         for (const GameAction& a : legal) {
             if (const auto* m = std::get_if<core::action::StartMove>(&a)) {
                 unit = m->unit;
@@ -867,7 +869,7 @@ bool is_unit_move(const GameState& gs) {
 // unit with models and the game isn't over.
 bool hard_applies(const GameState& gs) {
     if (gs.result) return false;
-    if (duel_of(gs)) return true;
+    if (duel_play(gs)) return true;
     std::array<bool, 2> alive{};
     for (const core::Unit& u : gs.units) {
         if (!u.models.empty()) alive[core::side_index(u.side)] = true;
@@ -875,11 +877,29 @@ bool hard_applies(const GameState& gs) {
     return alive[0] && alive[1];
 }
 
+// D-078 (M69): a side with more units with models than BotWeights::move_search_units moves as Normal does. Measured on
+// the rosters (60 seeds against Normal): Hard's Tyranids (9 units) won 35 games with their own move search and 44 with
+// Normal's moves; its Chaos Space Marines (5 units) are not affected.
+bool moves_as_normal(const GameState& gs, core::Side side, const BotWeights& w) {
+    if (w.move_search_units == 0) return false;
+    std::size_t units = 0;
+    for (const core::Unit& u : gs.units) {
+        if (u.side == side && !u.models.empty()) ++units;
+    }
+    return units > w.move_search_units;
+}
+
 std::optional<PolicyResult> hard_answer(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
                                         std::uint64_t seed, HardContext& hc) {
+    // D-078: the cache's build workers, and its tables drop the half-turns already played (never a value).
+    hc.chains.set_workers(hc.weights.lookahead.table_workers);
+    hc.chains.trim_before(std::max(0, (gs.flow.battle_round - 1) * 2 + gs.flow.turn_in_round));
     if (!hard_applies(gs)) return std::nullopt;
     analysis::OddsCache cache;  // per decision (D-054)
     const core::DecisionKind& kind = gs.pending->kind;
+    const bool unit_move = std::holds_alternative<core::decision::MoveUnits>(kind) ||
+                           (std::holds_alternative<core::decision::MoveModels>(kind) && is_unit_move(gs));
+    if (unit_move && moves_as_normal(gs, side, hc.weights)) return std::nullopt;
     if (std::holds_alternative<core::decision::MoveUnits>(kind)) {
         return hard_move_units(hc, cache, gs, side, legal, seed);
     }

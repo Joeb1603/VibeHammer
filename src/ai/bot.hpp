@@ -93,6 +93,9 @@ public:
     [[nodiscard]] std::size_t fallbacks() const noexcept { return fallbacks_; }
     // M44: chain tables the Hard level has built (tests: the cache is used, never relied on).
     [[nodiscard]] std::size_t chain_tables_built() const noexcept;
+    // D-078 (M69): from now on this bot's Hard chain tables are `other`'s (one cache for a game the two play; a cache
+    // never changes a decision).
+    void share_chain_cache(Bot& other);
 
 private:
     BotConfig config_;

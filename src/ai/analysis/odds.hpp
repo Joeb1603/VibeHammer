@@ -236,6 +236,17 @@ struct ShootingPlan {
 [[nodiscard]] std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameState& state,
                                                         core::UnitId shooter, core::UnitId target,
                                                         double hazard_rate = 0.0);
+// D-078 (M69): a unit's shot options (core::shot_options) for each shooting type it is eligible for, in the engine's
+// order, so several targets' best_shooting can share one computation.
+struct ShotOptionSet {
+    core::ShootingType type = core::ShootingType::Normal;
+    std::vector<core::ShotDeclaration> options;
+};
+[[nodiscard]] std::vector<ShotOptionSet> shot_option_sets(const core::GameState& state, const core::Unit& shooter);
+// The same as best_shooting above, from `sets` (shot_option_sets of the shooter in `state`): the same plan.
+[[nodiscard]] std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameState& state,
+                                                        core::UnitId shooter, core::UnitId target, double hazard_rate,
+                                                        std::span<const ShotOptionSet> sets);
 
 struct MeleePlanValue {
     std::vector<core::MeleeDeclaration> declarations;
