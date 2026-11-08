@@ -15,6 +15,7 @@
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/model/keywords.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
@@ -23,6 +24,7 @@
 #include "core/serialization/json.hpp"
 #include "core/state/queries.hpp"
 #include "support/engine_helpers.hpp"
+#include "support/monster_fixtures.hpp"
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
@@ -297,6 +299,35 @@ TEST(D004_LegalActions, RandomPlayFromTheRostersFixture) {
     for (const char* random : {"Havoc lascannon", "Bio-plasmic scream"}) {  // D-069 (M62): no longer refused
         EXPECT_GT(use.used.count(random), 0u) << random;
     }
+}
+
+TEST(D004_LegalActions, RandomPlayOnTheMonsterFixture) {
+    // M63 (D-073): the D-004 properties with the Hive Tyrant and a Screamer-killer next to CSM infantry, apart and
+    // engaged, either side first: 17.01 paths through enemy infantry and 17.03 shots at the engaged Tyrant are offered
+    // and validated like any other. Every game ends and round-trips.
+    WeaponUse use;
+    int shots_at_engaged_monsters = 0;
+    const ActionHook record = record_weapons(use);
+    const ActionHook hook = [&](const GameState& gs, const GameAction& a) {
+        record(gs, a);
+        if (const auto* sh = std::get_if<action::Shoot>(&a)) {
+            for (const ShotDeclaration& d : sh->shots) {
+                const Unit* t = gs.find_unit(d.target);
+                if (t != nullptr && has_keyword(*t, "Monster") && is_engaged(gs, *t)) ++shots_at_engaged_monsters;
+            }
+        }
+    };
+    for (std::uint64_t seed = 1; seed <= 16; ++seed) {
+        GameState gs = wh40k::test::monsters::fixture(seed % 2 == 0, seed % 4 < 2 ? Side::A : Side::B);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, hook);
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;
+    }
+    EXPECT_GT(use.shoots, 0);
+    EXPECT_GT(shots_at_engaged_monsters, 0) << use.shoots;
 }
 
 TEST(D004_LegalActions, RandomPlayRollsTheRostersRandomAttacksAndDamage) {

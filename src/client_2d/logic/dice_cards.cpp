@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <variant>
 
+#include "core/dice/modifiers.hpp"
 #include "core/engine/events.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
@@ -92,6 +93,8 @@ std::vector<EffectLine> attack_notes(const core::GameState& state, const AttackC
     for (EffectLine& line : effect_lines(*p, sels, core::batch_context(*batch, sels.front(), type), shooting)) {
         if (line.kind != EffectKind::Info) notes.push_back(std::move(line));
     }
+    // D-073: 10.06 / 17.03 and the D-011 cap.
+    for (EffectLine& line : hit_modifier_lines(sels, batch->profile.hit_modifier)) notes.push_back(std::move(line));
     return notes;
 }
 
@@ -110,9 +113,13 @@ DiceCard hit_card(const core::GameState& state, const AttackContext& c, const co
     if (const core::AttackBatch* batch = current_batch(c)) {
         if (batch->profile.skill) {
             card.need = "Need " + std::to_string(*batch->profile.skill) + "+ to hit";
-            if (batch->profile.hit_modifier != 0) {
-                card.need += " (modifier " + std::string(batch->profile.hit_modifier > 0 ? "+" : "") +
-                             std::to_string(batch->profile.hit_modifier) + ")";
+            // D-011: the modifier applied is the capped net (D-073: 10.06 and 17.03 can make it -2).
+            const int net = batch->profile.hit_modifier;
+            const int applied = core::cap_hit_wound_modifier(net);
+            if (applied != 0) {
+                card.need += " (modifier " + std::string(applied > 0 ? "+" : "") + std::to_string(applied);
+                if (applied != net) card.need += ", capped from " + std::to_string(net) + ", D-011";
+                card.need += ")";
             }
             card.need += "; an unmodified 6 is a critical hit";
         } else {

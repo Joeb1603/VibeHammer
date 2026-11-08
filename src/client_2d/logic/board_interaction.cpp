@@ -6,6 +6,7 @@
 
 #include "action_text.hpp"
 #include "casualty_plan.hpp"
+#include "core/engine/movement.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
@@ -51,22 +52,43 @@ void add_help(const core::WeaponProfile& p, MenuEntry& entry) {
 }
 
 // D-037: a whole-unit weapon choice: its stats, and what its abilities do to this volley (core's
-// ability_effects through effect_lines, for the selections the engine would make).
-void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& entry) {
+// ability_effects through effect_lines, for the selections the engine would make). M63: with `chosen`, the weapon
+// described is the chosen one (in a mixed loadout, D-071, the first shot can be another model's own weapon).
+void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& entry, const ShotChoice* chosen = nullptr) {
     const core::Unit* u = state.find_unit(shoot.unit);
     if (u == nullptr || shoot.shots.empty()) return;
-    const core::ShotDeclaration& first = shoot.shots.front();
+    const auto is_chosen = [&](const core::ShotDeclaration& d) {
+        const core::Model* m = core::find_model(state, d.model);
+        return m != nullptr && d.weapon_index < m->weapons.size() && m->weapons[d.weapon_index].name == chosen->weapon &&
+               d.profile_index == chosen->profile_index && d.target == chosen->target;
+    };
+    auto it = shoot.shots.begin();
+    if (chosen != nullptr) {
+        const auto c = std::find_if(shoot.shots.begin(), shoot.shots.end(), is_chosen);
+        if (c != shoot.shots.end()) it = c;
+    }
+    const core::ShotDeclaration& first = *it;
     const core::WeaponProfile* p = profile_at(state, first.model, first.weapon_index, first.profile_index);
     if (p == nullptr) return;
     add_help(*p, entry);
-    // The shots with this profile (D-071: a mixed loadout's other models fire other weapons).
+    // The shots with this profile at this target (D-071: a mixed loadout's other models fire other weapons).
     std::vector<core::ShotDeclaration> same;
     for (const core::ShotDeclaration& d : shoot.shots) {
         const core::WeaponProfile* q = profile_at(state, d.model, d.weapon_index, d.profile_index);
-        if (q != nullptr && q->name == p->name) same.push_back(d);
+        if (q != nullptr && q->name == p->name && d.target == first.target) same.push_back(d);
     }
     const auto selections = core::make_weapon_selections(state, *u, shoot.type, same);
-    entry.effects = effect_lines(*p, selections, core::shooting_context(state, *u), shoot.type);
+    const core::AttackContext context = core::shooting_context(state, *u);
+    entry.effects = effect_lines(*p, selections, context, shoot.type);
+    // D-073: 10.06 / 17.03 and the D-011 cap, with the net modifier gather_attack_batches would give the attacks.
+    if (!selections.empty()) {
+        const int net = core::make_attack_profile(*p, context).hit_modifier + selections.front().hit_modifier;
+        for (EffectLine& line : hit_modifier_lines(selections, net)) entry.effects.push_back(std::move(line));
+        const auto& rules = selections.front().hit_modifier_rules;
+        if (std::find(rules.begin(), rules.end(), core::HitModifierRule::EngagedMonsterTarget) != rules.end()) {
+            entry.help.push_back(engaged_monster_target_help());
+        }
+    }
     for (EffectLine& line : random_characteristic_lines(*p)) entry.effects.push_back(std::move(line));  // D-069
 }
 
@@ -98,10 +120,19 @@ void add_cancel(std::vector<MenuEntry>& menu) {
     menu.push_back(std::move(cancel_entry));
 }
 
-// A menu entry for an action; a shooting type gets its help (D-037).
+// A menu entry for an action; a shooting type gets its help (D-037), and a MONSTER/VEHICLE unit's Normal or Advance
+// move the help for 17.01 (D-073, core's moves_through_non_monster_enemies).
 MenuEntry action_entry(const core::GameState& state, const core::GameAction& action) {
     MenuEntry entry{action_label(state, action), action};
     if (const auto* s = std::get_if<a::Shoot>(&action)) entry.help.push_back(shooting_type_help(s->type));
+    if (const auto* m = std::get_if<a::StartMove>(&action)) {
+        const core::Unit* u = state.find_unit(m->unit);
+        if (u != nullptr && std::any_of(u->models.begin(), u->models.end(), [&](const core::Model& model) {
+                return core::moves_through_non_monster_enemies(m->move_type, *u, model);
+            })) {
+            entry.help.push_back(monsters_moving_help());
+        }
+    }
     return entry;
 }
 
@@ -453,7 +484,7 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
                 label += ": " + std::to_string(at) + (at == 1 ? " model" : " models");
                 if (own > 0) label += " (+" + std::to_string(own) + " with their own weapons)";
                 MenuEntry entry{label, shoot};
-                describe(state, shoot, entry);
+                describe(state, shoot, entry, &c);
                 result.menu.push_back(std::move(entry));
             }
             // D-031: per-model weapons and targets are chosen after the target, starting from the first weapon.

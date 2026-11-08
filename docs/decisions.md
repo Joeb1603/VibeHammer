@@ -2780,3 +2780,78 @@ conservative choice.
 - **Amends D-026.** [TWIN-LINKED] is no longer refused. [DEVASTATING WOUNDS] (24.10) and the D-071 unknown abilities
   still are. With the Hive Tyrant's bonesword selectable, 24.11 / D-071 make the Tyrant select its bonesword and its
   scything talons together.
+
+## D-073: Monsters and Vehicles: moving through enemy models, shooting at engaged ones, the 10.06 penalty added (M63; applies D-011)
+**Decided:** 2026-11-08 (M63 of the pre-approved M59–M70 batch). The readings marked *agreed* were agreed with the user in
+planning; the others take the conservative choice.
+- **"MONSTER/VEHICLE".** The engine's `is_monster_or_vehicle`: the unit has the MONSTER or VEHICLE keyword (02.05, matched
+  without case). It is a unit keyword, so every model of such a unit counts, and "a MONSTER/VEHICLE unit" (10.06, 17.03)
+  is the same test. In the data the Hive Tyrant, the Screamer-killers and the Tyrannofex are MONSTERS; no unit is a
+  VEHICLE, and no unit of V1, the two bot scenarios or Strike is either (checked by a test), so none of this touches
+  their play.
+- **17.01 Moving Monsters and Vehicles.** "Each time you make a normal or advance move with a unit, MONSTER/VEHICLE
+  models in that unit can be moved through friendly and enemy models (excluding other MONSTER/VEHICLE models)."
+  - *Normal (09.05) and Advance (09.06) moves only* (agreed). Not Fall Back (a Desperate Escape already passes every
+    enemy model, 09.07), charge, pile-in, consolidation or any other move.
+  - *What it lets through:* in those moves, a MONSTER/VEHICLE model's path may cross enemy models that are not
+    MONSTER/VEHICLE models. Enemy MONSTER/VEHICLE models still block it, as does the battlefield edge (03.01). The move
+    still can't end on any model (03.01 Ending a Move, D-027), and 09.05 / 09.06 After Moving still need the unit to end
+    unengaged. Crossing an enemy's Engagement Range on the way is no problem: no rule forbids it.
+  - *Friendly MONSTERS (agreed conservative reading):* 03.01 already lets every model be moved through friendly models,
+    and 17.01 only adds a permission. So a MONSTER may still pass friendly MONSTERS; the "excluding" clause takes nothing
+    away from 03.01.
+  - *Engine:* `moves_through_non_monster_enemies(type, unit, model)` (`engine/movement`) says whether 17.01 applies.
+    `PathContext` gets a `passable_enemy` list: enemy models the path may cross but not end on. The engine's
+    ProposeModelMove check splits the enemy models into blocking ones (`enemy`) and passable ones when 17.01 applies;
+    otherwise every enemy model blocks, as before.
+  - *Movement reach (D-040, D-044):* `move_reach` leaves out the `blocking` circle of a passable enemy model, so the
+    client's shaded area, the fix-illegal-move helper (D-052), the ring outline and every caller of `move_reach` follow.
+    Its `forbidden` circles (not on a model; not within an enemy's Engagement Range for a move that must end
+    unengaged) are unchanged. Charge, pile-in and consolidation moves are not 17.01 moves, so the auto moves (D-050,
+    D-056) are unaffected.
+  - *Bots:* Normal's and Hard's own movement planner keeps every enemy model as an obstacle (`segment_clear`). That is
+    stricter than the rules and never illegal, so it stays (a MONSTER of theirs may walk round enemy infantry it could
+    pass). Easy's straight-line moves are checked by the engine (`validate_action`), so its MONSTERS now pass enemy
+    infantry where the engine allows it; the client helpers use `move_reach`.
+- **17.03 Shooting at engaged Monsters and Vehicles.** "In your Shooting phase, enemy MONSTER/VEHICLE units that are
+  engaged can be selected as targets of ranged attacks. Each time a model makes a ranged attack that targets such a
+  unit, subtract 1 from the hit roll (excluding attacks made with [CLOSE-QUARTERS] weapons by models in a unit engaged
+  with the target)."
+  - *Targets:* 04.02's "Unengaged" no longer refuses an engaged enemy MONSTER/VEHICLE unit. This applies to every
+    shooting type: normal and assault shooting by unengaged units, and close-quarters shooting, where 10.06 already lets
+    a unit target what it is engaged with and lets MONSTER/VEHICLE models target other units too. An engaged enemy unit
+    that is not a MONSTER/VEHICLE stays refused (04.02).
+  - *[BLAST] is refused against an engaged MONSTER/VEHICLE unit* (agreed; the Rules Appendix FAQ: "When my unit shoots at
+    an engaged MONSTER/VEHICLE unit, can models in my unit target that unit with [BLAST] weapons? A: No.", and the 17.03
+    diagram). It is refused for every shooter and shooting type, with the reason "17.03: '...' is a [BLAST] weapon and
+    cannot target unit N, an engaged MONSTER/VEHICLE unit (Rules Appendix FAQ)". 10.06's own [BLAST] refusal (a
+    MONSTER/VEHICLE model at a unit its unit is engaged with) keeps its message and is checked first.
+  - *The -1:* every ranged attack at an engaged enemy MONSTER/VEHICLE unit, except one made with a [CLOSE-QUARTERS]
+    weapon ([PISTOL] is the same, 24.27) by a model whose unit is engaged with that target. A unit not engaged with the
+    target gets the -1 with any weapon, e.g. the Chaos Lord's plasma pistol in normal shooting.
+  - *When it is judged:* when the targets are selected (04.02 Select Targets, `make_weapon_selections`), as 10.06's -1
+    and the [BLAST] / [RAPID FIRE] facts already are. A target that becomes unengaged while the unit's attacks are being
+    resolved (its engaged models destroyed by earlier batches) stays a valid target and keeps the -1 recorded for it.
+    It was a valid target when selected, and 04.02 checks targets only when they are selected (conservative: no change
+    in the middle of a unit's attacks).
+  - *Your Shooting phase only:* there is no shooting outside the Shooting phase in this game (no Overwatch or other
+    stratagems), so every ranged attack the engine makes is in its player's Shooting phase.
+- **10.06 fix.** `make_weapon_selections` set the MONSTER/VEHICLE close-quarters penalty with `= -1`; it now adds it
+  (`-= 1`), and 17.03's -1 is added the same way. A MONSTER/VEHICLE model in close-quarters shooting firing a
+  non-[CLOSE-QUARTERS] weapon at an engaged enemy MONSTER/VEHICLE gets both: -2 on the selection. D-011's cap applies
+  where the hit roll is modified (`make_hit_rolls`: `cap_hit_wound_modifier(profile.hit_modifier)`), so the roll is
+  made at -1. The selection and the batch's `AttackProfile` keep the uncapped sum, as D-006 compares profiles and
+  [HEAVY]'s `batch_context` reads it. (Two batches whose sums differ but cap to the same value stay separate batches;
+  they resolve exactly as one would.)
+- **Recorded for the client.** `WeaponSelection::hit_modifier_rules` lists the rules behind its `hit_modifier`
+  (`HitModifierRule::CloseQuartersMonster` for 10.06, `EngagedMonsterTarget` for 17.03; JSON `"hit_modifier_rules":
+  ["10.06", "17.03"]`, omitted when empty, so every old file and replay is byte-identical). The hit card and the weapon
+  menus explain the -1 from it ("Engaged MONSTER/VEHICLE target: -1 to hit (17.03)") and note the cap when it bites
+  ("Net -2 to hit, capped at -1 (D-011)"; the card's need reads "(modifier -1, capped from -2, D-011)").
+- **Bot odds.** The live choices (`shooting_batches`, `evaluate_shots`, `best_shooting`: Normal, Hard and the
+  lookahead's shooting) take the -1 from the engine's selections, and the odds use core's `make_hit_rolls`, so the cap
+  is the engine's. The hypothetical volleys of the threat and movement scores (`unit_ranged_volley`) apply neither
+  10.06's nor 17.03's -1, as they applied no 10.06 penalty before (an approximation for M68 / M69). Normal's charge
+  planner asks the engine (`shot_options`) whether an engaged enemy can be shot, so it sees 17.03.
+- **Out of scope.** 17.02 FRAME (no unit in the data has the keyword); Deadly Demise and damaged profiles (the batch's
+  out-of-scope list); oval bases (M64–M66: until then the Tyrannofex's oval base is refused by the scenario loader).

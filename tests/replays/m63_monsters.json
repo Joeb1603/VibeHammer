@@ -1,0 +1,2400 @@
+{
+  "description": "M63: Monsters and Vehicles (17.01, 17.03, D-073) on the monster fixture (roster units placed by hand on the 44\"x60\" board; embedded state). Round 1, Side B first: the Hive Tyrant makes a Normal move 7.7\" south straight through the chainsword Legionaries' rank (17.01: a MONSTER moves through enemy models that aren't MONSTER/VEHICLE models), ending 2.04\" beyond it, unengaged (09.05). It declares a charge at the Legionaries and moves into base contact (or as far as its roll allows); it fights first, then the Legionaries fight back (every other decision takes the first legal action; casualties in unit order). Side A: every unit remains stationary; the unengaged Havocs fire their four lascannons at the engaged Tyrant at -1 to hit (17.03), then the engaged Legionaries fire their bolt pistols at it in close-quarters shooting with no penalty ([PISTOL] = [CLOSE-QUARTERS] weapons of a unit engaged with the target, 10.06, 17.03). Stops at Side A's first Charge decision.",
+  "expect": {
+    "battle_round": 1,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 5,
+        "x_mm": 406.3999938964844,
+        "y_mm": 914.3999633789063
+      },
+      {
+        "model": 6,
+        "unit": 2,
+        "wounds_remaining": 2,
+        "x_mm": 542.7999877929688,
+        "y_mm": 664.2099609375
+      },
+      {
+        "model": 7,
+        "unit": 2,
+        "wounds_remaining": 2,
+        "x_mm": 574.7999877929688,
+        "y_mm": 664.2099609375
+      },
+      {
+        "model": 8,
+        "unit": 2,
+        "wounds_remaining": 2,
+        "x_mm": 606.7999877929688,
+        "y_mm": 664.2099609375
+      },
+      {
+        "model": 9,
+        "unit": 2,
+        "wounds_remaining": 2,
+        "x_mm": 638.7999877929688,
+        "y_mm": 664.2099609375
+      },
+      {
+        "model": 10,
+        "unit": 2,
+        "wounds_remaining": 2,
+        "x_mm": 670.7999877929688,
+        "y_mm": 664.2099609375
+      },
+      {
+        "model": 11,
+        "unit": 2,
+        "wounds_remaining": 2,
+        "x_mm": 702.7999877929688,
+        "y_mm": 664.2099609375
+      },
+      {
+        "model": 32,
+        "unit": 5,
+        "wounds_remaining": 3,
+        "x_mm": 923.2999877929688,
+        "y_mm": 762.0
+      },
+      {
+        "model": 33,
+        "unit": 5,
+        "wounds_remaining": 3,
+        "x_mm": 963.2999877929688,
+        "y_mm": 762.0
+      },
+      {
+        "model": 34,
+        "unit": 5,
+        "wounds_remaining": 3,
+        "x_mm": 1003.2999877929688,
+        "y_mm": 762.0
+      },
+      {
+        "model": 35,
+        "unit": 5,
+        "wounds_remaining": 3,
+        "x_mm": 1043.300048828125,
+        "y_mm": 762.0
+      },
+      {
+        "model": 36,
+        "unit": 5,
+        "wounds_remaining": 3,
+        "x_mm": 1083.300048828125,
+        "y_mm": 762.0
+      },
+      {
+        "model": 37,
+        "unit": 6,
+        "wounds_remaining": 4,
+        "x_mm": 558.7999877929688,
+        "y_mm": 618.2099609375
+      },
+      {
+        "model": 68,
+        "unit": 11,
+        "wounds_remaining": 4,
+        "x_mm": 102.39999389648438,
+        "y_mm": 1016.0
+      },
+      {
+        "model": 69,
+        "unit": 11,
+        "wounds_remaining": 4,
+        "x_mm": 152.39999389648438,
+        "y_mm": 1016.0
+      },
+      {
+        "model": 70,
+        "unit": 11,
+        "wounds_remaining": 4,
+        "x_mm": 202.39999389648438,
+        "y_mm": 1016.0
+      },
+      {
+        "model": 71,
+        "unit": 12,
+        "wounds_remaining": 10,
+        "x_mm": 863.5999755859375,
+        "y_mm": 1143.0
+      }
+    ],
+    "result": null,
+    "stage": "Charge"
+  },
+  "format": 1,
+  "initial": {
+    "state": {
+      "battle_rounds": 5,
+      "battlefield": {
+        "depth_mm": 1524.0,
+        "width_mm": 1117.5999755859375
+      },
+      "command_points": [
+        0,
+        0
+      ],
+      "dice": {
+        "position": 0,
+        "seed": 1
+      },
+      "first_turn": "B",
+      "flow": {
+        "activation": null,
+        "attack": null,
+        "battle_round": 0,
+        "charge": null,
+        "fight": null,
+        "fight_sequence": null,
+        "forced_fights": [],
+        "move": null,
+        "stage": "NotStarted",
+        "step_done": [
+          false,
+          false
+        ],
+        "turn_in_round": 0
+      },
+      "pending": null,
+      "result": null,
+      "scenario_name": "Rosters fixture - Chaos Space Marines vs Tyranids, no Tyrannofex (44x60 portrait)",
+      "sides": [
+        {
+          "deployment_zone": {
+            "depth_mm": 304.79998779296875,
+            "edge": "south"
+          },
+          "name": "Chaos Space Marines"
+        },
+        {
+          "deployment_zone": {
+            "depth_mm": 304.79998779296875,
+            "edge": "north"
+          },
+          "name": "Tyranids"
+        }
+      ],
+      "units": [
+        {
+          "abilities": [
+            {
+              "name": "Leader",
+              "text": "This model can be attached to the following units: CHOSEN, LEGIONARIES, NEMESIS CLAW, RED CORSAIRS RAIDERS"
+            },
+            {
+              "name": "Chance for Glory",
+              "text": "Once per battle, at the start of the Fight phase, this model can use this ability. If it does, until the end of the phase, improve the Strength, Attacks, Armour Penetration and Damage characteristics of melee weapons equipped by this model by 1."
+            },
+            {
+              "name": "Dark Pacts",
+              "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+            },
+            {
+              "name": "Leader",
+              "text": "Before the battle, in the Muster Armies step, for each leader and support unit in your army, you can select one friendly bodyguard unit that unit can lead. That unit will then lead that bodyguard unit for the battle and form an attached unit with it. Unless otherwise stated, each bodyguard unit can only have one leader unit and one support unit attached to it."
+            },
+            {
+              "name": "Lord of Chaos",
+              "text": "Once per battle round, one unit from your army with this ability can use it when its unit is targeted with a Stratagem. If it does, reduce the CP cost of that use of that Stratagem by 1CP."
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Heretic Astartes"
+          ],
+          "id": 1,
+          "keywords": [
+            "Infantry",
+            "Character",
+            "Grenades",
+            "Chaos",
+            "Leader"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": 4,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 5
+              },
+              "id": 1,
+              "position": {
+                "x": 406.3999938964844,
+                "y": 914.3999633789063,
+                "z": 0.0
+              },
+              "type_name": "Chaos Lord",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Plasma pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -2,
+                      "D": 1,
+                      "S": 7,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Plasma pistol - standard",
+                      "range_mm": 304.79998779296875,
+                      "skill": 2
+                    },
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": 2,
+                      "S": 8,
+                      "abilities": [
+                        {
+                          "kind": "Hazardous"
+                        },
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Plasma pistol - supercharge",
+                      "range_mm": 304.79998779296875,
+                      "skill": 2
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainblade",
+                  "profiles": [
+                    {
+                      "A": 7,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainblade",
+                      "range_mm": null,
+                      "skill": 2
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 5
+            }
+          ],
+          "name": "Chaos Lord",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "A",
+          "starting_strength": 1,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        },
+        {
+          "abilities": [
+            {
+              "name": "Veterans of the Long War",
+              "text": "Each time a model in this unit targets an enemy unit with a melee attack, re-roll a Wound roll of 1. If that enemy unit is within range of an objective marker, you can re-roll the Wound roll instead."
+            },
+            {
+              "name": "Dark Pacts",
+              "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Heretic Astartes"
+          ],
+          "id": 2,
+          "keywords": [
+            "Infantry",
+            "Battleline",
+            "Chaos",
+            "Grenades"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 2,
+              "position": {
+                "x": 414.79998779296875,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Aspiring Champion",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 3,
+              "position": {
+                "x": 446.79998779296875,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 4,
+              "position": {
+                "x": 478.79998779296875,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 5,
+              "position": {
+                "x": 510.79998779296875,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 6,
+              "position": {
+                "x": 542.7999877929688,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 7,
+              "position": {
+                "x": 574.7999877929688,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 8,
+              "position": {
+                "x": 606.7999877929688,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 9,
+              "position": {
+                "x": 638.7999877929688,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 10,
+              "position": {
+                "x": 670.7999877929688,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            },
+            {
+              "base": {
+                "diameter_mm": 32.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 152.39999389648438,
+                "OC": 2,
+                "Sv": 3,
+                "T": 5,
+                "W": 2
+              },
+              "id": 11,
+              "position": {
+                "x": 702.7999877929688,
+                "y": 664.2099609375,
+                "z": 0.0
+              },
+              "type_name": "Legionary w/ chainsword",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bolt pistol",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [
+                        {
+                          "kind": "CloseQuarters"
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bolt pistol",
+                      "range_mm": 304.79998779296875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 2
+            }
+          ],
+          "name": "Legionaries",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "A",
+          "starting_strength": 10,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        },
+        {
+          "abilities": [
+            {
+              "name": "Stabilisation Talons",
+              "text": "Each time a model in this unit makes an attack with a ranged weapon, you can ignore any or all modifiers to the Hit roll and any or all modifiers to the Ballistic Skill characteristic of that weapon."
+            },
+            {
+              "name": "Dark Pacts",
+              "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Heretic Astartes"
+          ],
+          "id": 5,
+          "keywords": [
+            "Infantry",
+            "Chaos"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 32,
+              "position": {
+                "x": 923.2999877929688,
+                "y": 762.0,
+                "z": 0.0
+              },
+              "type_name": "Havoc Champion",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Plasma gun",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -2,
+                      "D": 1,
+                      "S": 7,
+                      "abilities": [
+                        {
+                          "kind": "RapidFire",
+                          "x": 1
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Plasma gun - standard",
+                      "range_mm": 609.5999755859375,
+                      "skill": 3
+                    },
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": 2,
+                      "S": 8,
+                      "abilities": [
+                        {
+                          "kind": "Hazardous"
+                        },
+                        {
+                          "kind": "RapidFire",
+                          "x": 1
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Plasma gun - supercharge",
+                      "range_mm": 609.5999755859375,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 5,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 33,
+              "position": {
+                "x": 963.2999877929688,
+                "y": 762.0,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 34,
+              "position": {
+                "x": 1003.2999877929688,
+                "y": 762.0,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 35,
+              "position": {
+                "x": 1043.300048828125,
+                "y": 762.0,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 36,
+              "position": {
+                "x": 1083.300048828125,
+                "y": 762.0,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            }
+          ],
+          "name": "Havocs",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "A",
+          "starting_strength": 5,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        },
+        {
+          "abilities": [
+            {
+              "name": "Onslaught (Aura, Psychic)",
+              "text": "While a friendly **TYRANIDS** unit is within 6\" of this model, ranged weapons equipped by models in that unit have the **[ASSAULT]** and **[LETHAL HITS]** abilities."
+            },
+            {
+              "name": "Leader",
+              "text": "This model can be attached to the following unit:\n- **^^Tyrant Guard^^**"
+            },
+            {
+              "name": "Deadly Demise",
+              "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+            },
+            {
+              "name": "Shadow in the Warp",
+              "text": "If your Army Faction is **TYRANIDS**, once per battle, in either player’s Command phase, if one or more units from your army with this ability are on the battlefield, you can unleash the Shadow in the Warp. When you do, each enemy unit on the battlefield must take a Battle‑shock test. Each time an enemy unit takes such a Battle‑shock test, if it is within 6\" of one or more **SYNAPSE** units from your army, subtract 1 from that test."
+            },
+            {
+              "name": "Synapse",
+              "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+            },
+            {
+              "name": "Will of the Hive Mind",
+              "text": "Once per battle round, one model from your army with this ability can use it when a friendly **TYRANIDS** unit within 12\" of that model is targeted with a Stratagem. If it does, reduce the CP cost of that use of that Stratagem by 1CP."
+            },
+            {
+              "name": "Leader",
+              "text": "Before the battle, in the Muster Armies step, for each leader and support unit in your army, you can select one friendly bodyguard unit that unit can lead. That unit will then lead that bodyguard unit for the battle and form an attached unit with it. Unless otherwise stated, each bodyguard unit can only have one leader unit and one support unit attached to it."
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Tyranids"
+          ],
+          "id": 6,
+          "keywords": [
+            "Monster",
+            "Character",
+            "Psyker",
+            "Great Devourer",
+            "Synapse",
+            "Leader"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 60.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": 4,
+                "Ld": 7,
+                "M_mm": 203.1999969482422,
+                "OC": 3,
+                "Sv": 2,
+                "T": 10,
+                "W": 10
+              },
+              "id": 37,
+              "position": {
+                "x": 558.7999877929688,
+                "y": 762.0,
+                "z": 0.0
+              },
+              "type_name": "Hive Tyrant",
+              "weapons": [
+                {
+                  "kind": "melee",
+                  "name": "Monstrous bonesword and lash whip",
+                  "profiles": [
+                    {
+                      "A": 6,
+                      "AP": -2,
+                      "D": 3,
+                      "S": 9,
+                      "abilities": [
+                        {
+                          "kind": "TwinLinked"
+                        }
+                      ],
+                      "kind": "melee",
+                      "name": "Monstrous bonesword and lash whip",
+                      "range_mm": null,
+                      "skill": 2
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Monstrous scything talons",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -2,
+                      "D": 2,
+                      "S": 7,
+                      "abilities": [
+                        {
+                          "kind": "ExtraAttacks"
+                        }
+                      ],
+                      "kind": "melee",
+                      "name": "Monstrous scything talons",
+                      "range_mm": null,
+                      "skill": 2
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 10
+            }
+          ],
+          "name": "Hive Tyrant",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "B",
+          "starting_strength": 1,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        },
+        {
+          "abilities": [
+            {
+              "name": "Guardian Organism",
+              "text": "While a **^^Character^^** model is leading this unit, that **^^Character^^** has the Feel No Pain 5+ ability."
+            },
+            {
+              "name": "Synapse",
+              "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Tyranids"
+          ],
+          "id": 11,
+          "keywords": [
+            "Infantry",
+            "Great Devourer"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 50.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 8,
+                "M_mm": 152.39999389648438,
+                "OC": 1,
+                "Sv": 3,
+                "T": 8,
+                "W": 4
+              },
+              "id": 68,
+              "position": {
+                "x": 102.39999389648438,
+                "y": 1016.0,
+                "z": 0.0
+              },
+              "type_name": "Tyrant Guard",
+              "weapons": [
+                {
+                  "kind": "melee",
+                  "name": "Scything talons and rending claws",
+                  "profiles": [
+                    {
+                      "A": 5,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Scything talons and rending claws",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 4
+            },
+            {
+              "base": {
+                "diameter_mm": 50.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 8,
+                "M_mm": 152.39999389648438,
+                "OC": 1,
+                "Sv": 3,
+                "T": 8,
+                "W": 4
+              },
+              "id": 69,
+              "position": {
+                "x": 152.39999389648438,
+                "y": 1016.0,
+                "z": 0.0
+              },
+              "type_name": "Tyrant Guard",
+              "weapons": [
+                {
+                  "kind": "melee",
+                  "name": "Scything talons and rending claws",
+                  "profiles": [
+                    {
+                      "A": 5,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Scything talons and rending claws",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 4
+            },
+            {
+              "base": {
+                "diameter_mm": 50.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 8,
+                "M_mm": 152.39999389648438,
+                "OC": 1,
+                "Sv": 3,
+                "T": 8,
+                "W": 4
+              },
+              "id": 70,
+              "position": {
+                "x": 202.39999389648438,
+                "y": 1016.0,
+                "z": 0.0
+              },
+              "type_name": "Tyrant Guard",
+              "weapons": [
+                {
+                  "kind": "melee",
+                  "name": "Scything talons and rending claws",
+                  "profiles": [
+                    {
+                      "A": 5,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Scything talons and rending claws",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 4
+            }
+          ],
+          "name": "Tyrant Guard",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "B",
+          "starting_strength": 3,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        },
+        {
+          "abilities": [
+            {
+              "name": "Death Scream",
+              "text": "In your Shooting phase, after this model has shot, select one unit hit by one or more of those attacks. That unit must take a Battle-shock test, subtracting 1 from that test."
+            },
+            {
+              "name": "Deadly Demise",
+              "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+            },
+            {
+              "name": "Synapse",
+              "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Tyranids"
+          ],
+          "id": 12,
+          "keywords": [
+            "Monster",
+            "Great Devourer"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 90.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 8,
+                "M_mm": 203.1999969482422,
+                "OC": 3,
+                "Sv": 2,
+                "T": 9,
+                "W": 10
+              },
+              "id": 71,
+              "position": {
+                "x": 863.5999755859375,
+                "y": 1143.0,
+                "z": 0.0
+              },
+              "type_name": "Screamer-killer",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Bio-plasmic scream",
+                  "profiles": [
+                    {
+                      "A": "D6+3",
+                      "AP": -2,
+                      "D": 1,
+                      "S": 8,
+                      "abilities": [
+                        {
+                          "kind": "Assault"
+                        },
+                        {
+                          "kind": "Blast",
+                          "x": 1
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Bio-plasmic scream",
+                      "range_mm": 457.1999816894531,
+                      "skill": 4
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Screamer-killer talons",
+                  "profiles": [
+                    {
+                      "A": 10,
+                      "AP": -2,
+                      "D": 3,
+                      "S": 10,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Screamer-killer talons",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 10
+            }
+          ],
+          "name": "Screamer-killer",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "B",
+          "starting_strength": 1,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 558.7999877929688,
+            "y": 566.4199829101563,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartChargeMove",
+        "targets": [
+          2
+        ],
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 558.7999877929688,
+            "y": 618.2099609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 37,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 6,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 0
+          },
+          {
+            "model": 37,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 4,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 1
+          }
+        ],
+        "kind": "Fight",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "indices": [
+          0
+        ],
+        "kind": "RerollWoundRolls"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "target": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "target": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 6,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 4,
+                "unit": 6
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 7,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 4,
+                "unit": 6
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 8,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 4,
+                "unit": 6
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 9,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 4,
+                "unit": 6
+              }
+            ],
+            "weapon_index": 1
+          }
+        ],
+        "kind": "Fight",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          37
+        ],
+        "target": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndConsolidations"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndConsolidations"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 33,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 34,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 35,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 36,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          37
+        ],
+        "target": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 6,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 7,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 8,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 9,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 10,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 11,
+            "profile_index": 0,
+            "target": 6,
+            "weapon_index": 0
+          }
+        ],
+        "type": "CloseQuarters",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    }
+  ]
+}

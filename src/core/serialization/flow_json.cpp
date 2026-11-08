@@ -200,6 +200,14 @@ void from_json(const Json& j, AttackType& v) {
     else if (s == "Fighting") v = AttackType::Fighting;
     else bad_enum("AttackType", j);
 }
+// D-073: by rule number.
+void to_json(Json& j, HitModifierRule v) { j = (v == HitModifierRule::CloseQuartersMonster) ? "10.06" : "17.03"; }
+void from_json(const Json& j, HitModifierRule& v) {
+    const auto s = j.get<std::string>();
+    if (s == "10.06") v = HitModifierRule::CloseQuartersMonster;
+    else if (s == "17.03") v = HitModifierRule::EngagedMonsterTarget;
+    else bad_enum("HitModifierRule", j);
+}
 
 void to_json(Json& j, const AttackContext& v) {
     j = Json{{"type", v.type}, {"heavy_conditions_met", v.heavy_conditions_met}};
@@ -218,6 +226,7 @@ void to_json(Json& j, const WeaponSelection& v) {
              {"target_models_at_selection", v.target_models_at_selection},
              {"hit_modifier", v.hit_modifier}};
     put_opt(j, "declared_attacks", v.declared_attacks);
+    if (!v.hit_modifier_rules.empty()) j["hit_modifier_rules"] = v.hit_modifier_rules;  // D-073
 }
 void from_json(const Json& j, WeaponSelection& v) {
     j.at("attacker").get_to(v.attacker);
@@ -228,6 +237,8 @@ void from_json(const Json& j, WeaponSelection& v) {
     j.at("target_within_half_range").get_to(v.target_within_half_range);
     j.at("target_models_at_selection").get_to(v.target_models_at_selection);
     j.at("hit_modifier").get_to(v.hit_modifier);
+    v.hit_modifier_rules.clear();
+    if (j.contains("hit_modifier_rules")) j.at("hit_modifier_rules").get_to(v.hit_modifier_rules);  // D-073
 }
 
 void to_json(Json& j, const AttackProfile& v) {

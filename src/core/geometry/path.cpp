@@ -89,6 +89,7 @@ std::vector<PathViolation> check_model_path(ModelId mover, const Base& base,
     };
     check_end(context.friendly);
     check_end(context.enemy);
+    check_end(context.passable_enemy);  // 17.01 passes through them, but a move still can't end on them (D-073)
     return out;
 }
 
