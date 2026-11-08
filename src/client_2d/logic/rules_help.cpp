@@ -82,16 +82,30 @@ HelpEntry weapon_ability_help(const core::WeaponAbility& ability) {
                 h.rule = "24.37";
                 h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::Hazardous>) {
-                h.summary = "After the unit's attacks, make a hazard roll for each [HAZARDOUS] weapon used. Not "
-                            "in this game yet.";
+                h.summary = "After the unit has made all of its attacks, it makes a hazard roll for each [HAZARDOUS] "
+                            "weapon it used: each 1-2 is a mortal wound on the unit (3 if every model in it is a "
+                            "MONSTER or VEHICLE), and its player picks the models that take them.";
                 h.rule = "24.15";
+                h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::DevastatingWounds>) {
                 h.summary = "A critical wound (unmodified 6) ends that attack and inflicts mortal wounds equal to "
                             "the weapon's Damage instead. Not in this game yet: weapons with it can't be "
                             "selected.";
                 h.rule = "24.10";
+            } else if constexpr (std::is_same_v<T, ab::SustainedHits>) {
+                h.summary = "Each critical hit (an unmodified 6 to hit) scores " + std::to_string(a.x) +
+                            (a.x == 1 ? " extra hit" : " extra hits") + " on the target. The extra hits are not "
+                            "critical hits.";
+                h.rule = "24.36";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::ExtraAttacks>) {
+                h.summary = "The model fights with this weapon in addition to one of its other melee weapons: it "
+                            "must select all of its [EXTRA ATTACKS] weapons and one other melee weapon, if it has "
+                            "one that can be used.";
+                h.rule = "24.11";
+                h.in_this_game = true;
             } else {
-                h.summary = "Not in this game yet: the engine shows this ability but does not apply it.";
+                h.summary = "Not in this game yet: weapons with this ability can't be selected (D-071).";
                 h.rule = "24";
             }
         },
@@ -198,6 +212,21 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
         } else if (std::holds_alternative<ab::Torrent>(a)) {
             line.text = "Torrent: hits automatically";
             line.kind = EffectKind::Active;
+        } else if (const auto* sh = std::get_if<ab::SustainedHits>(&a)) {
+            line.text = "Sustained Hits " + std::to_string(sh->x) + ": each critical hit scores " +
+                        std::to_string(sh->x) + (sh->x == 1 ? " extra hit" : " extra hits");
+            line.kind = EffectKind::Active;
+        } else if (std::holds_alternative<ab::Hazardous>(a)) {
+            line.text = "Hazardous: a hazard roll for the unit after its attacks (1-2: a mortal wound)";
+            line.kind = EffectKind::Active;
+        } else if (std::holds_alternative<ab::ExtraAttacks>(a)) {
+            if (context.type == core::AttackType::Fighting) {
+                line.text = "Extra Attacks: made in addition to the model's other melee weapon";
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = "Extra Attacks: fought with in addition to another melee weapon";
+                line.kind = EffectKind::Info;
+            }
         } else if (std::holds_alternative<ab::Assault>(a)) {
             if (type == core::ShootingType::Assault) {
                 line.text = "Assault: firing after Advancing (Assault shooting)";

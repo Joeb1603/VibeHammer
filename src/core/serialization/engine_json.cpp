@@ -105,8 +105,14 @@ void from_json(const Json& j, HitRoll& v) {
     get_opt(j, "modified", v.modified);
     j.at("outcome").get_to(v.outcome);
 }
-void to_json(Json& j, const HitRolls& v) { j = Json{{"rolls", v.rolls}}; }
-void from_json(const Json& j, HitRolls& v) { j.at("rolls").get_to(v.rolls); }
+void to_json(Json& j, const HitRolls& v) {
+    j = Json{{"rolls", v.rolls}};
+    if (v.sustained_hits != 0) j["sustained_hits"] = v.sustained_hits;  // 24.36; omitted when 0
+}
+void from_json(const Json& j, HitRolls& v) {
+    j.at("rolls").get_to(v.rolls);
+    v.sustained_hits = j.value("sustained_hits", 0);
+}
 
 void to_json(Json& j, const WoundRoll& v) {
     j = Json{{"unmodified", v.unmodified}, {"modified", v.modified}, {"outcome", v.outcome}};

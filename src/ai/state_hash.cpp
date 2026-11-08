@@ -96,6 +96,11 @@ void add(Fnv1a& h, const core::FlowState& f) {
                 for (const int r : *a.current->save_rolls) h.i32(r);
             }
         }
+        // M60 (24.15): only when set, so a state without hazard rolls hashes as before.
+        if (a.hazard_rolls != 0 || a.pending_mortal_wounds != 0) {
+            h.i32(a.hazard_rolls);
+            h.i32(a.pending_mortal_wounds);
+        }
     }
     h.flag(f.move.has_value());
     if (f.move) {

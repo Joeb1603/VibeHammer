@@ -40,10 +40,30 @@ bool usable_melee_profile(const WeaponProfile& p) {
            !unimplemented_ability_problem(p);
 }
 
-bool has_melee_weapon(const Model& m) {
-    return std::any_of(m.weapons.begin(), m.weapons.end(), [](const Weapon& w) {
-        return std::any_of(w.profiles.begin(), w.profiles.end(), usable_melee_profile);
-    });
+bool usable_melee_weapon(const Weapon& w) {
+    return std::any_of(w.profiles.begin(), w.profiles.end(), usable_melee_profile);
+}
+
+bool has_melee_weapon(const Model& m) { return std::any_of(m.weapons.begin(), m.weapons.end(), usable_melee_weapon); }
+
+// 24.11 / D-071: what a model must select. Weapons it can't use (D-002, D-026, D-071) count as absent, so a
+// model whose only other melee weapon is refused selects its [EXTRA ATTACKS] weapons alone.
+struct MeleeSelectionRule {
+    std::vector<std::size_t> extra_attacks;  // usable [EXTRA ATTACKS] weapons: all must be selected
+    bool has_other = false;                  // a usable other melee weapon: exactly one must be selected
+};
+
+MeleeSelectionRule selection_rule(const Model& m) {
+    MeleeSelectionRule r;
+    for (std::size_t w = 0; w < m.weapons.size(); ++w) {
+        if (!usable_melee_weapon(m.weapons[w])) continue;
+        if (is_extra_attacks_weapon(m.weapons[w])) {
+            r.extra_attacks.push_back(w);
+        } else {
+            r.has_other = true;
+        }
+    }
+    return r;
 }
 
 // The checks on one model's declaration (D-021), not counting the "every able model" rule.
@@ -294,21 +314,61 @@ std::vector<std::string> melee_problems(const GameState& state, const Unit& unit
     for (std::size_t i = 0; i < declarations.size(); ++i) {
         const MeleeDeclaration& d = declarations[i];
         bool duplicate = false;
-        for (std::size_t k = 0; k < i; ++k) duplicate = duplicate || declarations[k].model == d.model;
-        if (duplicate) {
+        for (std::size_t k = 0; k < i && !duplicate; ++k) duplicate = declarations[k].model == d.model;
+        // 24.11: a model with [EXTRA ATTACKS] weapons selects them in addition to one other melee weapon.
+        const Model* model = duplicate ? find_model(unit, d.model) : nullptr;
+        const bool extra = model != nullptr && !selection_rule(*model).extra_attacks.empty();
+        bool same_weapon = false;
+        bool two_others = false;
+        for (std::size_t k = 0; k < i && extra; ++k) {
+            const MeleeDeclaration& e = declarations[k];
+            if (e.model != d.model) continue;
+            same_weapon = same_weapon || e.weapon_index == d.weapon_index;
+            const auto is_other = [&](const MeleeDeclaration& x) {
+                return x.weapon_index < model->weapons.size() && !is_extra_attacks_weapon(model->weapons[x.weapon_index]);
+            };
+            two_others = two_others || (is_other(e) && is_other(d));
+        }
+        if (duplicate && !extra) {
             out.push_back("04.01: " + model_label(d.model) + " must select one melee weapon, not more");
+        } else if (same_weapon) {
+            out.push_back("04.01: " + model_label(d.model) + " selected weapon " + std::to_string(d.weapon_index) +
+                          " more than once (to attack several units with it, split its attacks, 04.02)");
+        } else if (two_others) {
+            out.push_back("24.11: " + model_label(d.model) + " must select its [EXTRA ATTACKS] weapons and only one "
+                                                              "of its other melee weapons");
         } else if (auto p = declaration_problem(state, unit, d)) {
             out.push_back(std::move(*p));
         }
     }
-    // 04.01 While Fighting: every model that can attack must select one melee weapon (D-021).
+    // 04.01 While Fighting: every model that can attack must select one melee weapon (D-021), and 24.11 all of
+    // its [EXTRA ATTACKS] weapons plus one other melee weapon if it has one it can use (D-071).
     for (const Model& m : unit.models) {
         if (!has_melee_weapon(m) || enemy_units_engaged_with_model(state, unit, m, m.position).empty()) continue;
-        const bool declared = std::any_of(declarations.begin(), declarations.end(),
-                                          [&m](const MeleeDeclaration& d) { return d.model == m.id; });
-        if (!declared) {
+        std::vector<std::size_t> declared;
+        for (const MeleeDeclaration& d : declarations) {
+            if (d.model == m.id) declared.push_back(d.weapon_index);
+        }
+        if (declared.empty()) {
             out.push_back("04.01: " + model_label(m.id) + " is engaged with an enemy unit and must select one melee "
                                                           "weapon (D-021)");
+            continue;
+        }
+        if (std::none_of(m.weapons.begin(), m.weapons.end(), is_extra_attacks_weapon)) continue;  // 04.01 alone
+        const MeleeSelectionRule rule = selection_rule(m);
+        if (rule.extra_attacks.empty()) continue;  // its [EXTRA ATTACKS] weapons are refused: 04.01 alone
+        for (const std::size_t w : rule.extra_attacks) {
+            if (std::find(declared.begin(), declared.end(), w) == declared.end()) {
+                out.push_back("24.11: " + model_label(m.id) + " must select all of its [EXTRA ATTACKS] weapons ('" +
+                              m.weapons[w].name + "' is not selected)");
+            }
+        }
+        const bool other_declared = std::any_of(declared.begin(), declared.end(), [&m](std::size_t w) {
+            return w < m.weapons.size() && !is_extra_attacks_weapon(m.weapons[w]);
+        });
+        if (rule.has_other && !other_declared) {
+            out.push_back("24.11: " + model_label(m.id) + " must also select one of its melee weapons other than its "
+                                                          "[EXTRA ATTACKS] weapons");
         }
     }
     return out;

@@ -1,7 +1,7 @@
 #pragma once
 
 // D-051: a read-only preview of the pending casualty decision (05.04 Select Model for an attack batch, or
-// 06.02 for mortal wounds), so a client can let the player pick the models one at a time. The answer is
+// 06.02 for mortal wounds: Desperate Escape's, 09.07, or [HAZARDOUS]'s, 24.15), so a client can let the player pick the models one at a time. The answer is
 // still one OrderCasualties (D-013): the picks, then the rest of the unit.
 
 #include <optional>

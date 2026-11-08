@@ -1,0 +1,865 @@
+{
+  "description": "M60: the Havocs vs Hive Tyrant fixture (D-070), the Tyrant with a heavy venom cannon instead of its bonesword, so its scything talons ([EXTRA ATTACKS], 24.11) are its only melee weapon. Round 1, Side A: the Havocs remain stationary; the champion fires its plasma gun on supercharge ([HAZARDOUS]) at the Tyrant, 8\" away (2 shots, Rapid Fire 1). After the attacks the Havocs make one hazard roll (24.15, 06.03); it fails, and Side A gives the mortal wound to the last lascannon Havoc (06.02, D-013). Side B: the Tyrant moves 4\" south, declares a charge at the Havocs and moves into base contact with the middle Havoc; it fights first with its talons alone (the heavy venom cannon is a ranged weapon; D-071) and slays the wounded Havoc (05.04: a model that has lost wounds first), then the four Havocs left fight back. Other casualties in unit order. Stops at Side B's first Consolidate decision.",
+  "expect": {
+    "battle_round": 1,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 3,
+        "x_mm": 224.79998779296875,
+        "y_mm": 183.1999969482422
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 3,
+        "x_mm": 264.79998779296875,
+        "y_mm": 183.1999969482422
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 3,
+        "x_mm": 304.79998779296875,
+        "y_mm": 183.1999969482422
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 3,
+        "x_mm": 344.79998779296875,
+        "y_mm": 183.1999969482422
+      },
+      {
+        "model": 6,
+        "unit": 2,
+        "wounds_remaining": 10,
+        "x_mm": 304.79998779296875,
+        "y_mm": 233.1999969482422
+      }
+    ],
+    "result": null,
+    "stage": "Consolidate"
+  },
+  "format": 1,
+  "initial": {
+    "state": {
+      "battle_rounds": 5,
+      "battlefield": {
+        "depth_mm": 609.5999755859375,
+        "width_mm": 609.5999755859375
+      },
+      "command_points": [
+        0,
+        0
+      ],
+      "dice": {
+        "position": 0,
+        "seed": 2
+      },
+      "first_turn": "A",
+      "flow": {
+        "activation": null,
+        "attack": null,
+        "battle_round": 0,
+        "charge": null,
+        "fight": null,
+        "fight_sequence": null,
+        "forced_fights": [],
+        "move": null,
+        "stage": "NotStarted",
+        "step_done": [
+          false,
+          false
+        ],
+        "turn_in_round": 0
+      },
+      "pending": null,
+      "result": null,
+      "scenario_name": "Fixture - Havocs vs Hive Tyrant at close range (24x24)",
+      "sides": [
+        {
+          "deployment_zone": {
+            "depth_mm": 203.1999969482422,
+            "edge": "south"
+          },
+          "name": "Chaos Space Marines"
+        },
+        {
+          "deployment_zone": {
+            "depth_mm": 203.1999969482422,
+            "edge": "north"
+          },
+          "name": "Tyranids"
+        }
+      ],
+      "units": [
+        {
+          "abilities": [
+            {
+              "name": "Stabilisation Talons",
+              "text": "Each time a model in this unit makes an attack with a ranged weapon, you can ignore any or all modifiers to the Hit roll and any or all modifiers to the Ballistic Skill characteristic of that weapon."
+            },
+            {
+              "name": "Dark Pacts",
+              "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Heretic Astartes"
+          ],
+          "id": 1,
+          "keywords": [
+            "Infantry",
+            "Chaos"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 1,
+              "position": {
+                "x": 224.79998779296875,
+                "y": 183.1999969482422,
+                "z": 0.0
+              },
+              "type_name": "Havoc Champion",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Plasma gun",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -2,
+                      "D": 1,
+                      "S": 7,
+                      "abilities": [
+                        {
+                          "kind": "RapidFire",
+                          "x": 1
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Plasma gun - standard",
+                      "range_mm": 609.5999755859375,
+                      "skill": 3
+                    },
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": 2,
+                      "S": 8,
+                      "abilities": [
+                        {
+                          "kind": "Hazardous"
+                        },
+                        {
+                          "kind": "RapidFire",
+                          "x": 1
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Plasma gun - supercharge",
+                      "range_mm": 609.5999755859375,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Astartes chainsword",
+                  "profiles": [
+                    {
+                      "A": 5,
+                      "AP": -1,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Astartes chainsword",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 2,
+              "position": {
+                "x": 264.79998779296875,
+                "y": 183.1999969482422,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 3,
+              "position": {
+                "x": 304.79998779296875,
+                "y": 183.1999969482422,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 4,
+              "position": {
+                "x": 344.79998779296875,
+                "y": 183.1999969482422,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            },
+            {
+              "base": {
+                "diameter_mm": 40.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": null,
+                "Ld": 6,
+                "M_mm": 127.0,
+                "OC": 1,
+                "Sv": 3,
+                "T": 5,
+                "W": 3
+              },
+              "id": 5,
+              "position": {
+                "x": 384.79998779296875,
+                "y": 183.1999969482422,
+                "z": 0.0
+              },
+              "type_name": "Havoc w/ lascannon",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Havoc lascannon",
+                  "profiles": [
+                    {
+                      "A": 1,
+                      "AP": -3,
+                      "D": "D6+1",
+                      "S": 12,
+                      "abilities": [],
+                      "kind": "ranged",
+                      "name": "Havoc lascannon",
+                      "range_mm": 1219.199951171875,
+                      "skill": 3
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Close combat weapon",
+                  "profiles": [
+                    {
+                      "A": 3,
+                      "AP": 0,
+                      "D": 1,
+                      "S": 5,
+                      "abilities": [],
+                      "kind": "melee",
+                      "name": "Close combat weapon",
+                      "range_mm": null,
+                      "skill": 3
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 3
+            }
+          ],
+          "name": "Havocs",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "A",
+          "starting_strength": 5,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        },
+        {
+          "abilities": [
+            {
+              "name": "Onslaught (Aura, Psychic)",
+              "text": "While a friendly **TYRANIDS** unit is within 6\" of this model, ranged weapons equipped by models in that unit have the **[ASSAULT]** and **[LETHAL HITS]** abilities."
+            },
+            {
+              "name": "Leader",
+              "text": "This model can be attached to the following unit:\n- **^^Tyrant Guard^^**"
+            },
+            {
+              "name": "Deadly Demise",
+              "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+            },
+            {
+              "name": "Shadow in the Warp",
+              "text": "If your Army Faction is **TYRANIDS**, once per battle, in either player’s Command phase, if one or more units from your army with this ability are on the battlefield, you can unleash the Shadow in the Warp. When you do, each enemy unit on the battlefield must take a Battle‑shock test. Each time an enemy unit takes such a Battle‑shock test, if it is within 6\" of one or more **SYNAPSE** units from your army, subtract 1 from that test."
+            },
+            {
+              "name": "Synapse",
+              "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+            },
+            {
+              "name": "Will of the Hive Mind",
+              "text": "Once per battle round, one model from your army with this ability can use it when a friendly **TYRANIDS** unit within 12\" of that model is targeted with a Stratagem. If it does, reduce the CP cost of that use of that Stratagem by 1CP."
+            },
+            {
+              "name": "Leader",
+              "text": "Before the battle, in the Muster Armies step, for each leader and support unit in your army, you can select one friendly bodyguard unit that unit can lead. That unit will then lead that bodyguard unit for the battle and form an attached unit with it. Unless otherwise stated, each bodyguard unit can only have one leader unit and one support unit attached to it."
+            }
+          ],
+          "battle_shocked": false,
+          "faction_keywords": [
+            "Tyranids"
+          ],
+          "id": 2,
+          "keywords": [
+            "Monster",
+            "Character",
+            "Psyker",
+            "Great Devourer",
+            "Synapse",
+            "Leader"
+          ],
+          "models": [
+            {
+              "base": {
+                "diameter_mm": 60.0,
+                "length_mm": 0.0,
+                "shape": "round"
+              },
+              "characteristics": {
+                "InSv": 4,
+                "Ld": 7,
+                "M_mm": 203.1999969482422,
+                "OC": 3,
+                "Sv": 2,
+                "T": 10,
+                "W": 10
+              },
+              "id": 6,
+              "position": {
+                "x": 304.79998779296875,
+                "y": 436.39996337890625,
+                "z": 0.0
+              },
+              "type_name": "Hive Tyrant",
+              "weapons": [
+                {
+                  "kind": "ranged",
+                  "name": "Heavy venom cannon",
+                  "profiles": [
+                    {
+                      "A": "D3",
+                      "AP": -2,
+                      "D": 3,
+                      "S": 9,
+                      "abilities": [
+                        {
+                          "kind": "Blast",
+                          "x": 1
+                        }
+                      ],
+                      "kind": "ranged",
+                      "name": "Heavy venom cannon",
+                      "range_mm": 914.3999633789063,
+                      "skill": 2
+                    }
+                  ]
+                },
+                {
+                  "kind": "melee",
+                  "name": "Monstrous scything talons",
+                  "profiles": [
+                    {
+                      "A": 4,
+                      "AP": -2,
+                      "D": 2,
+                      "S": 7,
+                      "abilities": [
+                        {
+                          "kind": "ExtraAttacks"
+                        }
+                      ],
+                      "kind": "melee",
+                      "name": "Monstrous scything talons",
+                      "range_mm": null,
+                      "skill": 2
+                    }
+                  ]
+                }
+              ],
+              "wounds_remaining": 10
+            }
+          ],
+          "name": "Hive Tyrant",
+          "phase_flags": {
+            "advance_roll": null,
+            "charge_roll": null,
+            "consolidated": false,
+            "declared_charge": false,
+            "desperate_escape_hazards_made": false,
+            "eligible_to_fight_this_phase": false,
+            "engaged_at_fight_step_start": false,
+            "forced_to_fight": false,
+            "piled_in": false,
+            "selected_for_overrun": false,
+            "selected_to_fight": false,
+            "selected_to_move": false,
+            "selected_to_shoot": false
+          },
+          "side": "B",
+          "starting_strength": 1,
+          "turn_flags": {
+            "advanced": false,
+            "fell_back": false,
+            "fights_first": false,
+            "made_charge_move": false,
+            "moved_over_3in": false
+          }
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 1,
+            "profile_index": 1,
+            "target": 2,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          5,
+          4,
+          3,
+          2,
+          1
+        ],
+        "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 304.79998779296875,
+            "y": 334.7999572753906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartChargeMove",
+        "targets": [
+          1
+        ],
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 304.79998779296875,
+            "y": 233.1999969482422,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndPileIns"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 6,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 4,
+                "unit": 1
+              }
+            ],
+            "weapon_index": 1
+          }
+        ],
+        "kind": "Fight",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "SelectToFight",
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "declarations": [
+          {
+            "model": 1,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 5,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 2,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 3,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 1
+          },
+          {
+            "model": 4,
+            "profile_index": 0,
+            "targets": [
+              {
+                "attacks": 3,
+                "unit": 2
+              }
+            ],
+            "weapon_index": 1
+          }
+        ],
+        "kind": "Fight",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    }
+  ]
+}

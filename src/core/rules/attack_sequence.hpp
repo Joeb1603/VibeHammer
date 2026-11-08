@@ -33,13 +33,18 @@ struct HitRoll {
 
 struct HitRolls {
     std::vector<HitRoll> rolls;
-    [[nodiscard]] int hits() const;           // includes critical hits and automatic hits
+    // 24.36 [SUSTAINED HITS X]: the additional hits scored by critical hits (X each). They are hits, not
+    // critical hits (D-071), and have no roll of their own.
+    int sustained_hits = 0;
+    [[nodiscard]] int hits() const;  // every hit scored: rolls that hit (critical and automatic included) plus sustained
+    [[nodiscard]] int rolled_hits() const;  // the rolls (or automatic hits) that hit, without the sustained hits
     [[nodiscard]] int critical_hits() const;
     friend bool operator==(const HitRolls&, const HitRolls&) = default;
 };
 
 // One hit roll per attack dice. Unmodified 1 fails, unmodified 6 is a critical hit, otherwise the
-// modified result (D-011: net modifier capped to +-1, floor 1) must be >= BS/WS.
+// modified result (D-011: net modifier capped to +-1, floor 1) must be >= BS/WS. Each critical hit of a
+// [SUSTAINED HITS X] profile scores X additional hits (24.36); [TORRENT]'s automatic hits are not critical.
 [[nodiscard]] HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int attack_dice);
 
 // ---- 05.02 Wound Rolls ----
@@ -68,7 +73,7 @@ struct WoundRolls {
     friend bool operator==(const WoundRolls&, const WoundRolls&) = default;
 };
 
-// One wound roll per hit. Unmodified 1 fails, unmodified 6 is a critical wound, otherwise the
+// One wound roll per hit (HitRolls::hits(), sustained hits included). Unmodified 1 fails, unmodified 6 is a critical wound, otherwise the
 // modified result (D-011) must be >= required_wound_roll(S, T).
 [[nodiscard]] WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits,
                                           int toughness);

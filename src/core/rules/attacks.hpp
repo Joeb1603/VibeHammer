@@ -30,10 +30,23 @@ namespace wh40k::core {
 
 [[nodiscard]] AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context);
 
-// D-026: V1 rejects weapons whose abilities act during the attack sequence but are not implemented yet
-// ([TWIN-LINKED] 24.38, [DEVASTATING WOUNDS] 24.10), when they are selected, as D-002 does for random
-// characteristics. Rule-cited reason, or nullopt if the profile can be used.
+// D-026 / D-071: V1 rejects weapons with an ability it does not implement yet ([TWIN-LINKED] 24.38,
+// [DEVASTATING WOUNDS] 24.10, and every ability it doesn't recognise, ability::Unknown, e.g. [LETHAL HITS] or
+// [ANTI-X Y+]), when they are selected, as D-002 does for random characteristics. Rule-cited reason, or
+// nullopt if the profile can be used.
 [[nodiscard]] std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon);
+
+// 24.36 [SUSTAINED HITS X]: the X of an attack profile, 0 without the ability. D-071: with two instances
+// (24.02 Duplicated Abilities, the controlling player selects one) the highest is used.
+[[nodiscard]] int sustained_hits(const AttackProfile& profile);
+
+// 24.11: is `weapon` an [EXTRA ATTACKS] weapon (one of its melee profiles has the ability; D-071)?
+[[nodiscard]] bool is_extra_attacks_weapon(const Weapon& weapon);
+
+// 24.15 [HAZARDOUS]: the number of [HAZARDOUS] weapons selected in the Select Weapons step: distinct
+// (model, weapon) pairs whose selected profile has the ability, so a melee weapon splitting its attacks
+// between targets counts once (D-071). Throws std::logic_error for an unknown model or index.
+[[nodiscard]] int hazardous_weapons_selected(const GameState& state, std::span<const WeaponSelection> selections);
 
 // 04.03 Gather Attack Dice for one selection: A (D-002: must be fixed), plus [RAPID FIRE X] if the
 // target was within half range at selection (24.30), plus [BLAST X] per five target models at
@@ -53,8 +66,10 @@ namespace wh40k::core {
 struct AbilityEffect {
     WeaponAbility ability;
     // It changes these attacks: [RAPID FIRE] / [BLAST] add dice, [HEAVY] adds 1 to hit, [TORRENT] hits
-    // automatically. [ASSAULT] and [CLOSE-QUARTERS] act when the shooting type is chosen (10.05, 10.06),
-    // and unimplemented abilities never act, so they are never active here.
+    // automatically, [SUSTAINED HITS] adds hits on critical hits, [HAZARDOUS] makes a hazard roll after the
+    // unit's attacks and [EXTRA ATTACKS] is fought with in addition to another melee weapon (D-071).
+    // [ASSAULT] and [CLOSE-QUARTERS] act when the shooting type is chosen (10.05, 10.06), and unimplemented
+    // abilities never act, so they are never active here.
     bool active = false;
     int extra_attack_dice = 0;  // 24.30 [RAPID FIRE X] within half range; 24.05 [BLAST X] per five models
     int hit_modifier = 0;       // 24.16 [HEAVY]: +1 when its conditions apply

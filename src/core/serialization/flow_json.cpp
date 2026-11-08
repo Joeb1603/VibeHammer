@@ -334,6 +334,8 @@ void to_json(Json& j, const AttackFlow& v) {
              {"batch_done", v.batch_done}};
     put_opt(j, "current_target", v.current_target);
     put_opt(j, "current", v.current);
+    if (v.hazard_rolls != 0) j["hazard_rolls"] = v.hazard_rolls;  // 24.15 (D-071); omitted when 0
+    if (v.pending_mortal_wounds != 0) j["pending_mortal_wounds"] = v.pending_mortal_wounds;
 }
 void from_json(const Json& j, AttackFlow& v) {
     j.at("attacker").get_to(v.attacker);
@@ -343,6 +345,8 @@ void from_json(const Json& j, AttackFlow& v) {
     v.batch_done = j.at("batch_done").get<std::vector<bool>>();
     get_opt(j, "current_target", v.current_target);
     get_opt(j, "current", v.current);
+    v.hazard_rolls = j.value("hazard_rolls", 0);
+    v.pending_mortal_wounds = j.value("pending_mortal_wounds", 0);
 }
 
 void to_json(Json& j, const FlowState& v) {

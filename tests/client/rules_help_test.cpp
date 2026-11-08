@@ -54,6 +54,7 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
     const std::vector<WeaponAbility> all{ability::Assault{},    ability::Heavy{},     ability::CloseQuarters{},
                                          ability::RapidFire{2}, ability::Blast{1},    ability::TwinLinked{},
                                          ability::Torrent{},    ability::Hazardous{}, ability::DevastatingWounds{},
+                                         ability::SustainedHits{1}, ability::ExtraAttacks{},
                                          ability::Unknown{"Lethal Hits"}};
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const WeaponAbility& a : all) expect_readable(weapon_ability_help(a));
@@ -61,6 +62,12 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
     EXPECT_EQ(weapon_ability_help(ability::RapidFire{2}).rule, "24.30");
     EXPECT_FALSE(weapon_ability_help(ability::TwinLinked{}).in_this_game);
     EXPECT_FALSE(weapon_ability_help(ability::Unknown{"Lethal Hits"}).in_this_game);
+    // M60 (D-071): 24.15, 24.36 and 24.11 are in the game now.
+    EXPECT_TRUE(weapon_ability_help(ability::Hazardous{}).in_this_game);
+    EXPECT_EQ(weapon_ability_help(ability::SustainedHits{1}).rule, "24.36");
+    EXPECT_TRUE(weapon_ability_help(ability::SustainedHits{1}).in_this_game);
+    EXPECT_EQ(weapon_ability_help(ability::ExtraAttacks{}).rule, "24.11");
+    EXPECT_TRUE(weapon_ability_help(ability::ExtraAttacks{}).in_this_game);
 }
 
 TEST(M24_RulesHelp, EveryKeywordOnTheDatasheetsHasPlainHelp) {

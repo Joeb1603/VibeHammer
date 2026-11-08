@@ -28,7 +28,8 @@ add_executable(wh40k_tests
     charge_test.cpp
     fight_test.cpp
     command_test.cpp
-    m54_test.cpp)
+    m54_test.cpp
+    m60_abilities_test.cpp)
 
 target_link_libraries(wh40k_tests PRIVATE wh40k_core GTest::gtest_main)
 target_include_directories(wh40k_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

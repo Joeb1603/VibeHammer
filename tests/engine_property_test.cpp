@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "core/data/datasheet.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
@@ -50,8 +51,10 @@ void check_rejection(const ValidationResult& r) {
 // Called with each action random play is about to apply (M59: checks which weapons get used).
 using ActionHook = std::function<void(const GameState&, const GameAction&)>;
 
-// Random play until GameOver or `max_actions`, checking the D-004 properties at every decision.
-PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions, const ActionHook& before_apply = {}) {
+// Random play until GameOver or `max_actions`, checking the D-004 properties at every decision. `events`, if given,
+// gets every event of the actions applied (M60).
+PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions, const ActionHook& before_apply = {},
+                         std::vector<GameEvent>* events = nullptr) {
     PlayStats stats;
     while (gs.pending && stats.actions < max_actions) {
         const Side side = decider(gs);
@@ -89,7 +92,8 @@ PlayStats play_and_check(GameState& gs, TestRng& rng, int max_actions, const Act
 
         const GameAction pick = wh40k::test::random_action(gs, rng);
         if (before_apply) before_apply(gs, pick);
-        apply_action(gs, side, pick);
+        const std::vector<GameEvent> happened = apply_action(gs, side, pick);
+        if (events != nullptr) events->insert(events->end(), happened.begin(), happened.end());
         ++stats.actions;
         EXPECT_EQ(gs.pending, compute_decision(gs));
     }
@@ -219,11 +223,12 @@ TEST(D004_LegalActions, RandomPlayFromTheStrikeScenario) {
 
 namespace {
 
-// D-002 / D-026: a profile the engine can resolve today: fixed A and D, no [TWIN-LINKED] or
-// [DEVASTATING WOUNDS]. Unknown abilities (Extra Attacks, Sustained Hits, ...) and [HAZARDOUS] are not
-// refused until M60; they are loaded and ignored.
+// D-002 / D-026 / D-071: a profile the engine can resolve today: fixed A and D, no [TWIN-LINKED] or
+// [DEVASTATING WOUNDS], and no ability the engine doesn't recognise (M60; [HAZARDOUS], [SUSTAINED HITS] and
+// [EXTRA ATTACKS] are implemented).
 bool resolvable(const WeaponProfile& p) {
-    return p.attacks.is_fixed() && p.damage.is_fixed() && !unimplemented_ability_problem(p);
+    return p.attacks.is_fixed() && p.damage.is_fixed() && !unimplemented_ability_problem(p) &&
+           !p.has<ability::Unknown>();
 }
 
 struct WeaponUse {
@@ -314,6 +319,79 @@ TEST(D004_LegalActions, RandomGamesFromTheRostersFixtureFinish) {
     EXPECT_GT(use.fights, 0);
 }
 
+namespace {
+
+// M60: the roster fixture with stand-ins so random play meets every new ability: the Havocs' lascannons and the
+// Legionaries' boltguns are swapped for their datasheets' heavy bolters ([SUSTAINED HITS 1]; the rosters equip none),
+// and the Hive Tyrant's bonesword loses [TWIN-LINKED] (M61's), so the Tyrant has an [EXTRA ATTACKS] weapon and
+// another one. The plasma guns and pistols keep their [HAZARDOUS] supercharge profiles.
+GameState rosters_with_new_abilities(float closer_in) {
+    GameState gs = wh40k::test::load_rosters_fixture_closer(closer_in);
+    const Datasheet havocs = load_datasheet(wh40k::test::repo_root() / "data/units/havocs.json");
+    const Datasheet legionaries = load_datasheet(wh40k::test::repo_root() / "data/units/legionaries.json");
+    const Weapon* havoc_bolter = havocs.find_weapon("Havoc heavy bolter");
+    const Weapon* heavy_bolter = legionaries.find_weapon("Heavy bolter");
+    EXPECT_TRUE(havoc_bolter != nullptr && heavy_bolter != nullptr);
+    for (Unit& u : gs.units) {
+        for (Model& m : u.models) {
+            for (Weapon& w : m.weapons) {
+                if (w.name == "Havoc lascannon" && havoc_bolter != nullptr) w = *havoc_bolter;
+                if (w.name == "Boltgun" && heavy_bolter != nullptr) w = *heavy_bolter;
+                if (w.name == "Monstrous bonesword and lash whip") w.profiles[0].abilities.clear();
+            }
+        }
+    }
+    return gs;
+}
+
+}  // namespace
+
+TEST(D004_LegalActions, RandomPlayExercisesHazardousSustainedHitsAndExtraAttacks) {
+    // M60 (D-071): the D-004 properties with the new abilities in play. Hazard rolls follow [HAZARDOUS] attacks
+    // (24.15), critical hits of [SUSTAINED HITS] weapons score extra hits (24.36) and the Tyrant declares its
+    // talons with another melee weapon (24.11).
+    WeaponUse use;
+    std::vector<GameEvent> events;
+    int extra_attacks_fights = 0;
+    const ActionHook hook = [&](const GameState& gs, const GameAction& a) {
+        record_weapons(use)(gs, a);
+        if (const auto* fi = std::get_if<action::Fight>(&a)) {
+            for (const MeleeDeclaration& d : fi->declarations) {
+                if (is_extra_attacks_weapon(find_model(gs, d.model)->weapons.at(d.weapon_index))) {
+                    ++extra_attacks_fights;
+                    EXPECT_GE(std::count_if(fi->declarations.begin(), fi->declarations.end(),
+                                            [&](const MeleeDeclaration& x) { return x.model == d.model; }),
+                              2);  // with the (now usable) bonesword
+                }
+            }
+        }
+    };
+    for (std::uint64_t seed = 21; seed <= 24; ++seed) {
+        GameState gs = rosters_with_new_abilities(seed % 2 == 0 ? 26.0f : 35.5f);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, hook, &events);
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;
+    }
+    int hazard_rolls = 0;
+    int sustained = 0;
+    for (const GameEvent& e : events) {
+        if (std::holds_alternative<event::HazardRollsMade>(e)) ++hazard_rolls;
+        if (const auto* h = std::get_if<event::HitRollsMade>(&e)) sustained += h->rolls.sustained_hits;
+    }
+    int criticals = 0;
+    for (const GameEvent& e : events) {
+        if (const auto* h = std::get_if<event::HitRollsMade>(&e)) criticals += h->rolls.critical_hits();
+    }
+    EXPECT_GT(hazard_rolls, 0);
+    EXPECT_GT(sustained, 0);
+    EXPECT_GT(extra_attacks_fights, 0);
+    EXPECT_GT(use.used.count("Plasma gun - supercharge") + use.used.count("Plasma pistol - supercharge"), 0u);
+    EXPECT_GT(use.used.count("Havoc heavy bolter") + use.used.count("Heavy bolter"), 0u);
+}
+
 TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWithARuleCitedReason) {
     // Side A's first Shooting phase on the roster fixture: the Havoc lascannons (D6+1 damage, D-002) are
     // in range of the east Termagants (48") but never offered, and declaring them is a rule-cited refusal.
@@ -339,8 +417,8 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
         << r.reasons.front();
     for (const auto& reason : r.reasons) EXPECT_TRUE(is_rule_cited(reason)) << reason;
 
-    // Melee: the Hive Tyrant's bonesword ([TWIN-LINKED], D-026) is refused. (Its scything talons, Extra
-    // Attacks, are an Unknown ability that M60 handles; D-070 notes they are accepted as plain attacks until then.)
+    // Melee: the Hive Tyrant's bonesword ([TWIN-LINKED], D-026) is refused. (Its scything talons are an [EXTRA
+    // ATTACKS] weapon since M60, D-071: with the bonesword refused, the talons alone are the legal selection.)
     GameState close = load_scenario(wh40k::test::repo_root() / wh40k::test::kHavocsVsTyrantFixture,
                                     wh40k::test::repo_root());
     Unit& tyrant = close.units[1];

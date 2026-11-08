@@ -134,6 +134,11 @@ void begin_move(GameState& state, const action::StartMove& a, DiceSource& dice, 
 void move_progress(GameState& state, DiceSource& dice, Events& events);
 // 06.02 for the moving unit's pending Desperate Escape mortal wounds, with a casualty priority (D-013).
 void resolve_move_mortal_wounds(GameState& state, const std::vector<ModelId>& priority, Events& events);
+// 06.02: `count` mortal wounds on `unit`, each Select Model step taking the first legal model in `priority`
+// (D-013), with the MortalWoundsInflicted / ModelDestroyed / UnitDestroyed events. Shared by Desperate Escape
+// (09.07) and [HAZARDOUS] (24.15).
+void inflict_mortal_wounds_by_priority(GameState& state, Unit& unit, int count, const std::vector<ModelId>& priority,
+                                       Events& events);
 
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::MoveModels& d);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::ProposeModelMove& a);

@@ -386,6 +386,11 @@ void DecisionPanel::draw_shot_grid(const core::GameState& gs, ShotPlan& plan,
                 ImGui::EndCombo();
             }
             if (selected) ImGui::PopStyleColor();
+            // D-071: a mixed loadout's default fires every weapon a model can (24.07); the combo picks one.
+            const std::vector<core::ShotDeclaration> all = plan.declarations_for(m.id);
+            for (std::size_t i = 1; i < all.size(); ++i) {
+                ImGui::TextDisabled("  + %s", declaration_text(gs, plan, all[i]).c_str());
+            }
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -420,7 +425,7 @@ void DecisionPanel::draw_melee_grid(const core::GameState& gs, MeleePlan& plan,
             const bool selected = selected_model == m.id;
             // 04.02 Splitting Melee Attacks: the engaged targets of this model's weapon.
             std::vector<core::UnitId> targets;
-            for (const MeleeOption& o : plan.options_for(m.id)) {
+            for (const MeleeOption& o : plan.main_options_for(m.id)) {
                 if (o.declaration.weapon_index == d->weapon_index && o.declaration.profile_index == d->profile_index) {
                     targets.push_back(o.declaration.targets.front().unit);
                 }
@@ -434,7 +439,7 @@ void DecisionPanel::draw_melee_grid(const core::GameState& gs, MeleePlan& plan,
             const float split_w = ImGui::CalcTextSize("Split...").x + style.FramePadding.x * 2.0f;
             ImGui::SetNextItemWidth(can_split ? -(split_w + style.ItemSpacing.x) : -FLT_MIN);
             if (ImGui::BeginCombo("##choice", melee_text(gs, *d, plan).c_str())) {
-                for (const MeleeOption& o : plan.options_for(m.id)) {
+                for (const MeleeOption& o : plan.main_options_for(m.id)) {
                     if (ImGui::Selectable(melee_text(gs, o.declaration, plan).c_str(), *d == o.declaration)) {
                         plan.override_model(m.id, o.declaration);
                     }
@@ -462,6 +467,10 @@ void DecisionPanel::draw_melee_grid(const core::GameState& gs, MeleePlan& plan,
                     if (changed) plan.override_model(m.id, split);  // the engine checks the split when submitted
                     ImGui::EndPopup();
                 }
+            }
+            // 24.11: [EXTRA ATTACKS] weapons are fought with as well (D-071).
+            for (const core::MeleeDeclaration& x : plan.extra_declarations_for(m.id)) {
+                ImGui::TextDisabled("  + %s (Extra Attacks)", melee_text(gs, x, plan).c_str());
             }
             ImGui::PopID();
         }

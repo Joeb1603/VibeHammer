@@ -59,12 +59,26 @@ TEST(Serialization, EveryWeaponAbilityRoundTrips) {
         ability::Assault{},   ability::Heavy{},     ability::CloseQuarters{},
         ability::RapidFire{2}, ability::Blast{3},   ability::TwinLinked{},
         ability::Torrent{},   ability::Hazardous{}, ability::DevastatingWounds{},
+        ability::SustainedHits{2}, ability::ExtraAttacks{},  // M60 (24.36, 24.11)
         ability::Unknown{"Anti-Infantry 4+"}};
     // Guard: the list above covers every alternative of the variant.
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const auto& a : all) {
         EXPECT_EQ(round_trip_ability(a), a);
     }
+}
+
+TEST(D071_UnknownAbilities, UnknownTextSavedBeforeTheEngineKnewItLoadsAsTheAbility) {
+    // A file written before M60 holds "Extra Attacks" and "Sustained Hits 1" as Unknown text; it loads as the
+    // abilities that text now names. Text the engine still doesn't know stays Unknown.
+    EXPECT_EQ(Json({{"kind", "Unknown"}, {"text", "Extra Attacks"}}).get<WeaponAbility>(),
+              WeaponAbility{ability::ExtraAttacks{}});
+    EXPECT_EQ(Json({{"kind", "Unknown"}, {"text", "Sustained Hits 1"}}).get<WeaponAbility>(),
+              WeaponAbility{ability::SustainedHits{1}});
+    EXPECT_EQ(Json({{"kind", "Unknown"}, {"text", "Lethal Hits"}}).get<WeaponAbility>(),
+              WeaponAbility{ability::Unknown{"Lethal Hits"}});
+    EXPECT_EQ(Json(WeaponAbility{ability::SustainedHits{1}}), Json({{"kind", "SustainedHits"}, {"x", 1}}));
+    EXPECT_EQ(Json(WeaponAbility{ability::ExtraAttacks{}}), Json({{"kind", "ExtraAttacks"}}));
 }
 
 TEST(Serialization, CharacteristicsOptionalsSetAndUnset) {
