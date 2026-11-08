@@ -30,4 +30,11 @@ inline constexpr float kLineOfSightWidthMm = 1.0f;
 [[nodiscard]] bool has_line_of_sight(const PosedModel& observer, const PosedModel& observed,
                                      std::span<const PosedModel> blockers);
 
+namespace visibility_detail {
+// M65: D-017's code run on posed models that all have round bases (the posed overload's round case, without copying
+// the blockers into PlacedModels). Precondition: every base is round.
+[[nodiscard]] bool round_line_of_sight(const PosedModel& observer, const PosedModel& observed,
+                                       std::span<const PosedModel> blockers);
+}  // namespace visibility_detail
+
 }  // namespace wh40k::core

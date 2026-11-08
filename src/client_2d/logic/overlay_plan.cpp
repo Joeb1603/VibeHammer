@@ -7,6 +7,7 @@
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
 
 namespace wh40k::client {
@@ -104,7 +105,12 @@ std::vector<Circle> ring_circles(const core::GameState& state, const std::vector
         for (const auto& [id, at] : overrides) {
             if (id == ring.model && !ring.centre) centre = at;
         }
-        out.push_back(Circle{centre, core::base_radius(m->base) + ring.distance_mm, ring.kind});
+        // D-074 (M65): the base's circumscribed radius (for a round base its radius, as before). For an oval it is half
+        // its length: exact for the movement and charge rings (a model may turn freely, 03.01, so some part of its base
+        // can reach all of that disc); round the other rings it is the circle through the oval's ends, at most
+        // (length - width) / 2 wider than the range across its width.
+        // TODO(M66): draw the oval's own offset outline for the engagement, coherency and weapon range rings.
+        out.push_back(Circle{centre, core::circumscribed_radius(m->base) + ring.distance_mm, ring.kind});
     }
     return out;
 }

@@ -64,14 +64,33 @@ std::vector<UnitId> eligible_charge_targets(const GameState& state, const Unit& 
 
 bool ends_closer_to_a_charge_target(const GameState& state, const Model& model, const Position& start,
                                     const Position& end, std::span<const UnitId> targets) {
+    return ends_closer_to_a_charge_target(state, BasePose{start, model.base, model.facing_deg},
+                                          BasePose{end, model.base, model.facing_deg}, targets);
+}
+
+bool ends_closer_to_unit(const BasePose& start, const BasePose& end, const Unit& target) {
+    const auto before = model_distance_to_unit(start, target);
+    const auto after = model_distance_to_unit(end, target);
+    if (!before || !after || !more_than(*before, *after)) {
+        return false;
+    }
+    // D-074 part 2: a turn does not count as moving closer, so the start is also measured at the end facing (only an
+    // oval's distance depends on its facing).
+    if (start.base.shape == BaseShape::Round || footprint_turn_deg(start.facing_deg, end.facing_deg) == 0.0) {
+        return true;
+    }
+    const auto turned = model_distance_to_unit(BasePose{start.position, start.base, end.facing_deg}, target);
+    return turned && more_than(*turned, *after);
+}
+
+bool ends_closer_to_a_charge_target(const GameState& state, const BasePose& start, const BasePose& end,
+                                    std::span<const UnitId> targets) {
     for (const UnitId id : targets) {
         const Unit* target = state.find_unit(id);
         if (target == nullptr || is_destroyed(*target)) {
             continue;
         }
-        const auto before = model_distance_to_unit(model, start, *target);
-        const auto after = model_distance_to_unit(model, end, *target);
-        if (before && after && more_than(*before, *after)) {
+        if (ends_closer_to_unit(start, end, *target)) {
             return true;
         }
     }

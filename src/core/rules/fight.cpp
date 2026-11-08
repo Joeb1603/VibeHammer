@@ -8,7 +8,9 @@
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
+#include "core/geometry/oval.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/charge.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -92,7 +94,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
         return "04.02: '" + profile.name + "' (A" + std::to_string(a) + ") cannot select " +
                std::to_string(d.targets.size()) + " targets";
     }
-    const std::vector<UnitId> engaged = enemy_units_engaged_with_model(state, unit, *model, model->position);
+    const std::vector<UnitId> engaged = enemy_units_engaged_with_model(state, unit, pose_of(*model));
     int total = 0;
     for (std::size_t i = 0; i < d.targets.size(); ++i) {
         const MeleeTarget& t = d.targets[i];
@@ -129,12 +131,16 @@ std::optional<FightType> fight_type_from_name(std::string_view name) {
 
 std::vector<UnitId> enemy_units_engaged_with_model(const GameState& state, const Unit& unit, const Model& model,
                                                    const Position& pos) {
+    return enemy_units_engaged_with_model(state, unit, BasePose{pos, model.base, model.facing_deg});
+}
+
+std::vector<UnitId> enemy_units_engaged_with_model(const GameState& state, const Unit& unit, const BasePose& pose) {
     std::vector<UnitId> out;
-    const PlacedModel me{model.id, pos, model.base};
     for (const Unit& other : state.units) {
         if (other.side == unit.side) continue;
-        for (const PlacedModel& them : placed_models(other)) {
-            if (models_engaged(me, them)) {
+        for (const Model& them : other.models) {
+            // 03.04 (models_engaged): within 2" of it, each base with its facing (D-074).
+            if (within(base_distance(pose, pose_of(them)), kEngagementRangeMm)) {
                 out.push_back(other.id);
                 break;
             }
@@ -144,10 +150,14 @@ std::vector<UnitId> enemy_units_engaged_with_model(const GameState& state, const
 }
 
 bool in_base_contact_with_enemy(const GameState& state, const Unit& unit, const Model& model, const Position& pos) {
+    return in_base_contact_with_enemy(state, unit, BasePose{pos, model.base, model.facing_deg});
+}
+
+bool in_base_contact_with_enemy(const GameState& state, const Unit& unit, const BasePose& pose) {
     for (const Unit& other : state.units) {
         if (other.side == unit.side) continue;
         for (const Model& m : other.models) {
-            if (in_base_contact(base_distance(pos, model.base, m.position, m.base))) return true;
+            if (in_base_contact(base_distance(pose, pose_of(m)))) return true;
         }
     }
     return false;
@@ -264,20 +274,26 @@ std::optional<std::string> consolidation_targets_problem(const GameState& state,
 
 bool ends_closer_to_closest_target(const GameState& state, const Model& model, const Position& start,
                                    const Position& end, std::span<const UnitId> targets) {
+    return ends_closer_to_closest_target(state, BasePose{start, model.base, model.facing_deg},
+                                         BasePose{end, model.base, model.facing_deg}, targets);
+}
+
+bool ends_closer_to_closest_target(const GameState& state, const BasePose& start, const BasePose& end,
+                                   std::span<const UnitId> targets) {
     std::vector<const Unit*> units;
-    std::vector<std::vector<PlacedModel>> candidates;
+    std::vector<std::vector<PosedModel>> candidates;
     for (const UnitId id : targets) {
         const Unit* t = state.find_unit(id);
         if (t == nullptr || is_destroyed(*t)) continue;
         units.push_back(t);
-        candidates.push_back(placed_models(*t));
+        candidates.push_back(posed_models(*t));
     }
-    // D-010: every unit tied for closest to the model's start position counts (geometry's tie tolerance).
-    const PlacedModel from{model.id, start, model.base};
-    for (const std::size_t i : closest_units(std::span<const PlacedModel>(&from, 1), candidates)) {
-        const auto before = model_distance_to_unit(model, start, *units[i]);
-        const auto after = model_distance_to_unit(model, end, *units[i]);
-        if (before && after && more_than(*before, *after)) return true;
+    // D-010: every unit tied for closest to the model's start (its start position and facing, D-022) counts
+    // (geometry's tie tolerance).
+    const PosedModel from{ModelId{}, start.position, start.base, start.facing_deg};
+    for (const std::size_t i : closest_units(std::span<const PosedModel>(&from, 1),
+                                             std::span<const std::vector<PosedModel>>(candidates))) {
+        if (ends_closer_to_unit(start, end, *units[i])) return true;  // D-074 part 2: a turn does not count
     }
     return false;
 }
@@ -288,8 +304,9 @@ std::vector<std::string> still_engaged_problems(const GameState& state, const Un
     for (const ModelStart& s : starts) {
         const Model* m = find_model(unit, s.model);
         if (m == nullptr) continue;
-        const auto before = enemy_units_engaged_with_model(state, unit, *m, s.position);
-        const auto after = enemy_units_engaged_with_model(state, unit, *m, m->position);
+        // D-074: at its start position and facing, then where it is now.
+        const auto before = enemy_units_engaged_with_model(state, unit, BasePose{s.position, m->base, s.facing_deg});
+        const auto after = enemy_units_engaged_with_model(state, unit, pose_of(*m));
         for (const UnitId e : before) {
             if (!contains(after, e)) {
                 out.push_back(std::string(rule) + ": " + model_label(m->id) + " started the move engaged with " +
@@ -341,7 +358,7 @@ std::vector<std::string> melee_problems(const GameState& state, const Unit& unit
     // 04.01 While Fighting: every model that can attack must select one melee weapon (D-021), and 24.11 all of
     // its [EXTRA ATTACKS] weapons plus one other melee weapon if it has one it can use (D-071).
     for (const Model& m : unit.models) {
-        if (!has_melee_weapon(m) || enemy_units_engaged_with_model(state, unit, m, m.position).empty()) continue;
+        if (!has_melee_weapon(m) || enemy_units_engaged_with_model(state, unit, pose_of(m)).empty()) continue;
         std::vector<std::size_t> declared;
         for (const MeleeDeclaration& d : declarations) {
             if (d.model == m.id) declared.push_back(d.weapon_index);
@@ -373,14 +390,14 @@ std::vector<std::string> melee_problems(const GameState& state, const Unit& unit
 
 bool can_make_melee_attacks(const GameState& state, const Unit& unit) {
     return std::any_of(unit.models.begin(), unit.models.end(), [&](const Model& m) {
-        return has_melee_weapon(m) && !enemy_units_engaged_with_model(state, unit, m, m.position).empty();
+        return has_melee_weapon(m) && !enemy_units_engaged_with_model(state, unit, pose_of(m)).empty();
     });
 }
 
 std::vector<MeleeDeclaration> melee_options(const GameState& state, const Unit& unit) {
     std::vector<MeleeDeclaration> out;
     for (const Model& m : unit.models) {
-        const auto engaged = enemy_units_engaged_with_model(state, unit, m, m.position);
+        const auto engaged = enemy_units_engaged_with_model(state, unit, pose_of(m));
         for (std::size_t w = 0; w < m.weapons.size(); ++w) {
             for (std::size_t p = 0; p < m.weapons[w].profiles.size(); ++p) {
                 const WeaponProfile& profile = m.weapons[w].profiles[p];

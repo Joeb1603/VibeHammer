@@ -330,6 +330,70 @@ TEST(D004_LegalActions, RandomPlayOnTheMonsterFixture) {
     EXPECT_GT(shots_at_engaged_monsters, 0) << use.shoots;
 }
 
+TEST(D004_LegalActions, RandomPlayOnTheTyrannofexFixture) {
+    // M65 (D-074 part 2): the D-004 properties with the Tyrannofex's oval base in play. The random fills give it turns
+    // (a facing at every vertex, a turn without moving, a last turn after the last line) and corrupt facings, which
+    // validation refuses with rule-cited reasons. No engine path may reach the round-only geometry (base_radius throws
+    // for an oval, which would end the test with the exception). The roster fixture with the Tyrannofex 36", 10" and
+    // 0.5" from the Chaos Space Marines, and the hand-placed layout, apart and engaged, with either side first. Every
+    // game ends and round-trips with its facings.
+    WeaponUse use;
+    int turns = 0;       // applied proposals that turn the Tyrannofex
+    int turns_only = 0;  // ... without moving it
+    int tyrannofex_shots = 0;
+    int tyrannofex_fights = 0;
+    bool faced_away = false;  // the Tyrannofex ended a game at a facing other than 0
+    const ActionHook record = record_weapons(use);
+    const ActionHook hook = [&](const GameState& gs, const GameAction& a) {
+        record(gs, a);
+        if (const auto* p = std::get_if<action::ProposeModelMove>(&a)) {
+            const Model* m = find_model(gs, p->model);
+            ASSERT_NE(m, nullptr);
+            if (m->base.shape == BaseShape::Oval && !p->facings.empty()) {
+                ++turns;
+                const auto start = move_start_position(gs, p->model);
+                if (start && std::all_of(p->path.begin(), p->path.end(), [&](const Position& q) { return q == *start; })) {
+                    ++turns_only;
+                }
+            }
+        } else if (const auto* sh = std::get_if<action::Shoot>(&a)) {
+            const Unit* u = gs.find_unit(sh->unit);
+            if (u != nullptr && u->name == "Tyrannofex") ++tyrannofex_shots;
+        } else if (const auto* fi = std::get_if<action::Fight>(&a)) {
+            const Unit* u = gs.find_unit(fi->unit);
+            if (u != nullptr && u->name == "Tyrannofex") ++tyrannofex_fights;
+        }
+    };
+    std::vector<GameState> setups{wh40k::test::load_tyrannofex_fixture(), wh40k::test::load_tyrannofex_fixture_closer(26.0f),
+                                  wh40k::test::load_tyrannofex_fixture_closer(35.5f),
+                                  wh40k::test::tyrannofex::fixture(Side::B), wh40k::test::tyrannofex::fixture(Side::A),
+                                  wh40k::test::tyrannofex::fixture(Side::B, true), wh40k::test::tyrannofex::fixture(Side::A, true)};
+    std::uint64_t seed = 0;
+    for (const GameState& setup : setups) {
+        for (int k = 0; k < 2; ++k) {
+            ++seed;
+            GameState gs = setup;
+            gs.dice.seed = seed;
+            start_game(gs);
+            TestRng rng(seed);
+            const PlayStats stats = play_and_check(gs, rng, 4000, hook);
+            EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+            EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;  // the state round-trips, facings and all
+            for (const Unit& u : gs.units) {
+                for (const Model& m : u.models) {
+                    if (m.base.shape == BaseShape::Oval && m.facing_deg != 0.0f) faced_away = true;
+                    if (m.base.shape == BaseShape::Round) EXPECT_EQ(m.facing_deg, 0.0f);  // a round base has none
+                }
+            }
+        }
+    }
+    EXPECT_GT(turns, 0);
+    EXPECT_GT(turns_only, 0);
+    EXPECT_TRUE(faced_away);
+    EXPECT_GT(tyrannofex_shots, 0);
+    EXPECT_GT(tyrannofex_fights, 0);
+}
+
 TEST(D004_LegalActions, RandomPlayRollsTheRostersRandomAttacksAndDamage) {
     // M62 (D-069): the D-004 properties with the rosters' random characteristics in play: the Screamer-killers'
     // bio-plasmic scream (A D6+3, [BLAST] dice added after the roll) and the Havocs' lascannons (D D6+1, rolled per

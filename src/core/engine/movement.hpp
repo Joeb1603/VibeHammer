@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/engine/actions.hpp"
+#include "core/geometry/pose.hpp"
 #include "core/geometry/primitives.hpp"
 #include "core/state/game_state.hpp"
 
@@ -19,6 +20,10 @@ namespace wh40k::core {
 
 // The position `model` started the move in progress from. nullopt if the model isn't moving.
 [[nodiscard]] std::optional<Position> move_start_position(const GameState& state, ModelId model);
+
+// D-074 part 2 (M65): the facing `model` started the move in progress with (0 for a round base). nullopt if the model
+// isn't moving.
+[[nodiscard]] std::optional<float> move_start_facing_deg(const GameState& state, ModelId model);
 
 // D-040 / D-041: where `model`'s base centre can end the move in progress, for clients to shade.
 // - The next straight line starts at `from` (its position now) and can be up to `remaining_mm` long (the
@@ -47,20 +52,63 @@ struct ReachCircle {
     ModelId model;            // the model this circle is round
     friend bool operator==(const ReachCircle&, const ReachCircle&) = default;
 };
+// D-074 part 2 (M65): one of MoveReach's areas for a pair of bases that isn't round to round (an oval mover, or an
+// oval other model). The moving model's centre c is in it when (reach_shape_contains)
+//     signed_base_distance(BasePose{c, mover_base, mover_facing_deg}, obstacle) < threshold_mm.
+// A round pair's ReachCircle is exactly that set, with radius both base radii + threshold_mm. The thresholds: 0 (not on
+// the model, 03.01), 2" + EPS (an engagement range, 03.04), `before - EPS` (closer, 11.04 / 12.03 / 12.08), -EPS
+// (blocking: the line's swept base would overlap the model by more than EPS, translation_crosses).
+// - At a fixed facing the set is convex (the signed distance to a convex set, the Minkowski difference of the two
+//   bases, is a convex function of c), so on any ray it is one interval, possibly empty: bisection on
+//   reach_shape_contains finds its ends.
+// - It contains the disc round obstacle.position of radius reach_shape_inner_radius_mm and lies inside the disc of
+//   radius reach_shape_outer_radius_mm (for culling and bisection brackets).
+// - A blocking shape's shadow (D-044) is, on each ray from MoveReach::from, everything beyond the ray's first point in
+//   the shape.
+struct ReachShape {
+    Base mover_base;
+    float mover_facing_deg = 0.0f;
+    BasePose obstacle;
+    float threshold_mm = 0.0f;
+    bool engagement = false;  // an enemy model's engagement range, not just its base
+    ModelId model;            // the model this shape is round
+    friend bool operator==(const ReachShape&, const ReachShape&) = default;
+};
+[[nodiscard]] bool reach_shape_contains(const ReachShape& shape, const Position& centre);
+// inscribed_radius(mover) + inscribed_radius(obstacle) + threshold: the shape holds this disc (when positive).
+[[nodiscard]] float reach_shape_inner_radius_mm(const ReachShape& shape);
+// circumscribed_radius(mover) + circumscribed_radius(obstacle) + threshold: the shape lies inside this disc.
+[[nodiscard]] float reach_shape_outer_radius_mm(const ReachShape& shape);
+
 struct MoveReach {
     Position start;
     float max_mm = 0.0f;
     Position from;
     float remaining_mm = 0.0f;
-    Rect centre_bounds;  // the battlefield shrunk by the model's base radius
+    Rect centre_bounds;  // the battlefield shrunk by the model's base (D-074: its half extents at `facing_deg`)
     std::vector<ReachCircle> forbidden;
     std::vector<std::vector<ReachCircle>> required_any;
     std::vector<ReachCircle> blocking;
     bool must_end_unengaged = false;
     bool immobile = false;
+    // D-074 part 2 (M65). With only round bases every field below keeps its default, so the reach is as before.
+    // - facing_deg: the facing the reach is for: the model turns at `from` to it, then moves (0 for a round base).
+    // - turn_blocked: that turn would pass through an enemy model the line may not pass, or cross the battlefield edge
+    //   (03.01), so nothing is reachable at this facing.
+    // - the *_shapes: the same areas as ReachShapes for each pair that isn't round to round. required_any_shapes is
+    //   empty (no group has a shape) or holds one group per required_any group: group i is required_any[i] and
+    //   required_any_shapes[i] together.
+    float facing_deg = 0.0f;
+    bool turn_blocked = false;
+    std::vector<ReachShape> forbidden_shapes;
+    std::vector<std::vector<ReachShape>> required_any_shapes;
+    std::vector<ReachShape> blocking_shapes;
     friend bool operator==(const MoveReach&, const MoveReach&) = default;
 };
+// At the model's current facing.
 [[nodiscard]] std::optional<MoveReach> move_reach(const GameState& state, ModelId model);
+// D-074 part 2: at `facing_deg` (the facing being dragged; any value, taken modulo 180; a round base ignores it).
+[[nodiscard]] std::optional<MoveReach> move_reach(const GameState& state, ModelId model, float facing_deg);
 
 // 17.01 (D-073): "Each time you make a normal or advance move with a unit, MONSTER/VEHICLE models in that unit can
 // be moved through friendly and enemy models (excluding other MONSTER/VEHICLE models)." True when a move of `type`

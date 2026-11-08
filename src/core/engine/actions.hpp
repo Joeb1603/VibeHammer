@@ -29,9 +29,15 @@ struct StartMove {
 // 03.01: move one model of the moving unit. `path` is the end of each straight line, starting from the
 // model's position at the start of the move; proposing again replaces the model's earlier path.
 // An empty path is the template legal_actions returns (D-004).
+// D-074 (M65): `facings` is empty (the model is not turned: it keeps its facing from the start of the move), or one
+// facing per `path` vertex (degrees, any finite value; an oval's is taken modulo 180). facings[k] is the model's facing
+// on the straight line to path[k] and at path[k]: it first turns in place, the shorter way between the footprints
+// (03.01 Rotating a Model), then moves. A turn without moving is path {its start position} with one facing; a round
+// base has no facing (only 0s). Omitted from JSON when empty.
 struct ProposeModelMove {
     ModelId model;
     std::vector<Position> path;
+    std::vector<float> facings{};
     friend bool operator==(const ProposeModelMove&, const ProposeModelMove&) = default;
 };
 // 03.01 Ending a Move: finish the move. If an end condition fails, every model returns to its start

@@ -743,21 +743,51 @@ float rotation_delta_deg(float from_deg, float to_deg) noexcept {
     return out == 0.0f ? 0.0f : out;
 }
 
-// ---- 01.04 ----
+namespace {
 
-float base_distance(const BasePose& a, const BasePose& b) {
+// `deg` (finite) as the same footprint in (-90, 90], in double: fmod and the +-180 are exact.
+double footprint_deg(double deg) noexcept {
+    double x = std::fmod(deg, 180.0);  // (-180, 180), exact
+    if (x > 90.0) {
+        x -= 180.0;
+    } else if (x <= -90.0) {
+        x += 180.0;
+    }
+    return x == 0.0 ? 0.0 : x;  // never -0
+}
+
+}  // namespace
+
+float footprint_facing_deg(float deg) noexcept {
+    if (!std::isfinite(deg)) return 0.0f;
+    // Exact: for |deg| < 180 the result is deg or deg -+ 180, a multiple of deg's ulp below 90 in size, so it fits in
+    // a float; for larger |deg| fmod keeps deg's (coarser) ulp. A result that rounds to -90 is the same footprint as 90.
+    float out = static_cast<float>(footprint_deg(static_cast<double>(deg)));
+    if (out <= -90.0f) out = 90.0f;
+    return out == 0.0f ? 0.0f : out;
+}
+
+double footprint_turn_deg(float from_deg, float to_deg) noexcept {
+    if (!std::isfinite(from_deg) || !std::isfinite(to_deg)) return 0.0;
+    const double d = footprint_deg(static_cast<double>(to_deg) - static_cast<double>(from_deg));
+    return d <= -90.0 ? 90.0 : d;
+}
+
+// ---- 01.04 (the round-round case is inline in oval.hpp) ----
+
+float oval_detail::base_distance_general(const BasePose& a, const BasePose& b) {
     if (is_round(a.base) && is_round(b.base)) return base_distance(a.position, a.base, b.position, b.base);
     return std::max(0.0f, static_cast<float>(pose_signed_distance(a, b).value));
 }
 
-float signed_base_distance(const BasePose& a, const BasePose& b) {
+float oval_detail::signed_base_distance_general(const BasePose& a, const BasePose& b) {
     if (is_round(a.base) && is_round(b.base)) {
         return centre_distance(a.position, b.position) - base_radius(a.base) - base_radius(b.base);
     }
     return static_cast<float>(pose_signed_distance(a, b).value);
 }
 
-bool bases_overlap(const BasePose& a, const BasePose& b) {
+bool oval_detail::bases_overlap_general(const BasePose& a, const BasePose& b) {
     if (is_round(a.base) && is_round(b.base)) return bases_overlap(a.position, a.base, b.position, b.base);
     // D-074: shrunk by EPS/2 each, they still intersect <=> the penetration depth is more than EPS.
     if (is_round(a.base) || is_round(b.base)) return pose_signed_distance(a, b).value < -kEps;  // Eberly: exact

@@ -308,6 +308,15 @@ bool auto_fight_move_available(const core::GameState& state) {
 
 AutoFightMove auto_fight_move(const core::GameState& state) {
     if (!auto_fight_move_available(state)) return AutoFightMove{{}, {"no pile-in or consolidation to plan"}};
+    // TODO(M66): remove when auto moves handle ovals. D-074 part 2: the arrangement is planned on round-only geometry
+    // (base_radius throws for an oval), so with any oval base on the battlefield it refuses cleanly instead.
+    for (const core::Unit& u : state.units) {
+        for (const core::Model& m : u.models) {
+            if (m.base.shape != core::BaseShape::Round) {
+                return AutoFightMove{{}, {"D-074: Auto move does not handle oval bases yet"}};
+            }
+        }
+    }
     const core::Unit& unit = *state.find_unit(state.flow.move->unit);
     // Closest to the target first; ties by model id (deterministic).
     std::vector<std::pair<float, core::ModelId>> by_gap;

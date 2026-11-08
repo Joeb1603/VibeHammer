@@ -15,25 +15,50 @@
 
 #include <cmath>
 
+#include "core/geometry/distance.hpp"
 #include "core/geometry/pose.hpp"
 #include "core/geometry/primitives.hpp"
 
 namespace wh40k::core {
 
+namespace oval_detail {
+// The functions below when a base isn't round (out of line; M65 moved the round-round case inline).
+[[nodiscard]] float base_distance_general(const BasePose& a, const BasePose& b);
+[[nodiscard]] float signed_base_distance_general(const BasePose& a, const BasePose& b);
+[[nodiscard]] bool bases_overlap_general(const BasePose& a, const BasePose& b);
+}  // namespace oval_detail
+
 // ---- 01.04 Measuring Distances ----
+// D-074 part 2 (M65): the round-round case of these three is inline (the engine measures through them on every hot
+// path), the same call as before, so the same result.
 
 // 01.04: the distance between the closest parts of two bases, clamped at 0. Round-round is
 // base_distance(Position, Base, Position, Base) (distance.hpp), bit-identical.
-[[nodiscard]] float base_distance(const BasePose& a, const BasePose& b);
+[[nodiscard]] inline float base_distance(const BasePose& a, const BasePose& b) {
+    if (a.base.shape == BaseShape::Round && b.base.shape == BaseShape::Round) [[likely]] {
+        return base_distance(a.position, a.base, b.position, b.base);
+    }
+    return oval_detail::base_distance_general(a, b);
+}
 
 // D-074: the signed distance between two bases: the gap when they are apart, minus the penetration depth (how far
 // one must be moved to separate them) when they overlap. Round-round: centre_distance - r1 - r2 (float).
-[[nodiscard]] float signed_base_distance(const BasePose& a, const BasePose& b);
+[[nodiscard]] inline float signed_base_distance(const BasePose& a, const BasePose& b) {
+    if (a.base.shape == BaseShape::Round && b.base.shape == BaseShape::Round) [[likely]] {
+        return centre_distance(a.position, b.position) - base_radius(a.base) - base_radius(b.base);
+    }
+    return oval_detail::signed_base_distance_general(a, b);
+}
 
 // D-074 / D-027 (03.01 Ending a Move: "on another model"): the bases overlap when they still intersect after each is
 // shrunk by EPS_MM/2, i.e. when they intersect by more than EPS_MM (penetration depth > EPS_MM). Bases in contact do
 // not overlap. Round-round is bases_overlap(Position, Base, Position, Base), bit-identical.
-[[nodiscard]] bool bases_overlap(const BasePose& a, const BasePose& b);
+[[nodiscard]] inline bool bases_overlap(const BasePose& a, const BasePose& b) {
+    if (a.base.shape == BaseShape::Round && b.base.shape == BaseShape::Round) [[likely]] {
+        return bases_overlap(a.position, a.base, b.position, b.base);
+    }
+    return oval_detail::bases_overlap_general(a, b);
+}
 
 // ---- D-009 Within / Wholly Within ----
 

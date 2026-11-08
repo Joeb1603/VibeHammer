@@ -2673,7 +2673,7 @@ client or the bots changes: they still call the round-only functions, and `base_
 
 ---
 
-## M65: Oval bases in the engine
+## M65: Oval bases in the engine ✅ (done)
 **Effort:** `max` · **Plan mode:** design first, then pre-approved · **Rules:** 01.04, 03.01, 03.02, 09.04, 12.03, 12.08 · **Decision:** D-074 (part 2)
 
 > **Facing.** `Position` gets `facing_deg`, defaulting to 0. It is omitted from JSON when 0 and refused on round
@@ -2693,6 +2693,164 @@ client or the bots changes: they still call the round-only functions, and `base_
 - Tests `R01_04_`, `R03_01_` and `D074_`, plus round trips.
 - D-004 random play over a fixture with the Tyrannofex, plus a replay.
 - Old play and replays unchanged.
+
+**Results (2026-11-08):** decision D-074 part 2, written first and approved with conditions before any code.
+- **Departure from the wording above:** the facing is `Model::facing_deg`, not `Position::facing_deg`.
+  - `Position` stays a plain 12-byte point: a path vertex, a ring centre, a mouse point, a bot's candidate.
+  - Every caller that builds a path from coordinates (the client's drags, the auto moves, the bots) would otherwise
+    turn an oval to 0 at each vertex. On the model, a path without facings keeps the facing.
+  - The move carries the rest: `ModelStart::facing_deg`, and `facings` on `ProposeModelMove` (one per path vertex, or
+    none), `ModelPath` and `ModelMoveProposed`.
+  - The cost: `GameAction` grows from 40 to 64 bytes (`ProposeModelMove` gains a vector); the timing below covers it.
+- **Engine** (`wh40k_core`):
+  - *Facing (D-074 part 2):*
+    - an oval's facing is stored modulo 180, in (-90, 90] (`footprint_facing_deg`); a turn between two vertices goes
+      the shorter way between the footprints (`footprint_turn_deg`, at most 90 degrees; a quarter turn is +90);
+    - a longer turn is several vertices at one point; the kernel gets unwrapped facings, so it sweeps exactly those
+      turns;
+    - a round base has no facing: a non-zero facing is refused in validation, the state JSON and the scenario loader.
+  - *Moves (03.01):*
+    - `ProposeModelMove{model, path, facings}`: the model turns in place, then moves; the distance is the centre's
+      lines only;
+    - a turn without moving is `path {start}` with one facing;
+    - the kernel's posed `check_model_path` checks each turn and line against enemy models and the battlefield edge
+      ("cannot be turned through enemy model N (before segment k)", "... while it turns"), and the end against every
+      model (D-027). Friendly models may be passed; 09.07 Desperate Escape and 17.01 (passable infantry) apply to turns;
+    - reverting or resetting a move restores the facing; `move_start_facing_deg` is the new query.
+  - *Which moves turn:* every move type. 09.04 Remain Stationary starts no move, so nothing turns. 12.03 / 12.08
+    Ongoing models in base contact can't be turned (moving includes rotating), nor M '-' models.
+  - *"Closer" with a turn (11.04, 12.03, 12.08):* `after < min(before at the start facing, before at the end facing) -
+    EPS`. A turn alone is never closer. This is agreed for 12.03 / 12.08 and applied to 11.04 as the conservative
+    extension. Start and end states (engaged, unengaged, still engaged) use the poses as they stand.
+  - *Every measurement takes the facing:*
+    - engagement, coherency, closest model and unit, wholly within, range and half range, line of sight, charge and
+      pile-in targets, base contact, the set-up checks (`pose_of`, `posed_models`, `posed_enemy_models`, `BasePose`
+      overloads of the per-model queries);
+    - the `Position` overloads keep their meaning, at the model's current facing;
+    - the round-only functions and `PlacedModel` views stay, still throwing for an oval, for the client and the bots.
+  - *Speed:*
+    - the round-round case of `base_distance`, `signed_base_distance` and `bases_overlap` on `BasePose`s is inline in
+      `oval.hpp`;
+    - the posed path check keeps the old loop for round pairs;
+    - the posed line of sight runs D-017's code on its spans with no copy.
+    All bit-identical.
+  - *`MoveReach`:*
+    - `move_reach(state, model, facing_deg)`; a round pair keeps its `ReachCircle`;
+    - any pair with an oval gets a `ReachShape{mover_base, mover_facing_deg, obstacle, threshold_mm, engagement, model}`
+      in `forbidden_shapes`, `required_any_shapes` (empty, or one group per `required_any` group) or `blocking_shapes`;
+    - `reach_shape_contains`, with `reach_shape_inner_radius_mm` / `reach_shape_outer_radius_mm` as bounds;
+    - `centre_bounds` by the extents at the facing; `turn_blocked`;
+    - a round-only state gives exactly the old `MoveReach`.
+  - *Set-up (03.02, D-008, D-064):*
+    - formations place each model by its half extents at the formation's facing (bit-identical for round bases);
+    - optional `formation.facing_deg`: a round base refuses a non-zero value; a non-number or non-finite value is
+      refused;
+    - an oval shorter than its width is refused at placement (D-070);
+    - coherency, wholly within, no overlap and unengaged are measured with the facings;
+    - M59's refusal of ovals goes.
+  - *JSON:* `facing_deg` (Model, ModelStart) and `facings` (ModelPath, ProposeModelMove, ModelMoveProposed) only when
+    non-zero / non-empty; a replay's `expect` records `facing_deg` only when non-zero. A stored facing outside
+    (-90, 90], a round base's facing or a path's facings of the wrong length are `DataError`s.
+- **Outside core** (each in D-074 part 2):
+  - `src/ai/state_hash.cpp`: a facing is hashed only when it isn't 0 (models, move starts, a path's facings), so
+    round-only states hash as before.
+  - `auto_fight_move` / `auto_charge_move`: a temporary guard (`TODO(M66): remove when auto moves handle ovals`).
+    With any oval base on the battlefield they return no arrangement ("D-074: Auto move does not handle oval bases
+    yet") instead of throwing.
+  - `overlay_plan.cpp` `ring_circles`: the replay viewer threw from `base_radius` on the new replay (a moving
+    Tyrannofex's rings). Converted, not guarded: the ring radius is the base's circumscribed radius (the radius for a
+    round base, unchanged), exact for the movement and charge rings. Round an oval's engagement, coherency and weapon
+    rings it is the circle through its ends, at most 14 mm too wide across its width (`TODO(M66)`).
+- **Fixture:**
+  - `tests/data/scenarios/rosters_tyrannofex_44x60.json`: the M59 roster fixture plus the Tyrannofex (unit 14, the
+    roster loadout, behind the west Screamer-killer at x = 23", `depth_in` 4, facing 0);
+  - `load_tyrannofex_fixture()` / `_closer(in)`;
+  - `tests/support/monster_fixtures.hpp` `tyrannofex::fixture(first_turn, engaged)`: the Legionaries, Havocs, Tyrant
+    Guard, a Screamer-killer and the Tyrannofex placed by hand. It is separate from the round-only M63 fixture, which
+    the client and ai tests share.
+- **Replay** `tests/replays/m65_oval_tyrannofex.json` (24 steps, seed 1, picked by `Replay.DISABLED_SearchM65Seed`;
+  embedded state):
+  - Side B first: the Tyrannofex turns 45 degrees and moves 3.00" south. The turn doesn't count, so no model moved
+    more than 3" and its [HEAVY] fleshborer hive gets +1.
+  - It fires both guns at the chainsword Legionaries.
+  - It charges them, turned back to 0 and engaged, fights first, and the Legionaries fight back.
+  - It stops at Side A's first Move Units decision.
+  - The client's viewer plays all 24 frames under `xvfb-run` (screenshots in scratchpad `m65/`).
+- **Tests** (50 new, all pass):
+  - `tests/m65_oval_engine_test.cpp` (38): `R01_04_OvalEngine` (3), `R03_03_OvalCoherency` (1), `R06_01_OvalEngine`
+    (1), `R03_01_OvalMoves` (9), `R09_04_RemainStationary` (1), `R11_04_OvalCharge` (4), `R12_03_OvalPileIn` (3),
+    `R12_08_OvalConsolidation` (1), `D074_Facings` (5), `D074_MoveReach` (6), `D074_Json` (4).
+  - `scenario_test.cpp` (5): `D074_Formation.*` (3), `D070_Formation.AnOvalShorterThanItsWidthIsRefused`,
+    `R03_02_SetUp.TheTyrannofexFixtureIsALegalSetUp`.
+  - `engine_property_test.cpp`: `D004_LegalActions.RandomPlayOnTheTyrannofexFixture`. 14 games (the roster fixture
+    36", 10" and 0.5" apart, the hand-placed layout apart and engaged, either side first) end and round-trip. The
+    random fills give the oval turns and corrupt facings: 42 applied proposals turned it, 19 without moving; it shot
+    23 times and fought 26 times. Nothing threw.
+  - `replay_test.cpp`: `Replay.RandomGamesFromTheTyrannofexFixtureReplayIdentically`, plus the M65 regeneration and
+    `DISABLED_SearchM65Seed`.
+  - `tests/client/m65_test.cpp` (3): the viewer's timeline and rings over the new replay; round rings unchanged; the
+    auto-move guard.
+  - `tests/ai/m65_test.cpp` (2): `M65_StateHash.RoundOnlyStatesHashAsBefore` (against a verbatim copy of the M64 hash,
+    at every decision of three random games each on V1, Strike and the roster fixture, up to 400 decisions a game,
+    moves in progress included), `ATurnChangesTheHash`.
+  - The fill helper (`engine_helpers.hpp`) draws extra numbers only for oval models, so every older random game is
+    unchanged. `neutral_action` / `play_neutral_until` are new shared helpers.
+- **Existing tests changed** (for the stated rule reason: M65 removes the limitation they asserted):
+  - `D008_Formation.ANonRoundBaseIsRejectedAsUnsupportedData` is now `...IsPlacedByItsExtents`;
+    `D008_Formation.TheTyrannofexOvalBaseIsStillRefusedAtPlacement` is now `...IsPlacedByItsExtents`.
+  - The refusal path they tested ("V1 supports round bases only") no longer exists. Every remaining loader refusal has
+    a test with its message: a round base's facing, a non-number facing, a non-finite facing, a malformed oval (also
+    `R02_02_Profiles.OvalBaseShorterThanItsWidthIsDataError`).
+  - No other test changed.
+- **ctest:** 1025 -> 1075 tests, all pass (Debug and Release).
+- **Acceptance:**
+  - *Tests `R01_04_`, `R03_01_`, `D074_` and round trips:* **met** (above).
+  - *D-004 random play over a fixture with the Tyrannofex, plus a replay:* **met**.
+  - *Old play and replays unchanged:* **met.**
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave all 17 replays byte-identical; the only
+      new file is `m65_oval_tyrannofex.json`.
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line (actions, final state and
+      trace hashes) for all 24 pairings of V1, both bot scenarios and Strike: 4,380 games, with the final binary and
+      with the one before its last two edits (a struct member and a rename, no behaviour change).
+  - *Speed (arena wall time on Strike within 5% of M64):* **met.** Strike, Normal vs Normal, 60 games, Release, the
+    M64 binary (`verify_arena_m64`) and M65 run alternately:
+    - the near-final build: M64 8.86, 8.76, 8.99, 8.54 s (mean 8.79); M65 9.13, 8.93, 9.02, 8.60 s (mean 8.92, +1.5%);
+    - the final build: M64 9.12, 8.82, 8.61, 8.82 s (mean 8.84); M65 9.10, 8.78, 9.07, 9.15 s (mean 9.02, +2.0%);
+    - over all eight runs each +1.8%. The decision p95 is 5.51-5.60 ms for M64 and 5.62-5.94 ms for M65.
+    - callgrind on a 3-game run: M65 executes 0.3% fewer instructions than M64 (4.487e9 against 4.501e9; the line of
+      sight no longer copies its blockers). The planned fallback (the old round-only code for an all-round state) was
+      not needed.
+- **Left for M66** (client logic and bots that throw or misbehave with an oval on the battlefield; file:line at this
+  commit):
+  - *Throw (round-only geometry, `base_radius`):*
+    - client logic:
+      - `auto_fight_move.cpp` 65, 74, 115, 138, 150, 176, 207, 217, 273 and `auto_charge_move.cpp` 86, 92, 121, 123,
+        170, 187, 218, 226, 386 (guarded in M65 at 311 and 577: remove the guards);
+      - `fight_move_skip.cpp` 65, 71, 91 (the client's step skipping and every bot level);
+      - `casualty_order.cpp` 32, 134, 137, 222, 227, 232, 269 (the default casualty order, `casualty_picks.cpp` 19,
+        37, 45, Hard's candidate, Normal's `coherency_losses`).
+    - bots:
+      - `normal/movement.cpp` 142, 145, 157, 164, 166, 177, 181, 184, 188, 189, 261, 262, 289, 298, 300, 333, 725,
+        736;
+      - `normal/move_score.cpp` 193, 236, 267, 377, 413, 440, 694, 711;
+      - `normal/defense.cpp` 223, 252, 310, 358, 363;
+      - `hard/lookahead.cpp` 123, 126, 145, 151, 154, 158;
+      - `hard/evaluator.cpp` 91;
+      - `hard/hard_bot.cpp` 130, 140, 718;
+      - `analysis/charge_odds.cpp` 142, 144, 145.
+    - Seen: the client on the Tyrannofex fixture (`--scenario`, `--bot both`) throws at the first casualty decision,
+      from `default_casualty_order` (`casualty_order.cpp` 137).
+  - *Misbehave (no throw):*
+    - `reach_area.cpp` 173-177 and 189-205, `drop_fix.cpp` 52-89 and 225-245, `ring_outline.cpp` 47-80: they read
+      `ReachCircle`s only and ignore the shapes, `turn_blocked` and the facing.
+    - `move_plan.cpp` 11-46: it drops `ModelPath::facings`, so extending a turned model's path undoes the turn.
+    - `overlay_plan.cpp` 107-113: the circumscribed ring is an outer bound round an oval's engagement, coherency and
+      weapon rings.
+    - `event_text.cpp` / `action_text.cpp`: no text for a turn.
+    - `board_view.cpp` 48, 88, 150 and `main.cpp` 1037-1326: ovals drawn and hit-tested as circles of their width; no
+      rotation input.
+- **Open:** the oval-against-oval turn check is conservative (part 1); the rosters have one oval, so it never applies
+  in their games.
 
 ---
 

@@ -94,10 +94,11 @@ WeaponSelection select_weapon_target(const GameState& state, ModelId attacker, s
     sel.declared_attacks = declared_attacks;
     sel.target_models_at_selection = static_cast<int>(target_unit.models.size());
     if (wp.range_mm) {
-        // 24.30 / D-009: the target unit is within half range if any of its models is.
-        const PlacedModel from{model.id, model.position, model.base};
-        const auto targets = placed_models(target_unit);
-        const auto d = closest_distance(std::span<const PlacedModel>(&from, 1), targets);
+        // 24.30 / D-009: the target unit is within half range if any of its models is (D-074: each base with its
+        // facing).
+        const PosedModel from = posed_of(model);
+        const auto targets = posed_models(target_unit);
+        const auto d = closest_distance(std::span<const PosedModel>(&from, 1), std::span<const PosedModel>(targets));
         sel.target_within_half_range = d.has_value() && within(*d, *wp.range_mm * 0.5f);
     }
     return sel;

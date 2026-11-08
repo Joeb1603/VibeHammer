@@ -574,6 +574,16 @@ AutoChargeMove auto_charge_move(const core::GameState& state) {
         out.problems.push_back("no charge move to plan");
         return out;
     }
+    // TODO(M66): remove when auto moves handle ovals. D-074 part 2: the arrangement is planned on round-only geometry
+    // (base_radius throws for an oval), so with any oval base on the battlefield it refuses cleanly instead.
+    for (const core::Unit& u : state.units) {
+        for (const core::Model& m : u.models) {
+            if (m.base.shape != core::BaseShape::Round) {
+                out.problems.push_back("D-074: Auto move does not handle oval bases yet");
+                return out;
+            }
+        }
+    }
     const Problem pb = set_up(state);
     if (pb.targets.empty()) {
         out.problems.push_back("no charge target has models left");

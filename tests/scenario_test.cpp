@@ -1,12 +1,17 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <limits>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "core/data/load_error.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/queries.hpp"
 #include "test_helpers.hpp"
 
 using namespace wh40k::core;
@@ -288,21 +293,34 @@ TEST(R02_06_UnitComposition, UnknownModelTypeIsRejected) {
     EXPECT_THROW((void)build(s), DataError);
 }
 
-TEST(D008_Formation, ANonRoundBaseIsRejectedAsUnsupportedData) {
-    // V1 geometry is round only (CLAUDE.md, Geometry): an oval base is a clean DataError, not a crash in
-    // the geometry code.
-    try {
-        (void)build_game_state(v1_scenario_json(), [](const std::string& unit_file) {
-            Datasheet d = load_datasheet(repo_root() / unit_file);
-            for (auto& t : d.model_types) {
-                t.base = Base{BaseShape::Oval, 28.5f, 40.0f};
-            }
-            return d;
-        });
-        FAIL() << "expected DataError";
-    } catch (const DataError& e) {
-        EXPECT_NE(std::string(e.what()).find("V1 supports round bases only"), std::string::npos) << e.what();
+TEST(D008_Formation, ANonRoundBaseIsPlacedByItsExtents) {
+    // D-074 part 2 (M65; until then V1 geometry refused a non-round base here). Every base of the V1 scenario made a
+    // 28.5 x 40 mm oval: at facing 0 each is 28.5 mm across along x and 40 mm deep along y, so a rank's bases touch
+    // along x, the second Termagant rank touches the first along y, and the front ranks touch the zone fronts.
+    const GameState gs = build_game_state(v1_scenario_json(), [](const std::string& unit_file) {
+        Datasheet d = load_datasheet(repo_root() / unit_file);
+        for (auto& t : d.model_types) {
+            t.base = Base{BaseShape::Oval, 28.5f, 40.0f};
+        }
+        return d;
+    });
+    const Unit& a = unit_of(gs, Side::A);
+    for (std::size_t i = 0; i < a.models.size(); ++i) {
+        EXPECT_EQ(a.models[i].facing_deg, 0.0f);
+        EXPECT_NEAR(a.models[i].position.y + 20.0f, in(6), 1e-3f);  // its front end on y = 6"
+        if (i > 0) {
+            EXPECT_NEAR(a.models[i].position.x - a.models[i - 1].position.x, 28.5f, 1e-3f);
+            EXPECT_TRUE(in_base_contact(base_distance(pose_of(a.models[i - 1]), pose_of(a.models[i]))));
+        }
     }
+    const Unit& b = unit_of(gs, Side::B);
+    for (std::size_t i = 0; i < 5; ++i) {
+        EXPECT_NEAR(b.models[i].position.y - 20.0f, in(18), 1e-3f);
+        EXPECT_NEAR(b.models[i + 5].position.y - b.models[i].position.y, 40.0f, 1e-3f);
+        EXPECT_TRUE(in_base_contact(base_distance(pose_of(b.models[i]), pose_of(b.models[i + 5]))));
+    }
+    EXPECT_TRUE(unit_coherency(a).ok());
+    EXPECT_TRUE(unit_coherency(b).ok());
 }
 
 // ---- 03.02 set-up / D-064: depth offset, overlap, several units per side (M53) ----
@@ -596,18 +614,147 @@ TEST(R03_02_SetUp, HavocsVsHiveTyrantFixtureLoads) {
     EXPECT_NEAR(gap, in(8), 0.01f);  // 8" between the front lines
 }
 
-TEST(D008_Formation, TheTyrannofexOvalBaseIsStillRefusedAtPlacement) {
-    // D-070: the Tyrannofex file loads (oval 120x92mm), but placement refuses non-round bases until M65.
+namespace {
+
+// The M59 roster fixture with the Tyrannofex appended to Side B, its formation given by `formation` (JSON text).
+nlohmann::json rosters_with_tyrannofex(const std::string& formation) {
     nlohmann::json s = read_json_file(repo_root() / wh40k::test::kRostersFixture);
-    s["sides"]["B"]["units"].push_back(nlohmann::json::parse(R"({
+    nlohmann::json unit = nlohmann::json::parse(R"({
         "unit_file": "data/units/tyrannofex.json",
         "models": [{"type": "Tyrannofex", "count": 1,
-                    "weapons": ["Stinger salvoes", "Fleshborer hive", "Powerful limbs"]}],
-        "formation": {"ranks": 1, "gap_in": 0, "centre_x_in": 22, "depth_in": 6, "anchor": "zone_front"}})"));
+                    "weapons": ["Stinger salvoes", "Fleshborer hive", "Powerful limbs"]}]})");
+    unit["formation"] = nlohmann::json::parse(formation);
+    s["sides"]["B"]["units"].push_back(unit);
+    return s;
+}
+
+std::string data_error(const nlohmann::json& scenario) {
     try {
-        (void)build(s);
+        (void)build(scenario);
+    } catch (const DataError& e) {
+        return e.what();
+    }
+    return "";
+}
+
+}  // namespace
+
+TEST(D008_Formation, TheTyrannofexOvalBaseIsPlacedByItsExtents) {
+    // D-074 part 2 (M65; until then placement refused the oval, D-070): the M59 fixture plus the Tyrannofex (120 x 92
+    // mm) centred at x = 22", 6" behind the north zone's front line (48"), facing 0: its length runs south to north.
+    const GameState gs = build(rosters_with_tyrannofex(
+        R"({"ranks": 1, "gap_in": 0, "centre_x_in": 22, "depth_in": 6, "anchor": "zone_front"})"));
+    const Unit& t = gs.units.back();
+    ASSERT_EQ(t.name, "Tyrannofex");
+    const Model& m = t.models[0];
+    EXPECT_EQ(m.base, (Base{BaseShape::Oval, 92.0f, 120.0f}));
+    EXPECT_EQ(m.facing_deg, 0.0f);
+    EXPECT_NEAR(m.position.x, in(22), 1e-3f);
+    EXPECT_NEAR(m.position.y, in(48 + 6) + 60.0f, 1e-3f);  // its south end 6" behind the front line
+    EXPECT_TRUE(wholly_within(zone_rect(gs.battlefield, gs.side(Side::B).deployment_zone), pose_of(m)));
+}
+
+TEST(D074_Formation, AnOvalTakesTheFormationsFacingModulo180) {
+    // D-074 part 2: formation.facing_deg turns every model of the unit; an oval keeps it modulo 180, in (-90, 90].
+    for (const auto& [given, stored] : std::vector<std::pair<float, float>>{{90.0f, 90.0f}, {270.0f, 90.0f},
+                                                                              {180.0f, 0.0f}, {-45.0f, -45.0f}}) {
+        const GameState gs = build(rosters_with_tyrannofex(
+            R"({"ranks": 1, "gap_in": 0, "centre_x_in": 22, "depth_in": 6, "anchor": "zone_front", "facing_deg": )" +
+            std::to_string(given) + "}"));
+        const Model& m = gs.units.back().models[0];
+        EXPECT_EQ(m.facing_deg, stored) << given;
+        // Placed by its extents at that facing: its south end still 6" behind the front line.
+        EXPECT_NEAR(m.position.y - base_extents(m.base, m.facing_deg).half_y_mm, in(48 + 6), 1e-3f) << given;
+    }
+    // A rank of turned ovals: across their length, 40 mm apart.
+    nlohmann::json v1 = v1_scenario_json();
+    v1["sides"]["A"]["units"][0]["formation"]["facing_deg"] = 90;
+    const GameState gs = build_game_state(v1, [](const std::string& unit_file) {
+        Datasheet d = load_datasheet(repo_root() / unit_file);
+        for (auto& t : d.model_types) {
+            t.base = Base{BaseShape::Oval, 28.5f, 40.0f};
+        }
+        return d;
+    });
+    const Unit& a = unit_of(gs, Side::A);
+    for (std::size_t i = 1; i < a.models.size(); ++i) {
+        EXPECT_EQ(a.models[i].facing_deg, 90.0f);
+        EXPECT_NEAR(a.models[i].position.x - a.models[i - 1].position.x, 40.0f, 1e-3f);
+    }
+}
+
+TEST(D074_Formation, ARoundBaseRefusesAFacing) {
+    // D-074 part 2: a round base has no facing, so formation.facing_deg must be 0 (an explicit 0 is fine).
+    nlohmann::json s = v1_scenario_json();
+    s["sides"]["A"]["units"][0]["formation"]["facing_deg"] = 30;
+    const std::string error = data_error(s);
+    EXPECT_NE(error.find("D-074: model type '"), std::string::npos) << error;
+    EXPECT_NE(error.find("' has a round base, which has no facing (formation.facing_deg must be 0)"), std::string::npos)
+        << error;
+    s["sides"]["A"]["units"][0]["formation"]["facing_deg"] = 0;
+    EXPECT_EQ(build(s), load_v1_scenario());
+}
+
+TEST(D074_Formation, AFacingMustBeAFiniteNumber) {
+    nlohmann::json s = rosters_with_tyrannofex(
+        R"({"ranks": 1, "gap_in": 0, "centre_x_in": 22, "depth_in": 6, "anchor": "zone_front", "facing_deg": "north"})");
+    EXPECT_NE(data_error(s).find("D-074: formation.facing_deg must be a number of degrees"), std::string::npos)
+        << data_error(s);
+    s["sides"]["B"]["units"].back()["formation"]["facing_deg"] = std::numeric_limits<double>::infinity();
+    EXPECT_NE(data_error(s).find("D-074: formation.facing_deg must be a finite number of degrees"), std::string::npos)
+        << data_error(s);
+}
+
+TEST(D070_Formation, AnOvalShorterThanItsWidthIsRefused) {
+    // D-070: an oval's length_mm is at least its diameter_mm (width). The unit loader refuses it in a datasheet file
+    // (R02_02_Profiles.OvalBaseShorterThanItsWidthIsDataError); placement refuses one from anywhere else too.
+    try {
+        (void)build_game_state(v1_scenario_json(), [](const std::string& unit_file) {
+            Datasheet d = load_datasheet(repo_root() / unit_file);
+            for (auto& t : d.model_types) {
+                t.base = Base{BaseShape::Oval, 40.0f, 28.5f};
+            }
+            return d;
+        });
         FAIL() << "expected DataError";
     } catch (const DataError& e) {
-        EXPECT_NE(std::string(e.what()).find("V1 supports round bases only"), std::string::npos) << e.what();
+        EXPECT_NE(std::string(e.what()).find("D-070: model type '"), std::string::npos) << e.what();
+        EXPECT_NE(std::string(e.what()).find("has an oval base whose length_mm is smaller than its diameter_mm (width)"),
+                  std::string::npos)
+            << e.what();
     }
+}
+
+TEST(R03_02_SetUp, TheTyrannofexFixtureIsALegalSetUp) {
+    // M65: the roster fixture plus the Tyrannofex (unit 14), every 03.02 check measured with the facings.
+    const GameState gs = wh40k::test::load_tyrannofex_fixture();
+    ASSERT_EQ(gs.units.size(), 14u);
+    const Unit& t = gs.units.back();
+    EXPECT_EQ(t.name, "Tyrannofex");
+    EXPECT_EQ(t.side, Side::B);
+    EXPECT_NEAR(t.models[0].position.x, in(23), 1e-3f);
+    EXPECT_NEAR(t.models[0].position.y, in(48 + 4) + 60.0f, 1e-3f);
+    float closest_enemy = 1e9f;
+    for (const Unit& u : gs.units) {
+        EXPECT_TRUE(unit_coherency(u).ok()) << u.id.v;  // 03.03
+        const Rect zone = zone_rect(gs.battlefield, gs.side(u.side).deployment_zone);
+        for (const Model& m : u.models) {
+            EXPECT_TRUE(wholly_within(zone, pose_of(m))) << "model " << m.id.v;  // D-009
+        }
+        for (const Unit& v : gs.units) {
+            for (const Model& a : u.models) {
+                for (const Model& b : v.models) {
+                    if (a.id == b.id) continue;
+                    EXPECT_FALSE(bases_overlap(pose_of(a), pose_of(b))) << a.id.v << " " << b.id.v;
+                    if (u.side != v.side) closest_enemy = std::min(closest_enemy, base_distance(pose_of(a), pose_of(b)));
+                }
+            }
+        }
+    }
+    EXPECT_GE(closest_enemy, in(36) - EPS_MM);  // 36" between the zones
+    // Apart from the Tyrannofex it is the M59 fixture, model for model.
+    GameState without = gs;
+    without.units.pop_back();
+    without.scenario_name = wh40k::test::load_rosters_fixture().scenario_name;
+    EXPECT_EQ(without, wh40k::test::load_rosters_fixture());
 }

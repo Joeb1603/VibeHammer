@@ -18,6 +18,9 @@ struct Model {
     Characteristics characteristics;
     Base base;
     Position position;
+    // D-074 (M65): the base's facing in degrees. An oval's is stored modulo 180, in (-90, 90]
+    // (footprint_facing_deg); a round base has no facing, so its facing is always 0.
+    float facing_deg = 0.0f;
     int wounds_remaining = 0;  // 02.02: destroyed at 0 or fewer
     std::vector<Weapon> weapons;
 

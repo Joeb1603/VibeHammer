@@ -39,7 +39,9 @@ struct Line {
 constexpr int kSamplesPerBase = 32;
 constexpr double kChordSlackMm = 1e-6;  // a line tangent to a base still touches it
 
-Circle circle_of(const PlacedModel& m, double extra = 0.0) {
+// PlacedModel, or a PosedModel with a round base (M65: the D-074 overload's round-only case, without a copy).
+template <class M>
+Circle circle_of(const M& m, double extra = 0.0) {
     return Circle{Vec{m.position.x, m.position.y}, static_cast<double>(base_radius(m.base)) + extra};
 }
 
@@ -147,10 +149,9 @@ std::vector<Vec> sample_points(const Circle& c) {
     return out;
 }
 
-}  // namespace
-
-bool has_line_of_sight(const PlacedModel& observer, const PlacedModel& observed,
-                       std::span<const PlacedModel> blockers) {
+// D-017 for round bases; M is PlacedModel or (M65) a PosedModel with a round base.
+template <class M>
+bool round_line_of_sight(const M& observer, const M& observed, std::span<const M> blockers) {
     const Circle from = circle_of(observer);
     const Circle to = circle_of(observed);
     const double half_width = kLineOfSightWidthMm / 2.0;
@@ -158,7 +159,7 @@ bool has_line_of_sight(const PlacedModel& observer, const PlacedModel& observed,
     // Only blockers near the hull of the two bases can matter.
     std::vector<Circle> near;
     const double reach = std::max(from.r, to.r) + half_width;
-    for (const PlacedModel& b : blockers) {
+    for (const M& b : blockers) {
         const Circle inflated = circle_of(b, half_width);
         if (point_segment_distance(inflated.c, from.c, to.c) < inflated.r + reach) {
             near.push_back(inflated);
@@ -200,5 +201,21 @@ bool has_line_of_sight(const PlacedModel& observer, const PlacedModel& observed,
     }
     return false;
 }
+
+}  // namespace
+
+bool has_line_of_sight(const PlacedModel& observer, const PlacedModel& observed,
+                       std::span<const PlacedModel> blockers) {
+    return round_line_of_sight(observer, observed, blockers);
+}
+
+namespace visibility_detail {
+
+bool round_line_of_sight(const PosedModel& observer, const PosedModel& observed,
+                         std::span<const PosedModel> blockers) {
+    return wh40k::core::round_line_of_sight(observer, observed, blockers);
+}
+
+}  // namespace visibility_detail
 
 }  // namespace wh40k::core

@@ -84,15 +84,32 @@ void from_json(const Json& j, FallBackMode& v) {
     if (!m) bad_enum("FallBackMode", j);
     v = *m;
 }
-void to_json(Json& j, const ModelStart& v) { j = Json{{"model", v.model}, {"position", v.position}}; }
+void to_json(Json& j, const ModelStart& v) {
+    j = Json{{"model", v.model}, {"position", v.position}};
+    if (v.facing_deg != 0.0f) j["facing_deg"] = v.facing_deg;  // D-074: omitted when 0
+}
 void from_json(const Json& j, ModelStart& v) {
     j.at("model").get_to(v.model);
     j.at("position").get_to(v.position);
+    v.facing_deg = j.contains("facing_deg")
+                       ? json_detail::stored_facing(j.at("facing_deg"), "a move start's facing_deg")
+                       : 0.0f;
 }
-void to_json(Json& j, const ModelPath& v) { j = Json{{"model", v.model}, {"points", v.points}}; }
+void to_json(Json& j, const ModelPath& v) {
+    j = Json{{"model", v.model}, {"points", v.points}};
+    if (!v.facings.empty()) j["facings"] = v.facings;  // D-074: omitted when the path turns the model nowhere
+}
 void from_json(const Json& j, ModelPath& v) {
     j.at("model").get_to(v.model);
     j.at("points").get_to(v.points);
+    v.facings.clear();
+    if (j.contains("facings")) {
+        const Json& fs = j.at("facings");
+        if (!fs.is_array() || fs.size() != v.points.size()) {
+            throw DataError("state JSON: D-074: a model path's facings must give one facing per point: " + fs.dump());
+        }
+        for (const Json& f : fs) v.facings.push_back(json_detail::stored_facing(f, "a model path's facing"));
+    }
 }
 void to_json(Json& j, const MoveInProgress& v) {
     j = Json{{"unit", v.unit},

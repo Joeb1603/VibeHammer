@@ -49,6 +49,22 @@ inline core::GameState load_rosters_fixture_closer(float closer_in) {
     return gs;
 }
 
+// M65 / D-074 part 2: the roster fixture plus the Tyrannofex (unit 14, Side B, a 92 x 120 mm oval base): 14 units.
+inline constexpr const char* kTyrannofexFixture = "tests/data/scenarios/rosters_tyrannofex_44x60.json";
+inline core::GameState load_tyrannofex_fixture() {
+    return core::load_scenario(repo_root() / kTyrannofexFixture, repo_root());
+}
+
+// The Tyrannofex fixture with every Tyranid model moved `closer_in` inches south, as load_rosters_fixture_closer.
+inline core::GameState load_tyrannofex_fixture_closer(float closer_in) {
+    core::GameState gs = load_tyrannofex_fixture();
+    for (auto& u : gs.units) {
+        if (u.side != core::Side::B) continue;
+        for (auto& m : u.models) m.position.y -= in(closer_in);
+    }
+    return gs;
+}
+
 // The V1 scenario with the Termagants moved 1" towards the Intercessors, so every Intercessor is
 // within 12" (half Bolt Rifle range) of the Termagant unit. At the D-008 start positions only the
 // centre Intercessor is (the others are 0.01-0.07 mm further than 12").

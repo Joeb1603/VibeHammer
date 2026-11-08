@@ -32,6 +32,14 @@ void add(Fnv1a& h, const core::Position& p) {
 void add(Fnv1a& h, core::UnitId id) { h.u64(id.v); }
 void add(Fnv1a& h, core::ModelId id) { h.u64(id.v); }
 
+// M65 (D-074 part 2): a facing only when it isn't 0, behind a tag, so a state with only round bases (every facing 0)
+// hashes as before.
+void add_facing(Fnv1a& h, float facing_deg) {
+    if (facing_deg == 0.0f) return;
+    h.u64(0x66616365ull);  // "face": apart from the fields around it
+    h.f32(facing_deg);
+}
+
 template <typename T>
 void add_opt_int(Fnv1a& h, const std::optional<T>& v) {
     h.flag(v.has_value());
@@ -57,6 +65,7 @@ void add(Fnv1a& h, const core::Unit& u) {
     for (const core::Model& m : u.models) {
         add(h, m.id);
         add(h, m.position);
+        add_facing(h, m.facing_deg);
         h.i32(m.wounds_remaining);
     }
 }
@@ -130,12 +139,17 @@ void add(Fnv1a& h, const core::FlowState& f) {
         for (const core::ModelStart& s : m.starts) {
             add(h, s.model);
             add(h, s.position);
+            add_facing(h, s.facing_deg);
         }
         h.u64(m.paths.size());
         for (const core::ModelPath& p : m.paths) {
             add(h, p.model);
             h.u64(p.points.size());
             for (const core::Position& pt : p.points) add(h, pt);
+            if (!p.facings.empty()) {  // M65: only a path that turns its model
+                h.u64(0x7475726eull);  // "turn"
+                for (const float f : p.facings) h.f32(f);
+            }
         }
         h.i32(m.pending_mortal_wounds);
         for (const core::UnitId t : m.targets) add(h, t);

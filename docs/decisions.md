@@ -2969,15 +2969,16 @@ engine, client and bots still call the round-only functions, and `base_radius()`
   never give NaN or an exception, and a degenerate oval (length = width) gives the circle's results within 0.001 mm.
 
 ### Part 2 (M65): the engine
-**Decided:** 2026-11-08 (M65 of the pre-approved M59–M70 batch). Written before any code (design first), for review
-against the rules text. Readings marked *agreed* were agreed with the user in planning; *conservative* marks the reading
-that permits less.
-- **The facing lives on the model, not in `Position`** (amends PLAN.md's `Position::facing_deg`).
+**Decided:** 2026-11-08 (M65 of the pre-approved M59–M70 batch). Written before any code (design first) and approved
+with conditions after review against the rules text; the implementation follows it. Readings marked *agreed* were
+agreed with the user in planning; *conservative* marks the reading that permits less.
+- **The facing lives on the model, not in `Position`.** This departs from PLAN.md's wording for M65 ("`Position` gets
+  `facing_deg`"); the departure was approved with the design, for the reasons below.
   - `Model::facing_deg` (float, default 0). `Position` stays a plain 12-byte point. It is also a path vertex, a
     `ReachCircle` centre, `MoveReach::start` / `from`, a mouse or ruler point, a centroid and a bot's candidate end,
     where a facing means nothing; `BasePose` and `PosedModel` (part 1) would carry two facings; and every caller that
-    builds a path from coordinates (the client's drags, the auto moves, the bots, the D-004 fills) would silently turn an
-    oval to facing 0 at each vertex. On the model, a path given without facings keeps the model's facing: the safe
+    builds a path from coordinates (the client's drags, the auto moves, the bots, the D-004 fills) would silently turn
+    an oval to facing 0 at each vertex. On the model, a path given without facings keeps the model's facing: the safe
     default for every caller until M66. `sizeof(Position)` (the bots' hot loops, M54) is unchanged. The cost:
     `ProposeModelMove` gains a vector, so the `GameAction` variant grows from 40 to 64 bytes (`GameEvent` stays 72);
     the speed check below covers it.
@@ -3039,7 +3040,8 @@ that permits less.
     rotating (03.01; 09.04's own wording), so such a model can't be turned either (the existing check, at its start
     pose).
 - **"Closer" and "engaged" with a turn (11.04, 12.03, 12.08; D-018, D-022).**
-  - *Closer* (*agreed*: a rotation does not count as moving closer; formalised *conservatively*): a moved model ends
+  - *Closer* (*agreed* for 12.03 and 12.08: a rotation does not count as moving closer; formalised *conservatively*,
+    and applied to 11.04 as well, a conservative extension approved with the design): a moved model ends
     closer to a unit when its end distance (end position, end facing) is "more than" EPS below its start distance
     measured from the start position **both** at the start facing **and** at the end facing: `after < min(before(start
     facing), before(end facing)) - EPS`. So the straight lines must do the work. A turn in place gains nothing: a
@@ -3071,14 +3073,17 @@ that permits less.
   - Queries that take a `Position` for a model (`model_distance_to_unit`, `enemy_units_engaged_with_model`,
     `in_base_contact_with_enemy`, `ends_closer_to_a_charge_target`, `ends_closer_to_closest_target`) keep their
     signatures, meaning the model at that point with its current facing (what their client, bot and test callers mean),
-    and gain `BasePose` overloads, which the engine uses.
+    and gain `BasePose` overloads, which the engine uses. New views: `pose_of(model)`, `posed_of(model)`,
+    `posed_models(unit)`, `posed_enemy_models` / `posed_friendly_models(state, side)`, and
+    `move_start_facing_deg(state, model)` beside `move_start_position`. The `PlacedModel` views (`placed_models`,
+    `enemy_models`, `friendly_models`) stay, round-only, for the client and the bots.
   - *Speed* (the round-round path stays bit-identical and cheap): the round-round case of `base_distance`,
     `signed_base_distance` and `bases_overlap` on `BasePose`s moves inline into `oval.hpp` (the same calls, so the same
     results); the posed `check_model_path` keeps the round-only inner loop for a round pair; the posed
     `has_line_of_sight` runs D-017's code on its spans without copying the blockers. Target: the Release arena's wall
-    time (Strike, Normal vs Normal, 60 games, run alternately with the M64 binary) within 5% of M64. If it is not met,
-    the engine's hottest calls (the ProposeModelMove path check, `is_engaged`) dispatch to the old round-only code when
-    every base in the state is round.
+    time (Strike, Normal vs Normal, 60 games, run alternately with the M64 binary) within 5% of M64. Measured +1.8%
+    over eight alternated runs each (callgrind: 0.3% fewer instructions than M64), so the planned fallback (the old
+    round-only code for an all-round state) was not needed.
 - **`MoveReach` (D-040, D-041, D-044, D-046, D-053).** `move_reach(state, model)` is for the model's current facing;
   `move_reach(state, model, facing_deg)` for the facing being dragged (normalised; a round base ignores it). The next
   straight line starts at `from` after the model turns there to `facing_deg`.
@@ -3104,7 +3109,10 @@ that permits less.
     Rect). `facing_deg`: the facing the reach is for. `turn_blocked`: turning at `from` to `facing_deg` would pass
     through a blocking enemy model or cross the edge (03.01), so nothing is reachable at that facing; false when no
     turn is needed.
-- **Set-up (03.02) and formations (D-008, D-064).** M59's refusal of non-round bases at placement goes.
+- **Set-up (03.02) and formations (D-008, D-064).** M59's refusal of non-round bases at placement goes. An oval whose
+  `length_mm` is smaller than its `diameter_mm` is refused at placement too ("D-070: ... has an oval base whose
+  length_mm is smaller than its diameter_mm (width)"), as the unit loader already refuses it in a datasheet file, since
+  a datasheet can come from elsewhere.
   - `place_formation` uses each model's half extents along x and y at the formation's facing (`base_extents`, exactly
     the radius for a round base, so round formations are bit-identical): a rank is as wide as its models' x extents
     plus the gaps, and the rank pitch is the largest y extent in the unit plus the gap. Tilted ovals side by side stand
@@ -3112,7 +3120,8 @@ that permits less.
   - New optional `formation.facing_deg` (degrees, default 0, any finite value, normalised modulo 180), given to every
     model of the unit. A non-zero value for a unit with a round-based model is corrupt data ("D-074: model type 'X' has
     a round base, which has no facing (formation.facing_deg must be 0)"). At 0 an oval's length runs south to north,
-    towards the enemy on every north/south scenario.
+    towards the enemy on every north/south scenario. A value that is not a number, or not finite, is corrupt data too
+    ("D-074: formation.facing_deg must be a (finite) number of degrees").
   - The 03.02 checks measure the poses: coherency (03.03), wholly within the zone (D-009, by the extents), no model on
     another (D-064, `bases_overlap`), unengaged (03.04).
 - **JSON** (every new field omitted at its default, so every existing file loads the same and saves byte-identically).
@@ -3133,9 +3142,16 @@ that permits less.
   existing `ProposeModelMove` and `ModelMoveProposed` gain their facings.
 - **The auto moves and other move builders.** Core builds no move but the D-004 template (`ProposeModelMove{model, {}}`,
   no facings). `auto_fight_move` (D-050; the bots' fight moves, D-057) and `auto_charge_move` (D-056; the bots'
-  charges) are client logic on round-only geometry, converted in M66. Until then they refuse cleanly: with any non-round
-  base in the state they return no arrangement, with the reason "D-074: Auto move does not handle oval bases yet", so
-  they never throw or produce a move for an oval (a bot then makes no charge or fight move instead).
+  charges) are client logic on round-only geometry, converted in M66. Until then, as a temporary measure marked
+  `TODO(M66): remove when auto moves handle ovals`, they refuse cleanly: with any non-round base on the battlefield they
+  return no arrangement, with the reason "D-074: Auto move does not handle oval bases yet", so they never throw or
+  produce a move for an oval (a bot then makes no charge or fight move instead). M66 removes the guard.
+- **The client's rings** (`ring_circles`, client logic): the replay viewer threw from `base_radius` on the new replay
+  (the rings of a moving Tyrannofex). Converted, not guarded: a ring's radius is now the base's circumscribed radius
+  plus the distance, exactly the radius for a round base (so round rings are unchanged). For an oval it is exact for
+  the movement and charge rings (a model may turn freely, 03.01, so some part of its base can reach all of that disc);
+  round its engagement, coherency and weapon rings it is the circle through the oval's ends, at most (length - width)
+  / 2 wider across its width than the true range, until M66 draws the oval's own offset outline (`TODO(M66)`).
 - **Left for M66 (part 3).** Client drawing and input (ovals are drawn and hit-tested as circles of their width; there
   is no rotation input); the client logic on round-only geometry (`fight_move_skip`, `casualty_order` and
   `casualty_picks`, `overlay_plan`, `reach_area`, `drop_fix`, `ring_outline`; `move_plan`, which drops

@@ -1,6 +1,7 @@
 #include "core/data/scenario_loader.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <string>
 #include <string_view>
@@ -9,6 +10,8 @@
 #include "core/data/load_error.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
+#include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/queries.hpp"
 
@@ -60,6 +63,7 @@ struct Formation {
     float gap_mm = 0.0f;
     float centre_x_mm = 0.0f;
     float depth_mm = 0.0f;  // D-064: front rank's distance behind the zone's front line
+    float raw_facing_deg = 0.0f;  // D-074 part 2: formation.facing_deg as given (0 when absent)
 };
 
 Formation parse_formation(const Json& j, const std::string& where) {
@@ -79,6 +83,18 @@ Formation parse_formation(const Json& j, const std::string& where) {
             fail(where + ": D-064: formation.depth_in must be 0 or more inches");
         }
         f.depth_mm = inches_to_mm(depth_in);
+    }
+    // D-074 part 2: optional; absent means 0 (an oval's length along y, south to north). Any finite number of degrees,
+    // given to every model of the unit (modulo 180 for an oval; a round base refuses anything but 0, place_formation).
+    if (j.contains("facing_deg")) {
+        const Json& e = j.at("facing_deg");
+        if (!e.is_number()) {
+            fail(where + ": D-074: formation.facing_deg must be a number of degrees");
+        }
+        f.raw_facing_deg = e.get<float>();
+        if (!std::isfinite(f.raw_facing_deg)) {
+            fail(where + ": D-074: formation.facing_deg must be a finite number of degrees");
+        }
     }
     const Json& anchor = require(j, "anchor", where);
     if (anchor != "zone_front") {
@@ -149,6 +165,9 @@ std::vector<Model> build_models(const Datasheet& ds, const Json& groups, const s
 // D-008: ranks centred on centre_x, front rank's bases touching the zone's front line, further
 // ranks behind it; models fill each rank left to right (low x to high x) in listed order.
 // D-064: the whole formation stands `depth_mm` further back (towards the owning side's edge).
+// D-074 part 2 (M65): each model is placed by its base's half extents along x and y at the formation's facing
+// (base_extents: exactly the radius for a round base, so round formations are placed bit-for-bit as before). A rank is
+// as wide as its models' x extents plus the gaps; the rank pitch is the deepest model's y extent plus the gap.
 void place_formation(std::vector<Model>& models, const Formation& f, const Battlefield& field,
                      const DeploymentZone& zone, const std::string& where) {
     float front_line = 0.0f;
@@ -167,18 +186,32 @@ void place_formation(std::vector<Model>& models, const Formation& f, const Battl
             fail(where + ": D-008 formation supports north/south deployment zones only");
     }
 
-    // V1 geometry supports round bases only (CLAUDE.md, Geometry); anything else is unsupported data.
-    for (const Model& m : models) {
-        if (m.base.shape != BaseShape::Round) {
-            fail(where + ": model type '" + m.type_name + "' has a non-round base; V1 supports round bases only");
+    // D-074 part 2: a round base has no facing; an oval takes the formation's facing modulo 180. An oval must be at
+    // least as long as it is wide (D-070; the unit loader checks it too, but a datasheet can come from elsewhere).
+    for (Model& m : models) {
+        if (m.base.shape == BaseShape::Oval && !(m.base.diameter_mm > 0.0f && m.base.length_mm >= m.base.diameter_mm)) {
+            fail(where + ": D-070: model type '" + m.type_name +
+                 "' has an oval base whose length_mm is smaller than its diameter_mm (width)");
+        }
+        if (m.base.shape == BaseShape::Round) {
+            if (f.raw_facing_deg != 0.0f) {
+                fail(where + ": D-074: model type '" + m.type_name +
+                     "' has a round base, which has no facing (formation.facing_deg must be 0)");
+            }
+            m.facing_deg = 0.0f;
+        } else {
+            m.facing_deg = footprint_facing_deg(f.raw_facing_deg);
         }
     }
     const std::size_t n = models.size();
     const std::size_t ranks = static_cast<std::size_t>(f.ranks);
     const std::size_t per_rank = (n + ranks - 1) / ranks;
-    float max_diameter = 0.0f;
+    std::vector<BaseExtents> ext;
+    ext.reserve(n);
+    float max_depth = 0.0f;  // the deepest base along y (for round bases: the largest diameter)
     for (const Model& m : models) {
-        max_diameter = std::max(max_diameter, 2.0f * base_radius(m.base));
+        ext.push_back(base_extents(m.base, m.facing_deg));
+        max_depth = std::max(max_depth, 2.0f * ext.back().half_y_mm);
     }
 
     for (std::size_t rank = 0; rank * per_rank < n; ++rank) {
@@ -186,16 +219,16 @@ void place_formation(std::vector<Model>& models, const Formation& f, const Battl
         const std::size_t last = std::min(n, first + per_rank);
         float width = f.gap_mm * static_cast<float>(last - first - 1);
         for (std::size_t i = first; i < last; ++i) {
-            width += 2.0f * base_radius(models[i].base);
+            width += 2.0f * ext[i].half_x_mm;
         }
         // D-064: depth_mm is added to the D-008 offset; at 0 the sum is that offset exactly, so files
         // without depth_in place their models bit-for-bit as before.
         const float rank_centre_y =
-            front_line + inward * (f.depth_mm + (max_diameter * 0.5f +
-                                                 static_cast<float>(rank) * (max_diameter + f.gap_mm)));
+            front_line + inward * (f.depth_mm + (max_depth * 0.5f +
+                                                 static_cast<float>(rank) * (max_depth + f.gap_mm)));
         float x = f.centre_x_mm - width * 0.5f;
         for (std::size_t i = first; i < last; ++i) {
-            const float r = base_radius(models[i].base);
+            const float r = ext[i].half_x_mm;
             models[i].position = Position{x + r, rank_centre_y, 0.0f};
             x += 2.0f * r + f.gap_mm;
         }
@@ -216,7 +249,7 @@ void check_set_up(const Unit& unit, const Rect& zone, const std::string& where) 
         fail(msg);
     }
     for (const Model& m : unit.models) {
-        if (!wholly_within(zone, m.position, m.base)) {
+        if (!wholly_within(zone, pose_of(m))) {  // D-074: by the base's extents at its facing
             fail(where + ": D-009: model " + std::to_string(m.id.v) + " of '" + unit.name +
                  "' is not wholly within its deployment zone");
         }
@@ -241,7 +274,7 @@ void check_no_overlap(const GameState& gs) {
         for (std::size_t j = i + 1; j < all.size(); ++j) {
             const Model& a = *all[i].model;
             const Model& b = *all[j].model;
-            if (bases_overlap(a.position, a.base, b.position, b.base)) {
+            if (bases_overlap(pose_of(a), pose_of(b))) {  // D-074: each base with its facing
                 fail("03.02 / D-064: model " + std::to_string(a.id.v) + " of unit " +
                      std::to_string(all[i].unit->id.v) + " '" + all[i].unit->name + "' overlaps model " +
                      std::to_string(b.id.v) + " of unit " + std::to_string(all[j].unit->id.v) + " '" +

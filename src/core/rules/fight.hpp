@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "core/geometry/pose.hpp"
 #include "core/rules/attack_types.hpp"
 #include "core/rules/fight_types.hpp"
 #include "core/state/game_state.hpp"
@@ -24,13 +25,18 @@ inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligib
 
 // ---- model-level engagement (03.04) ----
 
-// The enemy units (of `unit`'s opponent) that `model` of `unit`, at `pos`, is engaged with.
+// The enemy units (of `unit`'s opponent) that `model` of `unit`, at `pos` with its current facing, is engaged with.
 [[nodiscard]] std::vector<UnitId> enemy_units_engaged_with_model(const GameState& state, const Unit& unit,
                                                                  const Model& model, const Position& pos);
+// D-074: the same for a model of `unit` at `pose` (position, base and facing).
+[[nodiscard]] std::vector<UnitId> enemy_units_engaged_with_model(const GameState& state, const Unit& unit,
+                                                                 const BasePose& pose);
 
-// D-022: is `model` of `unit`, at `pos`, in base contact with one or more enemy models?
+// D-022: is `model` of `unit`, at `pos` with its current facing, in base contact with one or more enemy models?
 [[nodiscard]] bool in_base_contact_with_enemy(const GameState& state, const Unit& unit, const Model& model,
                                               const Position& pos);
+// D-074: the same for a model of `unit` at `pose`.
+[[nodiscard]] bool in_base_contact_with_enemy(const GameState& state, const Unit& unit, const BasePose& pose);
 
 // ---- 12.03 Pile-in move ----
 
@@ -80,12 +86,17 @@ inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligib
 // ---- shared While / After Moving checks (12.03, 12.08; D-022) ----
 
 // Each model that is moved must end its move closer to the closest of `targets` (measured from its
-// start position, edge to edge; any unit tied for closest counts, D-010).
+// start position, edge to edge; any unit tied for closest counts, D-010). The model keeps its current facing.
 [[nodiscard]] bool ends_closer_to_closest_target(const GameState& state, const Model& model, const Position& start,
                                                  const Position& end, std::span<const UnitId> targets);
+// D-074 part 2 (M65): the same for a base that may turn, from the `start` pose to the `end` pose. The closest target is
+// judged from the start pose (D-022); a rotation does not count as moving closer (agreed): the end must be closer than
+// the start measured both at the start facing and at the end facing (ends_closer_to_unit, charge.hpp).
+[[nodiscard]] bool ends_closer_to_closest_target(const GameState& state, const BasePose& start, const BasePose& end,
+                                                 std::span<const UnitId> targets);
 
 // 12.03 / 12.08 Ongoing After Moving: each model that started the move engaged with an enemy unit is
-// still engaged with that unit. `starts` are the models' start positions. Rule-cited problems.
+// still engaged with that unit. `starts` are the models' start positions and facings. Rule-cited problems.
 [[nodiscard]] std::vector<std::string> still_engaged_problems(const GameState& state, const Unit& unit,
                                                               std::span<const ModelStart> starts,
                                                               std::string_view rule);
