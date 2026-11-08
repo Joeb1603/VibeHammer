@@ -1,9 +1,11 @@
 #include "normal/value.hpp"
 
 #include <algorithm>
+#include <cstdint>
 
 #include "analysis/threat.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/model/keywords.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::ai::normal {
@@ -12,19 +14,59 @@ namespace {
 
 constexpr double kWorthFloor = 0.01;  // a model with no usable weapon still counts a little
 
-}  // namespace
-
-double unit_share(const core::Unit& unit, double model_equivalents) {
-    const int n = std::max(1, std::max(unit.starting_strength, static_cast<int>(unit.models.size())));
-    return model_equivalents / static_cast<double>(n);
+// The unit's starting strength as unit_share divides by it (at least its models now, at least 1).
+int strength_of(const core::Unit& unit) {
+    return std::max(1, std::max(unit.starting_strength, static_cast<int>(unit.models.size())));
 }
 
-double alive_share(const core::Unit& unit) { return unit_share(unit, static_cast<double>(unit.models.size())); }
+}  // namespace
+
+bool monster_or_vehicle(const core::Unit& unit) {
+    return std::any_of(unit.models.begin(), unit.models.end(),
+                       [&unit](const core::Model& m) { return core::is_monster_or_vehicle(unit, m); });
+}
+
+double share_weight(const core::GameState& state, const core::Unit& unit) {
+    if (unit.points <= 0) return 1.0;  // no points: as before M68
+    std::int64_t total = 0;
+    std::int64_t counted = 0;
+    const std::string* type = nullptr;  // the first datasheet of the unit's side
+    bool several_types = false;
+    for (const core::Unit& u : state.units) {
+        if (u.points <= 0) return 1.0;  // the scenario doesn't give every unit points
+        total += u.points;
+        ++counted;
+        if (u.side != unit.side) continue;
+        if (type == nullptr) {
+            type = &u.name;
+        } else if (u.name != *type) {
+            several_types = true;
+        }
+    }
+    if (!several_types || total <= 0) return 1.0;  // one unit type on this side (D-077): as before
+    return static_cast<double>(unit.points) * static_cast<double>(counted) / static_cast<double>(total);
+}
+
+double unit_share(const core::GameState& state, const core::Unit& unit, double model_equivalents) {
+    const double share = model_equivalents / static_cast<double>(strength_of(unit));
+    const double w = share_weight(state, unit);
+    return w == 1.0 ? share : share * w;  // D-077: unweighted, the M67 value exactly
+}
+
+double alive_share(const core::GameState& state, const core::Unit& unit) {
+    return unit_share(state, unit, static_cast<double>(unit.models.size()));
+}
+
+double hazard_rate(const core::GameState& state, const core::Unit& attacker, const core::Unit& target) {
+    const double ours = unit_share(state, attacker, 1.0);
+    const double theirs = unit_share(state, target, 1.0);
+    return theirs > 0.0 ? ours / theirs : 0.0;
+}
 
 double share_value(const core::GameState& state, std::span<const analysis::TargetOutcome> outcomes) {
     double total = 0.0;
     for (const analysis::TargetOutcome& o : outcomes) {
-        if (const core::Unit* t = state.find_unit(o.target)) total += unit_share(*t, o.outcome.model_equivalents);
+        if (const core::Unit* t = state.find_unit(o.target)) total += unit_share(state, *t, o.outcome.model_equivalents);
     }
     return total;
 }
@@ -90,19 +132,55 @@ std::map<core::ModelId, double> model_worth(analysis::OddsCache& cache, const co
     return out;
 }
 
-double melee_share(analysis::OddsCache& cache, const core::Unit& attacker, const core::Unit& target) {
+double melee_share(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+                   const core::Unit& target) {
     if (attacker.models.empty() || target.models.empty()) return 0.0;
-    const analysis::Volley v = analysis::unit_melee_volley(cache, attacker, target);
-    return unit_share(target, analysis::expected_outcome(cache, v, analysis::snapshot_of(target)).model_equivalents);
+    const analysis::Volley v = analysis::unit_melee_volley(cache, attacker, target, hazard_rate(state, attacker, target));
+    return unit_share(state, target,
+                      analysis::expected_outcome(cache, v, analysis::snapshot_of(target)).model_equivalents);
 }
 
-double ranged_share(analysis::OddsCache& cache, const core::Unit& attacker, const core::Unit& target, float gap_mm,
-                    bool close_quarters) {
+double ranged_share(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+                    const core::Unit& target, float gap_mm, bool close_quarters) {
+    analysis::ShotContext ctx;
+    ctx.type = close_quarters ? core::ShootingType::CloseQuarters : core::ShootingType::Normal;
+    ctx.heavy = !close_quarters;
+    ctx.gap_mm = close_quarters ? 0.0f : gap_mm;
+    return ranged_share(cache, state, attacker, target, ctx);
+}
+
+double ranged_share(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+                    const core::Unit& target, analysis::ShotContext context) {
     if (attacker.models.empty() || target.models.empty()) return 0.0;
-    const analysis::ShotContext ctx{close_quarters ? core::ShootingType::CloseQuarters : core::ShootingType::Normal,
-                                    !close_quarters, close_quarters ? 0.0f : gap_mm};
-    const analysis::Volley v = analysis::unit_ranged_volley(cache, attacker, target, ctx);
-    return unit_share(target, analysis::expected_outcome(cache, v, analysis::snapshot_of(target)).model_equivalents);
+    context.hazard_rate = hazard_rate(state, attacker, target);  // D-077
+    const analysis::Volley v = analysis::unit_ranged_volley(cache, attacker, target, context);
+    return unit_share(state, target,
+                      analysis::expected_outcome(cache, v, analysis::snapshot_of(target)).model_equivalents);
+}
+
+std::optional<analysis::ShotContext> next_turn_shot(const core::GameState& state, const core::Unit& attacker,
+                                                    const core::Unit& target, float gap_mm) {
+    if (attacker.models.empty() || target.models.empty()) return std::nullopt;
+    analysis::ShotContext ctx;
+    const std::vector<core::UnitId> engaged = core::engaged_enemy_units(state, attacker);
+    if (std::find(engaged.begin(), engaged.end(), target.id) != engaged.end()) {
+        ctx.type = core::ShootingType::CloseQuarters;  // 10.06: at the unit it is engaged with
+        return ctx;
+    }
+    ctx.target_engaged = core::is_engaged(state, target);
+    if (!engaged.empty()) {
+        // 10.06: an engaged unit shoots only in close-quarters shooting; at a unit it isn't engaged with, only its
+        // MONSTER/VEHICLE models can.
+        if (!monster_or_vehicle(attacker)) return std::nullopt;
+        ctx.type = core::ShootingType::CloseQuarters;
+        ctx.elsewhere = true;
+        ctx.gap_mm = gap_mm;
+        return ctx;
+    }
+    ctx.type = core::ShootingType::Normal;
+    ctx.heavy = true;
+    ctx.gap_mm = gap_mm;
+    return ctx;
 }
 
 }  // namespace wh40k::ai::normal

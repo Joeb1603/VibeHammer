@@ -145,8 +145,8 @@ StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& st
         for (const core::UnitId e : engaged) {
             const core::Unit* enemy = state.find_unit(e);
             if (enemy == nullptr) continue;
-            ours += melee_share(cache, unit, *enemy);
-            theirs += melee_share(cache, *enemy, unit);
+            ours += melee_share(cache, state, unit, *enemy);
+            theirs += melee_share(cache, state, *enemy, unit);
         }
         if (!m55 && !engaged.empty()) out.front = engaged;  // D-066: the units it is fighting
         if (will_fight(state, unit)) {
@@ -166,8 +166,8 @@ StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& st
     }
     if (m55) {
         const float gap = core::unit_distance(unit, *enemy).value_or(0.0f);
-        const double ours = melee_share(cache, unit, *enemy);
-        const double theirs = melee_share(cache, *enemy, unit);
+        const double ours = melee_share(cache, state, unit, *enemy);
+        const double theirs = melee_share(cache, state, *enemy, unit);
         const bool they_may_charge = analysis::threat_ranges(*enemy).p_charge_after_move(gap) > 0.0;
         out.stance = theirs > ours ? CasualtyStance::AvoidContact : CasualtyStance::SeekContact;
         out.position_weight = they_may_charge ? 1.0 : kUnthreatenedPosition;
@@ -190,7 +190,7 @@ StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& st
     const core::Unit* named = chargers.front().second;
     bool avoid = false;
     for (const auto& [gap, e] : chargers) {
-        if (melee_share(cache, *e, unit) > melee_share(cache, unit, *e)) {
+        if (melee_share(cache, state, *e, unit) > melee_share(cache, state, unit, *e)) {
             if (!avoid) named = e;
             avoid = true;
         }

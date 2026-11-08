@@ -3146,7 +3146,7 @@ shades). No design stop (pre-approved).
 
 ---
 
-## M68: Easy and Normal for the new units
+## M68: Easy and Normal for the new units ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Decision:** D-077 (amends D-066)
 
 > **Odds.** The bots' odds learn:
@@ -3165,6 +3165,114 @@ shades). No design stop (pre-approved).
 - Normal p95 ≤ 100 ms and max ≤ 1 s.
 - The old scenarios play identically (hashes) and replays are unchanged.
 - Tests `M68_`.
+
+**Results (2026-11-08):** decision D-077 (amends D-066). No design stop (pre-approved). Bot only (`src/ai`): no rule,
+core, state, action, event or JSON change, no new decision and no client change. Hard's own code is untouched.
+- **Odds** (`analysis/odds.*`):
+  - *Per-model loadouts:* checked; every estimate of Easy and Normal already used each model's own weapons (the
+    hypothetical volleys, `best_shooting` / `best_melee`, Normal's `plan_shooting` / `plan_melee`, the move score, the
+    casualty worth, Easy's plans), so a unit's volley is the sum of its loadout groups. The one representative site fixed:
+    Desperate Escape's expected losses use each model's W through core's 06.02 when they differ (no roster unit's do).
+  - *[EXTRA ATTACKS]:* checked in every melee estimate (each goes through `unit_melee_volley` or `plan_melee`); nothing to
+    change.
+  - *[HAZARDOUS]:* `hazard_model_equivalents` (core's `make_hazard_rolls` per face, a failure on 1-2, and
+    `inflict_mortal_wounds`, 06.02). Normal's shooting and melee declarations subtract the firing unit's expected loss (the
+    engine's count of hazard rolls) in its own share; the hypothetical picks price it at an exchange rate
+    (`ShotContext::hazard_rate`, `best_shooting(..., hazard_rate)`). The Havoc champion supercharges only when it is worth
+    it (at the Tyrant Guard: standard at 18", supercharge at 8"); Easy is unchanged (its plans never pick [HAZARDOUS]).
+  - *The -1s in hypothetical volleys:* `ShotContext` gains `target_engaged` and `elsewhere`; `unit_ranged_volley` judges
+    targets as the engine's `target_ok` does (04.02, 10.06, 17.03, [BLAST]) and adds 10.06's and 17.03's -1s as
+    `make_weapon_selections` does; the odds cap them through `make_hit_rolls` (D-011).
+- **Normal** (`normal/*`):
+  - *Engaged MONSTERS:* the charge planner's hold value lets an engaged enemy MONSTER/VEHICLE shoot us (close-quarters
+    shooting by its MONSTER models, at -1; 10.06) and shoots it at -1 (17.03); a MONSTER of ours stays a target while
+    engaged (17.03); the same in the consolidation and move scores (`next_turn_shot`).
+  - *17.01:* the movement planner lets a MONSTER's Normal or Advance move pass enemy infantry (`segment_clear`); its ends
+    stay off every model and out of Engagement Range, and every plan is still simulated on the engine.
+  - *Points-weighted material:* `share_weight` (the unit's points over the mean of every unit, when every unit has points
+    and its side has more than one unit type; else 1), applied in `unit_share`, so every exchange is in points.
+  - *The tiebreak objective:* under `points_destroyed` the move score has no time preference, keeps the survival term only
+    for a side's last unit, scaled by the engine's exact tally ((1 + R) times D-007's), and every side counts the other
+    units' replies by marginal exposure (no side plays for a draw).
+  - *Desperate Escape only when it stands:* the arena's 200 Normal vs Normal games found one reset (seed 193: battle-shocked
+    Chaos Terminators, the Hive Tyrant among them against the board edge, no arrangement left after the hazard losses).
+    Normal now checks one to three failed rolls first, as Hard does (`escape_stands`).
+  - *Left as they are (reasons and measures in D-077):* random damage planned at the preview's maximum; oval facings never
+    turned.
+- **Arena:** a points scenario's report adds the mean points destroyed by each side; every report adds each side's
+  decision times (Normal's own against Easy). `--per-game` lines unchanged.
+- **Tests** (`tests/ai/m68_test.cpp`, 13 + 2 disabled, all pass; no existing test changed):
+  - `M68_Loadouts.AUnitsVolleyIsTheSumOfItsLoadoutGroupsAsTheEngineGathersIt`: the Havocs, the boltgun Legionaries and the
+    Chaos Lord at the Tyrant Guard, and the Legionaries in melee: the engine's own batches, and within 2% of 20,000 engine
+    batches.
+  - `M68_ExtraAttacks.EveryMeleeEstimateCountsTheTyrantsTalons`.
+  - `M68_Hazard.TheCostMatchesTwentyThousandEngineHazardRolls` (the Havocs at one and two rolls, the Chaos Lord, the Hive
+    Tyrant: exact, and within 2% of 20,000 engine rolls), `M68_Hazard.NormalSuperchargesOnlyWhenItIsWorthIt` (Easy never).
+  - `M68_Modifiers.HypotheticalVolleysApplyTenOhSixAndSeventeenOhThreeAsTheEngine`.
+  - `M68_ChargePlanner.AnEngagedMonsterStillShootsOtherUnits`.
+  - `M68_Movement.AMonstersNormalMoveThroughInfantryIsPlannedAndTheEngineAcceptsIt`,
+    `M68_Movement.ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatStands` (seed 193; it fails with the guard
+    bypassed).
+  - `M68_Points.SharesAreWeightedByPointsOnlyForSidesOfSeveralUnitTypes`.
+  - `M68_Tiebreak.ThePointsRuleReplacesTheDrawInTheMoveScore`.
+  - `M68_Games.EveryEasyAndNormalPairingPlaysTheRostersClean` (two games of each of the four pairings, 22 s in Debug) and
+    the disabled `DISABLED_TenGamesOfEveryPairingPlayTheRostersClean`.
+  - `M68_Replay.TheRostersBotGameReplaysToItsResultWithCoreOnly`, `M68_Replay.TheSavedFileMatchesTheGame` (the whole game,
+    6 s in Debug) and `M68_Replay.DISABLED_RegenerateRostersNormalBotGameReplay`.
+  - ctest (Debug and Release): 1128 -> 1141 tests, all pass.
+- **Replay** `tests/replays/m68_rosters_normal_bot_game.json` (Normal vs Normal on `rosters_44x60.json`, dice seed 5, 614
+  steps, 148 KB; picked from 8 traced seeds): a whole game decided on points after battle round 5, the Havoc champion's
+  plasma gun once on supercharge (at the Hive Tyrant) and on standard otherwise, the lascannons at the Tyranid MONSTERS,
+  charges and fights by both armies. It loads in the replay viewer (scratchpad `m68/replay_frame420.png`).
+- **Acceptance** (Release arena, `data/scenarios/rosters_44x60.json`, seeds 1–200 per pairing, two arena processes at once
+  on the 4-core machine; for comparison the M67 binary with only the arena's new report lines, on the same seeds):
+  - *Normal beats Easy in at least 75% of games in each seat:* **met.**
+    - Normal (Chaos Space Marines, A) vs Easy: 200 wins, 0 losses, 0 draws, all on points after battle round 5; points
+      destroyed 567.3 to 127.8 on average (M67: 200 wins, 568.7 to 141.5).
+    - Easy vs Normal (Tyranids, B): Normal 197 wins (122 by wipe-out, 75 on points), 3 losses (on points: seeds 33, 102,
+      177), 0 draws; 888.3 to 316.6 (M67: 200 wins, 11 by wipe-out; 715.6 to 273.9).
+  - *Zero rejected actions, reverted moves, fallbacks and unfinished games in every pairing:* **met** with the final
+    build: the two above, Easy vs Easy (A 77, B 123, all on points: as at M67, Easy is unchanged) and Normal vs Normal
+    (Tyranids 140, Chaos Space Marines 60, all on points; 352.4 to 472.7): rejected 0, UnitMoveReverted 0, fallbacks 0,
+    unfinished 0 in all 800 games. (A build before the Desperate Escape guard had one UnitMoveReverted in Normal vs Normal,
+    seed 193; above.)
+  - *Normal's decision time p95 <= 100 ms and max <= 1 s:* **met.** Each Normal decision timed around `Bot::decide` by the
+    arena (steady clock, Release, the new per-side report line): as the Chaos Space Marines against Easy p50 0.007 ms, p95
+    12.3 ms, max 556 ms; as the Tyranids against Easy p50 0.011 ms, p95 6.2 ms, max 375 ms; Normal vs Normal p95 10.8 /
+    6.4 ms, max 296 / 76 ms. (Both sides together, M67 against Easy: p95 7.2 / 3.8 ms, max 609 / 189 ms; M68: 5.6 / 4.0 ms,
+    556 / 375 ms.)
+  - *The old scenarios play identically:* **met.**
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line (actions, final state and trace
+      hashes) for all 24 pairings of V1, both bot scenarios and Strike: 4,380 games (`baseline/run.sh`, run on its own).
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations (M45, M46, M47, M58) leave every replay
+      byte-identical; the only new file is `m68_rosters_normal_bot_game.json`, which regenerates byte-identical too.
+    - `M47_Replay.TheSavedFileMatchesTheGame` and `M58_Replay.TheSavedFileMatchesTheGame` pass (Debug and Release).
+  - *Strike timing within 5% of the M67 binary* (`verify_arena_m67`, Normal vs Normal, 60 games, run alternately four
+    times each on a quiet machine): **met**, M67 9.09, 9.00, 9.13, 8.95 s (mean 9.04), M68 8.96, 8.83, 9.07, 9.01 s (mean
+    8.97): -0.8%; decision p95 5.88–5.91 ms against 5.80–5.97 ms.
+  - *Tests `M68_`:* **met** (above).
+- **The M66 note (Normal vs Normal never reached melee).** Measured first on the new scenario with the M67 binary (60
+  games): Chaos Space Marines 46 wins, Tyranids 14, 22 pile-ins and consolidations, all the Chaos Space Marines'. Every
+  Tyranid unit lost its exchange with its closest Chaos Space Marine unit in unit shares (a 75-point Genestealer unit loses
+  about half of itself to a 180-point boltgun squad's shooting in a turn and takes under a fifth of it back), so each kept
+  away as a losing side (D-066), and D-007's survival and time-preference terms paid for hiding to reach a draw the
+  tiebreak no longer gives. Now (200 games): Tyranids 140, Chaos Space Marines 60, 462 pile-ins and consolidations (433 and
+  29); the Tyranid MONSTERS close in and fight (34 charge moves in 20 traced games: the Hive Tyrant and the
+  Screamer-killers). The infantry still holds back from the Chaos Space Marine infantry, which is right for these armies:
+  even in points, Genestealers charging boltgun Legionaries deal about 0.24 (points-weighted shares) and take about 0.50
+  back; against Easy, which walks into them, the Genestealers and Tyrant Guard charge too.
+- **Open:**
+  - *For M69 (Hard):* Hard's code is untouched. Its chain still uses a unit's representative model (per-model loadouts),
+    prices no [HAZARDOUS] profile (its calls pass no rate), knows no engaged-unit facts beyond its own close-quarters
+    band, its translations (`translation_ok`) don't pass infantry (17.01), and its army value has no points tiebreak. Where
+    it uses Normal's functions (move plans and candidates, Normal's answers as its defaults, the lookahead's shooting) it
+    gets M68's changes on the roster scenario (its old-scenario play is unchanged: hashes).
+  - Normal's horizon is two half-turns, so units far from anything they can reach hold rather than walk into range (on
+    the rosters the Tyranid infantry; measured right for these armies, above).
+  - The Desperate Escape guard checks one to three failed hazard rolls, as Hard's; more are not checked.
+  - The firer's own hazard loss is priced in the choice of profile but not taken off the move score's line; and D-071's
+    "no hazard roll after the last enemy model is destroyed" is ignored.
+  - Random damage is still planned at the preview's maximum, and the bots still never turn an oval (both measured, D-077).
 
 ---
 

@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "core/model/keywords.hpp"
+#include "core/rules/attacks.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/state/queries.hpp"
 #include "normal/value.hpp"
@@ -69,15 +70,36 @@ std::vector<Loadout> loadouts_for(const core::Unit& unit, const core::Model& mod
     return out;
 }
 
-// The declaration's value in unit shares; nullopt if the engine would refuse it.
+// D-077 (M68): does the unit carry a [HAZARDOUS] ranged profile it can use (24.15)? Only then are its declarations
+// priced for the hazard (the M67 arithmetic otherwise).
+bool has_hazardous_ranged(const core::Unit& u) {
+    for (const core::Model& m : u.models) {
+        for (const core::Weapon& w : m.weapons) {
+            for (const core::WeaponProfile& p : w.profiles) {
+                if (p.kind == core::WeaponKind::Ranged && p.has<core::ability::Hazardous>()) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// The declaration's value in unit shares; nullopt if the engine would refuse it. D-077 (M68): with `hazardous`, less
+// the expected loss to the unit's own hazard rolls (24.15: one per [HAZARDOUS] weapon selected, the engine's count;
+// 06.03, 06.02 through core), in its own unit shares.
 std::optional<double> declaration_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit,
                                         core::ShootingType type, const std::vector<core::ShotDeclaration>& shots,
-                                        std::vector<analysis::TargetOutcome>* outcomes = nullptr) {
+                                        std::vector<analysis::TargetOutcome>* outcomes = nullptr,
+                                        bool hazardous = false) {
     if (shots.empty()) return 0.0;
     const std::vector<core::AttackBatch> batches = analysis::shooting_batches(state, unit, type, shots);
     if (batches.empty()) return std::nullopt;
     std::vector<analysis::TargetOutcome> outs = evaluate_in_best_order(cache, state, batches);
-    const double v = share_value(state, outs);
+    double v = share_value(state, outs);
+    if (hazardous) {
+        const core::Unit& u = *state.find_unit(unit);
+        const int rolls = core::hazardous_weapons_selected(state, core::make_weapon_selections(state, u, type, shots));
+        if (rolls > 0) v -= unit_share(state, u, analysis::hazard_model_equivalents(u, rolls));
+    }
     if (outcomes != nullptr) *outcomes = std::move(outs);
     return v;
 }
@@ -132,6 +154,7 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
     if (u == nullptr) return std::nullopt;
     const std::vector<core::ShotDeclaration> options = core::shot_options(state, *u, type);
     if (options.empty()) return std::nullopt;
+    const bool hazardous = has_hazardous_ranged(*u);  // D-077
 
     // Each model's loadouts, and its best one valued alone against the fresh target.
     std::vector<std::vector<Loadout>> cands;
@@ -141,7 +164,7 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
         Loadout best;
         double best_value = -1.0;
         for (const Loadout& l : mine) {
-            const std::optional<double> v = declaration_value(cache, state, unit, type, l);
+            const std::optional<double> v = declaration_value(cache, state, unit, type, l, nullptr, hazardous);
             if (v && *v > best_value + kBetter) {
                 best_value = *v;
                 best = l;
@@ -150,7 +173,7 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
         cands.push_back(std::move(mine));
         current.push_back(std::move(best));
     }
-    std::optional<double> value = declaration_value(cache, state, unit, type, flatten(current));
+    std::optional<double> value = declaration_value(cache, state, unit, type, flatten(current), nullptr, hazardous);
     if (!value) return std::nullopt;  // the combination broke a rule (not expected: each model's own choice)
 
     // Coordinate descent on the whole volley: overkill and mixed profiles are judged together.
@@ -162,7 +185,8 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
                 if (l == current[i]) continue;
                 std::vector<Loadout> trial = current;
                 trial[i] = l;
-                const std::optional<double> v = declaration_value(cache, state, unit, type, flatten(trial));
+                const std::optional<double> v =
+                    declaration_value(cache, state, unit, type, flatten(trial), nullptr, hazardous);
                 if (v && *v > *value + kBetter) {
                     value = v;
                     current = std::move(trial);
@@ -177,7 +201,7 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
     out.type = type;
     out.shots = flatten(current);
     if (out.shots.empty()) return std::nullopt;
-    out.value = declaration_value(cache, state, unit, type, out.shots, &out.outcomes).value_or(0.0);
+    out.value = declaration_value(cache, state, unit, type, out.shots, &out.outcomes, hazardous).value_or(0.0);
     return out;
 }
 
@@ -245,7 +269,8 @@ std::size_t choose_attack_batch(analysis::OddsCache& cache, const core::GameStat
                     if (j == pick->batch || f->batch_done[j] || f->batches[j].target != t) continue;
                     v.push_back(analysis::volley_batch(f->batches[j]));
                 }
-                value = unit_share(*target, best_value_starting_with(cache, v, 0, analysis::snapshot_of(*target)));
+                value = unit_share(state, *target,
+                                   best_value_starting_with(cache, v, 0, analysis::snapshot_of(*target)));
             }
         }
         if (!best || value > best_value + kBetter) {

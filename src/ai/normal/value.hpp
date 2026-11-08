@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <map>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -18,11 +19,22 @@
 
 namespace wh40k::ai::normal {
 
-// `model_equivalents` of `unit` as a share of its starting strength.
-[[nodiscard]] double unit_share(const core::Unit& unit, double model_equivalents);
+// D-077 (M68): what a share of `unit` is worth, material weighted by points. 1 (as before M68) unless every unit in
+// `state` has points (the scenario gives them, D-076) and `unit`'s side has more than one unit type (datasheet name);
+// then the unit's points over the mean points of every unit (both sides, destroyed ones too: fixed for the game). V1,
+// the bot scenarios and Strike have no points, so every weight there is 1.
+[[nodiscard]] double share_weight(const core::GameState& state, const core::Unit& unit);
 
-// The unit's models still on the battlefield, as a share of its starting strength.
-[[nodiscard]] double alive_share(const core::Unit& unit);
+// `model_equivalents` of `unit` as a share of its starting strength, times its share_weight (D-077).
+[[nodiscard]] double unit_share(const core::GameState& state, const core::Unit& unit, double model_equivalents);
+
+// The unit's models still on the battlefield, as a share of its starting strength (times its share_weight).
+[[nodiscard]] double alive_share(const core::GameState& state, const core::Unit& unit);
+
+// D-077 (M68): [HAZARDOUS]'s exchange rate: one model equivalent of `attacker` in model equivalents of `target` (the
+// ratio of their unit_share of one model), so the attacker's loss to a hazard roll can be set against the damage its
+// weapon does (analysis::ShotContext::hazard_rate).
+[[nodiscard]] double hazard_rate(const core::GameState& state, const core::Unit& attacker, const core::Unit& target);
 
 // M42/M43: what is left of two opposing units, as shares of their starting strengths, as volleys land in
 // sequence. A volley is worth `rate` (shares of the target) at the attacker's strength when the exchange started,
@@ -106,12 +118,30 @@ private:
                                                           const core::Unit& enemy);
 
 // Every model of `attacker` fighting `target` with its best melee weapon (M40's unit_melee_volley), as a share
-// of `target`: what a combat between them is worth to the attacker if all its models fight.
-[[nodiscard]] double melee_share(analysis::OddsCache& cache, const core::Unit& attacker, const core::Unit& target);
+// of `target`: what a combat between them is worth to the attacker if all its models fight. D-077: [HAZARDOUS]
+// priced at hazard_rate.
+[[nodiscard]] double melee_share(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+                                 const core::Unit& target);
 
 // `attacker`'s best shooting at `target` across `gap_mm` (unengaged, Normal shooting, [HEAVY] applying), as a
-// share of `target`. With `close_quarters`, its [CLOSE-QUARTERS] shooting while engaged (10.06).
-[[nodiscard]] double ranged_share(analysis::OddsCache& cache, const core::Unit& attacker, const core::Unit& target,
-                                  float gap_mm, bool close_quarters = false);
+// share of `target`. With `close_quarters`, its [CLOSE-QUARTERS] shooting while engaged (10.06). D-077: [HAZARDOUS]
+// priced at hazard_rate.
+[[nodiscard]] double ranged_share(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+                                  const core::Unit& target, float gap_mm, bool close_quarters = false);
+// D-077 (M68): the same in any hypothetical context (who is engaged, 04.02, 10.06, 17.03); its hazard_rate is set here.
+[[nodiscard]] double ranged_share(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+                                  const core::Unit& target, analysis::ShotContext context);
+
+// D-077 (M68): a MONSTER/VEHICLE unit (17.01, 17.03, 10.06), as the engine's shooting rules test it.
+[[nodiscard]] bool monster_or_vehicle(const core::Unit& unit);
+
+// D-077 (M68): the hypothetical shooting `attacker` can do at `target` across `gap_mm` in its next Shooting phase,
+// judged by who is engaged now (strategic knowledge; the live state asks the engine): unengaged, Normal shooting
+// ([HEAVY] applying), at an unengaged target or an engaged MONSTER/VEHICLE (17.03); engaged with the target,
+// close-quarters shooting at it; engaged with another unit, close-quarters shooting by its MONSTER/VEHICLE models
+// (10.06). nullopt if none.
+[[nodiscard]] std::optional<analysis::ShotContext> next_turn_shot(const core::GameState& state,
+                                                                  const core::Unit& attacker, const core::Unit& target,
+                                                                  float gap_mm);
 
 }  // namespace wh40k::ai::normal

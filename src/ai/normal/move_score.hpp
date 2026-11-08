@@ -46,6 +46,13 @@
 // longest range: marginal exposure, otherwise its attacks go to one of our units whatever this move does); a side
 // losing it (playing for the draw, D-007) counts one whenever this unit would be its closest target (D-010). With
 // one enemy unit nothing is added: the score is M43's, term by term.
+// D-077 (M68): shares are weighted by points (share_weight: only with points and a side of several unit types).
+// Under the points tiebreak (D-076) there is no draw to play for and no wipe-out needed to win: the time preference
+// is off (both discounts 1), the survival term counts only for its side's last unit, scaled by what surviving buys on
+// the engine's exact points tally (a win 2, a draw 1, nothing when behind: (1 + R) times D-007's), and every side counts
+// the other units' replies by marginal exposure. The hypothetical volleys apply 10.06's and 17.03's -1s and price
+// [HAZARDOUS] (analysis::ShotContext); an engaged enemy MONSTER/VEHICLE may be shot (17.03) and still shoots
+// (10.06), and a MONSTER/VEHICLE of ours can be shot while engaged (17.03).
 
 #include <array>
 #include <cstdint>
@@ -231,6 +238,10 @@ public:
                                            const std::optional<OtherShot>& shot);
     // The survival weight (0 for a side that isn't losing the exchange).
     [[nodiscard]] double survival_weight() const noexcept { return survival_weight_; }
+    // D-077 (M68): the scenario decides on points destroyed (D-076), and whether the side plays for D-007's draw (a
+    // side losing the exchange without the tiebreak: D-066's closest-target rule for the other units' replies).
+    [[nodiscard]] bool points_rule() const noexcept { return points_rule_; }
+    [[nodiscard]] bool plays_for_draw() const noexcept { return !points_rule_ && lean_ < 0.0; }
 
 private:
     struct RateKey {
@@ -249,10 +260,22 @@ private:
     [[nodiscard]] double enemy_melee_wipe();
     [[nodiscard]] double enemy_engaged_wipe();
 
+    // D-077 (M68): a hypothetical shot of ours (`ours`) at enemy() or of enemy() at us, [HAZARDOUS] priced.
+    [[nodiscard]] analysis::ShotContext shot(bool ours, core::ShootingType type, bool heavy, float gap_mm) const;
+    // D-077: enemy() engaged with another of our units still shoots us if it is a MONSTER/VEHICLE (10.06: its
+    // MONSTER/VEHICLE models in close-quarters shooting, at -1): (share of us, P(it wipes us out)).
+    [[nodiscard]] std::pair<double, double> enemy_elsewhere_shooting(float gap_mm);
+
     analysis::OddsCache& cache_;
     const core::GameState& origin_;
     MoveWeights weights_;
     Generation generation_ = Generation::Current;
+    bool points_rule_ = false;  // D-077: the points tiebreak (D-076)
+    double rate_us_ = 0.0;      // D-077: hazard_rate of our unit against enemy(), and of enemy() against us
+    double rate_them_ = 0.0;
+    bool us_mv_ = false;        // D-077: our unit is a MONSTER/VEHICLE (17.03: it can be shot while engaged)
+    bool enemy_mv_ = false;     // enemy() is a MONSTER/VEHICLE
+    std::map<std::uint64_t, std::pair<double, double>> elsewhere_;  // band -> enemy_elsewhere_shooting
     core::Unit us_;
     std::optional<core::Unit> enemy_;
     std::vector<core::PosedModel> enemy_models_;  // D-074 part 3: with facings
@@ -292,11 +315,16 @@ private:
         std::vector<float> ranges;  // its distinct usable ranged ranges (bands of its shooting at us)
         bool locked = false;        // engaged with another of our units: it neither shoots us nor charges (04.02)
         float other_target_mm = 0.0f;  // its gap to the closest of our other units (its other targets), or far
-        bool engaged = false;       // engaged at all: we can't shoot it (04.02)
+        bool engaged = false;       // engaged at all: we can't shoot it (04.02; D-077: unless a MONSTER/VEHICLE, 17.03)
+        bool mv = false;            // D-077: a MONSTER/VEHICLE unit
+        double rate_us = 0.0;       // D-077: hazard_rate of our unit against it, and of it against us
+        double rate_them = 0.0;
         double melee = 0.0;         // its melee on us, shares of our unit
         double cq = 0.0;            // its close-quarters shooting on us
         double melee_wipe = 0.0;    // P(its melee wipes us out)
         std::map<std::pair<bool, std::uint64_t>, std::pair<double, double>> ranged;  // (heavy, band) -> (rate, wipe)
+        // D-077: band -> its shooting at us while we are an engaged MONSTER/VEHICLE (17.03, at -1): (rate, wipe)
+        std::map<std::uint64_t, std::pair<double, double>> at_engaged_us;
         // (model index, shooting type, heavy, our band) -> that model's best volley at it
         std::map<std::tuple<std::size_t, int, bool, std::uint64_t>, analysis::Volley> our_volleys;
         // (shooting type, heavy, every model's band) -> (share, models destroyed)
@@ -304,6 +332,8 @@ private:
     };
     [[nodiscard]] std::uint64_t other_band(const Other& o, float gap_mm) const;
     [[nodiscard]] std::pair<double, double> other_ranged(Other& o, bool heavy, float gap_mm);
+    // D-077: its shooting at us while we are an engaged MONSTER/VEHICLE (17.03, at -1), cached by band.
+    [[nodiscard]] std::pair<double, double> other_at_engaged_us(Other& o, float gap_mm);
     [[nodiscard]] float gap_to_other(const Other& o, const std::vector<core::Position>& positions) const;
     std::vector<Other> others_;
 };

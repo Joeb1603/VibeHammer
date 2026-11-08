@@ -177,6 +177,14 @@ struct SampledOutcome {
 // a random A on a melee profile is refused (unimplemented_ability_problem).
 [[nodiscard]] bool profile_supported(const core::WeaponProfile& profile);
 
+// ---- [HAZARDOUS] (24.15, 06.03, 06.02; D-077) ----
+
+// The model equivalents `firer` is expected to lose to `rolls` hazard rolls made for it (24.15: one per [HAZARDOUS]
+// weapon selected): whether each roll fails and its mortal wounds from core's make_hazard_rolls on every face (06.03),
+// the mortal wounds inflicted by core's inflict_mortal_wounds (06.02, the engine's first candidate each time), and the
+// loss counted as model_equivalents counts it (a wound off a W-wound model is 1/W). 0 for no roll.
+[[nodiscard]] double hazard_model_equivalents(const core::Unit& firer, int rolls);
+
 // 24.30 [RAPID FIRE]: is `gap_mm` within half the profile's range? The same test select_weapon_target records
 // (consistency-tested against it); false for a melee profile.
 [[nodiscard]] bool within_half_range(const core::WeaponProfile& profile, float gap_mm);
@@ -221,8 +229,13 @@ struct ShootingPlan {
 // eligible for, each model picks the weapon set (its [CLOSE-QUARTERS] weapons or its others, 24.07) and the
 // profile per weapon with the best value against the fresh target, from shot_options. The type with the best
 // combined value wins. nullopt if the unit can't shoot at `target` (no options). M41 refines this (overkill).
+// D-077 (M68): `hazard_rate`, the value of one of the shooter's model equivalents in the target's: a [HAZARDOUS]
+// profile's value is its expected outcome less the shooter's expected loss to its hazard roll at that rate (and a
+// type's value less the loss to all its hazard rolls). 0: not priced (as before M68). The plan's outcome is the
+// target's, without the cost.
 [[nodiscard]] std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameState& state,
-                                                        core::UnitId shooter, core::UnitId target);
+                                                        core::UnitId shooter, core::UnitId target,
+                                                        double hazard_rate = 0.0);
 
 struct MeleePlanValue {
     std::vector<core::MeleeDeclaration> declarations;
@@ -260,17 +273,33 @@ private:
 //   (engaged): [CLOSE-QUARTERS] weapons only, unless MONSTER/VEHICLE (10.06);
 // - heavy: 24.16 applies (remained stationary or moved no more than 3", unengaged);
 // - every target model counts for [BLAST] (24.05), and `gap_mm` decides range and half range per profile.
+// D-077 (M68), who is engaged (04.02, 10.06, 17.03), as the engine's target_problem and make_weapon_selections judge it:
+// - close-quarters shooting is at a unit the shooter is engaged with, unless `elsewhere` (10.06: then only its
+//   MONSTER/VEHICLE models shoot);
+// - `target_engaged`: the target is engaged (with another unit; a close-quarters target the shooter is engaged with is
+//   engaged anyway). An engaged target that isn't a MONSTER/VEHICLE unit can only be shot by a unit engaged with it
+//   (04.02); an engaged MONSTER/VEHICLE can be (17.03), not with [BLAST] (D-073);
+// - the -1s: 10.06's for a MONSTER/VEHICLE model in close-quarters shooting and 17.03's at an engaged MONSTER/VEHICLE
+//   target, each except a [CLOSE-QUARTERS] weapon at a unit the shooter is engaged with, added to the profile's hit
+//   modifier as the engine adds them (D-073); core's make_hit_rolls applies D-011's cap.
+// - `hazard_rate`: as best_shooting's (0: not priced).
+// The defaults are the M67 context: an unengaged target, close-quarters shooting at the unit engaged with.
 struct ShotContext {
     core::ShootingType type = core::ShootingType::Normal;
     bool heavy = false;
     float gap_mm = 0.0f;  // edge-to-edge distance to the target unit
+    bool target_engaged = false;
+    bool elsewhere = false;
+    double hazard_rate = 0.0;
 };
 
 // Each model's best usable ranged weapons against `target` in `context` (24.07: its [CLOSE-QUARTERS] weapons or
 // its others, one profile per weapon), as batches of identical attacks. Empty if nothing is usable.
 [[nodiscard]] Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const core::Unit& target,
                                         const ShotContext& context);
-// Each model's best melee weapon (D-021), with all its attacks, as if every model can fight `target`.
-[[nodiscard]] Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const core::Unit& target);
+// Each model's best melee weapon (D-021), with all its attacks, as if every model can fight `target`. D-077:
+// `hazard_rate` as best_shooting's for a [HAZARDOUS] melee profile (0: not priced).
+[[nodiscard]] Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const core::Unit& target,
+                                       double hazard_rate = 0.0);
 
 }  // namespace wh40k::ai::analysis

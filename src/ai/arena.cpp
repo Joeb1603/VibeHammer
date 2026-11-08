@@ -8,6 +8,7 @@
 #include "auto_actions.hpp"
 #include "core/engine/actions.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/points_destroyed.hpp"
 #include "session.hpp"
 #include "state_hash.hpp"
 
@@ -40,13 +41,15 @@ double percentile(std::vector<double> v, double p) {
 }  // namespace
 
 GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
-                         std::size_t step_cap, std::vector<double>* decision_ms, std::vector<std::string>* trace) {
+                         std::size_t step_cap, std::vector<double>* decision_ms, std::vector<std::string>* trace,
+                         std::vector<core::Side>* decision_sides) {
     client::GameSession session = client::GameSession::new_game(scenario, seed);
-    return play_bot_session(session, a, b, step_cap, decision_ms, trace);
+    return play_bot_session(session, a, b, step_cap, decision_ms, trace, decision_sides);
 }
 
 GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig b, std::size_t step_cap,
-                            std::vector<double>* decision_ms, std::vector<std::string>* trace) {
+                            std::vector<double>* decision_ms, std::vector<std::string>* trace,
+                            std::vector<core::Side>* decision_sides) {
     GameRecord rec;
     rec.seed = session.seed();
     const std::array<int, 2> wounds_at_start = wounds_left(session.state());
@@ -87,6 +90,7 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
         const BotChoice choice = bots[core::side_index(side)].decide(session.state(), side);
         const auto t1 = std::chrono::steady_clock::now();
         if (decision_ms != nullptr) decision_ms->push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
+        if (decision_sides != nullptr) decision_sides->push_back(side);
         if (trace != nullptr) {
             trace->push_back("R" + std::to_string(session.state().flow.battle_round) + " " +
                              (side == core::Side::A ? "A " : "B ") + std::string(core::action_name(choice.action)) +
@@ -110,6 +114,12 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     rec.finished = end.result.has_value();
     if (end.result) rec.winner = end.result->winner;
     rec.on_points = end.result && end.result->points.has_value();  // M67 (D-076)
+    if (end.result_rule == core::ResultRule::PointsDestroyed) {  // M68 (D-077): the points destroyed by the end
+        const core::PointsTally tally = core::points_destroyed(end);
+        for (std::size_t i = 0; i < 2; ++i) {
+            rec.points_destroyed[i] = static_cast<double>(tally.destroyed[i]) / static_cast<double>(tally.denominator);
+        }
+    }
     if (!rec.finished && rec.problems.empty()) rec.problems.push_back("step cap reached");
     rec.end_round = end.flow.battle_round;
     for (const core::Unit& u : end.units) rec.surviving_models[core::side_index(u.side)] += static_cast<int>(u.models.size());
@@ -123,8 +133,10 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
                       std::size_t step_cap) {
     ArenaResult r;
     std::vector<double> ms;
+    std::vector<core::Side> sides;
     for (int i = 0; i < games; ++i) {
-        r.games.push_back(play_bot_game(scenario, first_seed + static_cast<std::uint64_t>(i), a, b, step_cap, &ms));
+        r.games.push_back(
+            play_bot_game(scenario, first_seed + static_cast<std::uint64_t>(i), a, b, step_cap, &ms, nullptr, &sides));
     }
     for (const GameRecord& g : r.games) {
         if (!g.finished) {
@@ -149,6 +161,7 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
         for (std::size_t s = 0; s < 2; ++s) {
             r.fight_move_steps[s] += g.fight_move_steps[s];
             r.fight_moves[s] += g.fight_moves[s];
+            r.mean_points_destroyed[s] += g.points_destroyed[s];
         }
     }
     if (!r.games.empty()) {
@@ -158,10 +171,21 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
         r.mean_surviving[1] /= n;
         r.mean_wounds_lost[0] /= n;
         r.mean_wounds_lost[1] /= n;
+        r.mean_points_destroyed[0] /= n;
+        r.mean_points_destroyed[1] /= n;
     }
     r.p50_ms = percentile(ms, 0.50);
     r.p95_ms = percentile(ms, 0.95);
     r.max_ms = ms.empty() ? 0.0 : *std::max_element(ms.begin(), ms.end());
+    for (std::size_t s = 0; s < 2; ++s) {  // M68: each side's bot alone
+        std::vector<double> own;
+        for (std::size_t i = 0; i < ms.size() && i < sides.size(); ++i) {
+            if (core::side_index(sides[i]) == s) own.push_back(ms[i]);
+        }
+        r.side_p50_ms[s] = percentile(own, 0.50);
+        r.side_p95_ms[s] = percentile(own, 0.95);
+        r.side_max_ms[s] = own.empty() ? 0.0 : *std::max_element(own.begin(), own.end());
+    }
     return r;
 }
 
@@ -222,10 +246,19 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                   r.reverted, r.fallbacks, r.p50_ms, r.p95_ms, r.max_ms, r.mean_result(core::Side::A),
                   r.mean_result(core::Side::B));
     std::string out = buf;
+    std::snprintf(buf, sizeof buf,
+                  "decision time by side (M68): A p50 %.3f ms, p95 %.3f ms, max %.3f ms; B p50 %.3f ms, p95 %.3f ms, "
+                  "max %.3f ms\n",
+                  r.side_p50_ms[0], r.side_p95_ms[0], r.side_max_ms[0], r.side_p50_ms[1], r.side_p95_ms[1],
+                  r.side_max_ms[1]);
+    out += buf;
     if (scenario.result_rule == core::ResultRule::PointsDestroyed) {  // M67 (D-076): only for such a scenario
         std::snprintf(buf, sizeof buf,
                       "decided on points destroyed after the last battle round (D-076): A wins %d, B wins %d, draws %d\n",
                       r.points_wins[0], r.points_wins[1], r.points_draws);
+        out += buf;
+        std::snprintf(buf, sizeof buf, "mean points destroyed by the end (D-077): A %.2f, B %.2f\n",
+                      r.mean_points_destroyed[0], r.mean_points_destroyed[1]);
         out += buf;
     }
     std::snprintf(buf, sizeof buf,

@@ -10,6 +10,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
+#include "core/rules/mortal_wounds.hpp"
 #include "core/rules/random_characteristics.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/state/queries.hpp"
@@ -90,6 +91,53 @@ bool allowed_for_type(const core::Unit& unit, const core::Model& model, const co
         case core::ShootingType::CloseQuarters: return is_close_quarters(p) || core::is_monster_or_vehicle(unit, model);
     }
     return false;
+}
+
+// 17.03 / 10.06: a MONSTER/VEHICLE unit (any of its models), as the engine's shooting rules test it.
+bool unit_is_monster_or_vehicle(const core::Unit& unit) {
+    return std::any_of(unit.models.begin(), unit.models.end(),
+                       [&unit](const core::Model& m) { return core::is_monster_or_vehicle(unit, m); });
+}
+
+// D-077 (M68): the engagement facts of a hypothetical shot (ShotContext), as the engine's target_problem and
+// make_weapon_selections read them from a state (04.02, 10.06, 17.03, D-073).
+struct EngagementFacts {
+    bool close_quarters = false;  // close-quarters shooting (10.06)
+    bool with_target = false;     // the shooter is engaged with the target
+    bool target_engaged = false;  // the target is engaged (with the shooter or another unit)
+    bool target_mv = false;       // the target is a MONSTER/VEHICLE unit (only read, and only worked out, when engaged)
+};
+
+EngagementFacts facts_of(const ShotContext& context, const core::Unit& target) {
+    EngagementFacts f;
+    f.close_quarters = context.type == core::ShootingType::CloseQuarters;
+    f.with_target = f.close_quarters && !context.elsewhere;
+    f.target_engaged = context.target_engaged || f.with_target;
+    f.target_mv = f.target_engaged && unit_is_monster_or_vehicle(target);
+    return f;
+}
+
+// 04.02 / 10.06 / 17.03: may this model's profile target the unit (the target rules of the engine's target_ok, without
+// range and visibility, which the caller and the state judge)?
+bool target_allowed(const EngagementFacts& f, bool mv_model, const core::WeaponProfile& p) {
+    const bool blast = p.has<core::ability::Blast>();
+    if (f.close_quarters && !mv_model) {
+        if (!f.with_target) return false;  // 10.06: only enemy units engaged with its unit
+    } else if (f.close_quarters && f.with_target) {
+        if (blast) return false;  // 10.06: [BLAST] can't target a unit its unit is engaged with
+    } else if (f.target_engaged && !f.target_mv) {
+        return false;  // 04.02 (17.03: an engaged MONSTER/VEHICLE unit can be targeted)
+    }
+    return !(blast && f.target_engaged && f.target_mv);  // 17.03, Rules Appendix FAQ (D-073)
+}
+
+// The -1s to hit of make_weapon_selections (D-073, added: D-011's cap is applied by make_hit_rolls).
+int hit_modifier_of(const EngagementFacts& f, bool mv_model, const core::WeaponProfile& p) {
+    const bool cq_at_engaged = is_close_quarters(p) && f.with_target;
+    int modifier = 0;
+    if (f.close_quarters && mv_model && !cq_at_engaged) modifier -= 1;  // 10.06 MONSTER/VEHICLE models
+    if (f.target_mv && f.target_engaged && !cq_at_engaged) modifier -= 1;  // 17.03
+    return modifier;
 }
 
 void add_to_volley(Volley& volley, const core::AttackProfile& profile, int dice,
@@ -541,6 +589,52 @@ bool profile_supported(const core::WeaponProfile& profile) {
     return !core::unimplemented_ability_problem(profile);
 }
 
+double hazard_model_equivalents(const core::Unit& firer, int rolls) {
+    if (rolls <= 0 || firer.models.empty()) return 0.0;
+    // 06.03: whether one roll fails and its mortal wounds (1, or 3 if every model is a MONSTER/VEHICLE), face by face.
+    double p_fail = 0.0;
+    int per_failure = 0;
+    for (int face = 1; face <= kFaces; ++face) {
+        core::ScriptedDice die{face};
+        const core::HazardRolls h = core::make_hazard_rolls(die, firer, 1);
+        if (h.failures > 0) {
+            p_fail += 1.0 / kFaces;
+            per_failure = h.mortal_wounds;
+        }
+    }
+    if (!(p_fail > 0.0) || per_failure <= 0) return 0.0;
+    // 06.02 reads CHARACTER and the models' wounds; the rest is dropped so the copies are cheap.
+    core::Unit stripped;
+    stripped.id = firer.id;
+    stripped.side = firer.side;
+    if (core::has_keyword(firer, "Character")) stripped.keywords = {"Character"};
+    stripped.models = firer.models;
+    for (core::Model& m : stripped.models) {
+        m.weapons.clear();
+        m.type_name.clear();
+    }
+    const auto left = [](const core::Unit& u) {  // model equivalents left: a W-wound model at w wounds counts w / W
+        double total = 0.0;
+        for (const core::Model& m : u.models) {
+            total += static_cast<double>(m.wounds_remaining) / static_cast<double>(std::max(1, m.characteristics.wounds));
+        }
+        return total;
+    };
+    const core::ModelChooser first = [](const core::Unit&, std::span<const core::ModelId> options) {
+        return options.front();
+    };
+    const double before = left(stripped);
+    double expected = 0.0;
+    for (int k = 1; k <= rolls; ++k) {  // k failed rolls: k x per_failure mortal wounds, inflicted together (06.03)
+        const double pk = binomial(rolls, k, p_fail);
+        if (pk == 0.0) continue;
+        core::Unit u = stripped;
+        (void)core::inflict_mortal_wounds(u, k * per_failure, first);
+        expected += pk * (before - left(u));
+    }
+    return expected;
+}
+
 bool within_half_range(const core::WeaponProfile& profile, float gap_mm) {
     return profile.range_mm.has_value() && core::within(gap_mm, *profile.range_mm * 0.5f);  // 24.30, as core
 }
@@ -608,15 +702,27 @@ std::vector<TargetOutcome> evaluate_melee(OddsCache& cache, const core::GameStat
 }
 
 std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameState& state, core::UnitId shooter,
-                                          core::UnitId target) {
+                                          core::UnitId target, double hazard_rate) {
     const core::Unit* unit = state.find_unit(shooter);
     const core::Unit* enemy = state.find_unit(target);
     if (unit == nullptr || enemy == nullptr || core::is_destroyed(*enemy)) return std::nullopt;
     const TargetSnapshot snap = snapshot_of(*enemy);
+    // D-077 (M68): [HAZARDOUS] priced at `hazard_rate` (0: not, as before M68), one hazard roll per weapon (24.15).
+    std::optional<double> one_roll;
+    const auto hazard_cost = [&](int rolls) {
+        if (!(hazard_rate > 0.0) || rolls <= 0) return 0.0;
+        if (rolls == 1) {
+            if (!one_roll) one_roll = hazard_model_equivalents(*unit, 1);
+            return hazard_rate * *one_roll;
+        }
+        return hazard_rate * hazard_model_equivalents(*unit, rolls);
+    };
     std::optional<ShootingPlan> best;
+    double best_value = 0.0;
     for (const core::ShootingType type : core::eligible_shooting_types(state, *unit)) {
         const auto options = core::shot_options(state, *unit, type);
         std::vector<core::ShotDeclaration> chosen;
+        bool any_hazardous = false;
         for (const core::Model& model : unit->models) {
             std::vector<Candidate<core::ShotDeclaration>> cands;
             for (const core::ShotDeclaration& opt : options) {
@@ -625,19 +731,32 @@ std::optional<ShootingPlan> best_shooting(OddsCache& cache, const core::GameStat
                 const auto batches = shooting_batches(state, shooter, type, one);
                 const Volley v = to_volley(batches);
                 const core::WeaponProfile& p = model.weapons[opt.weapon_index].profiles[opt.profile_index];
-                cands.push_back({opt, expected_outcome(cache, v, snap).model_equivalents, is_close_quarters(p),
-                                 opt.weapon_index});
+                double value = expected_outcome(cache, v, snap).model_equivalents;
+                if (p.has<core::ability::Hazardous>()) value -= hazard_cost(1);  // D-077: its own hazard roll
+                cands.push_back({opt, value, is_close_quarters(p), opt.weapon_index});
             }
             // 24.07 applies outside close-quarters shooting, to non-MONSTER/VEHICLE models.
             const bool one_set = type != core::ShootingType::CloseQuarters && !core::is_monster_or_vehicle(*unit, model);
-            for (const auto& d : pick_model_set(cands, one_set)) chosen.push_back(d);
+            for (const auto& d : pick_model_set(cands, one_set)) {
+                any_hazardous = any_hazardous ||
+                                model.weapons[d.weapon_index].profiles[d.profile_index].has<core::ability::Hazardous>();
+                chosen.push_back(d);
+            }
         }
         if (chosen.empty()) continue;
         const auto batches = shooting_batches(state, shooter, type, chosen);
         if (batches.empty()) continue;  // the combination broke a rule after all
         const Volley v = to_volley(batches);
         ShootingPlan plan{type, chosen, expected_outcome(cache, v, snap)};
-        if (!best || plan.outcome.model_equivalents > best->outcome.model_equivalents) best = std::move(plan);
+        double value = plan.outcome.model_equivalents;
+        if (any_hazardous && hazard_rate > 0.0) {  // D-077: the engine's count of hazard rolls (24.15)
+            value -= hazard_cost(
+                core::hazardous_weapons_selected(state, core::make_weapon_selections(state, *unit, type, chosen)));
+        }
+        if (!best || value > best_value) {
+            best = std::move(plan);
+            best_value = value;
+        }
     }
     return best;
 }
@@ -705,33 +824,46 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
                           const ShotContext& context) {
     Volley volley;
     if (target.models.empty()) return volley;
+    // D-077 (M68): who is engaged (04.02, 10.06, 17.03). With the default context (an unengaged target, close-quarters
+    // shooting at the unit engaged with) and no MONSTER/VEHICLE on either side nothing below changes the M67 volley.
+    const EngagementFacts facts = facts_of(context, target);
+    if (facts.target_engaged && !facts.with_target && !facts.target_mv) return volley;  // 04.02: engaged, not ours
     const TargetSnapshot snap = snapshot_of(target);
     core::AttackContext attack;
     attack.type = core::AttackType::Shooting;
     attack.heavy_conditions_met = context.heavy;
+    std::optional<double> hazard;  // D-077: the attacker's expected loss to one hazard roll (24.15), when priced
     struct Pick {
         core::AttackProfile profile;
         int dice = 0;
         std::vector<core::DiceExpr> random;  // D-069: a random A, with its bonus dice in `dice`
     };
     for (const core::Model& model : attacker.models) {
+        // Only read in close-quarters shooting (10.06), so only worked out there.
+        const bool mv_model = facts.close_quarters && core::is_monster_or_vehicle(attacker, model);
         std::vector<Candidate<Pick>> cands;
         for (std::size_t w = 0; w < model.weapons.size(); ++w) {
             for (const core::WeaponProfile& p : model.weapons[w].profiles) {
                 if (p.kind != core::WeaponKind::Ranged || !profile_supported(p)) continue;
                 if (!allowed_for_type(attacker, model, p, context.type) || !within_range(p, context.gap_mm)) continue;
+                if (!target_allowed(facts, mv_model, p)) continue;  // D-077: 04.02, 10.06, 17.03
                 core::WeaponSelection sel;
                 sel.target = target.id;
                 sel.target_within_half_range = within_half_range(p, context.gap_mm);       // 24.30
                 sel.target_models_at_selection = static_cast<int>(target.models.size());  // 24.05
-                const core::AttackProfile ap = core::make_attack_profile(p, attack);
+                core::AttackProfile ap = core::make_attack_profile(p, attack);
+                ap.hit_modifier += hit_modifier_of(facts, mv_model, p);  // D-077: 10.06 and 17.03, as the engine adds them
                 const core::SelectionDice sd = core::selection_dice(p, sel, attack);
                 std::vector<core::DiceExpr> random;
                 if (sd.random) random.push_back(*sd.random);  // D-069
                 const int dice = sd.dice + sd.bonus;
                 const VolleyBatch one[] = {VolleyBatch{ap, dice, random}};
-                cands.push_back({Pick{ap, dice, random}, expected_outcome(cache, one, snap).model_equivalents,
-                                 is_close_quarters(p), w});
+                double value = expected_outcome(cache, one, snap).model_equivalents;
+                if (context.hazard_rate > 0.0 && p.has<core::ability::Hazardous>()) {
+                    if (!hazard) hazard = hazard_model_equivalents(attacker, 1);
+                    value -= context.hazard_rate * *hazard;  // D-077: its hazard roll, in the target's model equivalents
+                }
+                cands.push_back({Pick{ap, dice, random}, value, is_close_quarters(p), w});
             }
         }
         const bool one_set =
@@ -741,7 +873,7 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
     return volley;
 }
 
-Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const core::Unit& target) {
+Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const core::Unit& target, double hazard_rate) {
     Volley volley;
     if (target.models.empty()) return volley;
     const TargetSnapshot snap = snapshot_of(target);
@@ -750,6 +882,7 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
     const auto usable = [](const core::WeaponProfile& p) {
         return p.kind == core::WeaponKind::Melee && profile_supported(p);
     };
+    std::optional<double> hazard;  // D-077: the attacker's expected loss to one hazard roll (24.15), when priced
     for (const core::Model& model : attacker.models) {
         // 24.11 (D-071): the best of the model's other melee weapons, plus every [EXTRA ATTACKS] weapon; a model
         // with no other weapon it can use picks among its [EXTRA ATTACKS] weapons too.
@@ -767,7 +900,11 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
                 core::WeaponSelection sel;
                 sel.target = target.id;
                 const VolleyBatch one{core::make_attack_profile(p, attack), core::gather_attack_dice(p, sel, attack)};
-                const double value = expected_outcome(cache, std::span<const VolleyBatch>(&one, 1), snap).model_equivalents;
+                double value = expected_outcome(cache, std::span<const VolleyBatch>(&one, 1), snap).model_equivalents;
+                if (hazard_rate > 0.0 && p.has<core::ability::Hazardous>()) {
+                    if (!hazard) hazard = hazard_model_equivalents(attacker, 1);
+                    value -= hazard_rate * *hazard;  // D-077: its hazard roll, in the target's model equivalents
+                }
                 if (!best || value > best_value) {
                     best = one;
                     best_weapon = wi;
