@@ -80,14 +80,36 @@ std::string fight_move_reason(const std::string& head, const FightMoveCand& c) {
     return head + " - " + client::describe_shape_change(c.change) + " (" + signed_value(c.gain) + ")";
 }
 
+// D-077 (M68): does the unit carry a [HAZARDOUS] melee profile it can use (24.15)? Only then are its declarations
+// priced for the hazard (the M67 arithmetic otherwise).
+bool has_hazardous_melee(const core::Unit& u) {
+    for (const core::Model& m : u.models) {
+        for (const core::Weapon& w : m.weapons) {
+            for (const core::WeaponProfile& p : w.profiles) {
+                if (p.kind == core::WeaponKind::Melee && p.has<core::ability::Hazardous>()) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// The declarations' value in unit shares (D-077: less the expected loss to the unit's own hazard rolls when
+// `hazardous`, one per [HAZARDOUS] weapon selected, the engine's count); nullopt if the engine would refuse them.
 std::optional<double> melee_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit,
                                   const std::vector<core::MeleeDeclaration>& decls,
-                                  std::vector<analysis::TargetOutcome>* outcomes = nullptr) {
+                                  std::vector<analysis::TargetOutcome>* outcomes = nullptr, bool hazardous = false) {
     if (decls.empty()) return 0.0;
     const std::vector<core::AttackBatch> batches = analysis::melee_batches(state, unit, decls);
     if (batches.empty()) return std::nullopt;
     std::vector<analysis::TargetOutcome> outs = evaluate_in_best_order(cache, state, batches);
-    const double v = share_value(state, outs);
+    double v = share_value(state, outs);
+    if (hazardous) {
+        const int rolls = core::hazardous_weapons_selected(state, core::make_melee_selections(state, decls));
+        if (rolls > 0) {
+            const core::Unit& u = *state.find_unit(unit);
+            v -= unit_share(state, u, analysis::hazard_model_equivalents(u, rolls));
+        }
+    }
     if (outcomes != nullptr) *outcomes = std::move(outs);
     return v;
 }
@@ -258,6 +280,7 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
     if (u == nullptr || u->models.empty()) return std::nullopt;
     const std::vector<core::MeleeDeclaration> options = core::melee_options(state, *u);
     if (options.empty()) return std::nullopt;
+    const bool hazardous = has_hazardous_melee(*u);  // D-077
     // Per model, its candidate declaration sets (D-071: one declaration each, or a model's [EXTRA ATTACKS]
     // weapons with its main one, 24.11) and the set it takes.
     std::vector<std::vector<std::vector<core::MeleeDeclaration>>> cands;
@@ -268,7 +291,7 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
         std::size_t best = 0;
         double best_value = -1.0;
         for (std::size_t i = 0; i < mine.size(); ++i) {
-            const std::optional<double> v = melee_value(cache, state, unit, mine[i]);
+            const std::optional<double> v = melee_value(cache, state, unit, mine[i], nullptr, hazardous);
             if (v && *v > best_value + kBetter) {
                 best_value = *v;
                 best = i;
@@ -277,7 +300,7 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
         current.push_back(mine[best]);
         cands.push_back(std::move(mine));
     }
-    std::optional<double> value = melee_value(cache, state, unit, flatten(current));
+    std::optional<double> value = melee_value(cache, state, unit, flatten(current), nullptr, hazardous);
     if (!value) return std::nullopt;
     for (int pass = 0; pass < kDescentPasses; ++pass) {
         bool improved = false;
@@ -287,7 +310,7 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
                 if (d == current[i]) continue;
                 std::vector<std::vector<core::MeleeDeclaration>> trial = current;
                 trial[i] = d;
-                const std::optional<double> v = melee_value(cache, state, unit, flatten(trial));
+                const std::optional<double> v = melee_value(cache, state, unit, flatten(trial), nullptr, hazardous);
                 if (v && *v > *value + kBetter) {
                     value = v;
                     current = std::move(trial);
@@ -300,7 +323,7 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
     MeleeChoice out;
     out.unit = unit;
     out.declarations = flatten(current);
-    out.value = melee_value(cache, state, unit, out.declarations, &out.outcomes).value_or(0.0);
+    out.value = melee_value(cache, state, unit, out.declarations, &out.outcomes, hazardous).value_or(0.0);
     return out;
 }
 
@@ -333,28 +356,39 @@ double consolidation_score(analysis::OddsCache& cache, const core::GameState& st
             for (const core::UnitId id : engaged) {
                 const core::Unit* e = state.find_unit(id);
                 if (e == nullptr || e->models.empty()) continue;
-                score += ranged_share(cache, u, *e, 0.0f, true);
+                score += ranged_share(cache, state, u, *e, 0.0f, true);
                 score -= own_fight_value(cache, state, id);
-                score -= ranged_share(cache, *e, u, 0.0f, true);
+                score -= ranged_share(cache, state, *e, u, 0.0f, true);
             }
             continue;
         }
         if (gen == Generation::M55 || enemy_units(state, side).size() <= 1) {
             if (const core::Unit* e = closest_enemy(state, u)) {
                 const float gap = core::unit_distance(u, *e).value_or(0.0f);
-                score += ranged_share(cache, u, *e, gap) - ranged_share(cache, *e, u, gap);
+                score += ranged_share(cache, state, u, *e, gap) - ranged_share(cache, state, *e, u, gap);
             }
             continue;
         }
         // D-066 (M56): our best shot at any enemy unit that may be shot (unengaged, 04.02) minus the shooting of
         // every enemy unit that is free to shoot us (an engaged one can't, 10.04). One enemy unit: as above.
+        // D-077 (M68): an engaged MONSTER/VEHICLE may be shot (17.03, at -1) and still shoots us (10.06, its
+        // MONSTER/VEHICLE models in close-quarters shooting, at -1).
         double ours = 0.0;
         double theirs = 0.0;
         for (const core::Unit* e : enemy_units(state, side)) {
-            if (core::is_engaged(state, *e)) continue;
             const float gap = core::unit_distance(u, *e).value_or(0.0f);
-            ours = std::max(ours, ranged_share(cache, u, *e, gap));
-            theirs += ranged_share(cache, *e, u, gap);
+            if (core::is_engaged(state, *e)) {
+                if (!monster_or_vehicle(*e)) continue;
+                if (const std::optional<analysis::ShotContext> at = next_turn_shot(state, u, *e, gap)) {
+                    ours = std::max(ours, ranged_share(cache, state, u, *e, *at));
+                }
+                if (const std::optional<analysis::ShotContext> back = next_turn_shot(state, *e, u, gap)) {
+                    theirs += ranged_share(cache, state, *e, u, *back);
+                }
+                continue;
+            }
+            ours = std::max(ours, ranged_share(cache, state, u, *e, gap));
+            theirs += ranged_share(cache, state, *e, u, gap);
         }
         score += ours - theirs;
     }

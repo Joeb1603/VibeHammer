@@ -72,7 +72,7 @@ bool offered(const std::vector<core::GameAction>& legal, const core::GameAction&
 
 // ---- the value model (see the header) ----
 
-double alive(const core::Unit& u) { return alive_share(u); }
+double alive(const core::GameState& state, const core::Unit& u) { return alive_share(state, u); }
 
 struct Rates {
     double melee = 0.0;   // every model fighting with its best melee weapon
@@ -80,12 +80,12 @@ struct Rates {
     double ranged = 0.0;  // shooting across the gap
 };
 
-Rates rates_of(analysis::OddsCache& cache, const core::Unit& attacker, const core::Unit& target,
-               std::optional<float> gap) {
+Rates rates_of(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& attacker,
+               const core::Unit& target, std::optional<float> gap) {
     Rates r;
-    r.melee = melee_share(cache, attacker, target);
-    r.cq = ranged_share(cache, attacker, target, 0.0f, true);
-    if (gap) r.ranged = ranged_share(cache, attacker, target, *gap);
+    r.melee = melee_share(cache, state, attacker, target);
+    r.cq = ranged_share(cache, state, attacker, target, 0.0f, true);
+    if (gap) r.ranged = ranged_share(cache, state, attacker, target, *gap);
     return r;
 }
 
@@ -109,16 +109,28 @@ struct ChargedValue {
 // charges only (they can't shoot an engaged unit, 04.02); otherwise their shooting at the gap and their charge
 // after a Normal move. Units engaged with anything are busy (04.02, 11.02), and so is one that can reach another
 // of our units anyway (marginal exposure, as the move score's). Shares of `u`.
+// D-077 (M68): while we are engaged, a MONSTER/VEHICLE `u` can still be shot (17.03, at -1, no [BLAST]). An engaged
+// MONSTER/VEHICLE unit still shoots (10.06, its MONSTER/VEHICLE models in close-quarters shooting), but it always has
+// another target, the unit it is engaged with, so by marginal exposure it stays busy here.
 double others_threat(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& u,
                      std::span<const core::UnitId> involved, bool engaged) {
     double loss = 0.0;
+    const bool u_mv = monster_or_vehicle(u);
     for (const core::Unit* y : enemy_units(state, u.side)) {
         if (std::find(involved.begin(), involved.end(), y->id) != involved.end()) continue;
         if (core::is_engaged(state, *y) || reaches_another(state, *y, u)) continue;
         const float gap = core::unit_distance(u, *y).value_or(0.0f);
-        const double melee = melee_share(cache, *y, u);
+        const double melee = melee_share(cache, state, *y, u);
         loss += analysis::threat_ranges(*y).p_charge_after_move(gap) * melee;
-        if (!engaged) loss += ranged_share(cache, *y, u, gap);
+        if (!engaged) {
+            loss += ranged_share(cache, state, *y, u, gap);
+        } else if (u_mv) {
+            analysis::ShotContext at;  // 17.03: an engaged MONSTER/VEHICLE can be shot, at -1
+            at.heavy = true;
+            at.gap_mm = gap;
+            at.target_engaged = true;
+            loss += ranged_share(cache, state, *y, u, at);
+        }
     }
     return loss;
 }
@@ -133,7 +145,7 @@ bool has_other_enemies(const core::GameState& state, const core::Unit& u, std::s
 
 // D-066: several charge targets share our unit's strength. Each of our models fights the target closest to it
 // (a tie goes to the first target), and our losses add up over all of them (MultiExchange).
-ChargedValue charged_parts_shared(analysis::OddsCache& cache, const core::Unit& u,
+ChargedValue charged_parts_shared(analysis::OddsCache& cache, const core::GameState& state, const core::Unit& u,
                                   const std::vector<const core::Unit*>& ts, int turns, double others_loss) {
     ChargedValue out;
     std::vector<core::Unit> mine(ts.size(), u);
@@ -151,22 +163,26 @@ ChargedValue charged_parts_shared(analysis::OddsCache& cache, const core::Unit& 
         mine[best].models.push_back(m);
     }
     std::vector<double> them;
-    for (const core::Unit* t : ts) them.push_back(alive(*t));
-    MultiExchange x(alive(u), them);
+    for (const core::Unit* t : ts) them.push_back(alive(state, *t));
+    MultiExchange x(alive(state, u), them);
     // This Fight phase: Fights First (11.04 After Moving, 24.13): ours strike first, theirs reply.
-    for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, fighters(mine[t], *ts[t]), *ts[t]));
-    for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, fighters(*ts[t], u), u));
+    for (std::size_t t = 0; t < ts.size(); ++t) {
+        x.we_hit(t, melee_share(cache, state, fighters(mine[t], *ts[t]), *ts[t]));
+    }
+    for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, state, fighters(*ts[t], u), u));
     out.now = x.value();
     if (turns >= 1) {  // their turn, engaged: close-quarters shooting, then they fight first
-        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, ranged_share(cache, *ts[t], u, 0.0f, true));
-        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, *ts[t], u));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, ranged_share(cache, state, *ts[t], u, 0.0f, true));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, state, *ts[t], u));
         x.we_lose(others_loss);
-        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, mine[t], *ts[t]));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, state, mine[t], *ts[t]));
     }
     if (turns >= 2) {  // our turn, engaged
-        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, ranged_share(cache, mine[t], *ts[t], 0.0f, true));
-        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, mine[t], *ts[t]));
-        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, *ts[t], u));
+        for (std::size_t t = 0; t < ts.size(); ++t) {
+            x.we_hit(t, ranged_share(cache, state, mine[t], *ts[t], 0.0f, true));
+        }
+        for (std::size_t t = 0; t < ts.size(); ++t) x.we_hit(t, melee_share(cache, state, mine[t], *ts[t]));
+        for (std::size_t t = 0; t < ts.size(); ++t) x.they_hit(t, melee_share(cache, state, *ts[t], u));
     }
     out.total = x.value();
     return out;
@@ -186,18 +202,18 @@ ChargedValue charged_parts(analysis::OddsCache& cache, const core::GameState& af
             const core::Unit* e = after.find_unit(id);
             if (e != nullptr && !e->models.empty()) ts.push_back(e);
         }
-        if (ts.size() > 1) return charged_parts_shared(cache, *u, ts, turns, others_loss);
+        if (ts.size() > 1) return charged_parts_shared(cache, after, *u, ts, turns, others_loss);
     }
     // One target (M55: each target on its own, from our unit's full strength, summed).
     for (const core::UnitId id : targets) {
         const core::Unit* e = after.find_unit(id);
         if (e == nullptr || e->models.empty()) continue;
-        const Rates ours = rates_of(cache, *u, *e, std::nullopt);
-        const Rates theirs = rates_of(cache, *e, *u, std::nullopt);
-        Exchange x(alive(*u), alive(*e));
+        const Rates ours = rates_of(cache, after, *u, *e, std::nullopt);
+        const Rates theirs = rates_of(cache, after, *e, *u, std::nullopt);
+        Exchange x(alive(after, *u), alive(after, *e));
         // This Fight phase: Fights First (11.04 After Moving, 24.13), so ours strike first; theirs reply.
-        x.we_hit(melee_share(cache, fighters(*u, *e), *e));
-        x.they_hit(melee_share(cache, fighters(*e, *u), *u));
+        x.we_hit(melee_share(cache, after, fighters(*u, *e), *e));
+        x.they_hit(melee_share(cache, after, fighters(*e, *u), *u));
         out.now += x.value();
         if (turns >= 1) {  // their turn, engaged: close-quarters shooting, then they fight first
             x.they_hit(theirs.cq);
@@ -319,12 +335,14 @@ double hold_value(analysis::OddsCache& cache, const core::GameState& state, core
     const std::array<core::UnitId, 1> closest{e->id};
     const bool others = gen != Generation::M55 && has_other_enemies(state, *u, closest);
     const float gap = core::unit_distance(*u, *e).value_or(0.0f);
-    Rates ours = rates_of(cache, *u, *e, gap);
-    const Rates theirs = rates_of(cache, *e, *u, gap);
-    // An enemy engaged with another unit can neither shoot us (10.06: only units it is engaged with) nor charge
-    // (11.02) next turn; and whether we may shoot it is the engine's answer (shot_options, with our shooting this
-    // phase forgotten).
+    Rates ours = rates_of(cache, state, *u, *e, gap);
+    const Rates theirs = rates_of(cache, state, *e, *u, gap);
+    // An enemy engaged with another unit can't charge (11.02) next turn, nor shoot us (10.06: only units it is engaged
+    // with) unless it is a MONSTER/VEHICLE (D-077: its MONSTER/VEHICLE models may shoot other units, at -1); and
+    // whether we may shoot it is the engine's answer (shot_options, with our shooting this phase forgotten; 17.03 lets
+    // an engaged MONSTER/VEHICLE be shot, D-077: at -1).
     const bool enemy_engaged = core::is_engaged(state, *e);
+    const bool enemy_mv = enemy_engaged && monster_or_vehicle(*e);
     if (enemy_engaged) {
         core::GameState probe = state;
         probe.find_unit(unit)->phase_flags.selected_to_shoot = false;
@@ -332,10 +350,26 @@ double hold_value(analysis::OddsCache& cache, const core::GameState& state, core
             core::shot_options(probe, *probe.find_unit(unit), core::ShootingType::Normal);
         const bool targetable = std::any_of(shots.begin(), shots.end(),
                                             [&](const core::ShotDeclaration& s) { return s.target == e->id; });
-        if (!targetable) ours.ranged = 0.0;
+        if (!targetable) {
+            ours.ranged = 0.0;
+        } else if (enemy_mv) {
+            analysis::ShotContext at;  // 17.03: at -1, no [BLAST]
+            at.heavy = true;
+            at.gap_mm = gap;
+            at.target_engaged = true;
+            ours.ranged = ranged_share(cache, state, *u, *e, at);
+        }
     }
-    Exchange x(alive(*u), alive(*e));
-    if (!enemy_engaged) x.they_hit(theirs.ranged);  // their turn: they shoot us
+    Exchange x(alive(state, *u), alive(state, *e));
+    if (!enemy_engaged) {
+        x.they_hit(theirs.ranged);  // their turn: they shoot us
+    } else if (enemy_mv) {
+        analysis::ShotContext cq;  // D-077, 10.06: close-quarters shooting at a unit it isn't engaged with
+        cq.type = core::ShootingType::CloseQuarters;
+        cq.elsewhere = true;
+        cq.gap_mm = gap;
+        x.they_hit(ranged_share(cache, state, *e, *u, cq));
+    }
     if (others) x.we_lose(others_threat(cache, state, *u, closest, false));
     double p_charged = 0.0;
     if (!enemy_engaged) {

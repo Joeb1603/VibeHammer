@@ -20,9 +20,11 @@
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/path.hpp"
 #include "core/geometry/units.hpp"
+#include "core/model/keywords.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
+#include "normal/defense.hpp"
 #include "normal/fight.hpp"
 #include "normal/value.hpp"
 #include "reach_area.hpp"
@@ -114,6 +116,12 @@ struct MoveGeometry {
     std::vector<float> max_mm;
     float unit_max_mm = 0.0f;  // the slowest model's maximum
     std::vector<core::PosedModel> enemies;
+    // D-077 (M68), 17.01: the moving unit's models that may pass through enemy models that aren't MONSTER/VEHICLE
+    // models (a Normal or Advance move of a MONSTER/VEHICLE, as the engine's moves_through_non_monster_enemies), and
+    // which enemy models (in `enemies`' order) are MONSTER/VEHICLE models, which still block them.
+    std::vector<bool> passes_infantry;
+    std::vector<bool> enemy_mv;
+    bool any_passes = false;
     std::vector<core::PosedModel> others;  // friendly models of other units
     // The circumscribed radii (avoid_radius_mm) of `bases`, `enemies` and `others`, worked out once (the same floats).
     std::vector<float> radius;
@@ -144,6 +152,8 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin) {
         const std::optional<float> max = core::max_move_distance_mm(origin, m.id);
         if (!start || !max) return std::nullopt;
         g.ids.push_back(m.id);
+        g.passes_infantry.push_back(core::moves_through_non_monster_enemies(mv.type, *u, m));
+        g.any_passes = g.any_passes || g.passes_infantry.back();
         g.bases.push_back(m.base);
         g.facings.push_back(core::move_start_facing_deg(origin, m.id).value_or(m.facing_deg));
         g.starts.push_back(*start);
@@ -151,6 +161,12 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin) {
         g.unit_max_mm = g.unit_max_mm < 0.0f ? *max : std::min(g.unit_max_mm, *max);
     }
     g.enemies = core::posed_enemy_models(origin, u->side);
+    if (g.any_passes) {  // in posed_enemy_models' order: units in order, then their models
+        for (const core::Unit& e : origin.units) {
+            if (e.side == u->side) continue;
+            for (const core::Model& m : e.models) g.enemy_mv.push_back(core::is_monster_or_vehicle(e, m));
+        }
+    }
     for (const core::Unit& other : origin.units) {
         if (other.side != u->side || other.id == u->id) continue;
         for (const core::Model& m : other.models) g.others.push_back(core::posed_of(m));
@@ -178,11 +194,15 @@ bool on_battlefield(const MoveGeometry& g, std::size_t i, const Position& p) {
 }
 
 // 03.01: the straight line from `a` to `b` doesn't pass through an enemy model (unless the move may). D-074 part 3:
-// by the circumscribed circles (avoid).
+// by the circumscribed circles (avoid). D-077 (M68), 17.01: a MONSTER/VEHICLE model's Normal or Advance move may pass
+// through enemy models that aren't MONSTER/VEHICLE models (ends_ok still keeps it off them and out of Engagement
+// Range).
 bool segment_clear(const MoveGeometry& g, std::size_t i, const Position& a, const Position& b) {
     if (g.through_enemies) return true;
     const float r = g.radius[i];
+    const bool passes = g.any_passes && g.passes_infantry[i];
     for (std::size_t k = 0; k < g.enemies.size(); ++k) {
+        if (passes && !g.enemy_mv[k]) continue;  // 17.01
         if (client::point_segment_distance(g.enemies[k].position, a, b) < r + g.enemy_radius[k]) return false;
     }
     return true;
@@ -645,6 +665,58 @@ double hazard_wounds_per_model(const core::Unit& unit) {
     return total;
 }
 
+// D-077 (M68): a Desperate Escape is planned with no failed hazard roll (D-054), so before one is made, every likely
+// outcome (06.03: one to three failed rolls, the casualties chosen as Normal chooses them, 06.02) must still leave a
+// fall-back move that stands. Otherwise the losses can leave no coherent arrangement out of Engagement Range (09.07,
+// 03.03) and the move would have to be reset (a UnitMoveReverted): Hard's escape_stands (D-067), for Normal. Failing and
+// passing faces come from make_hazard_rolls itself.
+bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side side, const GameAction& escape,
+                   const core::Unit& unit, Generation gen) {
+    std::optional<int> fail;
+    std::optional<int> pass;
+    for (int face = 1; face <= 6; ++face) {
+        core::ScriptedDice dice{face};
+        if (core::make_hazard_rolls(dice, unit, 1).mortal_wounds > 0) {
+            if (!fail) fail = face;
+        } else if (!pass) {
+            pass = face;
+        }
+    }
+    if (!pass) return false;
+    if (!fail) return true;  // a hazard roll never fails
+    const int n = static_cast<int>(unit.models.size());
+    for (int k = 1; k <= std::min(3, n - 1); ++k) {
+        std::vector<int> faces(static_cast<std::size_t>(n), *pass);
+        for (int i = 0; i < k; ++i) faces[static_cast<std::size_t>(i)] = *fail;
+        core::ScriptedDice dice(faces);
+        Simulator sim(gs, 0);
+        if (!sim.step(side, escape, dice).ok()) return false;
+        for (int guard = 0; guard < 8 && sim.state().pending &&
+                            std::holds_alternative<core::decision::OrderCasualties>(sim.state().pending->kind);
+             ++guard) {
+            const auto& d = std::get<core::decision::OrderCasualties>(sim.state().pending->kind);
+            const std::optional<CasualtyOrder> o = casualty_order(cache, sim.state(), gen);
+            if (!o || !sim.step(side, core::action::OrderCasualties{d.target, o->priority}).ok()) return false;
+        }
+        const GameState& after = sim.state();
+        if (!after.pending || !std::holds_alternative<core::decision::MoveModels>(after.pending->kind)) continue;
+        if (standing_moves(cache, after, MoveWeights{}, 1, kMaxSimulatedMoves).empty()) return false;
+    }
+    return true;
+}
+
+// 09.07 Desperate Escape: the model equivalents expected to be lost to its hazard rolls, one per model. A unit whose
+// models share one W: the M43 expression (every mortal wound costs 1 / W of a model). D-077 (M68): otherwise each
+// model's own W, through core's 06.02 allocation (analysis::hazard_model_equivalents).
+double escape_losses(const core::Unit& u) {
+    const int w = std::max(1, u.models.front().characteristics.wounds);
+    const bool one_w = std::all_of(u.models.begin(), u.models.end(), [&](const core::Model& m) {
+        return std::max(1, m.characteristics.wounds) == w;
+    });
+    if (!one_w) return analysis::hazard_model_equivalents(u, static_cast<int>(u.models.size()));
+    return static_cast<double>(u.models.size()) * hazard_wounds_per_model(u) / w;
+}
+
 }  // namespace
 
 // ---- candidates ----
@@ -897,23 +969,35 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
         core::ScriptedDice sixes(std::vector<int>(u.models.size(), 6));
         if (sim.step(side, escape, sixes).ok()) {
             if (std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen)) {
-                const int w = std::max(1, u.models.front().characteristics.wounds);
-                const double lost = static_cast<double>(u.models.size()) * hazard_wounds_per_model(u) / w;
+                const double lost = escape_losses(u);
                 Option o;
                 o.start = escape;
                 o.score = pm->score;
-                o.value = pm->score.total - unit_share(u, lost);  // lost now, before the move
+                o.value = pm->score.total - unit_share(gs, u, lost);  // lost now, before the move
                 o.text = "Fall Back (Desperate Escape) " + pm->candidate.label + ", expecting " +
-                         signed_value(-unit_share(u, lost)) + " from hazard rolls";
+                         signed_value(-unit_share(gs, u, lost)) + " from hazard rolls";
                 if (values != nullptr) values->fall_back = o.value;
                 options.push_back(std::move(o));
             }
         }
     }
     if (options.empty()) return std::nullopt;
-    std::size_t best = 0;
-    for (std::size_t i = 1; i < options.size(); ++i) {
-        if (options[i].value > options[best].value + kBetter) best = i;
+    const auto best_of = [&](std::optional<std::size_t> skip) {
+        std::optional<std::size_t> b;
+        for (std::size_t i = 0; i < options.size(); ++i) {
+            if (i == skip) continue;
+            if (!b || options[i].value > options[*b].value + kBetter) b = i;
+        }
+        return b;
+    };
+    std::size_t best = *best_of(std::nullopt);
+    // D-077 (M68): a Desperate Escape is made only when the likely hazard losses leave a fall-back move that stands
+    // (escape_stands); otherwise the next best option. Checked only for the escape that would be made, so every other
+    // decision (and its reason) is as before.
+    std::optional<std::size_t> vetoed;
+    if (options[best].start == escape && options.size() > 1 && !escape_stands(cache, gs, side, escape, u, gen)) {
+        vetoed = best;
+        best = *best_of(best);
     }
     Option& chosen = options[best];
     std::string others;
@@ -922,6 +1006,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
         const auto& m = std::get<core::action::StartMove>(options[i].start);
         others += (others.empty() ? "" : ", ") + move_type_text(m.move_type, m.fall_back_mode) + " " +
                   signed_value(options[i].value);
+        if (vetoed == i) others += ", but its likely hazard losses leave no move that stands";
     }
     const std::string reason = client::unit_display_name(gs, u.id) + ": " + chosen.text + " - " + position_text(gs, *unit, chosen.score) + " (" +
                                signed_value(chosen.value) + (others.empty() ? "" : "; " + others) + ")";

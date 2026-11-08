@@ -10,6 +10,7 @@
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/units.hpp"
 #include "core/rules/charge.hpp"
+#include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
 #include "normal/charge.hpp"
@@ -237,6 +238,8 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
         }
     }
     us_round_ = all_round(us_.models);
+    us_mv_ = monster_or_vehicle(us_);
+    points_rule_ = origin.result_rule == core::ResultRule::PointsDestroyed;
     for (const core::Model& m : us_.models) us_extents_.push_back(edge_extents(m.base, m.facing_deg));
     us_threat_ = analysis::threat_ranges(us_);
     our_ranges_ = ranged_ranges(us_);
@@ -244,6 +247,9 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
     start_engaged_ = core::is_engaged(origin, us_);
     if (const core::Unit* e = closest_enemy(origin, us_)) {
         enemy_ = *e;
+        enemy_mv_ = monster_or_vehicle(*e);
+        rate_us_ = hazard_rate(origin, us_, *e);
+        rate_them_ = hazard_rate(origin, *e, us_);
         enemy_models_ = core::posed_models(*e);
         enemy_round_ = all_round(enemy_models_);
         for (const core::PosedModel& m : enemy_models_) enemy_extents_.push_back(edge_extents(m.base, m.facing_deg));
@@ -271,6 +277,26 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                              0.0, 1.0)
                 : 0.0;
         survival_weight_ = weights_.survival * std::max(0.0, -lean) * progress;
+        if (points_rule_) {
+            // D-077 (M68): the points tiebreak (D-076) has no draw to wait for and needs no wipe-out to win, so no time
+            // preference. A wipe-out still loses at once (D-007), so the survival term stays for the side's last unit,
+            // worth what surviving buys on the engine's exact tally: a win 2, a draw 1, nothing when behind.
+            our_discount_ = 1.0;
+            their_discount_ = 1.0;
+            bool last = true;
+            for (const core::Unit& f : origin.units) {
+                if (f.side == us_.side && f.id != us_.id && !f.models.empty()) last = false;
+            }
+            if (last) {
+                const core::PointsTally tally = core::points_destroyed(origin);
+                const std::int64_t ours_pts = tally.destroyed[core::side_index(us_.side)];
+                const std::int64_t theirs_pts = tally.destroyed[1 - core::side_index(us_.side)];
+                const double result = ours_pts > theirs_pts ? 1.0 : ours_pts < theirs_pts ? -1.0 : 0.0;
+                survival_weight_ *= 1.0 + result;
+            } else {
+                survival_weight_ = 0.0;
+            }
+        }
         // D-066 (M56): every other enemy unit, in unit order (M55: none).
         if (generation_ != Generation::M55) {
             for (const core::Unit* o : enemy_units(origin, us_.side)) {
@@ -289,10 +315,13 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                     if (f.side != us_.side || f.id == us_.id || f.models.empty()) continue;
                     x.other_target_mm = std::min(x.other_target_mm, core::unit_distance(f, *o).value_or(kFar));
                 }
-                x.melee = melee_share(cache_, *o, us_);
-                x.cq = ranged_share(cache_, *o, us_, 0.0f, true);
+                x.mv = monster_or_vehicle(*o);
+                x.rate_us = hazard_rate(origin, us_, *o);
+                x.rate_them = hazard_rate(origin, *o, us_);
+                x.melee = melee_share(cache_, origin, *o, us_);
+                x.cq = ranged_share(cache_, origin, *o, us_, 0.0f, true);
                 if (!us_.models.empty()) {
-                    const analysis::Volley mv = analysis::unit_melee_volley(cache_, *o, us_);
+                    const analysis::Volley mv = analysis::unit_melee_volley(cache_, *o, us_, x.rate_them);
                     x.melee_wipe = analysis::expected_outcome(cache_, mv, analysis::snapshot_of(us_)).p_wipe();
                 }
                 others_.push_back(std::move(x));
@@ -302,7 +331,17 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
 }
 
 ScoreLine MoveScoreContext::new_line() const {
-    return ScoreLine(alive_share(us_), enemy_ ? alive_share(*enemy_) : 0.0, our_discount_, their_discount_);
+    return ScoreLine(alive_share(origin_, us_), enemy_ ? alive_share(origin_, *enemy_) : 0.0, our_discount_,
+                     their_discount_);
+}
+
+analysis::ShotContext MoveScoreContext::shot(bool ours, core::ShootingType type, bool heavy, float gap_mm) const {
+    analysis::ShotContext c;
+    c.type = type;
+    c.heavy = heavy;
+    c.gap_mm = gap_mm;
+    c.hazard_rate = ours ? rate_us_ : rate_them_;  // D-077
+    return c;
 }
 
 std::uint64_t MoveScoreContext::band_of(bool ours, float gap_mm) const {
@@ -323,9 +362,9 @@ double MoveScoreContext::ranged_rate(bool ours, core::ShootingType type, bool he
     if (const auto it = rates_.find(key); it != rates_.end()) return it->second;
     const core::Unit& a = ours ? us_ : *enemy_;
     const core::Unit& t = ours ? *enemy_ : us_;
-    const analysis::Volley v = analysis::unit_ranged_volley(cache_, a, t, analysis::ShotContext{type, heavy, gap_mm});
+    const analysis::Volley v = analysis::unit_ranged_volley(cache_, a, t, shot(ours, type, heavy, gap_mm));
     const double share =
-        unit_share(t, analysis::expected_outcome(cache_, v, analysis::snapshot_of(t)).model_equivalents);
+        unit_share(origin_, t, analysis::expected_outcome(cache_, v, analysis::snapshot_of(t)).model_equivalents);
     rates_.emplace(key, share);
     return share;
 }
@@ -333,7 +372,7 @@ double MoveScoreContext::ranged_rate(bool ours, core::ShootingType type, bool he
 double MoveScoreContext::melee_rate(bool ours) {
     if (!enemy_) return 0.0;
     std::optional<double>& slot = melee_[ours ? 0 : 1];
-    if (!slot) slot = ours ? melee_share(cache_, us_, *enemy_) : melee_share(cache_, *enemy_, us_);
+    if (!slot) slot = ours ? melee_share(cache_, origin_, us_, *enemy_) : melee_share(cache_, origin_, *enemy_, us_);
     return *slot;
 }
 
@@ -341,17 +380,33 @@ double MoveScoreContext::close_quarters_rate(bool ours) {
     if (!enemy_) return 0.0;
     std::optional<double>& slot = cq_[ours ? 0 : 1];
     if (!slot) {
-        slot = ours ? ranged_share(cache_, us_, *enemy_, 0.0f, true) : ranged_share(cache_, *enemy_, us_, 0.0f, true);
+        slot = ours ? ranged_share(cache_, origin_, us_, *enemy_, 0.0f, true)
+                    : ranged_share(cache_, origin_, *enemy_, us_, 0.0f, true);
     }
     return *slot;
+}
+
+std::pair<double, double> MoveScoreContext::enemy_elsewhere_shooting(float gap_mm) {
+    if (!enemy_ || !enemy_mv_ || us_.models.empty()) return {0.0, 0.0};
+    const std::uint64_t band = band_of(false, gap_mm);
+    if (const auto it = elsewhere_.find(band); it != elsewhere_.end()) return it->second;
+    analysis::ShotContext c = shot(false, core::ShootingType::CloseQuarters, false, gap_mm);
+    c.elsewhere = true;  // 10.06: its MONSTER/VEHICLE models, at a unit it isn't engaged with
+    const analysis::Volley v = analysis::unit_ranged_volley(cache_, *enemy_, us_, c);
+    std::pair<double, double> out{0.0, 0.0};
+    if (!v.empty()) {
+        const analysis::AttackOutcome o = analysis::expected_outcome(cache_, v, analysis::snapshot_of(us_));
+        out = {unit_share(origin_, us_, o.model_equivalents), o.p_wipe()};
+    }
+    elsewhere_.emplace(band, out);
+    return out;
 }
 
 double MoveScoreContext::enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm) {
     if (!enemy_ || us_.models.empty()) return 0.0;
     const RateKey key{false, static_cast<int>(type), heavy, band_of(false, gap_mm)};
     if (const auto it = wipes_.find(key); it != wipes_.end()) return it->second;
-    const analysis::Volley v =
-        analysis::unit_ranged_volley(cache_, *enemy_, us_, analysis::ShotContext{type, heavy, gap_mm});
+    const analysis::Volley v = analysis::unit_ranged_volley(cache_, *enemy_, us_, shot(false, type, heavy, gap_mm));
     const double p = analysis::expected_outcome(cache_, v, analysis::snapshot_of(us_)).p_wipe();
     wipes_.emplace(key, p);
     return p;
@@ -360,7 +415,7 @@ double MoveScoreContext::enemy_ranged_wipe(core::ShootingType type, bool heavy, 
 double MoveScoreContext::enemy_melee_wipe() {
     if (!enemy_ || us_.models.empty()) return 0.0;
     if (!melee_wipe_) {
-        const analysis::Volley v = analysis::unit_melee_volley(cache_, *enemy_, us_);
+        const analysis::Volley v = analysis::unit_melee_volley(cache_, *enemy_, us_, rate_them_);
         melee_wipe_ = analysis::expected_outcome(cache_, v, analysis::snapshot_of(us_)).p_wipe();
     }
     return *melee_wipe_;
@@ -370,9 +425,9 @@ double MoveScoreContext::enemy_engaged_wipe() {
     if (!enemy_ || us_.models.empty()) return 0.0;
     if (!engaged_wipe_) {
         // Its turn in the combat: close-quarters shooting, then the fight.
-        analysis::Volley v = analysis::unit_ranged_volley(
-            cache_, *enemy_, us_, analysis::ShotContext{core::ShootingType::CloseQuarters, false, 0.0f});
-        const analysis::Volley melee = analysis::unit_melee_volley(cache_, *enemy_, us_);
+        analysis::Volley v =
+            analysis::unit_ranged_volley(cache_, *enemy_, us_, shot(false, core::ShootingType::CloseQuarters, false, 0.0f));
+        const analysis::Volley melee = analysis::unit_melee_volley(cache_, *enemy_, us_, rate_them_);
         v.insert(v.end(), melee.begin(), melee.end());
         engaged_wipe_ = analysis::expected_outcome(cache_, v, analysis::snapshot_of(us_)).p_wipe();
     }
@@ -404,7 +459,8 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
             }
         }
         if (longest > 0.0f && core::within(gap, longest * 0.5f)) ++half;
-        if (enemy_engaged_elsewhere_) continue;  // 04.02: not while it is engaged with a friendly unit
+        // 04.02: not while it is engaged with a friendly unit (D-077, 17.03: unless it is a MONSTER/VEHICLE, at -1).
+        if (enemy_engaged_elsewhere_ && !enemy_mv_) continue;
         const std::uint64_t band = band_of(true, gap);
         const auto key = std::make_tuple(i, static_cast<int>(type), heavy, band);
         auto it = model_volleys_.find(key);
@@ -412,7 +468,8 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
             core::Unit one = us_;
             one.models = {m};
             one.models.front().position = positions[i];
-            const analysis::ShotContext context{type, heavy, gap};
+            analysis::ShotContext context = shot(true, type, heavy, gap);
+            context.target_engaged = enemy_engaged_elsewhere_;  // D-077: 17.03
             it = model_volleys_.emplace(key, analysis::unit_ranged_volley(cache_, one, *enemy_, context)).first;
         }
         volley.insert(volley.end(), it->second.begin(), it->second.end());
@@ -420,7 +477,7 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
     if (half_range_models != nullptr) *half_range_models = half;
     const analysis::AttackOutcome o = analysis::expected_outcome(cache_, volley, enemy_snap_);
     if (outcome != nullptr) *outcome = o;
-    return unit_share(*enemy_, o.model_equivalents);
+    return unit_share(origin_, *enemy_, o.model_equivalents);
 }
 
 std::vector<float> MoveScoreContext::enemy_gaps(const std::vector<core::Position>& positions) const {
@@ -563,15 +620,25 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
     }
     if (enemy_engaged_elsewhere_ || gap_mm >= kFar) {
         // Engaged with another unit of ours it can neither shoot us nor charge (04.02, 11.02); wiped out, nothing.
+        // D-077 (M68): a MONSTER/VEHICLE still shoots us with its MONSTER/VEHICLE models (10.06, at -1).
         if (reply != nullptr) *reply = gap_mm >= kFar ? "is wiped out" : "is locked in combat";
         ScoreLine y = line;
         y.next_half_turn();
+        double survive = 1.0;
+        if (enemy_engaged_elsewhere_ && enemy_mv_ && gap_mm < kFar) {
+            const std::pair<double, double> r = enemy_elsewhere_shooting(gap_mm);
+            y.they_hit(r.first);
+            survive = 1.0 - r.second;
+            if (reply != nullptr) *reply = "is locked in combat and shoots";
+        }
         if (others != nullptr) {  // D-066: the other enemy units still reply
             y.others_hit(others->unengaged);
-            if (p_survive != nullptr) *p_survive = others->survive;
-            return our_next_turn(y, gap_mm >= kFar ? kFar : gap_mm) + w * others->survive;
+            survive *= others->survive;
+            if (p_survive != nullptr) *p_survive = survive;
+            return our_next_turn(y, gap_mm >= kFar ? kFar : gap_mm) + w * survive;
         }
-        return our_next_turn(y, gap_mm >= kFar ? kFar : gap_mm) + w;
+        if (p_survive != nullptr) *p_survive = survive;
+        return our_next_turn(y, gap_mm >= kFar ? kFar : gap_mm) + w * survive;
     }
     const float m = them_threat_.move_mm;
     double best = 0.0;
@@ -709,14 +776,39 @@ std::pair<double, double> MoveScoreContext::other_ranged(Other& o, bool heavy, f
     if (const auto it = o.ranged.find(key); it != o.ranged.end()) return it->second;
     std::pair<double, double> v{0.0, 0.0};
     if (!us_.models.empty()) {
-        const analysis::Volley volley = analysis::unit_ranged_volley(
-            cache_, o.unit, us_, analysis::ShotContext{core::ShootingType::Normal, heavy, gap_mm});
+        analysis::ShotContext c;
+        c.type = core::ShootingType::Normal;
+        c.heavy = heavy;
+        c.gap_mm = gap_mm;
+        c.hazard_rate = o.rate_them;  // D-077
+        const analysis::Volley volley = analysis::unit_ranged_volley(cache_, o.unit, us_, c);
         if (!volley.empty()) {
             const analysis::AttackOutcome out = analysis::expected_outcome(cache_, volley, analysis::snapshot_of(us_));
-            v = {unit_share(us_, out.model_equivalents), out.p_wipe()};
+            v = {unit_share(origin_, us_, out.model_equivalents), out.p_wipe()};
         }
     }
     o.ranged.emplace(key, v);
+    return v;
+}
+
+std::pair<double, double> MoveScoreContext::other_at_engaged_us(Other& o, float gap_mm) {
+    const std::uint64_t key = other_band(o, gap_mm);
+    if (const auto it = o.at_engaged_us.find(key); it != o.at_engaged_us.end()) return it->second;
+    std::pair<double, double> v{0.0, 0.0};
+    if (!us_.models.empty()) {
+        analysis::ShotContext c;  // 17.03: Normal shooting at our engaged MONSTER/VEHICLE, at -1, no [BLAST]
+        c.type = core::ShootingType::Normal;
+        c.heavy = true;
+        c.gap_mm = gap_mm;
+        c.target_engaged = true;
+        c.hazard_rate = o.rate_them;
+        const analysis::Volley volley = analysis::unit_ranged_volley(cache_, o.unit, us_, c);
+        if (!volley.empty()) {
+            const analysis::AttackOutcome out = analysis::expected_outcome(cache_, volley, analysis::snapshot_of(us_));
+            v = {unit_share(origin_, us_, out.model_equivalents), out.p_wipe()};
+        }
+    }
+    o.at_engaged_us.emplace(key, v);
     return v;
 }
 
@@ -739,7 +831,8 @@ double MoveScoreContext::our_shooting_at_other(std::size_t index, const std::vec
                                                core::ShootingType type, bool heavy, analysis::AttackOutcome* outcome) {
     if (outcome != nullptr) *outcome = analysis::AttackOutcome{};
     Other& o = others_[index];
-    if (o.engaged || o.models.empty() || positions.size() != us_.models.size()) return 0.0;  // 04.02: unengaged only
+    // 04.02: unengaged only (D-077, 17.03: or an engaged MONSTER/VEHICLE, at -1)
+    if ((o.engaged && !o.mv) || o.models.empty() || positions.size() != us_.models.size()) return 0.0;
     std::vector<std::uint64_t> bands(us_.models.size());
     std::vector<float> gaps(us_.models.size());
     bool any = false;
@@ -769,15 +862,19 @@ double MoveScoreContext::our_shooting_at_other(std::size_t index, const std::vec
                 core::Unit one = us_;
                 one.models = {us_.models[i]};
                 one.models.front().position = positions[i];
-                it = o.our_volleys
-                         .emplace(vkey, analysis::unit_ranged_volley(cache_, one, o.unit,
-                                                                     analysis::ShotContext{type, heavy, gaps[i]}))
-                         .first;
+                analysis::ShotContext c;
+                c.type = type;
+                c.heavy = heavy;
+                c.gap_mm = gaps[i];
+                c.target_engaged = o.engaged;  // D-077: 17.03 (an engaged MONSTER/VEHICLE)
+                c.hazard_rate = o.rate_us;
+                it = o.our_volleys.emplace(vkey, analysis::unit_ranged_volley(cache_, one, o.unit, c)).first;
             }
             volley.insert(volley.end(), it->second.begin(), it->second.end());
         }
         const analysis::AttackOutcome out = analysis::expected_outcome(cache_, volley, o.snap);
-        hit = o.our_shots.emplace(key, std::make_pair(unit_share(o.unit, out.model_equivalents), out.models_destroyed))
+        hit = o.our_shots
+                  .emplace(key, std::make_pair(unit_share(origin_, o.unit, out.model_equivalents), out.models_destroyed))
                   .first;
     }
     if (outcome != nullptr) outcome->models_destroyed = hit->second.second;
@@ -806,10 +903,12 @@ OtherThreat MoveScoreContext::other_threat(const std::vector<core::Position>& po
     const float m_close = kCloseGapMm;
     for (std::size_t i = 0; i < others_.size(); ++i) {
         Other& o = others_[i];
-        if (o.locked || o.models.empty()) continue;  // 04.02, 11.02: busy with another of our units
+        // 04.02, 11.02: busy with another of our units. D-077: a MONSTER/VEHICLE engaged with one still shoots (10.06),
+        // but that unit is always another target of its, so neither rule below counts it here.
+        if (o.locked || o.models.empty()) continue;
         double left = 1.0;  // its strength left after our shooting this turn
         if (shot && shot->index == i) {
-            const double alive = alive_share(o.unit);
+            const double alive = alive_share(origin_, o.unit);
             left = alive > 0.0 ? std::clamp(1.0 - shot->share / alive, 0.0, 1.0) : 0.0;
         }
         // Which replies count (an enemy unit engaged with us always does: it can only fight us):
@@ -818,7 +917,9 @@ OtherThreat MoveScoreContext::other_threat(const std::vector<core::Position>& po
         //   one of them whatever this move does, so only one with no other target counts;
         // - losing it, the side plays for the draw (D-007) and this unit's own survival matters: an enemy unit counts
         //   whenever this unit would be its closest target (it shoots and charges the closest, D-010: a tie counts).
-        const bool losing = lean_ < 0.0;
+        // D-077: under the points tiebreak (D-076) there is no draw to play for, so every side counts by marginal
+        // exposure.
+        const bool losing = plays_for_draw();
         const bool busy = !losing && core::within(o.other_target_mm, o.threat.shooting_reach_mm());
         if (busy && !o.engaged) continue;
         const float g = gap_to_other(o, positions);
@@ -859,10 +960,16 @@ OtherThreat MoveScoreContext::other_threat(const std::vector<core::Position>& po
         }
         t.unengaged += left * std::max(0.0, worst);
         t.survive *= 1.0 - left * worst_wipe;
-        // While we are engaged it can't shoot us (04.02); it may charge after a Normal move.
+        // While we are engaged it can't shoot us (04.02; D-077: unless we are a MONSTER/VEHICLE, 17.03, at -1); it may
+        // charge after a Normal move.
         const double pc = o.threat.p_charge_after_move(g);
         t.engaged += left * pc * o.melee;
         t.survive_engaged *= 1.0 - left * pc * o.melee_wipe;
+        if (us_mv_) {
+            const std::pair<double, double> r = other_at_engaged_us(o, g);
+            t.engaged += left * r.first;
+            t.survive_engaged *= 1.0 - left * r.second;
+        }
     }
     return t;
 }
@@ -880,9 +987,12 @@ MoveScore refine_move_score(MoveScoreContext& ctx, const PlannedEnd& plan, const
     ShootOverride shoot;
     const bool engaged_stay = plan.type == core::MoveType::RemainStationary && ctx.start_engaged();
     if (plan.type != core::MoveType::FallBack && !engaged_stay) {
-        if (const auto best = analysis::best_shooting(ctx.cache(), after, ctx.unit().id, enemy->id)) {
-            if (const core::Unit* e = after.find_unit(enemy->id)) {
-                shoot.share = unit_share(*e, best->outcome.model_equivalents);
+        // D-077 (M68): [HAZARDOUS] priced at our exchange rate against each target (hazard_rate).
+        const core::Unit* us = after.find_unit(ctx.unit().id);
+        const auto rate = [&](const core::Unit& e) { return us != nullptr ? hazard_rate(after, *us, e) : 0.0; };
+        if (const core::Unit* e = after.find_unit(enemy->id)) {
+            if (const auto best = analysis::best_shooting(ctx.cache(), after, ctx.unit().id, enemy->id, rate(*e))) {
+                shoot.share = unit_share(after, *e, best->outcome.model_equivalents);
                 shoot.models_destroyed = best->outcome.models_destroyed;
             }
         }
@@ -890,10 +1000,11 @@ MoveScore refine_move_score(MoveScoreContext& ctx, const PlannedEnd& plan, const
         double best_share = shoot.share;
         for (std::size_t i = 0; i < ctx.other_count(); ++i) {
             const core::UnitId id = ctx.other(i).id;
-            const auto best = analysis::best_shooting(ctx.cache(), after, ctx.unit().id, id);
-            const core::Unit* e = best ? after.find_unit(id) : nullptr;
-            if (e == nullptr) continue;
-            const double v = unit_share(*e, best->outcome.model_equivalents);
+            const core::Unit* e = after.find_unit(id);
+            const auto best = e != nullptr ? analysis::best_shooting(ctx.cache(), after, ctx.unit().id, id, rate(*e))
+                                           : std::nullopt;
+            if (!best) continue;
+            const double v = unit_share(after, *e, best->outcome.model_equivalents);
             if (v > best_share + 1e-9) {
                 best_share = v;
                 shoot.other = OtherShot{i, v, best->outcome.models_destroyed};

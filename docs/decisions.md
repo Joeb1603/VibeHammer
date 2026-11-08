@@ -1961,6 +1961,9 @@ state, replay or JSON change. Amends D-028 (the client layout) and D-029 (greyed
 ## D-066: Easy and Normal across several units (M56)
 **Decided:** 2026-11-07 (M56 is pre-approved with M53–M58; the details below are the conservative choices made
 for it). Bot only (`src/ai`); no rule, core, state, replay or JSON change. Amends D-054 (levels Easy and Normal).
+**Amended by D-077 (M68):** on a scenario with points and sides of several unit types every share below is weighted by
+points; under the points tiebreak (D-076) no side plays for the draw (marginal exposure for every side), and engaged
+MONSTER/VEHICLE units may be shot and still shoot (10.06, 17.03). Nothing changes on V1, the bot scenarios or Strike.
 - **The rule for 1v1 (one unit per side).** Every change below adds a term, a candidate or an ordering that only
   exists when a side has more than one unit, or picks "the closest" where M55 picked "the first" (the same unit
   when there is one). With one unit per side the old expressions run unchanged, in the same order, so V1 and the
@@ -3399,3 +3402,167 @@ pre-approved; the details below are the conservative choices made for it).
   charge and a fight, stopping at the start of round 2. With 36" between the zones and M 8" at most, no unit can charge
   in round 1, so the replay runs rounds 1 and 2 (the lascannon volley in round 1; the Genestealers' charge and the fight
   in round 2) and stops at Side A's first Move Units decision of round 3. The name is kept as briefed.
+
+## D-077: Easy and Normal for the roster units: per-model loadouts, [HAZARDOUS], the -1s, engaged MONSTERS, 17.01, material weighted by points and the tiebreak objective (M68; amends D-066)
+**Decided:** 2026-11-08 (M68 of the pre-approved M59–M70 batch; no design stop; the conservative choices are marked
+*conservative*). Bot only (`src/ai`): no rule, core, state, action, event or JSON change, no new decision. Amends D-066
+(levels Easy and Normal across several units) and the M40–M43 notes of D-054 where stated. Hard's own code (D-067) is
+untouched.
+- **The old scenarios play exactly as before.** Every change below but one acts only through a fact none of V1, the two
+  bot scenarios or Strike has: a MONSTER/VEHICLE unit, an equipped [HAZARDOUS] weapon, a unit whose models differ in W,
+  points on every unit, the points tiebreak. Without it the M67 expressions run unchanged (a weight of 1 is not even
+  multiplied in). The exception, the Desperate Escape guard (12), acts only on an escape Normal would make whose likely
+  losses leave no move that stands, which never happens in those scenarios' compared games. So they play identically: the
+  arena's `--per-game` hashes match `baseline/m60` on all 24 files (4,380 games) and the replays regenerate byte-identical
+  (PLAN.md, M68 Results).
+- **1. Per-model loadouts (checked; one site fixed).** Every estimate of Easy and Normal already used each model's own
+  weapons: the hypothetical volleys (`unit_ranged_volley`, `unit_melee_volley`: each model's best set, 24.07, then
+  identical attacks merged into one batch, D-006), the engine-based ones (`best_shooting`, `best_melee`, Normal's
+  `plan_shooting` and `plan_melee` over `shot_options` / `melee_options`), the move score's per-model shooting, the
+  casualty worth (`model_worth`) and Easy's default plans (D-071). So a unit's volley is the sum over its loadout groups:
+  the Havocs' four lascannons and the champion's plasma gun are two batches, the boltgun Legionaries' boltguns and their
+  champion's bolt pistol one (identical S5 AP-1 D1 attacks), the Legionaries' champion fights with his chainsword and the
+  others with close combat weapons; checked against the engine's own batches and 20,000 engine resolutions
+  (`M68_Loadouts`). The one representative model in Normal was Desperate Escape's expected hazard losses (the first
+  model's W): a unit whose models differ in W now goes through core's 06.02 allocation (`hazard_model_equivalents`), a
+  unit whose models share one W keeps the M43 expression (every roster unit shares one W). The representative model of
+  Hard's chain tables is M69's.
+- **2. [EXTRA ATTACKS] in every melee estimate (checked; nothing to change).** Every Normal and Easy melee estimate goes
+  through `unit_melee_volley` (M60: the best other weapon plus every [EXTRA ATTACKS] weapon) or the engine's
+  `melee_options` with M60's candidate sets (`plan_melee`): the charge planner's and move score's `melee_share` (and so the
+  charge value, the hold value, the fighters within pile-in reach, the threat of other units), the casualty stance and
+  worth, the consolidation score and fight selection (`plan_melee`), the threat roles (`unit_role`), and Easy's melee plan
+  (D-071). `M68_ExtraAttacks` checks the Hive Tyrant's talons in each.
+- **3. The cost of [HAZARDOUS] (24.15, 06.03, 06.02).**
+  - *The cost:* `analysis::hazard_model_equivalents(firer, rolls)`, the model equivalents the firing unit is expected to
+    lose: whether a roll fails and its mortal wounds from core's `make_hazard_rolls` on each face (a failure on 1-2, 1
+    mortal wound, 3 if every model is a MONSTER/VEHICLE), the failures binomial over the rolls, the mortal wounds inflicted
+    by core's `inflict_mortal_wounds` (06.02: a wounded non-CHARACTER model first, then any non-CHARACTER, then
+    CHARACTERS; the engine's first candidate each time, *conservative*: every roster unit's models share one W, so the
+    choice changes nothing), a wound off a W-wound model counted 1/W as model equivalents count it. The Havocs: 1/9 model
+    a roll; the Chaos Lord: 1/15; a MONSTER: 3/W. Checked against 20,000 engine hazard rolls (`M68_Hazard`).
+  - *The brief's "the chance of a 1"* is read as the engine's 06.03: a roll of 1-2 fails (1 in 3).
+  - *Normal's declarations:* `plan_shooting` and `plan_melee` value a declaration as its targets' shares less the firing
+    unit's own share of that loss, the rolls being the engine's count (`hazardous_weapons_selected`: one per [HAZARDOUS]
+    weapon selected). So the champion's plasma gun goes on supercharge only when its extra damage is worth more than the
+    hazard: at the Tyrant Guard, standard at 18" (one shot), supercharge within half range ([RAPID FIRE 1], two shots); the
+    Chaos Lord's pistol stays on standard against every roster target (its hazard costs 1/15 of a 95-point model).
+  - *Hypothetical volleys:* a [HAZARDOUS] profile's value in the per-model pick subtracts its hazard roll at the exchange
+    rate (`ShotContext::hazard_rate`, `best_shooting`'s `hazard_rate`: one of the firer's model equivalents in the target's,
+    `normal::hazard_rate`, the ratio of their shares of one model). Normal passes it for both sides' volleys (each side's
+    own rate: the enemy is assumed to pick as Normal does). Callers that pass nothing (Hard's chain, the tests) price
+    nothing, as before.
+  - *Easy:* unchanged. Its default plans (D-071) never pick a [HAZARDOUS] profile.
+  - *Not priced:* the firer's loss is not taken off the move score's line (only the profile choice is priced there), and
+    D-071's "no hazard roll after the last enemy model is destroyed" is ignored (both small).
+- **4. The -1s in hypothetical volleys (10.06, 17.03, D-011).** `analysis::ShotContext` gains who is engaged:
+  `target_engaged` (the target is engaged with another unit) and `elsewhere` (close-quarters shooting at a unit the
+  shooter is not engaged with); the defaults are M67's (an unengaged target; close-quarters shooting at the unit engaged
+  with). `unit_ranged_volley` judges the target as the engine's `target_ok` does (strategic knowledge, D-054: the same
+  checks in the same order): an engaged target that isn't a MONSTER/VEHICLE only by a unit engaged with it (04.02); in
+  close-quarters shooting a non-MONSTER model only at a unit engaged with its unit, a MONSTER/VEHICLE model with [BLAST]
+  not at one (10.06); [BLAST] never at an engaged MONSTER/VEHICLE (17.03, the FAQ, D-073). It adds the -1s as
+  `make_weapon_selections` adds them (D-073, `+=`): 10.06's for a MONSTER/VEHICLE model in close-quarters shooting, 17.03's
+  at an engaged MONSTER/VEHICLE target, each except a [CLOSE-QUARTERS] weapon at a unit its unit is engaged with; the odds
+  cap the net at -1 through core's `make_hit_rolls` (D-011). Checked against the engine's selections (`M68_Modifiers`).
+- **5. Engaged MONSTERS (10.06 as M63 implemented it).** M67's planners assumed an engaged enemy can shoot only the units it
+  is engaged with and an engaged unit can't be shot. Now:
+  - *The charge planner:* `hold_value` lets the closest enemy, engaged with another of our units, shoot us if it is a
+    MONSTER/VEHICLE (close-quarters shooting by its MONSTER/VEHICLE models, `elsewhere`, at -1; it still can't charge,
+    11.02), and our shot at it, where the engine offers one, is at -1 (17.03). `others_threat`: while we are engaged after a
+    charge, a MONSTER/VEHICLE of ours can still be shot by the enemy units outside the charge (17.03, at -1). An engaged
+    enemy MONSTER/VEHICLE stays out of `others_threat`, as before: it always has another target, the unit it is engaged
+    with, so by marginal exposure (D-066) it is busy.
+  - *The consolidation score:* an engaged enemy MONSTER/VEHICLE may be shot (17.03) and shoots us (10.06).
+  - *The move score:* our shooting at the closest enemy (or another enemy unit) when it is an engaged MONSTER/VEHICLE
+    (17.03, at -1; M67 skipped it); the hold line's locked enemy, if a MONSTER/VEHICLE, still shoots us (10.06); while we
+    are engaged, other enemy units shoot a MONSTER/VEHICLE of ours (17.03). A locked enemy MONSTER/VEHICLE other than the
+    closest stays uncounted (marginal exposure, as above).
+  - The helper `normal::next_turn_shot` gives the hypothetical shot of one unit at another from who is engaged now.
+  - `M68_ChargePlanner` checks the hold value with an engaged Hive Tyrant carrying a heavy venom cannon.
+- **6. MONSTERS walk through infantry (17.01, D-073).** Normal's movement planner (`segment_clear`) lets a MONSTER/VEHICLE
+  model's Normal or Advance move (the engine's `moves_through_non_monster_enemies`) pass enemy models that aren't
+  MONSTER/VEHICLE models; enemy MONSTER/VEHICLE models still block, and `ends_ok` still keeps every end off every model and
+  out of Engagement Range. The candidates, formations and parking steps all use it, and every plan is still simulated on the
+  engine. `M68_Movement`: the Hive Tyrant's 8" move through the Legionaries' rank is planned and accepted; the Tyrant Guard
+  gets no such candidate. Hard's own translations (`translation_ok`) are M69's.
+- **7. Material weighted by points.** `normal::share_weight(state, unit)`: 1 (as before) unless every unit in the state has
+  points (the scenario gives them, D-076) and the unit's side has more than one unit type (datasheet name); then the unit's
+  points over the mean points of every unit, both sides and destroyed ones (fixed for the game). Every unit share is
+  weighted (`unit_share`, `alive_share`, `share_value`, `melee_share`, `ranged_share`), so the exchanges' ratios (a unit's
+  share left over its share at the start) are unchanged and their values are in points. Roster weights (1915 points over
+  14 units): Termagants 0.40, Genestealers 0.55, Tyrant Guard 0.59, Chaos Lord 0.69, Screamer-killer 0.91, Havocs 0.99,
+  Tyrannofex 1.24, Legionaries 1.32, Hive Tyrant 1.43, Chaos Terminators 2.70.
+  - *Normalisation (conservative):* the mean over both sides keeps a trade between the two armies a trade in points (the
+    tiebreak's currency); a side of one unit type keeps weight 1 as the brief says, even with points (`M68_Points`; no such
+    scenario exists).
+  - *Fixed for the game:* destroyed units stay in the state, so the weights don't move while the game goes on.
+- **8. The objective knows the tiebreak (D-076).** With points-weighted material, a unit's share lost times its weight is
+  its points destroyed over the mean (exactly for a unit whose models share one W: model equivalents over starting
+  strength are wounds lost over starting wounds), so the charge, fight and consolidation values, which are material, count
+  the tiebreak's points; their horizon is cut at the game's end as before (`turns_left`). What assumed D-007's draw was the
+  move score's game-length terms. Under `points_destroyed`:
+  - *no time preference:* both discounts 1 (D-007's draw to wait for and wipe-out to win don't exist; losses past the end
+    are cut by the horizon anyway);
+  - *the survival term* only for its side's last unit (a wipe-out still loses at once, D-007), worth what surviving buys
+    on the engine's exact tally (`core::points_destroyed`): (1 + R) times D-007's, R = +1 ahead, 0 level, -1 behind (a win
+    over a loss 2, a draw 1, nothing);
+  - *D-066's reply rule:* no side plays for the draw, so every side counts the other enemy units' replies by marginal
+    exposure.
+  - The tie-break, edge and coherency terms are unchanged. `M68_Tiebreak` checks each against a D-007 copy of the state.
+- **9. Random damage (D-069): left as it is.** The bots still plan casualties against the preview's maximum damage. In the
+  rosters the only random D is the Havocs' lascannon (D6+1), and the maximum and the mean give the same casualties against
+  every Tyranid unit but one: a single model, W1 or W2 (any roll kills), or the Tyrant Guard (W4). There the maximum's set
+  of models to lose holds the mean's (the same greedy choice, run for more models), and three Tyrant Guard keep coherency
+  whichever of them is lost (the ends of a touching rank are 1.97" apart), so the plans can differ only in which Guard dies
+  first. Normal's Tyranids lost 1 model to coherency in 200 games against Easy (M67 and M68 alike), so an expected-damage
+  plan can't be clearly better; D-051's guarantee (every model a roll can reach is picked) keeps the maximum.
+- **10. Easy:** no new judgement; it plays the roster units clean (the arena, below, and `M68_Games`).
+- **11. Oval facing (D-074 part 3): left as it is.** Over 40 traced games (Normal Tyranids against Easy and Normal, seeds
+  1–20) the Tyrannofex declared 20 charges and made 12 charge moves against 10.0 its declarations' odds expected (the Hive
+  Tyrant 34 against 35.5, the Screamer-killers 33 against 33.7 and 32 against 29.6), and none of its moves was refused or
+  reverted: planning with a fixed facing doesn't measurably cost it. Turning its long axis to a target could add at most
+  (120 - 92) / 2 = 14 mm of reach; that is left for M69 / later if a measure shows it.
+- **12. Desperate Escape only when it stands (found by the M68 arena runs).** Normal plans a Desperate Escape with no
+  failed hazard roll (D-054) and checked nothing more. On the roster scenario the battle-shocked Chaos Terminators, engaged
+  with the Hive Tyrant standing among them against the south edge with a Screamer-killer 2.7" north, chose one whose
+  likely losses left no coherent arrangement out of Engagement Range (09.07, 03.03), so the move had to be reset (one
+  UnitMoveReverted in 200 Normal vs Normal games, seed 193). Normal now makes a Desperate Escape only when every likely
+  outcome (one to three failed rolls, 06.03, the casualties chosen as Normal chooses them) still leaves a fall-back move
+  that stands (`escape_stands`, as Hard's, D-067); otherwise it takes its next best option (staying in the fight), and the
+  reason says why. More failures (four or more of the unit's rolls) are not checked, as in Hard.
+  - *Checked only for the escape Normal would make* (*conservative*): a first build checked every offered escape, which
+    left the actions and states of the old scenarios as they were but dropped a losing escape option from the reasons of 3
+    of the 200 Normal vs Normal games with 20 Termagants (their trace hashes). Checked only when chosen, every other
+    decision and reason is as before, and the 24 old files' hashes match.
+  - `M68_Movement.ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatStands` plays seed 193 to that decision (the
+    test fails with the guard bypassed).
+- **Why Normal vs Normal never reached melee (the M66 note), and now.** Measured first on the new scenario with the M67
+  binary (60 games): the Chaos Space Marines won 46, the Tyranids 14, with 22 pile-ins and consolidations, all of them the
+  Chaos Space Marines'. Every Tyranid unit lost its exchange with the closest Chaos Space Marine unit counted in unit
+  shares (a 75-point Genestealer unit loses about half of itself to a 180-point boltgun squad's shooting in a turn and
+  takes under a fifth of it back in melee), so each kept away as a losing side does (D-066), and D-007's survival and
+  time-preference terms paid for hiding to reach a draw the tiebreak no longer gives. With material weighted by points
+  and the tiebreak in the objective the Tyranid MONSTERS close in and fight; the infantry still holds back from the Chaos
+  Space Marine infantry, which is right for these armies: even counted in points, Genestealers charging boltgun
+  Legionaries deal about 0.24 (points-weighted shares) and take about 0.50 back in the reply. Against Easy, which walks into
+  them, the Genestealers and Tyrant Guard charge too.
+  Normal vs Normal now (200 games): the Tyranids win 140, the Chaos Space Marines 60, with 462 pile-ins and consolidations
+  (433 and 29); 20 traced games had 34 Tyranid charge moves, all by the Hive Tyrant and the Screamer-killers.
+- **Measured** (Release arena, `rosters_44x60.json`, seeds 1–200 per pairing; the M67 binary with only the arena's new
+  report lines on the same seeds for comparison; PLAN.md, M68 Results, has the rest):
+  - Normal (Chaos Space Marines) vs Easy: 200 wins, all on points, 567.3 points destroyed to 127.8 (M67: 200 wins, 568.7 to
+    141.5). Easy vs Normal (Tyranids): Normal 197 wins (122 by wipe-out, 75 on points) and 3 losses on points, 888.3 to
+    316.6 (M67: 200 wins, 11 by wipe-out, 715.6 to 273.9). Easy vs Easy: 77 / 123, as at M67 (Easy is unchanged). Every
+    pairing clean.
+  - Normal's own decisions: p95 12.3 ms and max 556 ms as the Chaos Space Marines against Easy, 6.2 ms and 375 ms as the
+    Tyranids, 10.8 / 6.4 ms and 296 / 76 ms in Normal vs Normal.
+  - Strike (Normal vs Normal, 60 games, the M67 binary and this one alternately, four runs each): 9.04 s against 8.97 s
+    on average (-0.8%).
+- **Hard on the roster scenario.** Hard's code is untouched, and on the old scenarios it plays as before (hashes). Where it
+  uses Normal's functions (its move plans and candidates, Normal's charge, casualty and consolidation answers as its
+  defaults, the lookahead's shooting) and the shared volleys (its chain's close-quarters volleys get 10.06's and 17.03's -1s
+  for MONSTER pairs), it gets the changes above on the roster scenario only; M69 measures from there.
+- **Arena (`arena.*`):** for a points scenario the report adds the mean points each side destroyed by the end (D-076's
+  tally, whatever decided the game), and every report the decision times of each side's bot alone (Normal's own p95 and
+  maximum against Easy). `--per-game` lines are unchanged.
