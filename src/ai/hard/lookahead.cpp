@@ -10,6 +10,7 @@
 #include "analysis/charge_odds.hpp"
 #include "analysis/threat.hpp"
 #include "baseline_bot.hpp"
+#include "bounds.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
@@ -88,14 +89,22 @@ const core::Unit* target_of(const Evaluator& eval, const GameState& s, const cor
 }
 
 // The move in progress with no model moved yet: every model's start, the enemy's models, the battlefield.
+// D-074 part 3 (M66): an oval keeps its facing (`facings`, from the move's start); the checks use bounding circles
+// and extents (bounds.hpp).
 struct MoveSetup {
     core::UnitId unit;
     std::vector<core::ModelId> ids;
     std::vector<core::Base> bases;
+    std::vector<float> facings;
     std::vector<Position> starts;
     float max_mm = 0.0f;  // the slowest model's maximum
-    std::vector<core::PlacedModel> enemies;
-    std::vector<core::PlacedModel> others;
+    std::vector<core::PosedModel> enemies;
+    std::vector<core::PosedModel> others;
+    // The circumscribed radii (avoid_radius_mm) of `bases`, `enemies` and `others`, worked out once (the same floats).
+    std::vector<float> radius;
+    std::vector<float> enemy_radius;
+    std::vector<float> other_radius;
+    std::vector<core::BaseExtents> extents;  // of `bases` at `facings` (round: the radius both ways)
     Position enemy_centroid;
     bool through_enemies = false;  // 09.07 Desperate Escape
     float width = 0.0f;
@@ -117,17 +126,22 @@ std::optional<MoveSetup> setup_of(const Evaluator& eval, const GameState& s) {
         if (!start || !max) return std::nullopt;
         m.ids.push_back(model.id);
         m.bases.push_back(model.base);
+        m.facings.push_back(core::move_start_facing_deg(s, model.id).value_or(model.facing_deg));
         m.starts.push_back(*start);
         m.max_mm = m.max_mm < 0.0f ? *max : std::min(m.max_mm, *max);
     }
-    m.enemies = core::enemy_models(s, u->side);
+    m.enemies = core::posed_enemy_models(s, u->side);
     for (const core::Unit& o : s.units) {
         if (o.side != u->side || o.id == u->id) continue;
-        for (const core::PlacedModel& p : core::placed_models(o)) m.others.push_back(p);
+        for (const core::Model& p : o.models) m.others.push_back(core::posed_of(p));
     }
     std::vector<Position> ps;
     for (const core::Model& model : e->models) ps.push_back(model.position);
     m.enemy_centroid = centroid(ps);
+    for (const core::Base& b : m.bases) m.radius.push_back(avoid_radius_mm(b));
+    for (std::size_t i = 0; i < m.bases.size(); ++i) m.extents.push_back(edge_extents(m.bases[i], m.facings[i]));
+    for (const core::PosedModel& e : m.enemies) m.enemy_radius.push_back(avoid_radius_mm(e.base));
+    for (const core::PosedModel& o : m.others) m.other_radius.push_back(avoid_radius_mm(o.base));
     m.through_enemies = s.flow.move->mode == core::FallBackMode::DesperateEscape;
     m.width = s.battlefield.width_mm;
     m.depth = s.battlefield.depth_mm;
@@ -142,20 +156,27 @@ bool translation_ok(const MoveSetup& m, float dx, float dy, float t) {
     for (std::size_t i = 0; i < m.starts.size(); ++i) {
         const Position a = m.starts[i];
         const Position b{a.x + dx * t, a.y + dy * t, a.z};
-        const float r = core::base_radius(m.bases[i]);
-        if (b.x < r + kEdgeMarginMm || b.x > m.width - r - kEdgeMarginMm || b.y < r + kEdgeMarginMm ||
-            b.y > m.depth - r - kEdgeMarginMm) {
+        // D-074 part 3: the edge by the half extents at the fixed facing; enemy bases, Engagement Range and other
+        // models by the circumscribed circles (round: the radius in every test, as before).
+        const float rx = m.extents[i].half_x_mm;
+        const float ry = m.extents[i].half_y_mm;
+        if (b.x < rx + kEdgeMarginMm || b.x > m.width - rx - kEdgeMarginMm || b.y < ry + kEdgeMarginMm ||
+            b.y > m.depth - ry - kEdgeMarginMm) {
             return false;
         }
-        for (const core::PlacedModel& e : m.enemies) {
-            if (!m.through_enemies && client::point_segment_distance(e.position, a, b) < r + core::base_radius(e.base)) {
+        const float r = m.radius[i];
+        for (std::size_t k = 0; k < m.enemies.size(); ++k) {
+            const core::PosedModel& e = m.enemies[k];
+            if (!m.through_enemies && client::point_segment_distance(e.position, a, b) < r + m.enemy_radius[k]) {
                 return false;
             }
-            const float d = core::base_distance(b, m.bases[i], e.position, e.base);
+            // avoid_gap_mm (base_distance's formula with the circumscribed radii)
+            const float d = std::max(0.0f, core::centre_distance(b, e.position) - r - m.enemy_radius[k]);
             if (!(d > core::kEngagementRangeMm + core::EPS_MM + kEngagedMarginMm)) return false;
         }
-        for (const core::PlacedModel& o : m.others) {
-            if (core::bases_overlap(b, m.bases[i], o.position, o.base)) return false;
+        for (std::size_t k = 0; k < m.others.size(); ++k) {
+            // avoid_overlap (bases_overlap's formula with the circumscribed radii)
+            if (core::centre_distance(b, m.others[k].position) < r + m.other_radius[k] - core::EPS_MM) return false;
         }
     }
     return true;

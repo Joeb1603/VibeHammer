@@ -55,6 +55,13 @@ inline constexpr std::size_t kAdvanceEstimateMoves =
 // cheap geometric checks; the engine still decides (they are simulated before one is chosen). Deterministic.
 [[nodiscard]] std::vector<MoveCandidate> move_candidates(const core::GameState& origin);
 
+// D-075 (M66): the proposals that move each model of the move in progress in `origin` (no model moved yet) straight to
+// `ends` (unit order), as a formation's are made: an order in which no model ends on one still to move (D-027), a cycle
+// broken by parking one model beside its start (clear of it at every facing, so with room for a 120 mm oval) and
+// proposing it again later. nullopt if no order is found. Exposed for the tests.
+[[nodiscard]] std::optional<std::vector<core::action::ProposeModelMove>> slot_moves(
+    const core::GameState& origin, const std::vector<core::Position>& ends);
+
 struct PlannedMove {
     MoveCandidate candidate;
     MoveScore score;

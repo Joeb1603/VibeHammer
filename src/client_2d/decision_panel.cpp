@@ -235,7 +235,9 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
     }
     if (path_hint) {
         ImGui::TextWrapped("Drag a model to add a straight line to its path, or drag the diamond to move the "
-                           "whole unit. Then commit or reset the move.");
+                           "whole unit. Then commit or reset the move. While dragging an oval base, Q / E turn it "
+                           "15\u00b0 and Shift+wheel 5\u00b0 (03.01: turning doesn't count towards the distance); let "
+                           "go without moving to turn it where it stands.");
         move_status(gs);
     }
 

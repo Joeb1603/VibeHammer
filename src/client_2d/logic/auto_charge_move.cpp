@@ -12,8 +12,10 @@
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/geometry/oval.hpp"
 #include "core/model/keywords.hpp"
 #include "core/state/queries.hpp"
+#include "base_shape.hpp"
 #include "directions.hpp"
 #include "fight_move_skip.hpp"
 #include "reach_area.hpp"
@@ -39,6 +41,8 @@ struct TargetModel {
     core::Position p;
     core::Base base;
     std::size_t unit = 0;  // index into the (alive) charge targets
+    float facing = 0.0f;   // D-074 part 3
+    [[nodiscard]] core::BasePose pose() const { return core::BasePose{p, base, facing}; }
 };
 
 struct Spot {
@@ -51,7 +55,9 @@ struct Spot {
 struct Mover {
     core::ModelId id;
     core::Base base;
-    float r = 0.0f;
+    float r = 0.0f;         // a round base's radius
+    bool round = true;      // D-074 part 3: the base is round
+    float facing = 0.0f;    // D-074 part 3: its facing, kept (an auto move never turns a model)
     core::Position start;
     float reach = 0.0f;
     bool movable = false;
@@ -60,12 +66,38 @@ struct Mover {
     std::vector<std::size_t> by_move;  // spots by (engaged first, then the shortest move; else the gap)
 };
 
+// D-074 part 3: the ring spots round an oval pair's target (contact_ring) depend only on the target, the moving base and
+// its facing, and the ring, so the models of a unit with the same base share them.
+struct RingSpots {
+    std::size_t target = 0;
+    core::Base base;
+    float facing = 0.0f;
+    float ring = 0.0f;
+    std::vector<std::optional<core::Position>> spots;  // one per direction
+};
+
 struct Problem {
     std::vector<Mover> movers;  // the moving unit's models, in unit order
     std::vector<TargetModel> targets;
     std::size_t target_units = 0;
-    mutable std::vector<core::PlacedModel> placed;  // scratch for the coherency check (no allocation per check)
+    mutable std::vector<core::PosedModel> placed;  // scratch for the coherency check (no allocation per check)
+    mutable std::vector<core::PlacedModel> placed_round;  // the same for an all-round unit (the round-only check)
+    mutable std::vector<RingSpots> ring_spots;     // D-074 part 3: computed once per target, base, facing and ring
+    bool all_round = true;  // D-074 part 3: every mover and target is round (the round-only code, as before)
 };
+
+core::BasePose pose_at(const Mover& m, const core::Position& p) { return core::BasePose{p, m.base, m.facing}; }
+
+// The two movers' bases at p and q meet (centre distance below both radii, the arrangement's quick test; D-074 part 3:
+// by the pose-aware signed distance for a pair with an oval).
+bool oval_bases_meet(const Mover& a, const core::Position& p, const Mover& b, const core::Position& q) {
+    return core::signed_base_distance(pose_at(a, p), pose_at(b, q)) < 0.0f;
+}
+
+inline bool bases_meet(const Mover& a, const core::Position& p, const Mover& b, const core::Position& q) {
+    if (a.round && b.round) [[likely]] return core::centre_distance(p, q) < a.r + b.r;
+    return oval_bases_meet(a, p, b, q);
+}
 
 using Arrangement = std::vector<core::Position>;  // each mover's end (its start when it isn't moved)
 
@@ -81,13 +113,31 @@ int tier_of(float gap) {
     return 3;
 }
 
+// D-074 part 3: the pose-aware versions, for a problem with an oval base (out of line, so the round code stays small).
+float oval_gap_at(const Problem& pb, const Mover& m, const core::Position& p) {
+    float best = std::numeric_limits<float>::max();
+    const core::BasePose at = pose_at(m, p);
+    for (const TargetModel& t : pb.targets) best = std::min(best, core::base_distance(at, t.pose()));
+    return best;
+}
+
+bool oval_engages_unit(const Problem& pb, const Mover& m, const core::Position& p, std::size_t unit) {
+    const core::BasePose at = pose_at(m, p);
+    for (const TargetModel& t : pb.targets) {
+        if (t.unit == unit && core::within(core::base_distance(at, t.pose()), core::kEngagementRangeMm)) return true;
+    }
+    return false;
+}
+
 float gap_at(const Problem& pb, const Mover& m, const core::Position& p) {
+    if (!pb.all_round) [[unlikely]] return oval_gap_at(pb, m, p);
     float best = std::numeric_limits<float>::max();
     for (const TargetModel& t : pb.targets) best = std::min(best, core::base_distance(p, m.base, t.p, t.base));
     return best;
 }
 
 bool engages_unit(const Problem& pb, const Mover& m, const core::Position& p, std::size_t unit) {
+    if (!pb.all_round) [[unlikely]] return oval_engages_unit(pb, m, p, unit);
     for (const TargetModel& t : pb.targets) {
         if (t.unit == unit && core::within(core::base_distance(p, m.base, t.p, t.base), core::kEngagementRangeMm)) {
             return true;
@@ -118,22 +168,45 @@ void add_spot(std::vector<Spot>& out, const Problem& pb, const Mover& m, const c
 
 std::vector<Spot> spots_for(const Problem& pb, const Mover& m) {
     std::vector<Spot> out;
-    const float r = core::base_radius(m.base);
-    for (const TargetModel& t : pb.targets) {
-        const float touching = r + core::base_radius(t.base);
+    for (std::size_t ti = 0; ti < pb.targets.size(); ++ti) {
+        const TargetModel& t = pb.targets[ti];
+        const bool round_pair = m.round && t.base.shape == core::BaseShape::Round;
+        // D-074 part 3: an oval pair's reach check by the circumscribed radii (generous: the engine decides).
+        const float touching = round_pair ? m.r + core::base_radius(t.base)
+                                          : core::circumscribed_radius(m.base) + core::circumscribed_radius(t.base);
         const float centres = core::centre_distance(m.start, t.p);
         // The straight line towards it: into base contact, or as far as the model can go.
         if (const auto d = direction(t.p.x - m.start.x, t.p.y - m.start.y)) {
-            const float along = std::min(m.reach - kReachInsetMm, centres - touching - kContactNudgeMm);
+            const float to_contact = round_pair ? centres - touching - kContactNudgeMm
+                                                : distance_until_gap(pose_at(m, m.start), t.pose(), kContactNudgeMm);
+            const float along = std::min(m.reach - kReachInsetMm, to_contact);
             if (along > 0.0f) add_spot(out, pb, m, offset(m.start, *d, along));
         }
         // Rings round it (base contact, within 1", engaged), if the model could get engaged with it.
         if (centres - touching - core::kEngagementRangeMm > m.reach) continue;
         const float rings[] = {kContactNudgeMm, kOneInchMm - kRingInsetMm, core::kEngagementRangeMm - kRingInsetMm};
+        // D-075: round a base bigger than 32 mm, more directions (72 for every smaller base, the old table).
+        const int count = contact_direction_count(t.base);
+        const std::vector<UnitVector> dirs = direction_table(count);
         for (const float ring : rings) {
-            const std::size_t step = ring == kContactNudgeMm ? 1 : 2;  // every 5 degrees in contact, else 10
-            for (std::size_t k = 0; k < kDirections72.size(); k += step) {
-                add_spot(out, pb, m, offset(t.p, kDirections72[k], touching + ring));
+            const std::size_t step = ring == kContactNudgeMm ? 1 : 2;  // every 5 degrees in contact, else 10 (for 72)
+            if (round_pair) {
+                for (std::size_t k = 0; k < dirs.size(); k += step) add_spot(out, pb, m, offset(t.p, dirs[k], touching + ring));
+                continue;
+            }
+            // D-074 part 3: the pose-aware contact spots (contact_ring), once per target, base, facing and ring.
+            auto cached = std::find_if(pb.ring_spots.begin(), pb.ring_spots.end(), [&](const RingSpots& r) {
+                return r.target == ti && r.base == m.base && r.facing == m.facing && r.ring == ring;
+            });
+            if (cached == pb.ring_spots.end()) {
+                const int every = static_cast<int>(dirs.size() / step);
+                std::vector<std::optional<core::Position>> spots = contact_ring(t.pose(), m.base, m.facing, every, ring);
+                RingSpots r{ti, m.base, m.facing, ring, std::vector<std::optional<core::Position>>(dirs.size())};
+                for (std::size_t k = 0; k < spots.size(); ++k) r.spots[k * step] = spots[k];
+                cached = pb.ring_spots.insert(pb.ring_spots.end(), std::move(r));
+            }
+            for (std::size_t k = 0; k < dirs.size(); k += step) {
+                if (cached->spots[k]) add_spot(out, pb, m, *cached->spots[k]);
             }
         }
     }
@@ -160,14 +233,18 @@ Problem set_up(const core::GameState& state) {
     for (const core::UnitId id : mv.targets) {
         const core::Unit* t = state.find_unit(id);
         if (t == nullptr || core::is_destroyed(*t)) continue;
-        for (const core::Model& m : t->models) pb.targets.push_back(TargetModel{m.position, m.base, pb.target_units});
+        for (const core::Model& m : t->models) {
+            pb.targets.push_back(TargetModel{m.position, m.base, pb.target_units, m.facing_deg});
+        }
         ++pb.target_units;
     }
     for (const core::Model& m : unit.models) {
         Mover mover;
         mover.id = m.id;
         mover.base = m.base;
-        mover.r = core::base_radius(m.base);
+        mover.round = m.base.shape == core::BaseShape::Round;
+        mover.r = mover.round ? core::base_radius(m.base) : core::circumscribed_radius(m.base);
+        mover.facing = m.facing_deg;
         mover.start = m.position;
         const std::optional<core::MoveReach> reach = core::move_reach(state, m.id);
         if (reach && !reach->immobile && reach->remaining_mm > 0.0f && m.characteristics.move_mm) {
@@ -180,11 +257,20 @@ Problem set_up(const core::GameState& state) {
                 return std::any_of(unit.models.begin(), unit.models.end(),
                                    [&](const core::Model& o) { return o.id == c.model; });
             });
+            std::erase_if(mover.region.outside_shapes, [&](const core::ReachShape& c) {  // D-074 part 3
+                return std::any_of(unit.models.begin(), unit.models.end(),
+                                   [&](const core::Model& o) { return o.id == c.model; });
+            });
             mover.region = trimmed_region(mover.region);  // M54: the same test, fewer circles
         }
         pb.movers.push_back(std::move(mover));
     }
-    for (const Mover& m : pb.movers) pb.placed.push_back(core::PlacedModel{m.id, m.start, m.base});
+    for (const Mover& m : pb.movers) {
+        pb.placed.push_back(core::PosedModel{m.id, m.start, m.base, m.facing});
+        pb.placed_round.push_back(core::PlacedModel{m.id, m.start, m.base});
+        pb.all_round = pb.all_round && m.round;
+    }
+    for (const TargetModel& t : pb.targets) pb.all_round = pb.all_round && t.base.shape == core::BaseShape::Round;
     for (Mover& m : pb.movers) {
         if (!m.movable) continue;
         m.spots = spots_for(pb, m);
@@ -206,21 +292,45 @@ Problem set_up(const core::GameState& state) {
 
 bool is_moved(const Problem& pb, const Arrangement& a, std::size_t i) { return !(a[i] == pb.movers[i].start); }
 
+bool oval_on_another(const Problem& pb, const Arrangement& a, std::size_t i, const core::Position& p) {
+    for (std::size_t j = 0; j < a.size(); ++j) {
+        if (j != i && bases_meet(pb.movers[i], p, pb.movers[j], a[j])) return true;
+    }
+    return false;
+}
+
 bool on_another(const Problem& pb, const Arrangement& a, std::size_t i, const core::Position& p) {
+    if (!pb.all_round) [[unlikely]] return oval_on_another(pb, a, i, p);
     for (std::size_t j = 0; j < a.size(); ++j) {
         if (j != i && core::centre_distance(p, a[j]) < pb.movers[i].r + pb.movers[j].r) return true;
     }
     return false;
 }
 
-bool coherent(const Problem& pb, const Arrangement& a) {
+bool oval_coherent(const Problem& pb, const Arrangement& a) {
     for (std::size_t i = 0; i < a.size(); ++i) pb.placed[i].position = a[i];
-    return core::check_coherency(pb.placed).ok();
+    return core::check_coherency(std::span<const core::PosedModel>(pb.placed)).ok();
+}
+
+bool coherent(const Problem& pb, const Arrangement& a) {
+    if (!pb.all_round) [[unlikely]] return oval_coherent(pb, a);
+    for (std::size_t i = 0; i < a.size(); ++i) pb.placed_round[i].position = a[i];
+    return core::check_coherency(pb.placed_round).ok();
+}
+
+bool oval_has_a_neighbour(const Problem& pb, const Arrangement& a, std::size_t i, const core::Position& p) {
+    const core::BasePose at = pose_at(pb.movers[i], p);
+    for (std::size_t j = 0; j < a.size(); ++j) {
+        if (j == i) continue;
+        if (core::within(core::base_distance(at, pose_at(pb.movers[j], a[j])), core::kCoherencyNearMm)) return true;
+    }
+    return false;
 }
 
 // A quick necessary condition for coherency (the full check is core's): the spot has another model within 2".
 bool has_a_neighbour(const Problem& pb, const Arrangement& a, std::size_t i, const core::Position& p) {
     if (a.size() < 2) return true;
+    if (!pb.all_round) [[unlikely]] return oval_has_a_neighbour(pb, a, i, p);
     for (std::size_t j = 0; j < a.size(); ++j) {
         if (j == i) continue;
         if (core::within(core::base_distance(p, pb.movers[i].base, a[j], pb.movers[j].base), core::kCoherencyNearMm)) {
@@ -239,9 +349,10 @@ std::optional<std::vector<std::size_t>> move_order(const Problem& pb, const Arra
         if (!is_moved(pb, a, i)) continue;
         for (std::size_t j = 0; j < n; ++j) {
             if (j == i || !is_moved(pb, a, j)) continue;
-            if (core::centre_distance(a[i], pb.movers[j].start) < pb.movers[i].r + pb.movers[j].r) {
-                waits_for[i].push_back(j);
-            }
+            const bool meet = pb.all_round
+                                  ? core::centre_distance(a[i], pb.movers[j].start) < pb.movers[i].r + pb.movers[j].r
+                                  : bases_meet(pb.movers[i], a[i], pb.movers[j], pb.movers[j].start);
+            if (meet) waits_for[i].push_back(j);
         }
     }
     std::vector<bool> done(n, false);
@@ -269,7 +380,10 @@ std::optional<std::vector<std::size_t>> move_order(const Problem& pb, const Arra
 bool ends_on_a_start(const Problem& pb, const Arrangement& a, std::size_t i) {
     for (std::size_t j = 0; j < a.size(); ++j) {
         if (j == i || !is_moved(pb, a, j)) continue;
-        if (core::centre_distance(a[i], pb.movers[j].start) < pb.movers[i].r + pb.movers[j].r) return true;
+        if (pb.all_round ? core::centre_distance(a[i], pb.movers[j].start) < pb.movers[i].r + pb.movers[j].r
+                         : bases_meet(pb.movers[i], a[i], pb.movers[j], pb.movers[j].start)) {
+            return true;
+        }
     }
     return false;
 }
@@ -383,7 +497,7 @@ std::vector<Arrangement> block_starts(const Problem& pb) {
     std::optional<UnitVector> to_closest;
     for (const Mover& m : pb.movers) {
         for (const TargetModel& t : pb.targets) {
-            const float g = core::base_distance(m.start, m.base, t.p, t.base);
+            const float g = core::base_distance(pose_at(m, m.start), t.pose());
             if (g < best) {
                 best = g;
                 pair = direction(t.p.x - m.start.x, t.p.y - m.start.y);
@@ -573,16 +687,6 @@ AutoChargeMove auto_charge_move(const core::GameState& state) {
     if (!auto_charge_move_available(state)) {
         out.problems.push_back("no charge move to plan");
         return out;
-    }
-    // TODO(M66): remove when auto moves handle ovals. D-074 part 2: the arrangement is planned on round-only geometry
-    // (base_radius throws for an oval), so with any oval base on the battlefield it refuses cleanly instead.
-    for (const core::Unit& u : state.units) {
-        for (const core::Model& m : u.models) {
-            if (m.base.shape != core::BaseShape::Round) {
-                out.problems.push_back("D-074: Auto move does not handle oval bases yet");
-                return out;
-            }
-        }
     }
     const Problem pb = set_up(state);
     if (pb.targets.empty()) {

@@ -25,6 +25,17 @@
 
 namespace wh40k::client {
 
+// M66 (D-074 part 3): --turn <model>:<deg>[:<dx>,<dy>]: in the first decision that moves that model, start dragging it
+// (grabbed at its centre), turned `deg` degrees from its facing, the cursor `dx`, `dy` inches from it (for screenshots
+// of the turn preview and the reach area at a facing); it submits nothing.
+struct CliTurn {
+    unsigned model = 0;
+    float deg = 0.0f;
+    float dx_in = 0.0f;
+    float dy_in = 0.0f;
+    friend bool operator==(const CliTurn&, const CliTurn&) = default;
+};
+
 struct LaunchOptions {
     std::optional<std::string> replay;
     std::optional<std::size_t> frame;
@@ -46,6 +57,7 @@ struct LaunchOptions {
     std::vector<std::size_t> pick_dice;  // --pick-dice (M61)
     std::vector<unsigned> pick_models;   // --pick-models (M62)
     std::vector<unsigned> click_units;   // --click-units (M63)
+    std::optional<CliTurn> turn;         // --turn (M66)
 };
 
 // argv[1..]: "--key value" pairs.

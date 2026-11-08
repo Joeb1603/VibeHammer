@@ -26,6 +26,9 @@
 //   screenshots); it submits nothing.
 //   M63: --click-units <id,id,...>: click those units on the board in the first decision it handles, as clicks would
 //   (a shooter, then a target, opens the target's weapon menu next to it); it stops before a click that submits.
+//   M66: --turn <model>:<deg>[:<dx>,<dy>]: in the first decision that moves that model, start dragging it (grabbed at
+//   its centre), turned <deg> degrees from its facing, the cursor <dx>, <dy> inches from it (for screenshots of the
+//   turn preview and the reach area at a facing); it submits nothing.
 
 #include <imgui.h>
 #include <raylib.h>
@@ -46,6 +49,7 @@
 
 #include "action_text.hpp"
 #include "auto_actions.hpp"
+#include "base_shape.hpp"
 #include "board_interaction.hpp"
 #include "board_view.hpp"
 #include "bot.hpp"
@@ -57,6 +61,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
+#include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/queries.hpp"
 #include "core/version.hpp"
@@ -98,6 +103,10 @@ constexpr float kDragThresholdPx = 3.0f;
 constexpr float kRulerText = 18.0f;
 constexpr float kFontSize = 15.0f;
 const Color kFixCue{255, 200, 90, 200};  // D-052: the cursor's outline and line to a fixed drop
+// D-074 part 3 (03.01 Rotating a Model): Q and E turn a dragged oval this much (counter-clockwise and clockwise),
+// Shift+wheel this much a notch.
+constexpr float kTurnStepDeg = 15.0f;
+constexpr float kFineTurnStepDeg = 5.0f;
 // The folder holding data/: next to the exe when it has been copied out of the build (a zipped
 // distribution), otherwise the source tree it was built from.
 fs::path find_data_root() {
@@ -134,6 +143,15 @@ struct Drag {
     core::Position drop;             // where letting go drops now: the cursor, or the fixed spot
     std::optional<FixedDrop> fixed;  // set when `drop` is a fixed spot
     bool refused = false;            // the fix is on but found no spot for a refused drop
+    // D-075: the model's centre when it was grabbed: it keeps the grab offset from the cursor (drag_drop).
+    core::Position model_at_grab;
+    // D-074 part 3: the facing it is dragged at (Q / E, Shift+wheel), for an oval (`can_turn`); its facing when grabbed
+    // otherwise. `scripted`: started by --turn, so the mouse doesn't move it.
+    bool can_turn = false;
+    float facing = 0.0f;
+    float start_facing = 0.0f;
+    bool scripted = false;
+    [[nodiscard]] bool turned() const { return can_turn && core::footprint_turn_deg(start_facing, facing) != 0.0; }
 };
 
 // D-035: the measuring ruler, from a left-press on nothing clickable.
@@ -395,6 +413,8 @@ public:
     void pick_models(std::vector<unsigned> models) { cli_model_picks_ = std::move(models); }
     // --click-units (M63): the units clicked on the board in the first decision it handles, as clicks would.
     void click_units(std::vector<unsigned> units) { cli_unit_clicks_ = std::move(units); }
+    // --turn (M66): a scripted drag of that model, turned, for screenshots.
+    void cli_turn(std::optional<CliTurn> turn) { cli_turn_ = turn; }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
         if (unit) selected_unit_ = core::UnitId{*unit};
@@ -469,7 +489,8 @@ public:
         draw_board(
             state(), camera_, [this](core::UnitId id) { return board_.greyed(id); }, emphasised, ui_scale(),
             [this](core::UnitId unit, core::ModelId model) { return board_.model_dimmed(unit, model); });
-        ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides());
+        ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides(),
+                                     drag_facings());
         // Rings stop at the battlefield edge (no model can be beyond it).
         const Rectangle field = camera_.to_screen(core::Rect{0.0f, 0.0f, state().battlefield.width_mm,
                                                              state().battlefield.depth_mm});
@@ -477,6 +498,7 @@ public:
                          static_cast<int>(field.height));
         draw_reach();  // D-040: under the rings
         draw_overlays(camera_, outline_arcs(ring_circles_), ui_scale());
+        draw_ring_paths(camera_, outline_paths(ring_circles_), ui_scale());  // D-074 part 3: oval rings
         EndScissorMode();
         draw_selection_and_moves();
         draw_measure();
@@ -596,6 +618,12 @@ private:
         return out;
     }
 
+    // D-074 part 3: while an oval is turned in a drag, its rings turn with it.
+    FacingOverrides drag_facings() const {
+        if (!drag_ || drag_->whole_unit || !drag_->can_turn) return {};
+        return FacingOverrides{{drag_->model, drag_->facing}};
+    }
+
     // The path a model has moved so far this move, then a line on to `to` (a drag preview).
     void draw_path_to(const core::GameState& gs, const core::Model& m, Vector2 to, Color colour) {
         std::vector<core::Position> path = model_path(gs, m.id);
@@ -660,6 +688,24 @@ private:
                 }
             }
             cli_unit_clicks_.clear();
+        }
+        // --turn (M66): a scripted drag, once, in the first decision that moves the model (screenshots, D-074 part 3).
+        if (cli_turn_ && !drag_) {
+            const core::Model* m = core::find_model(session_->state(), core::ModelId{cli_turn_->model});
+            const auto moving = moving_unit();
+            const core::Unit* u = core::find_unit_of_model(session_->state(), core::ModelId{cli_turn_->model});
+            if (m != nullptr && moving && u != nullptr && u->id == *moving) {
+                const core::Position at{m->position.x + core::inches_to_mm(cli_turn_->dx_in),
+                                        m->position.y + core::inches_to_mm(cli_turn_->dy_in), 0.0f};
+                start_model_drag(*u, *m, m->position, camera_.to_screen(m->position));
+                drag_->scripted = true;
+                if (drag_->can_turn) turn_drag(cli_turn_->deg);
+                drag_->current = at;
+                update_drop(*drag_);
+                selected_unit_ = u->id;
+                selected_model_ = m->id;
+                cli_turn_.reset();
+            }
         }
     }
 
@@ -791,7 +837,9 @@ private:
             }
         }
         if (!model) return std::nullopt;
-        const std::optional<core::MoveReach> reach = core::move_reach(state(), *model);
+        // D-074 part 3: at the facing it is dragged at.
+        const std::optional<core::MoveReach> reach =
+            drag_ ? core::move_reach(state(), *model, drag_->facing) : core::move_reach(state(), *model);
         if (!reach) return std::nullopt;
         return model_region(*reach);
     }
@@ -799,7 +847,10 @@ private:
     // D-040: a faint fill of that region, one screen row per span.
     void draw_reach() {
         const std::optional<ReachRegion> region = reach_region();
-        if (!region) return;
+        if (!region) {
+            reach_cache_.reset();
+            return;
+        }
         const float px = camera_.px_per_mm();
         if (!(px > 0.0f)) return;
         const float step_mm = 1.0f / px;  // one screen pixel
@@ -812,11 +863,41 @@ private:
                 DrawRectangleRec(Rectangle{std::min(a.x, b.x), std::min(a.y, b.y), std::fabs(b.x - a.x), 1.0f}, colour);
             }
         };
-        draw_spans(reach_spans(*region, step_mm), fill);
-        // D-053: where it may go but can't end (within Engagement Range), faintly in the engagement colour.
+        if (!region->has_shapes()) {  // round bases: worked out each frame, as before
+            reach_cache_.reset();
+            draw_spans(reach_spans(*region, step_mm), fill);
+            // D-053: where it may go but can't end (within Engagement Range), faintly in the engagement colour.
+            Color engaged = ring_color(RingKind::Engagement);
+            engaged.a = 40;
+            draw_spans(engaged_spans(*region, step_mm), engaged);
+            return;
+        }
+        // D-074 part 3: shapes are found by bisection, so the spans are kept while the move, the model, the facing,
+        // the zoom and (for the whole unit) the grab point are unchanged.
+        ReachCache key;
+        key.generation = generation_;
+        key.step = session_ ? session_->history().size() : 0;
+        key.whole_unit = drag_ && drag_->whole_unit;
+        if (drag_ && !drag_->whole_unit) key.model = drag_->model;
+        if (!drag_) key.model = selected_model_;
+        if (drag_) {
+            key.grab = drag_->grab;
+            key.facing = drag_->facing;
+        }
+        key.step_mm = step_mm;
+        const bool same = reach_cache_ && reach_cache_->generation == key.generation && reach_cache_->step == key.step &&
+                          reach_cache_->model == key.model && reach_cache_->whole_unit == key.whole_unit &&
+                          reach_cache_->grab == key.grab && reach_cache_->facing == key.facing &&
+                          reach_cache_->step_mm == key.step_mm;
+        if (!same) {
+            key.spans = reach_spans(*region, step_mm);
+            key.engaged = engaged_spans(*region, step_mm);
+            reach_cache_ = std::move(key);
+        }
+        draw_spans(reach_cache_->spans, fill);
         Color engaged = ring_color(RingKind::Engagement);
         engaged.a = 40;
-        draw_spans(engaged_spans(*region, step_mm), engaged);
+        draw_spans(reach_cache_->engaged, engaged);
     }
 
     // The unit being moved model by model, if it is this player's MoveModels decision.
@@ -843,7 +924,12 @@ private:
     void handle_mouse() {
         const Vector2 mouse = GetMousePosition();
         const float wheel = GetMouseWheelMove();
-        if (wheel != 0.0f) camera_.zoom_by(std::pow(1.15f, wheel), mouse);  // zoom to cursor
+        const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+        if (wheel != 0.0f && drag_ && drag_->can_turn && shift) {
+            turn_drag(wheel * kFineTurnStepDeg);  // D-074 part 3: Shift+wheel turns the dragged oval
+        } else if (wheel != 0.0f) {
+            camera_.zoom_by(std::pow(1.15f, wheel), mouse);  // zoom to cursor
+        }
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) camera_.pan(GetMouseDelta());
 
         const auto hovered = model_at(state(), camera_, mouse);
@@ -878,7 +964,7 @@ private:
             return;
         }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press(mouse, hovered);
-        if (drag_) {
+        if (drag_ && !drag_->scripted) {
             drag_->current = camera_.to_world(mouse);
             update_drop(*drag_);
         }
@@ -948,12 +1034,7 @@ private:
         }
         if (moving && *moving == unit) {
             selected_model_ = hovered->model->id;
-            drag_ = Drag{false, hovered->model->id, unit, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
-            drag_->from = hovered->model->position;
-            if (const auto reach = core::move_reach(state(), hovered->model->id)) {
-                drag_->fix = fix_region(model_region(*reach));  // D-052
-            }
-            update_drop(*drag_);
+            start_model_drag(*hovered->unit, *hovered->model, camera_.to_world(mouse), mouse);
             return;
         }
         if (board_.picking_model()) {
@@ -969,10 +1050,45 @@ private:
         tidy_selection();  // D-043: a click that started nothing leaves no rings
     }
 
+    // One model's drag (its next straight line), grabbed at `grab` (world) / `screen`.
+    void start_model_drag(const core::Unit& unit, const core::Model& m, const core::Position& grab, Vector2 screen) {
+        drag_ = Drag{false, m.id, unit.id, grab, grab, screen};
+        drag_->from = m.position;
+        drag_->model_at_grab = m.position;  // D-075: it keeps the grab offset
+        drag_->can_turn = m.base.shape != core::BaseShape::Round;  // D-074 part 3: an oval can be turned
+        drag_->facing = m.facing_deg;
+        drag_->start_facing = m.facing_deg;
+        refresh_fix(*drag_);
+        update_drop(*drag_);
+    }
+
+    // D-052 / D-074 part 3: the region a refused drop is fixed into, at the facing it is dragged at.
+    void refresh_fix(Drag& d) const {
+        d.fix.reset();
+        if (d.whole_unit) return;
+        if (const auto reach = core::move_reach(state(), d.model, d.facing)) d.fix = fix_region(model_region(*reach));
+    }
+
+    // D-074 part 3 (03.01 Rotating a Model): turns the dragged oval by `deg` (counter-clockwise positive).
+    void turn_drag(float deg) {
+        if (!drag_ || !drag_->can_turn) return;
+        drag_->facing = core::normalise_facing_deg(drag_->facing + deg);
+        refresh_fix(*drag_);
+        update_drop(*drag_);
+    }
+
     void release(Vector2 mouse) {
         const Drag d = *drag_;
         drag_.reset();
-        if (distance_px(d.grab_screen, mouse) < kDragThresholdPx * ui_scale()) return;  // a click, not a drag
+        if (distance_px(d.grab_screen, mouse) < kDragThresholdPx * ui_scale()) {
+            // D-074 part 3: a drag that turned the model without moving it is a turn in place (03.01).
+            if (!d.whole_unit && d.turned()) {
+                if (const core::Model* m = core::find_model(state(), d.model)) {
+                    submit(turned_drop(state(), d.model, m->position, d.facing).action);
+                }
+            }
+            return;  // a click, not a drag
+        }
         if (d.whole_unit) {
             // The "Move unit" handle: one ProposeModelMove per model, each validated by the engine, all one
             // Undo group (D-039). With a fixed drop (D-052), the fixed offset.
@@ -985,33 +1101,42 @@ private:
             return;
         }
         // D-052: the fixed spot, checked by the engine first. If it were refused (it shouldn't be), the drop is
-        // made as it was, so the engine's reasons show as before.
+        // made as it was, so the engine's reasons show as before. D-074 part 3: at the dragged facing (turn then move,
+        // else move then turn, turned_drop); D-075: the model keeps the grab offset.
         if (d.fixed) {
-            const core::action::ProposeModelMove fixed = extend_path(state(), d.model, d.drop);
+            const core::action::ProposeModelMove fixed = turned_drop(state(), d.model, d.drop, d.facing).action;
             if (session_->check(fixed).ok()) {
                 if (submit(fixed)) status_ = fix_message(*d.fixed);
                 return;
             }
         }
-        submit(extend_path(state(), d.model, d.current));
+        submit(turned_drop(state(), d.model, drag_drop(d.model_at_grab, d.grab, d.current), d.facing).action);
     }
 
     // D-052: where letting go drops: the cursor, or with "Fix illegal moves" on and a drop the engine would
     // refuse, the nearest spot it can go (fix_drop). Drawn while dragging, so the player sees it first.
     void update_drop(Drag& d) const {
-        d.drop = d.current;
+        // D-075: a single model keeps the offset from the cursor it was grabbed with (the whole unit's handle is
+        // translated by the cursor's offset already).
+        const core::Position target = d.whole_unit ? d.current : drag_drop(d.model_at_grab, d.grab, d.current);
+        d.drop = target;
         d.fixed.reset();
         d.refused = false;
         if (!settings_.fix_moves || !d.fix) return;
-        d.fixed = fix_drop(*d.fix, d.from, d.current);
+        d.fixed = fix_drop(*d.fix, d.from, target);
         if (d.fixed) {
             d.drop = d.fixed->to;
         } else {
-            d.refused = drop_problem(*d.fix, d.current).has_value();
+            d.refused = drop_problem(*d.fix, target).has_value();
         }
     }
 
     void handle_keys() {
+        // D-074 part 3 (03.01 Rotating a Model): Q and E turn the dragged oval counter-clockwise and clockwise.
+        if (drag_ && drag_->can_turn) {
+            if (IsKeyPressed(KEY_Q) || IsKeyPressedRepeat(KEY_Q)) turn_drag(kTurnStepDeg);
+            if (IsKeyPressed(KEY_E) || IsKeyPressedRepeat(KEY_E)) turn_drag(-kTurnStepDeg);
+        }
         if (mode_ == Mode::Play && !board_waits() && IsKeyPressed(KEY_ESCAPE)) {
             board_.cancel();
             if (!moving_unit()) clear_selection();  // D-041: as Cancel
@@ -1034,7 +1159,7 @@ private:
     void draw_ring_tooltip(const core::Position& at) {
         std::vector<RingKind> kinds;
         for (const Circle& c : ring_circles_) {
-            const bool inside = std::hypot(at.x - c.centre.x, at.y - c.centre.y) <= c.radius_mm;
+            const bool inside = ring_contains(c, at);  // D-074 part 3: an oval's ring by its own outline
             if (inside && std::find(kinds.begin(), kinds.end(), c.kind) == kinds.end()) kinds.push_back(c.kind);
         }
         if (kinds.empty()) return;
@@ -1055,7 +1180,12 @@ private:
         ImGui::Text("%s (unit %u, %s)", unit_display_name(state(), h.unit->id).c_str(), h.unit->id.v,
                     side_name(h.unit->side).c_str());
         ImGui::Text("Model %u: %s", m.id.v, m.type_name.c_str());
-        ImGui::Text("Wounds %d/%d, base %.1f mm", m.wounds_remaining, m.characteristics.wounds, m.base.diameter_mm);
+        if (m.base.shape == core::BaseShape::Round) {
+            ImGui::Text("Wounds %d/%d, base %.1f mm", m.wounds_remaining, m.characteristics.wounds, m.base.diameter_mm);
+        } else {  // D-074 part 3
+            ImGui::Text("Wounds %d/%d, base %.0f x %.0f mm oval, facing %.0f\u00b0", m.wounds_remaining,
+                        m.characteristics.wounds, m.base.diameter_mm, m.base.length_mm, m.facing_deg);
+        }
         ImGui::TextUnformatted(stat_line(m.characteristics).c_str());  // D-034
         ImGui::Text("Position (%.2f\", %.2f\")", core::mm_to_inches(m.position.x), core::mm_to_inches(m.position.y));
         if (h.unit->battle_shocked) ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "Battle-shocked");
@@ -1176,9 +1306,18 @@ private:
 
     void draw_ruler(Vector2 at, const std::optional<Ruler>& r) {
         if (!r) return;
-        char text[64];
-        std::snprintf(text, sizeof(text), "%.2f\" / %.2f\"", static_cast<double>(core::mm_to_inches(r->moved_mm)),
-                      static_cast<double>(core::mm_to_inches(r->max_mm)));
+        char text[96];
+        // D-074 part 3: the move's description says when the model turned ("turned 45° then 1.50\" / 8.00\"").
+        if (r->turned_deg >= 0.05f) {
+            std::snprintf(text, sizeof(text), r->moved_mm > 0.0f ? "turned %.0f\u00b0 then %.2f\" / %.2f\""
+                                                                 : "turned %.0f\u00b0, %.2f\" / %.2f\"",
+                          static_cast<double>(r->turned_deg),
+                          static_cast<double>(core::mm_to_inches(r->moved_mm)),
+                          static_cast<double>(core::mm_to_inches(r->max_mm)));
+        } else {
+            std::snprintf(text, sizeof(text), "%.2f\" / %.2f\"", static_cast<double>(core::mm_to_inches(r->moved_mm)),
+                          static_cast<double>(core::mm_to_inches(r->max_mm)));
+        }
         const float s = ui_scale();
         DrawText(text, static_cast<int>(at.x + 14.0f * s), static_cast<int>(at.y - 22.0f * s),
                  static_cast<int>(kRulerText * s), r->over ? RED : RAYWHITE);
@@ -1189,6 +1328,10 @@ private:
         auto outline = [&](core::UnitId id, Color colour) {
             if (const core::Unit* u = gs.find_unit(id)) {
                 for (const core::Model& m : u->models) {
+                    if (m.base.shape != core::BaseShape::Round) {  // D-074 part 3: round the oval at its facing
+                        draw_base_outline(camera_, core::pose_of(m), 3.25f * ui_scale(), 2.5f * ui_scale(), colour);
+                        continue;
+                    }
                     const float r = camera_.to_px(m.base.diameter_mm * 0.5f) + 3.0f * ui_scale();
                     DrawRing(camera_.to_screen(m.position), r - ui_scale(), r + 1.5f * ui_scale(), 0.0f, 360.0f, 48,
                              colour);
@@ -1219,7 +1362,12 @@ private:
         for (const core::UnitId id : board_.chosen_targets()) outline(id, Color{255, 90, 90, 255});
         // D-042: the model chosen for removal (coherency).
         if (const auto chosen = board_.chosen_model()) {
-            if (const core::Model* m = core::find_model(gs, *chosen)) {
+            if (const core::Model* m = core::find_model(gs, *chosen); m != nullptr && m->base.shape != core::BaseShape::Round) {
+                // D-074 part 3: the ring and the cross at the oval's facing.
+                draw_base_outline(camera_, core::pose_of(*m), 3.75f * ui_scale(), 3.5f * ui_scale(),
+                                  Color{255, 90, 90, 255});
+                draw_base_cross(camera_, core::pose_of(*m), 3.0f * ui_scale(), Color{255, 90, 90, 230});
+            } else if (m != nullptr) {
                 const float r = camera_.to_px(m->base.diameter_mm * 0.5f) + 3.0f * ui_scale();
                 DrawRing(camera_.to_screen(m->position), r - ui_scale(), r + 2.5f * ui_scale(), 0.0f, 360.0f, 48,
                          Color{255, 90, 90, 255});
@@ -1240,10 +1388,21 @@ private:
                 if (m == nullptr) continue;
                 const Color colour = mark.destroyed ? Color{255, 90, 90, 255} : Color{255, 170, 60, 255};
                 const Vector2 c = camera_.to_screen(m->position);
-                const float r = camera_.to_px(m->base.diameter_mm * 0.5f) + 3.0f * s;
+                const bool oval = m->base.shape != core::BaseShape::Round;
+                // D-074 part 3: an oval's ring at its facing; the text beside its widest extent.
+                const float r = camera_.to_px(oval ? core::circumscribed_radius(m->base) : m->base.diameter_mm * 0.5f) +
+                                3.0f * s;
                 // D-069: a provisional mark (reached only after an earlier random roll) has a thin ring.
-                DrawRing(c, r - s, r + (mark.provisional ? 0.5f : 2.5f) * s, 0.0f, 360.0f, 48, colour);
-                if (mark.destroyed) {
+                if (oval) {
+                    draw_base_outline(camera_, core::pose_of(*m), 3.0f * s + (mark.provisional ? 0.5f : 1.5f) * s - 0.5f * s,
+                                      (mark.provisional ? 1.5f : 3.5f) * s, colour);
+                } else {
+                    DrawRing(c, r - s, r + (mark.provisional ? 0.5f : 2.5f) * s, 0.0f, 360.0f, 48, colour);
+                }
+                if (mark.destroyed && oval) {
+                    draw_base_cross(camera_, core::pose_of(*m), 6.0f * s, BLACK);
+                    draw_base_cross(camera_, core::pose_of(*m), 3.0f * s, colour);
+                } else if (mark.destroyed) {
                     // A black outline under the red cross, so it shows on red (Termagant) bases too.
                     const float k = m->base.diameter_mm * 0.35f;
                     const Vector2 a0 = camera_.to_screen(m->position.x - k, m->position.y - k);
@@ -1268,8 +1427,13 @@ private:
         if (selected_unit_) {
             if (const core::Unit* u = gs.find_unit(*selected_unit_)) {
                 for (const core::Model& m : u->models) {
-                    const float r = camera_.to_px(m.base.diameter_mm * 0.5f) + 3.0f;
                     const bool chosen = selected_model_ == m.id;
+                    if (m.base.shape != core::BaseShape::Round) {  // D-074 part 3: at its facing
+                        draw_base_outline(camera_, core::pose_of(m), 3.0f, 1.0f, chosen ? YELLOW : WHITE);
+                        if (chosen) draw_base_outline(camera_, core::pose_of(m), 5.0f, 1.0f, YELLOW);
+                        continue;
+                    }
+                    const float r = camera_.to_px(m.base.diameter_mm * 0.5f) + 3.0f;
                     DrawCircleLinesV(camera_.to_screen(m.position), r, chosen ? YELLOW : WHITE);
                     if (chosen) DrawCircleLinesV(camera_.to_screen(m.position), r + 2.0f, YELLOW);
                 }
@@ -1281,9 +1445,15 @@ private:
             for (const core::Model& m : u->models) {
                 const std::vector<core::Position> path = model_path(gs, m.id);
                 if (path.size() < 2) continue;
-                const float r = camera_.to_px(m.base.diameter_mm * 0.5f);
-                DrawCircleV(camera_.to_screen(path.front()), r, Color{255, 255, 255, 40});
-                DrawCircleLinesV(camera_.to_screen(path.front()), r, Color{255, 255, 255, 140});
+                if (m.base.shape != core::BaseShape::Round) {  // D-074 part 3: where it started, at its start facing
+                    const core::BasePose was{path.front(), m.base, core::move_start_facing_deg(gs, m.id).value_or(0.0f)};
+                    fill_base(camera_, was, Color{255, 255, 255, 40});
+                    draw_base_outline(camera_, was, 0.0f, 1.0f, Color{255, 255, 255, 140});
+                } else {
+                    const float r = camera_.to_px(m.base.diameter_mm * 0.5f);
+                    DrawCircleV(camera_.to_screen(path.front()), r, Color{255, 255, 255, 40});
+                    DrawCircleLinesV(camera_.to_screen(path.front()), r, Color{255, 255, 255, 140});
+                }
                 for (std::size_t i = 1; i < path.size(); ++i) {
                     DrawLineEx(camera_.to_screen(path[i - 1]), camera_.to_screen(path[i]), 2.0f,
                                Color{255, 255, 255, 160});
@@ -1309,7 +1479,7 @@ private:
                 for (const core::Model& m : u->models) {
                     const core::Position to{m.position.x + dx, m.position.y + dy, 0.0f};
                     draw_path_to(gs, m, camera_.to_screen(to), Color{255, 255, 255, 160});
-                    DrawCircleV(camera_.to_screen(to), camera_.to_px(m.base.diameter_mm * 0.5f), Color{255, 255, 255, 60});
+                    fill_base(camera_, core::BasePose{to, m.base, m.facing_deg}, Color{255, 255, 255, 60});
                     const auto r = ruler(gs, m.id, to);
                     if (r && (!worst || r->moved_mm > worst->moved_mm)) worst = r;
                 }
@@ -1320,14 +1490,37 @@ private:
                     if (x.id == drag_->model) m = &x;
                 }
                 if (m != nullptr) {
+                    // D-075: the model keeps its grab offset; the raw drop (before a fix) is there, not at the cursor.
+                    const core::Position target = drag_drop(drag_->model_at_grab, drag_->grab, drag_->current);
+                    const Vector2 aimed = camera_.to_screen(target);
                     draw_path_to(gs, *m, dropped, YELLOW);
-                    DrawCircleV(dropped, camera_.to_px(m->base.diameter_mm * 0.5f), ghost);
-                    draw_ruler(cursor, ruler(gs, m->id, drag_->drop));
-                    if (drag_->fixed) DrawCircleLinesV(cursor, camera_.to_px(m->base.diameter_mm * 0.5f), kFixCue);
+                    const core::BasePose ghost_pose{drag_->drop, m->base, drag_->can_turn ? drag_->facing : 0.0f};
+                    if (drag_->turned()) {
+                        // D-074 part 3 (03.01): the turn preview: the area the turn sweeps where it is made (at the
+                        // line's start, or at its end when only move-then-turn is accepted), and the footprint at the
+                        // new facing.
+                        const TurnedDrop how = turned_drop(gs, m->id, drag_->drop, drag_->facing);
+                        const core::Position pivot = how.how == TurnedDrop::How::MoveThenTurn ? drag_->drop : m->position;
+                        draw_world_loop(camera_,
+                                        turn_swept_outline(m->base, pivot, drag_->start_facing, drag_->facing),
+                                        1.5f * ui_scale(), Color{255, 220, 80, 150});
+                        draw_base_outline(camera_, core::BasePose{pivot, m->base, drag_->start_facing}, 0.0f, 1.0f,
+                                          Color{255, 255, 255, 90});
+                    }
+                    fill_base(camera_, ghost_pose, ghost);
+                    if (drag_->can_turn) draw_base_outline(camera_, ghost_pose, 0.0f, 1.5f * ui_scale(), YELLOW);
+                    draw_ruler(cursor, ruler(gs, m->id, drag_->drop,
+                                             drag_->can_turn ? std::optional<float>(drag_->facing) : std::nullopt));
+                    if (drag_->fixed) {
+                        draw_base_outline(camera_, core::BasePose{target, m->base, ghost_pose.facing_deg}, 0.0f, 1.0f,
+                                          kFixCue);
+                        DrawLineEx(aimed, dropped, 1.5f * ui_scale(), kFixCue);
+                        DrawCircleLinesV(aimed, 4.0f * ui_scale(), kFixCue);
+                    }
                 }
             }
-            // D-052: the cursor and where the fixed drop will go.
-            if (drag_->fixed) {
+            // D-052: the cursor and where the fixed drop will go (the whole unit's handle).
+            if (drag_->fixed && drag_->whole_unit) {
                 DrawLineEx(cursor, dropped, 1.5f * ui_scale(), kFixCue);
                 DrawCircleLinesV(cursor, 4.0f * ui_scale(), kFixCue);
             }
@@ -1684,6 +1877,8 @@ private:
         scale_slider_active_ = ImGui::IsItemActive();
         if (ImGui::IsItemDeactivatedAfterEdit()) settings_.ui_scale = static_cast<float>(scale_percent_) / 100.0f;
         ImGui::TextDisabled("click a unit to act, left-drag: move, right-click: datasheet, right-drag: pan, wheel: zoom, Esc: cancel");
+        // D-074 part 3: the turn keys.
+        ImGui::TextDisabled("while dragging an oval base: Q / E turn it 15\u00b0, Shift+wheel 5\u00b0 (03.01)");
     }
 
     static void overlay_toggle(RingKind kind, bool* value) {
@@ -2208,6 +2403,20 @@ private:
     std::vector<unsigned> cli_unit_clicks_;    // --click-units (M63), applied once
     bool cli_menu_at_anchor_ = false;          // --click-units opened the menu: draw it at its anchor
     int cli_menu_frames_ = 0;                  // --click-units: frames until its menu opens
+    std::optional<CliTurn> cli_turn_;          // --turn (M66), applied once
+    // D-074 part 3: the shaded area's spans, kept while what they show is unchanged (shapes are found by bisection).
+    struct ReachCache {
+        std::size_t generation = 0;
+        std::size_t step = 0;
+        std::optional<core::ModelId> model;
+        bool whole_unit = false;
+        core::Position grab;
+        float facing = 0.0f;
+        float step_mm = 0.0f;
+        std::vector<ReachSpan> spans;
+        std::vector<ReachSpan> engaged;
+    };
+    std::optional<ReachCache> reach_cache_;
 };
 
 }  // namespace
@@ -2272,6 +2481,7 @@ int main(int argc, char** argv) {
     app.pick_dice(options.pick_dice);  // M61
     app.pick_models(options.pick_models);  // M62
     app.click_units(options.click_units);  // M63
+    app.cli_turn(options.turn);            // M66
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;
@@ -2280,8 +2490,10 @@ int main(int argc, char** argv) {
         BeginDrawing();
         rlImGuiBegin();
         app.frame();
-        if (options.zoom && !zoom_applied) {
-            app.set_zoom(*options.zoom);  // after the first fit
+        // After the first fit. M66: in a --screenshot run, every frame (the window may still be resized, and a resize
+        // fits the board again).
+        if (options.zoom && (!zoom_applied || options.screenshot)) {
+            app.set_zoom(*options.zoom);
             zoom_applied = true;
         }
         rlImGuiEnd();

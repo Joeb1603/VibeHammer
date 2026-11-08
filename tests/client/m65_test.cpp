@@ -1,7 +1,8 @@
-// M65 (D-074 part 2): what the client logic does with an oval base before M66 converts it. The replay viewer plays the
-// Tyrannofex replay and plans its rings at every frame (the rings use the base's circumscribed radius: exact for the
-// movement and charge rings, which a model may reach by turning, and the radius itself for a round base); the auto
-// moves (D-050, D-056) refuse cleanly while an oval base is on the battlefield instead of throwing.
+// M65 (D-074 part 2): what the client logic does with an oval base. The replay viewer plays the Tyrannofex replay and
+// plans its rings at every frame (the rings use the base's circumscribed radius: exact for the movement and charge
+// rings, which a model may reach by turning, and the radius itself for a round base). M65's auto moves (D-050, D-056)
+// refused cleanly while an oval base was on the battlefield; M66 (D-074 part 3) removed that guard, and the test of it
+// became a test that they plan the oval legally.
 
 #include <gtest/gtest.h>
 
@@ -81,9 +82,10 @@ TEST(M65_Replay, ARoundBasesRingsAreAsBefore) {
     }
 }
 
-TEST(M65_AutoMove, OvalBasesAreRefusedCleanlyUntilM66) {
-    // D-074 part 2: auto_charge_move and auto_fight_move are planned on round-only geometry (M66 converts them). While
-    // an oval base is on the battlefield they return no arrangement, with a D-074 reason, and never throw.
+TEST(M65_AutoMove, OvalBasesArePlannedSinceM66) {
+    // M65 had a temporary guard here (D-074 part 2: the auto moves refused cleanly while an oval base was on the
+    // battlefield). M66 (D-074 part 3) removes it: auto_charge_move and auto_fight_move plan an oval mover at its
+    // facing, and every move they offer is accepted by the engine (the same set-up as the guard's test).
     GameState gs = tf::fixture(Side::B);
     tf::the_tyrannofex(gs).position = wh40k::test::at(22.0f, 31.0f);
     tf::the_tyrannofex(gs).facing_deg = 90.0f;
@@ -95,10 +97,20 @@ TEST(M65_AutoMove, OvalBasesAreRefusedCleanlyUntilM66) {
     apply_action(gs, Side::B, action::StartChargeMove{gs.units[tf::kTyrannofex].id, {gs.units[tf::kLegionaries].id}});
     ASSERT_TRUE(auto_charge_move_available(gs));
     const AutoChargeMove charge = auto_charge_move(gs);
-    EXPECT_FALSE(charge.ok());
-    EXPECT_TRUE(charge.moves.empty());
-    ASSERT_FALSE(charge.problems.empty());
-    EXPECT_EQ(charge.problems.front(), "D-074: Auto move does not handle oval bases yet");
+    ASSERT_TRUE(charge.ok()) << (charge.problems.empty() ? std::string() : charge.problems.front());
+    {
+        GameState work = gs;
+        for (const GameAction& a : charge.moves) {
+            const ValidationResult r = validate_action(work, Side::B, a);
+            ASSERT_TRUE(r.ok()) << (r.reasons.empty() ? std::string() : r.reasons.front());
+            const auto* p = std::get_if<action::ProposeModelMove>(&a);
+            ASSERT_NE(p, nullptr);
+            EXPECT_TRUE(p->facings.empty());  // it keeps its facing
+            apply_action(work, Side::B, a);
+        }
+        EXPECT_TRUE(move_end_problems(work).empty());
+        EXPECT_EQ(tf::the_tyrannofex(work).facing_deg, 90.0f);
+    }
 
     // A pile-in, after a charge that ends 1" away.
     const Position s = gs.units[tf::kTyrannofex].models[0].position;
@@ -112,8 +124,12 @@ TEST(M65_AutoMove, OvalBasesAreRefusedCleanlyUntilM66) {
                  action::StartPileIn{gs.units[tf::kTyrannofex].id, {gs.units[tf::kLegionaries].id}});
     ASSERT_TRUE(auto_fight_move_available(gs));
     const AutoFightMove pile_in = auto_fight_move(gs);
-    EXPECT_FALSE(pile_in.ok());
-    EXPECT_TRUE(pile_in.moves.empty());
-    ASSERT_FALSE(pile_in.problems.empty());
-    EXPECT_EQ(pile_in.problems.front(), "D-074: Auto move does not handle oval bases yet");
+    ASSERT_TRUE(pile_in.ok()) << (pile_in.problems.empty() ? std::string() : pile_in.problems.front());
+    GameState work = gs;
+    for (const GameAction& a : pile_in.moves) {
+        const ValidationResult r = validate_action(work, work.pending->side, a);
+        ASSERT_TRUE(r.ok()) << (r.reasons.empty() ? std::string() : r.reasons.front());
+        apply_action(work, work.pending->side, a);
+    }
+    EXPECT_TRUE(move_end_problems(work).empty());
 }

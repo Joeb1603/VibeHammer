@@ -17,5 +17,7 @@ namespace wh40k::client {
 
 // `ui_scale`: the line width multiplier (D-028).
 void draw_overlays(const BoardCamera& camera, const std::vector<Arc>& arcs, float ui_scale);
+// D-074 part 3 (M66): the visible parts of oval rings (outline_paths).
+void draw_ring_paths(const BoardCamera& camera, const std::vector<RingPath>& paths, float ui_scale);
 
 }  // namespace wh40k::client

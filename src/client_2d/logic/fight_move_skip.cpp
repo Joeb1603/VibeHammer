@@ -9,6 +9,7 @@
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/geometry/oval.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/fight.hpp"
 #include "core/state/queries.hpp"
@@ -62,13 +63,15 @@ bool could_make_new_contact(const core::GameState& state, const core::Unit& unit
     if (reach.immobile) return false;
     const std::vector<core::UnitId> engaged =
         core::enemy_units_engaged_with_model(state, unit, model, reach.start);
-    const float r = core::base_radius(model.base);
+    // D-074 part 3: generous, so by the bases' circumscribed radii (for a round base its radius, as before).
+    const float r = core::circumscribed_radius(model.base);
     for (const core::Unit& other : state.units) {
         if (other.side == unit.side || core::is_destroyed(other)) continue;
         if (std::find(engaged.begin(), engaged.end(), other.id) != engaged.end()) continue;
         for (const core::Model& o : other.models) {
             const float centres = std::hypot(o.position.x - reach.start.x, o.position.y - reach.start.y);
-            const float gap = centres - r - core::base_radius(o.base) - core::kEngagementRangeMm - core::EPS_MM;
+            const float gap =
+                centres - r - core::circumscribed_radius(o.base) - core::kEngagementRangeMm - core::EPS_MM;
             if (gap <= reach.remaining_mm) return true;
         }
     }
@@ -85,10 +88,12 @@ bool nearly_in_base_contact(const core::GameState& state, const core::Unit& unit
     const bool ongoing = mv.type == core::MoveType::Consolidation &&
                          mv.consolidation_mode == core::ConsolidationMode::Ongoing;
     if (!pile_in && !ongoing) return false;
+    // D-074 part 3: the model at its start pose (it hasn't moved or turned yet in the preview).
+    const core::BasePose at{start, model.base, model.facing_deg};
     for (const core::Unit& other : state.units) {
         if (other.side == unit.side || core::is_destroyed(other)) continue;
         for (const core::Model& o : other.models) {
-            if (core::base_distance(start, model.base, o.position, o.base) <= kNearBaseContactMm) return true;
+            if (core::base_distance(at, core::pose_of(o)) <= kNearBaseContactMm) return true;
         }
     }
     return false;

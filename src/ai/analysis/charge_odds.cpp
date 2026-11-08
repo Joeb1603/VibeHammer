@@ -139,10 +139,12 @@ std::optional<AdvanceOdds> advance_odds(const core::GameState& state, core::Unit
 
 std::optional<float> kth_closest_model_distance(const core::Unit& from, const core::Unit& enemy, int k) {
     if (k < 1 || from.models.empty() || static_cast<int>(enemy.models.size()) < k) return std::nullopt;
-    const auto ours = core::placed_models(from);
+    // D-074 part 3 (M66): the charge reach exactly, each model at its facing (round: closest_distance's round result).
+    const std::vector<core::PosedModel> ours = core::posed_models(from);
     std::vector<float> gaps;
-    for (const core::PlacedModel& m : core::placed_models(enemy)) {
-        const auto d = core::closest_distance(std::span<const core::PlacedModel>(&m, 1), ours);
+    for (const core::PosedModel& m : core::posed_models(enemy)) {
+        const auto d = core::closest_distance(std::span<const core::PosedModel>(&m, 1),
+                                              std::span<const core::PosedModel>(ours));
         if (d) gaps.push_back(*d);
     }
     if (static_cast<int>(gaps.size()) < k) return std::nullopt;

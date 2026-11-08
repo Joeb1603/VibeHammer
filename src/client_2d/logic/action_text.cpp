@@ -5,10 +5,12 @@
 #include <variant>
 #include <vector>
 
+#include "core/engine/movement.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
+#include "move_plan.hpp"
 #include "unit_style.hpp"
 
 namespace wh40k::client {
@@ -44,7 +46,19 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 }
                 return s;
             } else if constexpr (std::is_same_v<T, a::ProposeModelMove>) {
-                return "Move model " + std::to_string(x.model.v);
+                // D-074 part 3: "Move model 54 (turns 45° then moves 3.00\")" when the proposal turns it.
+                std::string s = "Move model " + std::to_string(x.model.v);
+                if (x.facings.empty() || !state.flow.move) return s;
+                std::vector<core::Position> points;
+                if (const std::optional<core::Position> start = core::move_start_position(state, x.model)) {
+                    points.push_back(*start);
+                }
+                std::vector<float> facings;
+                if (const std::optional<float> f = core::move_start_facing_deg(state, x.model)) facings.push_back(*f);
+                points.insert(points.end(), x.path.begin(), x.path.end());
+                facings.insert(facings.end(), x.facings.begin(), x.facings.end());
+                if (facings_turn_deg(facings) < 0.05f) return s;
+                return s + " (" + describe_path(points, facings, true) + ")";
             } else if constexpr (std::is_same_v<T, a::CommitUnitMove>) {
                 return "Commit move";
             } else if constexpr (std::is_same_v<T, a::ResetUnitMove>) {

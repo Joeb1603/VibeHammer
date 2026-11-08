@@ -10,6 +10,7 @@
 #include "core/geometry/closest.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/geometry/oval.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::client {
@@ -20,16 +21,16 @@ using Alive = std::vector<unsigned char>;  // per model (unit order): 1 while it
 
 // 03.03 on a pairwise table. within_2(i, j) / within_9(i, j) are measured from model i to model j exactly as
 // check_coherency measures them for model i (base_distance(i, j), `within` 2" and 9"), so every count below
-// equals check_coherency's on the same models.
+// equals check_coherency's on the same models. D-074 part 3 (M66): each model with its facing (a round pair is the
+// old base_distance, inline in core, so the same float).
 class CoherencyTable {
 public:
-    explicit CoherencyTable(std::span<const core::PlacedModel> models)
+    explicit CoherencyTable(std::span<const core::PosedModel> models)
         : n_(models.size()), within_2_(n_ * n_), within_9_(n_ * n_) {
         for (std::size_t i = 0; i < n_; ++i) {
             for (std::size_t j = 0; j < n_; ++j) {
                 if (i == j) continue;
-                const float d =
-                    core::base_distance(models[i].position, models[i].base, models[j].position, models[j].base);
+                const float d = core::base_distance(models[i].pose(), models[j].pose());
                 within_2_[i * n_ + j] = core::within(d, core::kCoherencyNearMm) ? 1 : 0;
                 within_9_[i * n_ + j] = core::within(d, core::kCoherencyFarMm) ? 1 : 0;
             }
@@ -127,17 +128,19 @@ struct Facts {
     std::vector<unsigned char> engaged;       // 03.04
     std::vector<std::size_t> odd_rank;        // 0 for an ordinary model; n - i for the odd one out
 
-    Facts(const core::GameState& state, const core::Unit& unit, const std::vector<core::PlacedModel>& placed)
+    Facts(const core::GameState& state, const core::Unit& unit, const std::vector<core::PosedModel>& placed)
         : table(placed) {
         const std::size_t n = placed.size();
-        for (const core::PlacedModel& p : placed) ids.push_back(p.id);
-        const std::vector<core::PlacedModel> enemies = core::enemy_models(state, unit.side);
+        for (const core::PosedModel& p : placed) ids.push_back(p.id);
+        const std::vector<core::PosedModel> enemies = core::posed_enemy_models(state, unit.side);  // D-074 part 3
         gap.assign(n, std::nullopt);
         for (std::size_t i = 0; i < n; ++i) {
-            gap[i] = core::closest_distance(std::span<const core::PlacedModel>(&placed[i], 1), enemies);
+            gap[i] = core::closest_distance(std::span<const core::PosedModel>(&placed[i], 1),
+                                            std::span<const core::PosedModel>(enemies));
         }
         engaged.assign(n, 0);
-        for (const core::ModelId id : core::engaged_models(placed, enemies)) {
+        for (const core::ModelId id : core::engaged_models(std::span<const core::PosedModel>(placed),
+                                                           std::span<const core::PosedModel>(enemies))) {
             for (std::size_t i = 0; i < n; ++i) {
                 if (ids[i] == id) engaged[i] = 1;
             }
@@ -219,9 +222,16 @@ bool casualties_pending_for(const core::GameState& state, core::UnitId target) {
 
 }  // namespace
 
-int coherency_losses(std::vector<core::PlacedModel> models) {
+int coherency_losses(std::vector<core::PosedModel> models) {
     const CoherencyTable table(models);
     return table.losses(Alive(models.size(), 1));
+}
+
+int coherency_losses(std::vector<core::PlacedModel> models) {
+    std::vector<core::PosedModel> posed;
+    posed.reserve(models.size());
+    for (const core::PlacedModel& m : models) posed.push_back(core::PosedModel{m.id, m.position, m.base, 0.0f});
+    return coherency_losses(std::move(posed));
 }
 
 std::vector<core::ModelId> default_casualty_order(const core::GameState& state, core::UnitId target,
@@ -229,7 +239,7 @@ std::vector<core::ModelId> default_casualty_order(const core::GameState& state, 
     std::vector<core::ModelId> order;
     const core::Unit* unit = state.find_unit(target);
     if (unit == nullptr) return order;
-    const std::vector<core::PlacedModel> placed = core::placed_models(*unit);
+    const std::vector<core::PosedModel> placed = core::posed_models(*unit);  // D-074 part 3
     const Facts f(state, *unit, placed);
     Alive in_s(placed.size(), 1);
     for (const core::ModelId id : picks) {
@@ -266,7 +276,7 @@ std::vector<core::ModelId> default_casualty_order(const core::GameState& state, 
 std::optional<core::ModelId> default_coherency_removal(const core::GameState& state, core::UnitId unit_id) {
     const core::Unit* unit = state.find_unit(unit_id);
     if (unit == nullptr || unit->models.empty()) return std::nullopt;
-    const std::vector<core::PlacedModel> placed = core::placed_models(*unit);
+    const std::vector<core::PosedModel> placed = core::posed_models(*unit);  // D-074 part 3
     const Facts f(state, *unit, placed);
     const Alive in_s(placed.size(), 1);
     const std::optional<std::size_t> best = best_of(f, in_s, members(in_s));

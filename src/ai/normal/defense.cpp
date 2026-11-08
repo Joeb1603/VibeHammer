@@ -25,9 +25,10 @@ constexpr double kUnthreatenedPosition = 0.3;  // position weight when no enemy 
 
 using Worth = std::map<core::ModelId, double>;
 
-std::vector<core::PlacedModel> without(const std::vector<core::PlacedModel>& models, const std::set<core::ModelId>& gone) {
-    std::vector<core::PlacedModel> out;
-    for (const core::PlacedModel& p : models) {
+// D-074 part 3 (M66): with facings (coherency is measured at each model's facing).
+std::vector<core::PosedModel> without(const std::vector<core::PosedModel>& models, const std::set<core::ModelId>& gone) {
+    std::vector<core::PosedModel> out;
+    for (const core::PosedModel& p : models) {
         if (gone.count(p.id) == 0) out.push_back(p);
     }
     return out;
@@ -220,7 +221,7 @@ std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const co
     const std::map<core::ModelId, double> position = position_rank(state, *unit, stance);
     const Worth worth = worth_of(cache, state, *unit, gen);
     const double mean = mean_worth(worth);
-    const std::vector<core::PlacedModel> placed = core::placed_models(*unit);
+    const std::vector<core::PosedModel> placed = core::posed_models(*unit);
 
     const auto score_of = [&](core::ModelId id) {
         return removal_score(*unit, id, 0, stance.position_weight, position, worth, mean);
@@ -355,7 +356,7 @@ std::optional<core::ModelId> coherency_removal(analysis::OddsCache& cache, const
     const std::map<core::ModelId, double> position = position_rank(state, *unit, stance);
     const Worth worth = worth_of(cache, state, *unit, gen);
     const double mean = mean_worth(worth);
-    const std::vector<core::PlacedModel> placed = core::placed_models(*unit);
+    const std::vector<core::PosedModel> placed = core::posed_models(*unit);
     std::optional<core::ModelId> best;
     double best_score = 0.0;
     int best_more = 0;

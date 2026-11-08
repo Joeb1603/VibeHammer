@@ -9,6 +9,7 @@
 
 #include "analysis/charge_odds.hpp"
 #include "analysis/threat.hpp"
+#include "bounds.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
@@ -88,12 +89,15 @@ float room_away(const core::GameState& gs, const core::Unit& u, const core::Posi
         if (dot < 0.5f) continue;
         float t = 1.0e6f;
         for (const core::Model& m : u.models) {
-            const float r = core::base_radius(m.base);
+            // D-074 part 3: the edge by the base's half extents at its facing (round: its radius, as before).
+            const core::BaseExtents ext = edge_extents(m.base, m.facing_deg);
+            const float rx = ext.half_x_mm;
+            const float ry = ext.half_y_mm;
             const core::Position& p = m.position;
-            if (d.x > 1e-6f) t = std::min(t, (w - r - p.x) / d.x);
-            if (d.x < -1e-6f) t = std::min(t, (r - p.x) / d.x);
-            if (d.y > 1e-6f) t = std::min(t, (h - r - p.y) / d.y);
-            if (d.y < -1e-6f) t = std::min(t, (r - p.y) / d.y);
+            if (d.x > 1e-6f) t = std::min(t, (w - rx - p.x) / d.x);
+            if (d.x < -1e-6f) t = std::min(t, (rx - p.x) / d.x);
+            if (d.y > 1e-6f) t = std::min(t, (h - ry - p.y) / d.y);
+            if (d.y < -1e-6f) t = std::min(t, (ry - p.y) / d.y);
         }
         best = std::max(best, std::max(0.0f, t) * dot);
     }

@@ -19,8 +19,21 @@ struct Shadow {
     core::ReachCircle disc;
 };
 
+// D-074 part 3 (M66): the shadow of a blocking ReachShape (D-044): the points p whose straight line from `from`
+// meets the shape (core::translation_crosses for the moving base at the shape's facing: the line's swept base would
+// overlap the model by more than EPS). On each ray from `from` it is everything beyond the ray's first point in the
+// shape; the set is convex.
+struct ShapeShadow {
+    core::Position from;
+    core::ReachShape shape;
+};
+
 // A point is in the region when it is inside `bounds`, inside every `inside_all` circle, inside at least
 // one circle of every `inside_any` group, outside every `outside_all` circle and in no `outside_shadows`.
+// D-074 part 3 (M66): the pairs that aren't round to round (an oval mover, or an oval other model) come as core's
+// ReachShapes (D-074 part 2): `inside_any_shapes` is empty (no group has a shape) or holds one group per `inside_any`
+// group (group i is inside_any[i] and inside_any_shapes[i] together); a point must be outside every `outside_shapes`
+// shape and in no `outside_shape_shadows`. Round-only regions have none, so they are tested exactly as before.
 struct ReachRegion {
     core::Rect bounds;
     std::vector<core::ReachCircle> inside_all;
@@ -28,7 +41,23 @@ struct ReachRegion {
     std::vector<core::ReachCircle> outside_all;
     std::vector<Shadow> outside_shadows;
     bool empty = false;  // nothing can be dropped anywhere (e.g. the model can't be moved)
+    std::vector<std::vector<core::ReachShape>> inside_any_shapes;
+    std::vector<core::ReachShape> outside_shapes;
+    std::vector<ShapeShadow> outside_shape_shadows;
+    [[nodiscard]] bool has_shapes() const noexcept {
+        return !inside_any_shapes.empty() || !outside_shapes.empty() || !outside_shape_shadows.empty();
+    }
 };
+
+// D-074 part 3: the shapes of group `g` of `region.inside_any` (none when the region has no shapes).
+[[nodiscard]] const std::vector<core::ReachShape>& group_shapes(const ReachRegion& region, std::size_t g);
+
+// D-074 part 3: whether `p` is in `shape` (core::reach_shape_contains), deciding by its inner and outer discs first.
+[[nodiscard]] bool shape_holds(const core::ReachShape& shape, const core::Position& p);
+
+// D-074 part 3: whether `p` is in the shadow (the straight line from its `from` to `p` meets the shape), deciding by
+// the shape's inner and outer discs first.
+[[nodiscard]] bool shadow_holds(const ShapeShadow& shadow, const core::Position& p);
 
 // Where one model's next drag can be dropped: its next straight line (from where it is now, up to the
 // distance it has left), within core's limits. Empty if it can't be moved.
@@ -49,6 +78,12 @@ struct ReachSpan {
 
 // One line every `y_step_mm` across the region, bottom to top, spans on a line left to right. Nothing for
 // an empty region or a step that isn't positive.
+// D-074 part 3: a shape or shape shadow crosses each line in one interval (each is convex), whose ends are found by
+// bisection on shape_holds / shadow_holds to within kShapeSpanToleranceMm (or half the step, if smaller), from the
+// shape's inner disc (or a sample inside it) out to its outer disc. A sliver of a shadow narrower than the samples
+// (at most kShapeSpanToleranceMm apart) on a line may be missed. That is the band at the boundary the shading may be
+// off by; in_region is exact.
+inline constexpr float kShapeSpanToleranceMm = 0.5f;
 [[nodiscard]] std::vector<ReachSpan> reach_spans(const ReachRegion& region, float y_step_mm);
 
 // Whether a point is in the region (the same test the spans use).

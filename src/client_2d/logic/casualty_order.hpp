@@ -43,6 +43,9 @@ inline constexpr const char* kDefaultCasualtyOrderText =
 // coherency (greedy: each time the first model whose removal leaves the fewest coherency problems, counted as
 // check_coherency's isolated plus too-far models). 0 if they are. Moved from the Normal bot (M41) unchanged in
 // behaviour (M47); computed on a pairwise table with the same `within` tests as check_coherency.
+// D-074 part 3 (M66): each model with its facing (round bases: the same counts as before). The PlacedModel overload
+// is the same at facing 0 (round bases).
+[[nodiscard]] int coherency_losses(std::vector<core::PosedModel> models);
 [[nodiscard]] int coherency_losses(std::vector<core::PlacedModel> models);
 
 // D-058: every model of `target` exactly once, most-preferred casualty first (an OrderCasualties priority,

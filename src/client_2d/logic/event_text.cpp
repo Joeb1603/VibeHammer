@@ -6,6 +6,7 @@
 
 #include "core/geometry/units.hpp"
 #include "core/model/dice_expr.hpp"
+#include "move_plan.hpp"
 
 namespace wh40k::client {
 
@@ -96,7 +97,9 @@ std::string body(const core::GameEvent& e) {
                 return std::to_string(x.result.steps.size()) + " mortal wound(s) on " + unit(x.unit) + ", " +
                        std::to_string(x.result.models_destroyed) + " destroyed";
             } else if constexpr (std::is_same_v<T, ev::ModelMoveProposed>) {
-                return model(x.model) + " moves " + core::format_inches(x.distance_mm);
+                // D-074 part 3: "turns 45° then moves 3.00\"" when the path turns the model (no facings: as before).
+                if (x.facings.empty()) return model(x.model) + " moves " + core::format_inches(x.distance_mm);
+                return model(x.model) + " " + describe_path(x.path, x.facings, true);
             } else if constexpr (std::is_same_v<T, ev::UnitMoveCommitted>) {
                 return unit(x.unit) + " ends its " + std::string(core::move_type_name(x.move_type)) + " move";
             } else if constexpr (std::is_same_v<T, ev::UnitMoveReverted>) {
