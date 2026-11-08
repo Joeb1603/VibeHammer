@@ -3,14 +3,19 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <vector>
 
+#include "core/data/datasheet.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
@@ -28,6 +33,7 @@ using wh40k::test::TestRng;
 namespace {
 
 const std::filesystem::path kReplayDir{WH40K_REPLAY_DIR};
+constexpr std::uint64_t kM60Seed = 2;  // M60: picked by Replay.DISABLED_SearchM60Seed
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -56,6 +62,111 @@ void save_if_clean(const Replay& replay, const std::filesystem::path& path) {
         return;
     }
     save_replay(replay, path);
+}
+
+// M60 (D-071): the Havocs vs Hive Tyrant fixture with the Tyrant's bonesword replaced by a heavy venom cannon (a
+// datasheet option), so its only melee weapon is its scything talons ([EXTRA ATTACKS], selected alone: still legal
+// once M61 makes the bonesword selectable). Embedded initial state, so the file needs no tests/data scenario.
+// `ok` says whether the seed shows what the replay is about: the hazard roll fails and the talons destroy a Havoc;
+// `problem`, the first refused step (none expected).
+Replay m60_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M60: the Havocs vs Hive Tyrant fixture (D-070), the Tyrant with a heavy venom cannon instead of its bonesword, "
+        "so its scything talons ([EXTRA ATTACKS], 24.11) are its only melee weapon. Round 1, Side A: the Havocs remain "
+        "stationary; the champion fires its plasma gun on supercharge ([HAZARDOUS]) at the Tyrant, 8\" away (2 shots, "
+        "Rapid Fire 1). After the attacks the Havocs make one hazard roll (24.15, 06.03); it fails, and Side A gives "
+        "the mortal wound to the last lascannon Havoc (06.02, D-013). Side B: the Tyrant moves 4\" south, declares a "
+        "charge at the Havocs and moves into base contact with the middle Havoc; it fights first with its talons "
+        "alone (the heavy venom cannon is a ranged weapon; D-071) and slays the wounded Havoc (05.04: a model that "
+        "has lost wounds first), then the four Havocs left fight back. Other casualties in unit order. Stops at Side "
+        "B's first Consolidate decision.";
+    GameState init = load_scenario(repo_root() / wh40k::test::kHavocsVsTyrantFixture, repo_root());
+    const Datasheet tyrant_sheet = load_datasheet(repo_root() / "data/units/hive_tyrant.json");
+    init.units[1].models[0].weapons[0] = *tyrant_sheet.find_weapon("Heavy venom cannon");
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    start_game(g);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (!failed) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        apply_action(g, side, a);
+    };
+    const UnitId havocs = g.units[0].id;
+    const UnitId tyrant = g.units[1].id;
+    auto first_legal = [&]() -> GameAction {
+        GameAction a = legal_actions(g, decider(g)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g.find_unit(oc->target));
+        }
+        return a;
+    };
+    act(action::StartMove{havocs, MoveType::RemainStationary, std::nullopt});
+    const Weapon& plasma = g.units[0].models[0].weapons[0];
+    const std::size_t supercharge = plasma.profiles[1].has<ability::Hazardous>() ? 1 : 0;
+    act(action::Shoot{havocs, ShootingType::Normal, {ShotDeclaration{g.units[0].models[0].id, 0, supercharge, tyrant}}});
+    bool hazard_failed = false;
+    while (!failed && g.flow.attack) {
+        if (g.flow.attack->pending_mortal_wounds > 0) {
+            hazard_failed = true;
+            std::vector<ModelId> priority = wh40k::test::model_ids(g.units[0]);
+            std::reverse(priority.begin(), priority.end());  // the last lascannon Havoc takes it
+            act(action::OrderCasualties{havocs, priority});
+        } else {
+            act(first_legal());
+        }
+    }
+    act(action::EndShootStep{});
+    act(action::EndChargeStep{});
+    while (!failed && !(g.pending && *g.pending == PendingDecision{Side::B, decision::MoveUnits{}})) act(first_legal());
+    act(action::StartMove{tyrant, MoveType::Normal, std::nullopt});
+    const Position p = *move_start_position(g, g.units[1].models[0].id);
+    act(action::ProposeModelMove{g.units[1].models[0].id, {Position{p.x, p.y - wh40k::test::in(4), 0}}});
+    act(action::CommitUnitMove{});
+    act(action::EndShootStep{});
+    act(action::DeclareCharge{tyrant});
+    if (failed || !g.pending || !std::holds_alternative<decision::SelectChargeTargets>(g.pending->kind)) return r;
+    act(action::StartChargeMove{tyrant, {havocs}});
+    {
+        // Straight at the middle Havoc: into base contact if the roll allows, else as far as it goes.
+        const Model& t = g.units[1].models[0];
+        const Model& h = g.units[0].models[2];
+        const Position from = *move_start_position(g, t.id);
+        const float dx = h.position.x - from.x;
+        const float dy = h.position.y - from.y;
+        const float centre = std::sqrt(dx * dx + dy * dy);
+        const float contact = centre - base_radius(t.base) - base_radius(h.base);
+        const float step = std::min(contact, max_move_distance_mm(g, t.id).value_or(0.0f));
+        act(action::ProposeModelMove{t.id, {Position{from.x + dx / centre * step, from.y + dy / centre * step, 0}}});
+    }
+    act(action::CommitUnitMove{});
+    if (failed || g.flow.stage != Stage::Charge) return r;
+    act(action::EndChargeStep{});
+    while (!failed && g.pending && std::holds_alternative<decision::PileIn>(g.pending->kind)) act(action::EndPileIns{});
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::B, decision::SelectUnitToFight{}}) return r;
+    act(action::SelectToFight{tyrant, FightType::Normal});
+    const std::size_t havoc_models = g.units[0].models.size();
+    act(action::Fight{tyrant, {MeleeDeclaration{g.units[1].models[0].id, 1, 0, {MeleeTarget{havocs, 4}}}}});
+    while (!failed && g.flow.attack) act(first_legal());
+    const bool talons_killed = g.units[0].models.size() < havoc_models;
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::A, decision::SelectUnitToFight{}}) return r;
+    act(action::SelectToFight{havocs, FightType::Normal});
+    act(wh40k::test::first_melee_options(g, havocs));
+    while (!failed && g.flow.attack) act(first_legal());
+    while (!failed && g.pending && !std::holds_alternative<decision::Consolidate>(g.pending->kind)) act(first_legal());
+    if (failed || !g.pending || g.pending->side != Side::B) return r;
+    r.expect = replay_expectation(g);
+    ok = hazard_failed && talons_killed;
+    return r;
 }
 
 }  // namespace
@@ -637,4 +748,26 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_EQ(g59.flow.battle_round, 2);
     rosters.expect = replay_expectation(g59);
     save_if_clean(rosters, kReplayDir / "m59_rosters_fixture_round1.json");
+
+    // M60: the hazard roll after a supercharged plasma gun's attacks, and the Hive Tyrant's [EXTRA ATTACKS] talons
+    // (D-071). Stops at Side B's first Consolidate decision, before anything M61-M70 change.
+    bool shows_it = false;
+    std::string problem;
+    const Replay m60 = m60_replay(kM60Seed, shows_it, problem);
+    ASSERT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(shows_it) << "seed " << kM60Seed << " no longer shows a failed hazard roll and a Havoc slain by the talons";
+    save_if_clean(m60, kReplayDir / "m60_hazard_and_extra_attacks.json");
+}
+
+TEST(Replay, DISABLED_SearchM60Seed) {
+    for (std::uint64_t seed = 1; seed <= 200; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m60_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M60 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
 }

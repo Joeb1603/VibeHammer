@@ -151,7 +151,11 @@ std::string body(const core::GameEvent& e) {
                 return "Batch " + std::to_string(x.batch) + ": " + std::to_string(x.attack_dice) + " dice at " +
                        unit(x.target);
             } else if constexpr (std::is_same_v<T, ev::HitRollsMade>) {
-                return "Hit rolls: " + hit_rolls(x.rolls) + " -> " + std::to_string(x.rolls.hits()) + " hits";
+                std::string text = "Hit rolls: " + hit_rolls(x.rolls) + " -> " + std::to_string(x.rolls.hits()) + " hits";
+                if (x.rolls.sustained_hits > 0) {
+                    text += " (" + std::to_string(x.rolls.sustained_hits) + " from [SUSTAINED HITS])";  // 24.36
+                }
+                return text;
             } else if constexpr (std::is_same_v<T, ev::WoundRollsMade>) {
                 return "Wound rolls (" + std::to_string(x.rolls.required) + "+): " + wound_rolls(x.rolls) + " -> " +
                        std::to_string(x.rolls.wounds()) + " wounds";

@@ -10,6 +10,7 @@
 #include "auto_fight_move.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
 #include "core/state/queries.hpp"
 #include "fight_move_skip.hpp"
@@ -103,8 +104,9 @@ std::vector<core::MeleeDeclaration> melee_candidates(const core::Model& model,
     std::size_t splits = 0;
     for (std::size_t i = 0; i < singles && splits < kMaxSplits; ++i) {
         for (std::size_t j = i + 1; j < singles && splits < kMaxSplits; ++j) {
-            const core::MeleeDeclaration& a = out[i];
-            const core::MeleeDeclaration& b = out[j];
+            // Copies: the push_back below may reallocate `out` (M60: references here were left dangling).
+            const core::MeleeDeclaration a = out[i];
+            const core::MeleeDeclaration b = out[j];
             if (a.weapon_index != b.weapon_index || a.profile_index != b.profile_index) continue;
             if (a.targets.size() != 1 || b.targets.size() != 1 || a.targets[0].unit == b.targets[0].unit) continue;
             const int attacks = a.targets[0].attacks;
@@ -116,6 +118,57 @@ std::vector<core::MeleeDeclaration> melee_candidates(const core::Model& model,
             }
         }
     }
+    return out;
+}
+
+// D-071 (24.11): a model's candidate declaration sets. Without [EXTRA ATTACKS] weapons, one set per candidate
+// above. With them, each candidate of its main weapon (one of its other melee weapons, or one of its [EXTRA
+// ATTACKS] weapons if it is offered no other) with its other [EXTRA ATTACKS] weapons, each at the main
+// candidate's first target if it reaches it, else at its first target.
+std::vector<std::vector<core::MeleeDeclaration>> melee_candidate_sets(const core::Model& model,
+                                                                      const std::vector<core::MeleeDeclaration>& options) {
+    const auto extra = [&](const core::MeleeDeclaration& o) {
+        return core::is_extra_attacks_weapon(model.weapons[o.weapon_index]);
+    };
+    std::vector<core::MeleeDeclaration> mine;
+    for (const core::MeleeDeclaration& o : options) {
+        if (o.model == model.id) mine.push_back(o);
+    }
+    const bool any_extra = std::any_of(mine.begin(), mine.end(), extra);
+    std::vector<std::vector<core::MeleeDeclaration>> out;
+    if (!any_extra) {
+        for (core::MeleeDeclaration& d : melee_candidates(model, options)) out.push_back({std::move(d)});
+        return out;
+    }
+    const bool has_other = std::any_of(mine.begin(), mine.end(), [&](const auto& o) { return !extra(o); });
+    std::vector<core::MeleeDeclaration> main_options;
+    for (const core::MeleeDeclaration& o : mine) {
+        if (!has_other || !extra(o)) main_options.push_back(o);
+    }
+    for (const core::MeleeDeclaration& main : melee_candidates(model, main_options)) {
+        std::vector<core::MeleeDeclaration> set{main};
+        for (const core::MeleeDeclaration& o : mine) {
+            if (!extra(o) || o.weapon_index == main.weapon_index) continue;
+            if (std::any_of(set.begin(), set.end(), [&](const auto& d) { return d.weapon_index == o.weapon_index; })) {
+                continue;
+            }
+            const core::MeleeDeclaration* pick = &o;  // the weapon's first option
+            for (const core::MeleeDeclaration& x : mine) {
+                if (x.weapon_index == o.weapon_index && x.targets.front().unit == main.targets.front().unit) {
+                    pick = &x;
+                    break;
+                }
+            }
+            set.push_back(*pick);
+        }
+        out.push_back(std::move(set));
+    }
+    return out;
+}
+
+std::vector<core::MeleeDeclaration> flatten(const std::vector<std::vector<core::MeleeDeclaration>>& sets) {
+    std::vector<core::MeleeDeclaration> out;
+    for (const auto& set : sets) out.insert(out.end(), set.begin(), set.end());
     return out;
 }
 
@@ -205,15 +258,17 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
     if (u == nullptr || u->models.empty()) return std::nullopt;
     const std::vector<core::MeleeDeclaration> options = core::melee_options(state, *u);
     if (options.empty()) return std::nullopt;
-    std::vector<std::vector<core::MeleeDeclaration>> cands;
-    std::vector<core::MeleeDeclaration> current;
+    // Per model, its candidate declaration sets (D-071: one declaration each, or a model's [EXTRA ATTACKS]
+    // weapons with its main one, 24.11) and the set it takes.
+    std::vector<std::vector<std::vector<core::MeleeDeclaration>>> cands;
+    std::vector<std::vector<core::MeleeDeclaration>> current;
     for (const core::Model& m : u->models) {
-        std::vector<core::MeleeDeclaration> mine = melee_candidates(m, options);
+        std::vector<std::vector<core::MeleeDeclaration>> mine = melee_candidate_sets(m, options);
         if (mine.empty()) continue;  // D-021: a model with no possible target declares nothing
         std::size_t best = 0;
         double best_value = -1.0;
         for (std::size_t i = 0; i < mine.size(); ++i) {
-            const std::optional<double> v = melee_value(cache, state, unit, {mine[i]});
+            const std::optional<double> v = melee_value(cache, state, unit, mine[i]);
             if (v && *v > best_value + kBetter) {
                 best_value = *v;
                 best = i;
@@ -222,17 +277,17 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
         current.push_back(mine[best]);
         cands.push_back(std::move(mine));
     }
-    std::optional<double> value = melee_value(cache, state, unit, current);
+    std::optional<double> value = melee_value(cache, state, unit, flatten(current));
     if (!value) return std::nullopt;
     for (int pass = 0; pass < kDescentPasses; ++pass) {
         bool improved = false;
         for (std::size_t i = 0; i < current.size(); ++i) {
             if (cands[i].size() < 2) continue;
-            for (const core::MeleeDeclaration& d : cands[i]) {
+            for (const std::vector<core::MeleeDeclaration>& d : cands[i]) {
                 if (d == current[i]) continue;
-                std::vector<core::MeleeDeclaration> trial = current;
+                std::vector<std::vector<core::MeleeDeclaration>> trial = current;
                 trial[i] = d;
-                const std::optional<double> v = melee_value(cache, state, unit, trial);
+                const std::optional<double> v = melee_value(cache, state, unit, flatten(trial));
                 if (v && *v > *value + kBetter) {
                     value = v;
                     current = std::move(trial);
@@ -244,7 +299,7 @@ std::optional<MeleeChoice> plan_melee(analysis::OddsCache& cache, const core::Ga
     }
     MeleeChoice out;
     out.unit = unit;
-    out.declarations = std::move(current);
+    out.declarations = flatten(current);
     out.value = melee_value(cache, state, unit, out.declarations, &out.outcomes).value_or(0.0);
     return out;
 }

@@ -101,7 +101,6 @@ DiceExpr fixed(int v) { return DiceExpr::fixed(v); }
 constexpr WeaponKind R = WeaponKind::Ranged;
 constexpr WeaponKind M = WeaponKind::Melee;
 const std::nullopt_t melee = std::nullopt;
-ability::Unknown unknown(const char* t) { return ability::Unknown{t}; }
 
 bool has_keyword(const Datasheet& ds, const char* k) {
     return std::find(ds.keywords.begin(), ds.keywords.end(), k) != ds.keywords.end();
@@ -142,7 +141,7 @@ TEST(R02_Datasheet, HiveTyrantMatchesTheRoster) {
     expect_weapon(ds, "Monstrous bonesword and lash whip",
                   {{"Monstrous bonesword and lash whip", M, melee, fixed(6), 2, 9, -2, fixed(3), {ability::TwinLinked{}}}});
     expect_weapon(ds, "Monstrous scything talons",
-                  {{"Monstrous scything talons", M, melee, fixed(4), 2, 7, -2, fixed(2), {unknown("Extra Attacks")}}});
+                  {{"Monstrous scything talons", M, melee, fixed(4), 2, 7, -2, fixed(2), {ability::ExtraAttacks{}}}});
     expect_weapon(ds, "Heavy venom cannon", {{"Heavy venom cannon", R, 36, DiceExpr{1, 3, 0}, 2, 9, -2, fixed(3),
                                               {ability::Blast{1}}}});
     expect_weapon(ds, "Stranglethorn cannon", {{"Stranglethorn cannon", R, 36, DiceExpr{1, 6, 1}, 2, 7, -1, fixed(2),
@@ -235,7 +234,7 @@ TEST(R02_Datasheet, TyrannofexMatchesTheRosterWithAnOvalBase) {
     expect_weapon(ds, "Stinger salvoes", {{"Stinger salvoes", R, 24, fixed(8), 3, 5, 0, fixed(1), {}}});
     expect_weapon(ds, "Fleshborer hive",
                   {{"Fleshborer hive", R, 24, fixed(20), 3, 5, 0, fixed(1),
-                    {ability::Heavy{}, unknown("Sustained Hits 1"), ability::TwinLinked{}}}});
+                    {ability::Heavy{}, ability::SustainedHits{1}, ability::TwinLinked{}}}});
     expect_weapon(ds, "Powerful limbs", {{"Powerful limbs", M, melee, fixed(4), 3, 8, 0, fixed(2), {}}});
 }
 

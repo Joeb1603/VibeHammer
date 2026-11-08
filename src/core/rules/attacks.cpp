@@ -1,9 +1,11 @@
 #include "core/rules/attacks.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 #include "core/geometry/closest.hpp"
@@ -15,16 +17,25 @@ namespace wh40k::core {
 namespace {
 
 // D-006: abilities that still affect the attack from the hit roll onward, other than those already
-// captured by AttackProfile fields ([HEAVY] -> hit_modifier, [TORRENT] -> torrent).
+// captured by AttackProfile fields ([HEAVY] -> hit_modifier, [TORRENT] -> torrent). [EXTRA ATTACKS] is used
+// up in the Select Weapons step (24.11, D-071), like [ASSAULT].
 bool is_attack_time_ability(const WeaponAbility& a) {
     return std::visit(
         [](const auto& x) {
             using T = std::decay_t<decltype(x)>;
             return !(std::is_same_v<T, ability::Assault> || std::is_same_v<T, ability::CloseQuarters> ||
                      std::is_same_v<T, ability::RapidFire> || std::is_same_v<T, ability::Blast> ||
-                     std::is_same_v<T, ability::Heavy> || std::is_same_v<T, ability::Torrent>);
+                     std::is_same_v<T, ability::Heavy> || std::is_same_v<T, ability::Torrent> ||
+                     std::is_same_v<T, ability::ExtraAttacks>);
         },
         a);
+}
+
+std::string upper_ascii(std::string s) {
+    for (char& c : s) {
+        if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
+    }
+    return s;
 }
 
 // Canonical order so that ability order in the data file doesn't split identical attacks.
@@ -100,7 +111,37 @@ std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& we
     if (weapon.has<ability::DevastatingWounds>()) {
         return "24.10: '" + weapon.name + "' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)";
     }
+    // D-071: an ability the engine does not recognise ([LETHAL HITS], [ANTI-X Y+], [MELTA X], [PRECISION], ...) is
+    // refused in the same way, rather than ignored.
+    if (const auto* unknown = weapon.get<ability::Unknown>()) {
+        return "D-071: '" + weapon.name + "' has [" + upper_ascii(unknown->text) +
+               "], which the engine does not implement yet; weapons with it can't be selected";
+    }
     return std::nullopt;
+}
+
+int sustained_hits(const AttackProfile& profile) {
+    int x = 0;
+    for (const WeaponAbility& a : profile.attack_time_abilities) {
+        if (const auto* s = std::get_if<ability::SustainedHits>(&a)) x = std::max(x, s->x);  // D-071 (24.02)
+    }
+    return x;
+}
+
+bool is_extra_attacks_weapon(const Weapon& weapon) {
+    return std::any_of(weapon.profiles.begin(), weapon.profiles.end(), [](const WeaponProfile& p) {
+        return p.kind == WeaponKind::Melee && p.has<ability::ExtraAttacks>();
+    });
+}
+
+int hazardous_weapons_selected(const GameState& state, std::span<const WeaponSelection> selections) {
+    std::vector<std::pair<std::uint32_t, std::size_t>> seen;  // (model, weapon): a split weapon counts once
+    for (const WeaponSelection& sel : selections) {
+        if (!selected_profile(state, sel).has<ability::Hazardous>()) continue;
+        const std::pair<std::uint32_t, std::size_t> key{sel.attacker.v, sel.weapon_index};
+        if (std::find(seen.begin(), seen.end(), key) == seen.end()) seen.push_back(key);
+    }
+    return static_cast<int>(seen.size());
 }
 
 AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context) {
@@ -174,6 +215,10 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
             if (context.type == AttackType::Shooting && context.heavy_conditions_met) e.hit_modifier = 1;  // 24.16
         } else if (std::holds_alternative<ability::Torrent>(a)) {
             e.active = true;  // 24.37
+        } else if (std::holds_alternative<ability::SustainedHits>(a) || std::holds_alternative<ability::Hazardous>(a)) {
+            e.active = true;  // 24.36 on each critical hit; 24.15 a hazard roll after the unit's attacks (D-071)
+        } else if (std::holds_alternative<ability::ExtraAttacks>(a)) {
+            e.active = context.type == AttackType::Fighting;  // 24.11: made in addition to another melee weapon
         }
         e.active = e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0;
         out.push_back(e);

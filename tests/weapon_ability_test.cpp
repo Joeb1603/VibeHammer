@@ -44,8 +44,24 @@ TEST(R24_05_Blast, BareBlastIsBlast1) {
     EXPECT_EQ(parse_weapon_ability("Blast 2"), WeaponAbility{ability::Blast{2}});
 }
 
+TEST(R24_36_SustainedHits, ParsesSustainedHitsX) {
+    // M60: 24.36 "always takes the form [SUSTAINED HITS X]".
+    EXPECT_EQ(parse_weapon_ability("Sustained Hits 1"), WeaponAbility{ability::SustainedHits{1}});
+    EXPECT_EQ(parse_weapon_ability("[SUSTAINED HITS 2]"), WeaponAbility{ability::SustainedHits{2}});
+    // No X, a random X or a keyword condition (24.01) is not implemented: it stays Unknown (refused, D-071).
+    for (const char* s : {"Sustained Hits", "Sustained Hits D3", "Sustained Hits 1: Infantry"}) {
+        EXPECT_EQ(parse_weapon_ability(s), WeaponAbility{ability::Unknown{s}}) << s;
+    }
+}
+
+TEST(R24_11_ExtraAttacks, ParsesExtraAttacks) {
+    EXPECT_EQ(parse_weapon_ability("Extra Attacks"), WeaponAbility{ability::ExtraAttacks{}});
+    EXPECT_EQ(parse_weapon_ability("[EXTRA ATTACKS]"), WeaponAbility{ability::ExtraAttacks{}});
+}
+
 TEST(R24_Abilities, UnknownAbilityKeepsOriginalTextAndDoesNotThrow) {
-    for (const char* s : {"Lethal Hits", "Anti-Infantry 4+", "Sustained Hits 1", "", "Blast X",
+    // ("Sustained Hits 1" left this list in M60: 24.36 is implemented, R24_36_SustainedHits.ParsesSustainedHitsX.)
+    for (const char* s : {"Lethal Hits", "Anti-Infantry 4+", "", "Blast X",
                           "Rapid Fire 0"}) {
         WeaponAbility a;
         EXPECT_NO_THROW(a = parse_weapon_ability(s)) << s;

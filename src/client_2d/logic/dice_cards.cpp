@@ -41,6 +41,7 @@ struct AttackContext {
     core::ShootingType shooting_type = core::ShootingType::Normal;  // the last ShootingStarted's
     std::optional<std::size_t> batch;  // the batch being resolved
     std::vector<core::AllocationGroup> groups;  // the current target's groups, in allocation order
+    bool attacking = false;  // since the last AttackBatchesGathered, no move has started (24.15 vs 09.07 hazards)
 };
 
 // The weapon profile a batch attacks with (its first selection), e.g. "Bolt Rifle - Focused Fire".
@@ -128,8 +129,13 @@ DiceCard hit_card(const core::GameState& state, const AttackContext& c, const co
         criticals += d.critical ? 1 : 0;
         card.dice.push_back(d);
     }
+    hits += rolls.sustained_hits;  // 24.36: hits without a die of their own
     card.result = plural(hits, "hit", "hits");
     if (criticals > 0) card.result += " (" + std::to_string(criticals) + " critical)";
+    if (rolls.sustained_hits > 0) {
+        card.result += ", " + std::to_string(rolls.sustained_hits) + " of them from Sustained Hits";
+        card.need += "; Sustained Hits: each critical hit scores extra hits";
+    }
     return card;
 }
 
@@ -217,6 +223,9 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                         c.batches = e.batches;
                         c.batch.reset();
                         c.groups.clear();
+                        c.attacking = true;
+                    } else if constexpr (std::is_same_v<T, ev::MoveStarted>) {
+                        c.attacking = false;
                     } else if constexpr (std::is_same_v<T, ev::AttackBatchSelected>) {
                         c.attacker = e.attacker;
                         c.batch = e.batch;
@@ -251,7 +260,12 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                         cards.push_back(card);
                     } else if constexpr (std::is_same_v<T, ev::HazardRollsMade>) {
                         if (!show) return;
-                        DiceCard card{"Hazard rolls", unit_name(state, e.unit), "Each 1-2 fails", "", "06.03",
+                        // 24.15: after a unit's attacks with [HAZARDOUS] weapons; otherwise 09.07's Desperate Escape.
+                        const bool hazardous = c.attacking && c.attacker == e.unit;
+                        DiceCard card{"Hazard rolls",
+                                      unit_name(state, e.unit) +
+                                          (hazardous ? " after its attacks ([HAZARDOUS] weapons)" : std::string()),
+                                      "Each 1-2 fails", "", hazardous ? "24.15" : "06.03",
                                       side_of(state, e.unit, core::Side::A), {}};
                         for (const int r : e.rolls.rolls) card.dice.push_back(DieFace{r, r > 2, false, false});
                         card.result = plural(e.rolls.failures, "failure", "failures") + ": " +

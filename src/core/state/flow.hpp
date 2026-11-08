@@ -89,6 +89,12 @@ struct AttackFlow {
     std::vector<bool> batch_done;          // resolved, or lost (D-012)
     std::optional<UnitId> current_target;  // 04.03 Select Enemy Unit
     std::optional<BatchInProgress> current;
+    // 24.15 [HAZARDOUS]: hazard rolls (06.03) to make for the attacking unit once all of its attacks are
+    // resolved, one per [HAZARDOUS] weapon selected (D-071); 0 once they are made. Omitted from JSON when 0.
+    int hazard_rolls = 0;
+    // 06.02: mortal wounds from failed hazard rolls not yet inflicted on the attacking unit; its player
+    // answers OrderCasualties for it (D-013, D-051). Omitted from JSON when 0.
+    int pending_mortal_wounds = 0;
     friend bool operator==(const AttackFlow&, const AttackFlow&) = default;
 };
 

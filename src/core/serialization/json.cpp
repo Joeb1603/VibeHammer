@@ -118,6 +118,8 @@ void to_json(Json& j, const WeaponAbility& v) {
             else if constexpr (std::is_same_v<T, Torrent>) j = Json{{"kind", "Torrent"}};
             else if constexpr (std::is_same_v<T, Hazardous>) j = Json{{"kind", "Hazardous"}};
             else if constexpr (std::is_same_v<T, DevastatingWounds>) j = Json{{"kind", "DevastatingWounds"}};
+            else if constexpr (std::is_same_v<T, SustainedHits>) j = Json{{"kind", "SustainedHits"}, {"x", a.x}};
+            else if constexpr (std::is_same_v<T, ExtraAttacks>) j = Json{{"kind", "ExtraAttacks"}};
             else if constexpr (std::is_same_v<T, Unknown>) j = Json{{"kind", "Unknown"}, {"text", a.text}};
             else static_assert(sizeof(T) == 0, "unhandled WeaponAbility alternative");
         },
@@ -135,7 +137,11 @@ void from_json(const Json& j, WeaponAbility& v) {
     else if (kind == "Torrent") v = Torrent{};
     else if (kind == "Hazardous") v = Hazardous{};
     else if (kind == "DevastatingWounds") v = DevastatingWounds{};
-    else if (kind == "Unknown") v = Unknown{j.at("text").get<std::string>()};
+    else if (kind == "SustainedHits") v = SustainedHits{j.at("x").get<int>()};
+    else if (kind == "ExtraAttacks") v = ExtraAttacks{};
+    // D-071: text a file saved before the engine knew the ability (e.g. "Extra Attacks" before M60) is read
+    // again, so an old save or replay gets the ability the text now names. Unrecognised text stays Unknown.
+    else if (kind == "Unknown") v = parse_weapon_ability(j.at("text").get<std::string>());
     else bad_enum("WeaponAbility", j);
 }
 

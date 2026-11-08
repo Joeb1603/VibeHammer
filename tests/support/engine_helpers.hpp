@@ -171,7 +171,9 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
         return filled;
     }
     if (const auto* fi = std::get_if<core::action::Fight>(&tmpl)) {
-        // D-021: every model that can attack declares one random single-target option (always valid).
+        // D-021: every model that can attack declares one random single-target option (always valid). 24.11
+        // (M60): a model offered [EXTRA ATTACKS] weapons declares a random option of each of them, plus one of its
+        // other weapons' options if it is offered any.
         core::action::Fight filled = *fi;
         const core::Unit& unit = *gs.find_unit(fi->unit);
         const auto options = core::melee_options(gs, unit);
@@ -180,7 +182,30 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
             for (const auto& o : options) {
                 if (o.model == m.id) mine.push_back(o);
             }
-            if (!mine.empty()) filled.declarations.push_back(mine[rng.below(mine.size())]);
+            const auto extra = [&m](const core::MeleeDeclaration& o) {
+                return core::is_extra_attacks_weapon(m.weapons[o.weapon_index]);
+            };
+            if (std::none_of(mine.begin(), mine.end(), extra)) {
+                if (!mine.empty()) filled.declarations.push_back(mine[rng.below(mine.size())]);
+                continue;
+            }
+            std::vector<std::size_t> extra_weapons;
+            std::vector<core::MeleeDeclaration> others;
+            for (const auto& o : mine) {
+                if (!extra(o)) {
+                    others.push_back(o);
+                } else if (std::find(extra_weapons.begin(), extra_weapons.end(), o.weapon_index) == extra_weapons.end()) {
+                    extra_weapons.push_back(o.weapon_index);
+                }
+            }
+            for (const std::size_t w : extra_weapons) {
+                std::vector<core::MeleeDeclaration> of_w;
+                for (const auto& o : mine) {
+                    if (o.weapon_index == w) of_w.push_back(o);
+                }
+                filled.declarations.push_back(of_w[rng.below(of_w.size())]);
+            }
+            if (!others.empty()) filled.declarations.push_back(others[rng.below(others.size())]);
         }
         if (corrupt) {
             switch (rng.below(4)) {
@@ -267,13 +292,31 @@ inline core::GameState after_successful_charge() {
     return gs;
 }
 
-// Every model's first melee option (D-021): a valid Fight action for `unit`.
+// Every model's first melee option (D-021): a valid Fight action for `unit`. A model with [EXTRA ATTACKS]
+// weapons also declares the first option of each other weapon whose kind it still needs (24.11, M60).
 inline core::action::Fight first_melee_options(const core::GameState& gs, core::UnitId unit) {
     core::action::Fight a{unit, {}};
-    for (const auto& o : core::melee_options(gs, *gs.find_unit(unit))) {
-        const bool seen = std::any_of(a.declarations.begin(), a.declarations.end(),
-                                      [&](const core::MeleeDeclaration& d) { return d.model == o.model; });
-        if (!seen) a.declarations.push_back(o);
+    const core::Unit& u = *gs.find_unit(unit);
+    for (const auto& o : core::melee_options(gs, u)) {
+        const core::Model& m = *core::find_model(u, o.model);
+        const auto extra = [&m](std::size_t w) { return core::is_extra_attacks_weapon(m.weapons[w]); };
+        bool seen = false;
+        bool needed = false;
+        for (const core::MeleeDeclaration& d : a.declarations) {
+            if (d.model != o.model) continue;
+            seen = true;
+            needed = needed || d.weapon_index == o.weapon_index;
+        }
+        if (!seen) {
+            a.declarations.push_back(o);
+            continue;
+        }
+        if (needed) continue;  // this weapon is already declared
+        // 24.11: every [EXTRA ATTACKS] weapon, and one other weapon.
+        const bool have_other = std::any_of(a.declarations.begin(), a.declarations.end(), [&](const core::MeleeDeclaration& d) {
+            return d.model == o.model && !extra(d.weapon_index);
+        });
+        if (extra(o.weapon_index) || !have_other) a.declarations.push_back(o);
     }
     return a;
 }

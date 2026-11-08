@@ -11,7 +11,8 @@
 
 namespace wh40k::core {
 
-// Weapon abilities (24.xx). Only parsed here; behaviour is implemented in later milestones.
+// Weapon abilities (24.xx), parsed here. The rules apply them in rules/ and engine/; D-026 / D-071 refuse a
+// profile with one the engine does not implement (unimplemented_ability_problem, rules/attacks.hpp).
 namespace ability {
 struct Assault {  // 24.04
     friend bool operator==(const Assault&, const Assault&) = default;
@@ -42,7 +43,14 @@ struct Hazardous {  // 24.15
 struct DevastatingWounds {  // 24.10
     friend bool operator==(const DevastatingWounds&, const DevastatingWounds&) = default;
 };
-// Anything not recognised. Loaded, displayed, never applied.
+struct SustainedHits {  // 24.36 [SUSTAINED HITS X]
+    int x = 1;
+    friend bool operator==(const SustainedHits&, const SustainedHits&) = default;
+};
+struct ExtraAttacks {  // 24.11
+    friend bool operator==(const ExtraAttacks&, const ExtraAttacks&) = default;
+};
+// Anything not recognised. Loaded and displayed; a profile with one can't be selected (D-071).
 struct Unknown {
     std::string text;
     friend bool operator==(const Unknown&, const Unknown&) = default;
@@ -52,7 +60,7 @@ struct Unknown {
 using WeaponAbility =
     std::variant<ability::Assault, ability::Heavy, ability::CloseQuarters, ability::RapidFire,
                  ability::Blast, ability::TwinLinked, ability::Torrent, ability::Hazardous,
-                 ability::DevastatingWounds, ability::Unknown>;
+                 ability::DevastatingWounds, ability::SustainedHits, ability::ExtraAttacks, ability::Unknown>;
 
 // Never throws: unrecognised text becomes ability::Unknown{text}.
 [[nodiscard]] WeaponAbility parse_weapon_ability(std::string_view text);

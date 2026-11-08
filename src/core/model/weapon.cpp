@@ -76,11 +76,15 @@ WeaponAbility parse_weapon_ability(std::string_view text) {
     if (n == "torrent") return ability::Torrent{};
     if (n == "hazardous") return ability::Hazardous{};
     if (n == "devastating wounds") return ability::DevastatingWounds{};
+    if (n == "extra attacks") return ability::ExtraAttacks{};
     if (const auto x = parse_suffix_int(n, "rapid fire", std::nullopt)) {
         return ability::RapidFire{*x};  // 24.30: always [RAPID FIRE X]
     }
     if (const auto x = parse_suffix_int(n, "blast", 1)) {
         return ability::Blast{*x};  // 24.05: [BLAST] adds 1 per five models
+    }
+    if (const auto x = parse_suffix_int(n, "sustained hits", std::nullopt)) {
+        return ability::SustainedHits{*x};  // 24.36: always [SUSTAINED HITS X]; a random X stays Unknown
     }
     return ability::Unknown{std::string(text)};
 }

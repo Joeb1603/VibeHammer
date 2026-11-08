@@ -90,9 +90,12 @@ inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligib
                                                               std::span<const ModelStart> starts,
                                                               std::string_view rule);
 
-// ---- 04.01 / 04.02 While Fighting (D-021) ----
+// ---- 04.01 / 04.02 While Fighting (D-021), 24.11 [EXTRA ATTACKS] (D-071) ----
 
-// Every rule problem with `declarations` for `unit`. Rule-cited; empty means valid.
+// Every rule problem with `declarations` for `unit`. Rule-cited; empty means valid. Each engaged model that
+// can make melee attacks declares one melee weapon (04.01), or, if it has [EXTRA ATTACKS] weapons, each of
+// those plus one other melee weapon if it has one it can use (24.11; weapons refused under D-002 / D-026 /
+// D-071 count as absent). A weapon is declared once; to attack several units it splits its attacks (04.02).
 [[nodiscard]] std::vector<std::string> melee_problems(const GameState& state, const Unit& unit,
                                                       std::span<const MeleeDeclaration> declarations);
 
@@ -100,7 +103,9 @@ inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligib
 [[nodiscard]] bool can_make_melee_attacks(const GameState& state, const Unit& unit);
 
 // Every single-target declaration a model may make (each melee weapon, profile and engaged enemy unit,
-// with all of the weapon's attacks), in model order. For clients and random play.
+// with all of the weapon's attacks), in model order. For clients and random play. A model offered an
+// [EXTRA ATTACKS] weapon (is_extra_attacks_weapon, attacks.hpp) must declare one option of each of those
+// weapons, plus one option of one other weapon if it is offered one (24.11).
 [[nodiscard]] std::vector<MeleeDeclaration> melee_options(const GameState& state, const Unit& unit);
 
 // 04.02 Select Targets: the WeaponSelections for valid declarations (one per target; split attacks

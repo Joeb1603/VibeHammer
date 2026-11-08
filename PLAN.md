@@ -2060,7 +2060,7 @@ milestone per session" and "agree each milestone first" for these milestones onl
 
 ---
 
-## M60: Unknown abilities refused; Hazardous, Sustained Hits, Extra Attacks; mixed-loadout default plans
+## M60: Unknown abilities refused; Hazardous, Sustained Hits, Extra Attacks; mixed-loadout default plans ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-08) · **Rules:** 24.15, 06.03, 24.36, 24.11, 04.01 · **Decision:** D-071 (extends D-026)
 
 > **Unknown abilities.** Any weapon profile with an ability the engine doesn't know is refused at selection.
@@ -2080,6 +2080,121 @@ milestone per session" and "agree each milestone first" for these milestones onl
 **Acceptance**
 - Tests `R24_15_`, `R24_36_`, `R24_11_`, `D071_` and client `M60_`, plus a replay.
 - Units with a single loadout play exactly as before (hashes). Replays unchanged.
+
+**Results (2026-11-08):** design in D-071 (extends D-026, amends D-021).
+- **Unknown abilities refused** (`rules/attacks.cpp`):
+  - `unimplemented_ability_problem` refuses any `ability::Unknown` with "D-071: '<profile>' has [<TEXT>], which the
+    engine does not implement yet; weapons with it can't be selected". So `shot_options`, the Shoot templates,
+    `melee_options`, validation and the bots' `profile_supported` all leave such profiles out, and the attack
+    sequence throws on one as a second safety net.
+  - No weapon equipped in V1, the bot scenarios or Strike has one (a test checks every loadout).
+  - `ability::SustainedHits{x}` and `ability::ExtraAttacks` are parsed now. A random X or keyword-conditioned form
+    stays Unknown and is refused.
+  - JSON: `{"kind": "SustainedHits", "x": 1}` and `{"kind": "ExtraAttacks"}`. An old file's
+    `{"kind": "Unknown", "text": ...}` is parsed again on load.
+- **[HAZARDOUS]** (`engine/attack_flow.cpp`):
+  - *Count:* recorded in Select Weapons as the distinct (model, weapon) pairs with a [HAZARDOUS] profile selected
+    (`hazardous_weapons_selected`; a split melee weapon counts once), in `AttackFlow::hazard_rolls`.
+  - *Rolls:* made after every batch is resolved or lost (D-012), event `HazardRollsMade`: 1 mortal wound per 1-2,
+    3 if every model is a MONSTER/VEHICLE.
+  - *Mortal wounds:* kept in `AttackFlow::pending_mortal_wounds` (both fields omitted from JSON when 0). The
+    attacking unit's player answers `OrderCasualties{attacker}`, always asked (D-051). The dispatch and
+    `preview_casualties` tell it apart from 05.04 and Desperate Escape. `inflict_mortal_wounds_by_priority` is
+    shared with 09.07.
+  - *Shooting and fighting alike.* A self-wipe ends the activation (the fight goes to the next unit). No roll is
+    made once no enemy model is left (D-007 ends the game first).
+  - The bots' state hash includes the two fields only when set.
+- **[SUSTAINED HITS X]** (`rules/attack_sequence.cpp`):
+  - `HitRolls::sustained_hits` holds X per critical hit (JSON omitted when 0). `hits()` includes them and
+    `rolled_hits()` doesn't, so the wound rolls cover every hit.
+  - Torrent and modified 6s are not critical. With two instances the highest X is used (24.02).
+  - Bot odds: `HitWoundOdds::sustained` (in the cache key), and `expected_outcome` mixes exactly over 0, 1 or 1 + X
+    hits per die. Profiles without it take the old code path unchanged.
+- **[EXTRA ATTACKS]** (`rules/fight.cpp`):
+  - `melee_problems` accepts several declarations for a model with [EXTRA ATTACKS] weapons: all of them, plus
+    exactly one other melee weapon if it has one it can use. Refused weapons (D-002 / D-026 / D-071) count as absent.
+  - New rule-cited refusals: a missing [EXTRA ATTACKS] weapon, a missing other weapon, two other weapons, or the
+    same weapon twice. A model without [EXTRA ATTACKS] keeps 04.01's message.
+  - It is excluded from D-006's attack-time abilities. `is_extra_attacks_weapon` is in `rules/attacks.hpp`.
+  - The Hive Tyrant's talons are its legal selection alone while the bonesword is refused (until M61); then it must
+    take both.
+- **Default plans** (`client_2d/logic/shot_plan.cpp`, `melee_plan.cpp`):
+  - *Single ranged loadout:* exactly the M12 default (every V1, bot and Strike unit).
+  - *Mixed loadout:* each model fires its own weapons at the unit default's target. A weapon that can't reach it
+    fires at its own first target, and 24.07 keeps the set with more weapons on the target (ties go to the
+    non-pistol set).
+  - *Never [HAZARDOUS]:* the default is a non-Hazardous profile of the same weapon, else another option.
+  - *Melee:* each model's main weapon goes at the default target where it is engaged with it, and its [EXTRA
+    ATTACKS] weapons are added (`extra_declarations_for`, `main_options_for`).
+  - *Editors and menus:* the board menus count models rather than declarations, describe only the chosen profile's
+    shots, and the per-model grids list a model's extra declarations.
+  - *Client text:* log text and dice cards for sustained hits ("-> 3 hits (1 from [SUSTAINED HITS])"), a 24.15 hazard
+    card ("... after its attacks ([HAZARDOUS] weapons)"), and help text and effect lines for the three abilities.
+- **Bots:**
+  - Easy uses the plans above.
+  - Normal's melee plan picks candidate *sets* per model (main weapon plus [EXTRA ATTACKS] weapons), and
+    `best_melee` / `unit_melee_volley` add [EXTRA ATTACKS] weapons. Hard plays Normal's melee.
+  - Fixed a dangling reference in Normal's `melee_candidates`: undefined behaviour with attack splits, which crashed
+    a roster-fixture bot game in Debug. See the hash note under Acceptance.
+- **Replay** `tests/replays/m60_hazard_and_extra_attacks.json` (22 steps, seed 2):
+  - The Havocs vs Hive Tyrant fixture, with the Tyrant carrying a heavy venom cannon instead of its bonesword (an
+    embedded state, so the talons alone stay legal after M61).
+  - The champion fires its plasma gun on supercharge, the hazard roll fails and Side A gives the mortal wound to the
+    last Havoc. The Tyrant moves, charges into base contact and fights first with its talons alone, slaying the
+    wounded Havoc. The Havocs fight back.
+  - It stops at Side B's first Consolidate decision. Checked in the client under `xvfb-run` (`--replay`, frames 2
+    and 18).
+- **Tests** (all new unless listed under "Changed"):
+  - `tests/m60_abilities_test.cpp` (31):
+    - `R24_15_Hazardous.*` (12): the roll after the attacks, none without the ability, the attacker's casualty
+      decision and preview, one roll per weapon, 3 mortal wounds for a MONSTER, the roll after a D-012 loss, none
+      after the last enemy model, a self-wipe in shooting and in melee, a melee roll, a split weapon counting once,
+      and round trips.
+    - `R24_36_SustainedHits.*` (7) and `R24_11_ExtraAttacks.*` (6).
+    - `D071_UnknownAbilities.*` (6): the reason, not offered for shooting, a model unable to fight, the engine
+      throwing, every roster profile with one refused, and the old loadouts clean.
+  - `weapon_ability_test.cpp`: `R24_36_SustainedHits.ParsesSustainedHitsX` and `R24_11_ExtraAttacks.ParsesExtraAttacks`.
+  - `serialization_test.cpp`: `D071_UnknownAbilities.UnknownTextSavedBeforeTheEngineKnewItLoadsAsTheAbility`.
+  - `engine_property_test.cpp`: `D004_LegalActions.RandomPlayExercisesHazardousSustainedHitsAndExtraAttacks`. This is
+    D-004 random play on the roster fixture with stand-ins (heavy bolters with Sustained Hits, a usable bonesword);
+    it asserts that hazard rolls, sustained hits and two-weapon Extra Attacks fights happen.
+  - `tests/client/m60_test.cpp` (10): `M60_DefaultPlans.*` (single-loadout plans equal the M12 algorithm on every
+    Shoot / fight random play reaches in V1 and Strike; Havocs; boltgun Legionaries; Hazardous listed first; the
+    Tyrant with and without a usable bonesword; mixed melee) and `M60_ClientText.*`.
+  - `tests/ai/m60_test.cpp` (7): sustained-hits odds within 2% of 20,000 engine batches, `profile_supported`, Extra
+    Attacks in the volley, `best_melee` and every level's Fight action, no level firing a refused weapon, and clean
+    Easy/Normal/Hard games on both fixtures.
+  - *Changed, for a rule reason:* `Serialization.EveryWeaponAbilityRoundTrips` and
+    `M24_RulesHelp.EveryWeaponAbilityHasPlainHelp` list the two new variant alternatives (their size guards), and the
+    second now expects [HAZARDOUS] to be in the game. `R24_Abilities.UnknownAbilityKeepsOriginalTextAndDoesNotThrow`
+    drops "Sustained Hits 1", which is parsed now. `R02_Datasheet.HiveTyrantMatchesTheRoster` and
+    `TyrannofexMatchesTheRosterWithAnOvalBase` expect `ExtraAttacks{}` / `SustainedHits{1}` instead of Unknown text.
+  - *Test helpers:* the random Fight fill and `first_melee_options` declare [EXTRA ATTACKS] weapons too (unchanged
+    for other models, so old random games are the same), and `play_and_check` can collect events.
+  - ctest (Debug): 817 → 869 tests, all pass.
+- **Acceptance:**
+  - *Tests and a replay:* **met** (above).
+  - *Single-loadout play unchanged:* **met for every M60 rule and plan change; 3 games change because of the UB fix,
+    accepted at review.** The old code read freed memory, so those games' results were not defined behaviour.
+    Later milestones compare against the M60 build's output (`baseline/m60`).
+    - With the old `melee_candidates` lines restored, the Release arena's `--per-game` hashes match `baseline/main`
+      for every game of all 24 pairings (V1, both bot scenarios, Strike).
+    - With the fix, 23 pairings are identical. Strike Normal vs Easy differs in 3 of 200 games (seeds 23, 65, 150):
+      Normal now weighs the splits the undefined behaviour used to garble.
+    - Reverting the two lines restores identical hashes, but then a Normal game on the roster fixture crashes in
+      Debug, so the fixture game test would have to leave Normal out.
+    - `M60_DefaultPlans.SingleLoadoutUnitsPlanExactlyAsBefore` compares the plans directly.
+  - *Replays unchanged:* **met, with one rule-driven byte change.** `Replay.DISABLED_RegenerateReplays` and the four ai
+    regenerations leave every replay from M5 to M58 byte-identical. `m59_rosters_fixture_round1.json` embeds its
+    initial state, and the regeneration now writes the talons' ability as `{"kind": "ExtraAttacks"}` instead of
+    `{"kind": "Unknown", "text": "Extra Attacks"}`. That is the only change; its steps and expectation are the same,
+    and the old file still loads to the same state (Unknown text is parsed again).
+- **Open:**
+  - The bots don't price the hazard of a supercharge profile (Normal and Hard may pick it; M68).
+  - The per-model editors still choose one declaration per model (the others are listed, not editable), and the
+    Split popup splits only the main weapon.
+  - The pending-decision text cites 05.04 for every `OrderCasualties`, including 06.02's (as Desperate Escape already
+    did).
 
 ---
 

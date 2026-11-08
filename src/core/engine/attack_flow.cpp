@@ -9,6 +9,7 @@
 #include "core/model/keywords.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/mortal_wounds.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -158,10 +159,35 @@ void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, 
 }
 
 void finish_attacks(GameState& state) {
-    // TODO(24.15): [HAZARDOUS] hazard rolls after the unit's attacks (no V1 loadout has a [HAZARDOUS] weapon;
-    // not in the M8 rule list).
     state.flow.attack.reset();
     state.flow.activation.reset();
+}
+
+bool side_has_models(const GameState& state, Side side) {
+    return std::any_of(state.units.begin(), state.units.end(),
+                       [side](const Unit& u) { return u.side == side && !is_destroyed(u); });
+}
+
+// 24.15 [HAZARDOUS]: after the unit has resolved all of its attacks, one hazard roll (06.03) for it per
+// [HAZARDOUS] weapon selected, made simultaneously. D-071: none are made if the unit is gone, or if no enemy
+// model is left (D-007 ends the game once the attacks are resolved).
+void make_attack_hazard_rolls(GameState& state, DiceSource& dice, Events& events) {
+    AttackFlow& f = flow_of(state);
+    const int count = f.hazard_rolls;
+    f.hazard_rolls = 0;
+    const Unit& unit = unit_ref(state, f.attacker);
+    if (is_destroyed(unit) || !side_has_models(state, opponent(unit.side))) return;
+    const HazardRolls rolls = make_hazard_rolls(dice, unit, count);
+    events.push_back(event::HazardRollsMade{unit.id, rolls});
+    f.pending_mortal_wounds = rolls.mortal_wounds;  // 06.03: 1 per failure, or 3 for MONSTER/VEHICLE units
+}
+
+// 06.02 for the attacking unit's hazard mortal wounds, with its player's casualty priority (D-013).
+void resolve_attack_mortal_wounds(GameState& state, const std::vector<ModelId>& priority, Events& events) {
+    AttackFlow& f = flow_of(state);
+    const int count = f.pending_mortal_wounds;
+    f.pending_mortal_wounds = 0;
+    inflict_mortal_wounds_by_priority(state, unit_ref(state, f.attacker), count, priority, events);
 }
 
 std::vector<ModelId> model_ids(const Unit& unit) {
@@ -176,6 +202,13 @@ std::vector<ModelId> model_ids(const Unit& unit) {
 
 std::optional<PendingDecision> attack_decision(const GameState& state) {
     const AttackFlow& f = flow_of(state);
+    if (!f.current && f.pending_mortal_wounds > 0) {
+        // 06.02 Select Model for the hazard mortal wounds (24.15), answered once by the attacking unit's player
+        // (D-013). Every mortal wound selects a model, so they are always asked (D-051).
+        const Unit& attacker = unit_ref(state, f.attacker);
+        if (!is_destroyed(attacker)) return PendingDecision{attacker.side, decision::OrderCasualties{attacker.id}};
+        return std::nullopt;
+    }
     if (f.current) {
         const BatchInProgress& b = *f.current;
         const AttackBatch& batch = f.batches[b.batch];
@@ -223,6 +256,11 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
         return;
     }
 
+    if (f.pending_mortal_wounds > 0) {
+        // Only reached when the attacking unit is gone (attack_decision asks otherwise): nothing to inflict.
+        f.pending_mortal_wounds = 0;
+        return;
+    }
     // D-012: batches against a target that is no longer on the battlefield are lost.
     bool dropped = false;
     for (std::size_t i = 0; i < f.batches.size(); ++i) {
@@ -238,7 +276,12 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
 
     const std::vector<std::size_t> options = batch_options(state, f);
     if (options.empty()) {
-        finish_attacks(state);  // 04.03: all weapons have been used; the attacks have been resolved
+        // 04.03: all weapons have been used; the attacks have been resolved. Then 24.15's hazard rolls.
+        if (f.hazard_rolls > 0) {
+            make_attack_hazard_rolls(state, dice, events);
+            return;
+        }
+        finish_attacks(state);
         return;
     }
     start_batch(state, dice, options.front(), events);  // only one option (otherwise a decision)
@@ -336,7 +379,9 @@ ValidationResult validate_details(const GameState& state, Side, const action::Or
 }
 
 void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource&, Events& events) {
-    if (state.flow.attack) {
+    if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
+        resolve_attack_mortal_wounds(state, a.priority, events);  // 06.02 ([HAZARDOUS] hazards, 24.15)
+    } else if (state.flow.attack) {
         resolve_casualties(state, a.priority, events);  // 05.04
     } else {
         resolve_move_mortal_wounds(state, a.priority, events);  // 06.02 (Desperate Escape hazards)
@@ -389,6 +434,7 @@ void start_attacks(GameState& state, UnitId attacker, const AttackContext& conte
     f.context = context;
     f.batches = gather_attack_batches(state, selections, context);  // 04.03, D-006
     f.batch_done.assign(f.batches.size(), false);
+    f.hazard_rolls = hazardous_weapons_selected(state, selections);  // 24.15: counted at Select Weapons
     f.selections = std::move(selections);
     events.push_back(event::AttackBatchesGathered{attacker, f.batches});
 

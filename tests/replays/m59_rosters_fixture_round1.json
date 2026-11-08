@@ -3583,8 +3583,7 @@
                       "S": 7,
                       "abilities": [
                         {
-                          "kind": "Unknown",
-                          "text": "Extra Attacks"
+                          "kind": "ExtraAttacks"
                         }
                       ],
                       "kind": "melee",

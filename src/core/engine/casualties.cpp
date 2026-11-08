@@ -89,14 +89,15 @@ std::optional<CasualtyPreview> preview_attack(const GameState& state, std::span<
     return out;
 }
 
-std::optional<CasualtyPreview> preview_mortal_wounds(const GameState& state, std::span<const ModelId> picks) {
-    const MoveInProgress& mv = *state.flow.move;
-    const Unit* unit = state.find_unit(mv.unit);
-    if (unit == nullptr || mv.pending_mortal_wounds <= 0) return std::nullopt;
+// 06.02 for `count` pending mortal wounds on `unit_id`: Desperate Escape's (09.07) or [HAZARDOUS]'s (24.15).
+std::optional<CasualtyPreview> preview_mortal_wounds(const GameState& state, UnitId unit_id, int count,
+                                                     std::span<const ModelId> picks) {
+    const Unit* unit = state.find_unit(unit_id);
+    if (unit == nullptr || count <= 0) return std::nullopt;
     Unit copy = *unit;
     PickReplay replay(picks);
     const ModelChooser chooser = [&replay](const Unit&, std::span<const ModelId> options) { return replay(options); };
-    const MortalWoundsResult r = inflict_mortal_wounds(copy, mv.pending_mortal_wounds, chooser, true);
+    const MortalWoundsResult r = inflict_mortal_wounds(copy, count, chooser, true);
     if (!replay.valid()) return std::nullopt;
 
     CasualtyPreview out;
@@ -119,8 +120,15 @@ std::optional<CasualtyPreview> preview_casualties(const GameState& state, std::s
     if (!state.pending || !std::holds_alternative<decision::OrderCasualties>(state.pending->kind)) {
         return std::nullopt;
     }
-    if (state.flow.attack) return preview_attack(state, picks);  // as OrderCasualties' apply (attack_flow)
-    if (state.flow.move) return preview_mortal_wounds(state, picks);
+    // As OrderCasualties' apply (attack_flow.cpp) tells them apart.
+    if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
+        return preview_mortal_wounds(state, state.flow.attack->attacker, state.flow.attack->pending_mortal_wounds,
+                                     picks);
+    }
+    if (state.flow.attack) return preview_attack(state, picks);
+    if (state.flow.move) {
+        return preview_mortal_wounds(state, state.flow.move->unit, state.flow.move->pending_mortal_wounds, picks);
+    }
     return std::nullopt;
 }
 

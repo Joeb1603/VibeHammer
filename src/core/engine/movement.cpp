@@ -196,17 +196,15 @@ std::optional<PendingDecision> move_decision(const GameState& state) {
     return PendingDecision{u.side, decision::MoveModels{u.id}};
 }
 
-void resolve_move_mortal_wounds(GameState& state, const std::vector<ModelId>& priority, Events& events) {
-    MoveInProgress& mv = move_of(state);
-    Unit& u = *state.find_unit(mv.unit);
+void inflict_mortal_wounds_by_priority(GameState&, Unit& u, int count, const std::vector<ModelId>& priority,
+                                       Events& events) {
     const ModelChooser by_priority = [&priority](const Unit&, std::span<const ModelId> options) {
         for (const ModelId id : priority) {
             if (std::find(options.begin(), options.end(), id) != options.end()) return id;
         }
         throw std::logic_error("06.02: the casualty order has no legal model");
     };
-    const MortalWoundsResult result = inflict_mortal_wounds(u, mv.pending_mortal_wounds, by_priority);
-    mv.pending_mortal_wounds = 0;
+    const MortalWoundsResult result = inflict_mortal_wounds(u, count, by_priority);
     events.push_back(event::MortalWoundsInflicted{u.id, result});
     for (const DamageResult& d : result.steps) {
         if (d.destroyed) events.push_back(event::ModelDestroyed{u.id, d.model});
@@ -214,6 +212,14 @@ void resolve_move_mortal_wounds(GameState& state, const std::vector<ModelId>& pr
     if (is_destroyed(u)) {
         events.push_back(event::UnitDestroyed{u.id});
     }
+}
+
+void resolve_move_mortal_wounds(GameState& state, const std::vector<ModelId>& priority, Events& events) {
+    MoveInProgress& mv = move_of(state);
+    Unit& u = *state.find_unit(mv.unit);
+    const int count = mv.pending_mortal_wounds;
+    mv.pending_mortal_wounds = 0;
+    inflict_mortal_wounds_by_priority(state, u, count, priority, events);
 }
 
 void move_progress(GameState& state, DiceSource&, Events& events) {

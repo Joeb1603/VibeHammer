@@ -13,8 +13,9 @@ namespace wh40k::core {
 
 namespace {
 
-// Known core abilities whose effects (re-rolls, critical-wound handling) are not implemented yet.
-// Refuse rather than resolve them wrongly. Unknown{text} abilities are display-only by design (M2).
+// Abilities whose effects (re-rolls, critical-wound handling, anything unrecognised) are not implemented
+// yet. Validation refuses them when they are selected (D-026, D-071); this second safety net refuses to
+// resolve them wrongly.
 void reject_unimplemented(const AttackProfile& profile) {
     for (const WeaponAbility& a : profile.attack_time_abilities) {
         if (std::holds_alternative<ability::TwinLinked>(a)) {
@@ -22,6 +23,9 @@ void reject_unimplemented(const AttackProfile& profile) {
         }
         if (std::holds_alternative<ability::DevastatingWounds>(a)) {
             throw std::logic_error("24.10 [DEVASTATING WOUNDS] is not implemented");
+        }
+        if (const auto* u = std::get_if<ability::Unknown>(&a)) {
+            throw std::logic_error("D-071: the ability '" + u->text + "' is not implemented");
         }
     }
 }
@@ -34,11 +38,13 @@ bool contains(std::span<const ModelId> ids, ModelId id) {
 
 // ---- 05.01 ----
 
-int HitRolls::hits() const {
+int HitRolls::rolled_hits() const {
     return static_cast<int>(std::count_if(rolls.begin(), rolls.end(), [](const HitRoll& r) {
         return r.outcome != HitOutcome::Fail;
     }));
 }
+
+int HitRolls::hits() const { return rolled_hits() + sustained_hits; }
 
 int HitRolls::critical_hits() const {
     return static_cast<int>(std::count_if(rolls.begin(), rolls.end(), [](const HitRoll& r) {
@@ -50,6 +56,7 @@ HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int atta
     reject_unimplemented(profile);
     HitRolls out;
     const int modifier = cap_hit_wound_modifier(profile.hit_modifier);  // D-011
+    const int sustained = sustained_hits(profile);                      // 24.36 [SUSTAINED HITS X]
     for (int i = 0; i < attack_dice; ++i) {
         HitRoll r;
         if (profile.torrent) {
@@ -65,6 +72,7 @@ HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int atta
             r.outcome = HitOutcome::Fail;  // unmodified 1
         } else if (u == 6) {
             r.outcome = HitOutcome::CriticalHit;  // unmodified 6
+            out.sustained_hits += sustained;      // 24.36: X additional hits on the target
         } else if (m >= profile.skill.value()) {
             r.outcome = HitOutcome::Hit;
         } else {

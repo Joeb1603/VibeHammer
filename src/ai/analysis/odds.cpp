@@ -26,7 +26,7 @@ HitWoundOdds derive_hit_wound(const core::AttackProfile& profile, int toughness)
     for (int face = 1; face <= kFaces; ++face) {
         core::ScriptedDice hit_die{face};  // [TORRENT] rolls nothing; the face is simply unused
         const core::HitRolls h = core::make_hit_rolls(hit_die, profile, 1);
-        o.hit += h.hits();
+        o.hit += h.rolled_hits();  // 24.36's extra hits are counted separately (`sustained`)
         o.critical_hit += h.critical_hits();
         core::ScriptedDice wound_die{face};
         const core::WoundRolls w = core::make_wound_rolls(wound_die, profile, 1, toughness);
@@ -37,7 +37,16 @@ HitWoundOdds derive_hit_wound(const core::AttackProfile& profile, int toughness)
     o.critical_hit /= kFaces;
     o.wound /= kFaces;
     o.critical_wound /= kFaces;
+    o.sustained = core::sustained_hits(profile);
     return o;
+}
+
+// P(exactly k successes in n tries, each with chance p).
+double binomial(int n, int k, double p) {
+    if (k < 0 || k > n) return 0.0;
+    double c = 1.0;
+    for (int i = 1; i <= k; ++i) c = c * static_cast<double>(n - k + i) / static_cast<double>(i);
+    return c * std::pow(p, k) * std::pow(1.0 - p, n - k);
 }
 
 int opt_or(const std::optional<int>& v) { return v ? *v : -1; }
@@ -116,8 +125,8 @@ std::vector<Decl> pick_model_set(const std::vector<Candidate<Decl>>& cands, bool
 
 const HitWoundOdds& OddsCache::hit_wound(const core::AttackProfile& profile, int toughness) {
     ++lookups_;
-    const HitWoundKey key{opt_or(profile.skill), profile.torrent, profile.strength, profile.hit_modifier,
-                          profile.wound_modifier, toughness};
+    const HitWoundKey key{opt_or(profile.skill), profile.torrent,         profile.strength, profile.hit_modifier,
+                          profile.wound_modifier,  toughness, core::sustained_hits(profile)};
     auto it = hit_wound_.find(key);
     if (it == hit_wound_.end()) {
         ++computed_;
@@ -208,6 +217,58 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
         if (batch.attack_dice <= 0) continue;
         const HitWoundOdds& hw = cache.hit_wound(batch.profile, target.toughness);
         const int damage = batch.profile.damage.fixed_value();  // D-002
+        if (hw.sustained > 0) {
+            // 24.36 (M60): a die scores 0, 1 or 1 + X hits; each hit wounds and gets past the save independently.
+            // P(k wounds from one die), then k one-wound steps (the front model can change between them).
+            const int x = hw.sustained;
+            const double normal = hw.hit - hw.critical_hit;
+            std::vector<double> pk(static_cast<std::size_t>(x) + 2, 0.0);
+            pk[0] = 1.0 - hw.hit;
+            for (int k = 0; k <= x + 1; ++k) {
+                pk[static_cast<std::size_t>(k)] +=
+                    normal * binomial(1, k, hw.wound) + hw.critical_hit * binomial(x + 1, k, hw.wound);
+            }
+            std::vector<double> u(target.groups.size(), 0.0);  // P(one wound gets past the save | group)
+            for (std::size_t g = 0; g < u.size(); ++g) {
+                u[g] = cache.unsaved(target.groups[g], batch.profile.armour_penetration);
+            }
+            const double hits_per_die = hw.hit + x * hw.critical_hit;
+            out.attack_dice += batch.attack_dice;
+            out.hits += batch.attack_dice * hits_per_die;
+            out.wounds += batch.attack_dice * hits_per_die * hw.wound;
+            out.unsaved += batch.attack_dice * hits_per_die * hw.wound * u[target.slots[0].group];
+            std::vector<double> step(dist.size(), 0.0);
+            std::vector<double> acc(dist.size(), 0.0);
+            for (int die = 0; die < batch.attack_dice; ++die) {
+                for (std::size_t i = 0; i < dist.size(); ++i) acc[i] = pk[0] * dist[i];
+                for (int k = 1; k <= x + 1; ++k) {
+                    // One more wound: dist -> step (the same transition as below, with u for the slot's group).
+                    std::fill(step.begin(), step.end(), 0.0);
+                    step[slots * width] += dist[slots * width];
+                    for (std::size_t s = 0; s < slots; ++s) {
+                        const double us = u[target.slots[s].group];
+                        for (std::size_t w = 1; w < width; ++w) {
+                            const double p = dist[s * width + w];
+                            if (p == 0.0) continue;
+                            step[s * width + w] += p * (1.0 - us);
+                            const int left = static_cast<int>(w) - damage;
+                            if (left > 0) {
+                                step[s * width + static_cast<std::size_t>(left)] += p * us;
+                            } else {
+                                const std::size_t ns = s + 1;
+                                const std::size_t nw =
+                                    ns < slots ? static_cast<std::size_t>(target.slots[ns].wounds_left) : 0;
+                                step[ns * width + nw] += p * us;
+                            }
+                        }
+                    }
+                    dist.swap(step);
+                    for (std::size_t i = 0; i < dist.size(); ++i) acc[i] += pk[static_cast<std::size_t>(k)] * dist[i];
+                }
+                dist.swap(acc);
+            }
+            continue;
+        }
         std::vector<double> q(target.groups.size(), 0.0);       // P(one die inflicts damage | group)
         for (std::size_t g = 0; g < q.size(); ++g) {
             q[g] = hw.hit * hw.wound * cache.unsaved(target.groups[g], batch.profile.armour_penetration);
@@ -452,15 +513,32 @@ std::optional<MeleePlanValue> best_melee(OddsCache& cache, const core::GameState
     const auto options = core::melee_options(state, *unit);
     std::vector<core::MeleeDeclaration> chosen;
     for (const core::Model& model : unit->models) {
+        const auto at_target = [&](const core::MeleeDeclaration& opt) {
+            return opt.model == model.id && opt.targets.size() == 1 && opt.targets.front().unit == target;
+        };
+        const auto extra = [&](const core::MeleeDeclaration& opt) {
+            return core::is_extra_attacks_weapon(model.weapons[opt.weapon_index]);
+        };
+        // 24.11 (D-071): [EXTRA ATTACKS] weapons are added below, unless the model has no other weapon to pick.
+        const bool has_other =
+            std::any_of(options.begin(), options.end(), [&](const auto& o) { return at_target(o) && !extra(o); });
         std::optional<Candidate<core::MeleeDeclaration>> best;
         for (const core::MeleeDeclaration& opt : options) {
-            if (opt.model != model.id || opt.targets.size() != 1 || opt.targets.front().unit != target) continue;
+            if (!at_target(opt) || (has_other && extra(opt))) continue;
             const core::MeleeDeclaration one[] = {opt};
             const Volley v = to_volley(melee_batches(state, attacker, one));
             const double value = expected_outcome(cache, v, snap).model_equivalents;
             if (!best || value > best->value) best = Candidate<core::MeleeDeclaration>{opt, value, false, 0};
         }
-        if (best) chosen.push_back(best->decl);  // D-021: one melee weapon per model
+        if (!best) continue;
+        chosen.push_back(best->decl);  // D-021: one melee weapon per model
+        for (const core::MeleeDeclaration& opt : options) {  // 24.11: and each of its [EXTRA ATTACKS] weapons
+            if (!at_target(opt) || !extra(opt) || opt.weapon_index == best->decl.weapon_index) continue;
+            const bool taken = std::any_of(chosen.begin(), chosen.end(), [&](const core::MeleeDeclaration& d) {
+                return d.model == opt.model && d.weapon_index == opt.weapon_index;
+            });
+            if (!taken) chosen.push_back(opt);
+        }
     }
     if (chosen.empty()) return std::nullopt;
     const auto batches = melee_batches(state, attacker, chosen);
@@ -527,23 +605,47 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
     const TargetSnapshot snap = snapshot_of(target);
     core::AttackContext attack;
     attack.type = core::AttackType::Fighting;
+    const auto usable = [](const core::WeaponProfile& p) {
+        return p.kind == core::WeaponKind::Melee && profile_supported(p);
+    };
     for (const core::Model& model : attacker.models) {
+        // 24.11 (D-071): the best of the model's other melee weapons, plus every [EXTRA ATTACKS] weapon; a model
+        // with no other weapon it can use picks among its [EXTRA ATTACKS] weapons too.
+        const bool has_other = std::any_of(model.weapons.begin(), model.weapons.end(), [&](const core::Weapon& w) {
+            return !core::is_extra_attacks_weapon(w) && std::any_of(w.profiles.begin(), w.profiles.end(), usable);
+        });
         std::optional<VolleyBatch> best;
+        std::size_t best_weapon = 0;
         double best_value = 0.0;
-        for (const core::Weapon& weapon : model.weapons) {
+        for (std::size_t wi = 0; wi < model.weapons.size(); ++wi) {
+            const core::Weapon& weapon = model.weapons[wi];
+            if (has_other && core::is_extra_attacks_weapon(weapon)) continue;
             for (const core::WeaponProfile& p : weapon.profiles) {
-                if (p.kind != core::WeaponKind::Melee || !profile_supported(p)) continue;
+                if (!usable(p)) continue;
                 core::WeaponSelection sel;
                 sel.target = target.id;
                 const VolleyBatch one{core::make_attack_profile(p, attack), core::gather_attack_dice(p, sel, attack)};
                 const double value = expected_outcome(cache, std::span<const VolleyBatch>(&one, 1), snap).model_equivalents;
                 if (!best || value > best_value) {
                     best = one;
+                    best_weapon = wi;
                     best_value = value;
                 }
             }
         }
-        if (best) add_to_volley(volley, best->profile, best->attack_dice);  // D-021: one melee weapon per model
+        if (!best) continue;
+        add_to_volley(volley, best->profile, best->attack_dice);  // D-021: one melee weapon per model
+        for (std::size_t wi = 0; wi < model.weapons.size(); ++wi) {
+            const core::Weapon& weapon = model.weapons[wi];
+            if (wi == best_weapon || !core::is_extra_attacks_weapon(weapon)) continue;
+            for (const core::WeaponProfile& p : weapon.profiles) {  // its first usable profile (D-001)
+                if (!usable(p)) continue;
+                core::WeaponSelection sel;
+                sel.target = target.id;
+                add_to_volley(volley, core::make_attack_profile(p, attack), core::gather_attack_dice(p, sel, attack));
+                break;
+            }
+        }
     }
     return volley;
 }

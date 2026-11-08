@@ -352,6 +352,8 @@ of the charge for that reason.
   unit can attack, its fight resolves with no attacks and the player isn't asked.
 - **Template.** The `Fight` action carries every declaration. An empty list is the template that
   `legal_actions` returns (as D-016 does for shooting); `melee_options()` lists the single-target choices.
+- **Amended by D-071 (M60):** a model with [EXTRA ATTACKS] weapons selects all of them as well as one other melee
+  weapon if it has one it can use (24.11).
 
 ## D-022: Pile-in and consolidation movement details (12.03, 12.08)
 **Decided:** 2026-11-02 (M10). **Confirmed by the user** (2026-11-02).
@@ -465,6 +467,8 @@ of the charge for that reason.
   `GameSession::submit` reports such an exception as a failure instead of letting it crash the client.
 - When either ability is implemented, remove it from `unimplemented_ability_problem`
   (`rules/attacks.cpp`) and update this entry.
+- **Extended by D-071 (M60):** every ability the engine does not recognise (`ability::Unknown`) is refused the same
+  way. [HAZARDOUS], [SUSTAINED HITS X] and [EXTRA ATTACKS] are implemented.
 
 ## D-027: A proposed model move may not end on another model (03.01, M14)
 **Decided:** 2026-11-05 (agreed with the user)
@@ -2355,3 +2359,109 @@ crashes on a datasheet it can't read. The engine's unit loader reads the two new
 - **Replay** `m59_rosters_fixture_round1.json` embeds its initial state (`initial.state`) rather than naming the
   fixture, so the client's replay list and the package load it without `tests/data`. It is larger than the others
   (about 210 KB).
+
+## D-071: Unknown abilities refused; [HAZARDOUS], [SUSTAINED HITS], [EXTRA ATTACKS]; mixed-loadout default plans (M60; extends D-026)
+**Decided:** 2026-11-08 (M60 of the pre-approved M59–M70 batch; ambiguities take the conservative choice).
+- **Unknown abilities are refused (extends D-026).**
+  - Any weapon profile with an ability the engine does not recognise (`ability::Unknown`: [LETHAL HITS], [ANTI-X Y+],
+    [MELTA X], [LANCE], [PRECISION], [IGNORES COVER], [PSYCHIC], [INDIRECT FIRE], a keyword-conditioned or random-X
+    form such as [SUSTAINED HITS D3], ...) is refused when it is selected, like [TWIN-LINKED] and [DEVASTATING
+    WOUNDS]. The reason is `"D-071: '<profile>' has [<ABILITY TEXT>], which the engine does not implement yet;
+    weapons with it can't be selected"`.
+  - `unimplemented_ability_problem` gives it, so `shot_options`, `has_shot_option` (the Shoot templates),
+    `melee_options` and the bots' `profile_supported` all leave such profiles out. The attack sequence's second
+    safety net throws on one.
+  - A model whose only melee weapons are refused counts as unable to make melee attacks (as D-026). [IGNORES COVER]
+    is refused too, although V1 has no cover: Stealth-like rules aren't implemented either, so it is not "known to do
+    nothing".
+  - No weapon equipped in V1, the two bot scenarios or Strike has such an ability (checked by a test), so their play
+    is unchanged.
+  - *Old files:* JSON written before M60 holds "Extra Attacks" and "Sustained Hits 1" as `{"kind": "Unknown", "text":
+    ...}`. Reading an Unknown ability parses its text again, so such a file gets the ability the text now names.
+    Text the engine still doesn't know stays Unknown.
+  - *Replay m59:* its embedded initial state is written again by the regeneration with `{"kind": "ExtraAttacks"}`
+    for the scything talons (the only byte change; its steps and expectation are identical).
+- **[HAZARDOUS] (24.15, 06.03, 06.02).**
+  - *Count:* the number of [HAZARDOUS] weapons selected in the Select Weapons step. That is the distinct (model,
+    weapon) pairs whose selected profile has the ability, so a melee weapon splitting its attacks counts once. It is
+    recorded when the attacks start (`AttackFlow::hazard_rolls`).
+  - *When:* once every batch is resolved or lost (D-012), the rolls are made together (06.03 "simultaneously"),
+    event `HazardRollsMade`. A unit whose target was destroyed early still rolls. This applies to shooting and
+    fighting alike.
+  - *Mortal wounds:* 1 per failed roll (1-2), or 3 if every model in the unit is a MONSTER/VEHICLE. They go in
+    `AttackFlow::pending_mortal_wounds` (JSON omitted when 0, as is `hazard_rolls`). The attacking unit's player
+    answers `OrderCasualties{attacker}` (06.02 Select Model, D-013), always asked even when forced (D-051). The
+    D-051 preview follows them.
+  - *Telling the casualties apart:* `OrderCasualties` during an attack with pending mortal wounds is 06.02 for the
+    attacker; otherwise during an attack it is 05.04 for the batch's target; outside an attack it is Desperate
+    Escape's (09.07).
+  - *Self-wipe:* a unit destroyed by its own hazards ends its activation normally. Shooting goes back to the Shoot
+    decision; a fight goes on to the next unit (12.04). If that leaves a side with no models, D-007 ends the game.
+  - *D-007 first:* if no enemy model is left when the attacks are resolved, no hazard roll is made. The game is over
+    "after the current attack sequence"; this also keeps both sides from being wiped out at once.
+  - The bots' odds do not price the hazard (M68 adds its cost), so Normal and Hard may pick supercharge.
+- **[SUSTAINED HITS X] (24.36, 05.01).**
+  - Each critical hit (an unmodified 6; D-011) scores X additional hits, which are not critical and have no roll.
+    They are kept in `HitRolls::sustained_hits` (JSON omitted when 0); `hits()` includes them and `rolled_hits()`
+    doesn't. One wound roll is made for every hit (05.02).
+  - [TORRENT]'s automatic hits are not critical. A modified 6 is not critical.
+  - With two instances on one profile (24.02, the player selects one) the highest X is used: it is always the
+    controlling player's best choice.
+  - It is an attack-time ability (D-006), so it splits identical attacks.
+  - *Bots:* the exact odds mix over 0, 1 or 1 + X hits per die and a one-wound step per wound. A profile without it
+    takes the old code path unchanged, so old play's numbers are bit-identical.
+- **[EXTRA ATTACKS] (24.11, 04.01; amends D-021).**
+  - *What must be selected:* a model with [EXTRA ATTACKS] weapons must select all of them and exactly one other melee
+    weapon if it has one. A weapon is an [EXTRA ATTACKS] weapon if one of its melee profiles has the ability. Each
+    weapon is selected once; to attack several units it splits its attacks (04.02).
+  - *Refusals:* missing an [EXTRA ATTACKS] weapon, missing the other weapon, two other weapons, or one weapon twice.
+    A model without [EXTRA ATTACKS] weapons keeps 04.01's "one melee weapon, not more" message.
+  - *"If possible" (conservative):* a weapon the engine refuses (D-002 random A/D, D-026, the Unknown abilities above)
+    counts as absent. So while the Hive Tyrant's bonesword is refused ([TWIN-LINKED], until M61), the talons alone
+    are its legal selection, and with the bonesword the declaration is refused for the bonesword. Once M61 makes the
+    bonesword selectable, the Tyrant must take both. A model with only [EXTRA ATTACKS] weapons selects those alone.
+  - The ability is used up at selection, so it is excluded from D-006's attack-time abilities, like [ASSAULT].
+  - `is_extra_attacks_weapon` (rules/attacks.hpp) lets clients and bots build the selection from `melee_options`.
+- **Default plans (client, D-001 / D-016 UI rule; used by the Shoot and Fight buttons, the board menus, `--steps`,
+  level Easy and the bots' fallback).**
+  - *Shooting, single loadout:* a unit whose models all carry the same ranged weapons (every V1, bot-scenario and
+    Strike unit) keeps the M12 default exactly. That is the first option as a unit-wide choice, and a model that
+    can't make it doesn't fire. Old plans and the Easy hashes are unchanged.
+  - *Shooting, mixed loadout:* there is no one choice that suits a mixed loadout (Havocs: lascannons and a champion's
+    plasma gun; boltgun Legionaries: a champion with only a bolt pistol), so by default each model fires its own
+    weapons.
+    - It aims at the unit default's target, or at the first target it can reach if none of its weapons reaches that.
+    - Each weapon's first non-[HAZARDOUS] profile is used, at that target if the weapon reaches it, else at its own
+      first target.
+    - 24.07 applies to a non-MONSTER/VEHICLE model outside close-quarters shooting: it keeps the set (its
+      [CLOSE-QUARTERS] / [PISTOL] weapons or its other ranged weapons) with more weapons reaching the target; a tie
+      goes to the other ranged weapons. So a Legionary fires its boltgun, not its pistol.
+    - A unit-wide choice the player picks on the board still goes to every model that has it, and the other models
+      of a mixed loadout fire their own weapons at its target.
+  - *Never [HAZARDOUS] by default:* the unit default is the first option. If that is [HAZARDOUS], it becomes the
+    same weapon's first other profile at the same target, else the first option that isn't. With none, there is no
+    default and Easy doesn't shoot with the unit. BSData lists "Plasma pistol - supercharge" first for the
+    Intercessors; the order is not relied on. In melee, where D-021 makes every able model fight, a [HAZARDOUS]
+    profile is used only if the model has nothing else.
+  - *Melee:* each model's main weapon is its override, else the unit default if it is one of its options, else its
+    first option at the unit default's target, else its first option (non-[HAZARDOUS] first). For a model with
+    [EXTRA ATTACKS] weapons, the main weapon is picked from its other weapons (or from the [EXTRA ATTACKS] ones if
+    it has no other it can use). The rest of its [EXTRA ATTACKS] weapons are added at the main weapon's target where
+    they reach it. For single-loadout units this is the M12 plan exactly.
+  - *Editors:* the per-model editors still pick one weapon per model; the other declarations a model makes are listed
+    under it.
+- **Bots.**
+  - Easy uses the client plans above.
+  - Normal's melee plan, `best_melee` and `unit_melee_volley` declare (or count) every [EXTRA ATTACKS] weapon with
+    the model's best other weapon. Hard plays Normal's melee.
+  - A model without [EXTRA ATTACKS] weapons goes through the old code with the same arithmetic, so old play is
+    identical.
+  - *Fixed in passing:* Normal's melee candidates (`normal/fight.cpp`, `melee_candidates`) kept references into a
+    vector they were growing while adding attack splits. Once a split reallocated it, the next split was copied from
+    freed memory: undefined behaviour. In Debug it crashed a Normal game on the roster fixture; in the Release
+    arena it silently changed which splits Normal considered.
+    - The candidates are copies now, so every split is offered as intended.
+    - This changes 3 of the 200 Strike Normal-vs-Easy arena games (seeds 23, 65 and 150), where an Intercessor
+      engaged with two Termagant units now weighs a split. With the two lines reverted, every M60 change leaves all
+      24 arena pairings identical to the pre-batch baseline.
+    - The fix was kept because the old code can crash. It is the only intended change to old bot play.

@@ -39,11 +39,14 @@ namespace wh40k::ai::analysis {
 // hits ([TORRENT], 24.37); `wound` is P(wound | hit) and includes critical wounds. V1 gives criticals no extra
 // effect beyond succeeding ([DEVASTATING WOUNDS] and [TWIN-LINKED] are rejected, D-026), so they are reported but
 // add nothing.
+// M60 (D-071): `hit` counts the hit rolls that hit; [SUSTAINED HITS X] (24.36) adds X hits per critical hit on top,
+// so a die can score up to 1 + X hits (expected_outcome mixes over that exactly).
 struct HitWoundOdds {
     double hit = 0.0;
     double critical_hit = 0.0;
     double wound = 0.0;
     double critical_wound = 0.0;
+    int sustained = 0;  // 24.36: the X of [SUSTAINED HITS X], 0 without it
 };
 
 // Per-die chances, computed once per key. Lookups are deterministic and the values do not depend on what else is
@@ -59,8 +62,8 @@ public:
     [[nodiscard]] std::size_t lookups() const noexcept { return lookups_; }
 
 private:
-    // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness)
-    using HitWoundKey = std::tuple<int, bool, int, int, int, int>;
+    // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X)
+    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
     std::map<HitWoundKey, HitWoundOdds> hit_wound_;

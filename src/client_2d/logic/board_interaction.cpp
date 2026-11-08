@@ -26,6 +26,15 @@ const std::vector<core::UnitId>* targets_of(const core::GameAction& action) {
     return nullptr;
 }
 
+// The unit's models, in unit order.
+std::vector<core::ModelId> unit_models(const core::GameState& state, core::UnitId unit) {
+    std::vector<core::ModelId> out;
+    if (const core::Unit* u = state.find_unit(unit)) {
+        for (const core::Model& m : u->models) out.push_back(m.id);
+    }
+    return out;
+}
+
 const core::WeaponProfile* profile_at(const core::GameState& state, core::ModelId model, std::size_t weapon,
                                       std::size_t profile) {
     const core::Model* m = core::find_model(state, model);
@@ -47,7 +56,13 @@ void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& en
     const core::WeaponProfile* p = profile_at(state, first.model, first.weapon_index, first.profile_index);
     if (p == nullptr) return;
     add_help(*p, entry);
-    const auto selections = core::make_weapon_selections(state, *u, shoot.type, shoot.shots);
+    // The shots with this profile (D-071: a mixed loadout's other models fire other weapons).
+    std::vector<core::ShotDeclaration> same;
+    for (const core::ShotDeclaration& d : shoot.shots) {
+        const core::WeaponProfile* q = profile_at(state, d.model, d.weapon_index, d.profile_index);
+        if (q != nullptr && q->name == p->name) same.push_back(d);
+    }
+    const auto selections = core::make_weapon_selections(state, *u, shoot.type, same);
     entry.effects = effect_lines(*p, selections, core::shooting_context(state, *u), shoot.type);
 }
 
@@ -407,7 +422,24 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
                 } else if (!profile.empty()) {
                     label += " (" + profile + ")";
                 }
-                label += ": " + std::to_string(shoot.shots.size()) + (shoot.shots.size() == 1 ? " model" : " models");
+                // Models, not declarations: in a mixed loadout a model can fire several weapons (D-071).
+                std::size_t at = 0;
+                std::size_t own = 0;
+                for (const core::ModelId m : unit_models(state, plan.unit())) {
+                    const std::vector<core::ShotDeclaration> ds = plan.declarations_for(m);
+                    if (ds.empty()) continue;
+                    const bool chosen = std::any_of(ds.begin(), ds.end(), [&](const core::ShotDeclaration& d) {
+                        for (const ShotOption& o : plan.options()) {
+                            if (o.declaration == d) {
+                                return o.weapon == c.weapon && d.profile_index == c.profile_index && d.target == c.target;
+                            }
+                        }
+                        return false;
+                    });
+                    (chosen ? at : own) += 1;
+                }
+                label += ": " + std::to_string(at) + (at == 1 ? " model" : " models");
+                if (own > 0) label += " (+" + std::to_string(own) + " with their own weapons)";
                 MenuEntry entry{label, shoot};
                 describe(state, shoot, entry);
                 result.menu.push_back(std::move(entry));
@@ -526,7 +558,10 @@ ClickResult BoardInteraction::melee_menu(const core::GameState& state, core::Uni
             label += " (" + profile + ")";
         }
         label += ": " + std::to_string(at) + (at == 1 ? " model" : " models");
-        if (const std::size_t other = fight.declarations.size() - at; other > 0) {
+        // Models, not declarations: a model with [EXTRA ATTACKS] weapons declares those too (24.11, D-071).
+        std::size_t fighting = 0;
+        for (const core::ModelId m : unit_models(state, plan.unit())) fighting += plan.declaration_for(m) ? 1 : 0;
+        if (const std::size_t other = fighting - at; other > 0) {
             label += " (+" + std::to_string(other) + " at another target)";
         }
         MenuEntry entry{label, fight};
