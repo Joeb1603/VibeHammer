@@ -20,7 +20,10 @@
 // every enemy model, the Monte Carlo's rollouts play every unit of both sides, and the Charge decision weighs each
 // unit's charge at its closest eligible target. Like every level it is a pure function of the state (D-054): the
 // chain tables it keeps are a cache of a pure function, and every random number is the bot's own, seeded from the
-// dice-free state hash.
+// dice-free state hash. M69 (D-078): under the points tiebreak (D-076) Hard keeps the army path even with one unit per
+// side, its cache holds every pair of unit types in play (dropping the half-turns already played at each decision), and
+// it builds missing tables with LookaheadWeights::table_workers threads, joined before a decision returns. A side with
+// more than BotWeights::move_search_units units with models moves as Normal does (its other decisions stay Hard's).
 
 #include <cstdint>
 #include <optional>

@@ -3276,7 +3276,7 @@ core, state, action, event or JSON change, no new decision and no client change.
 
 ---
 
-## M69: Hard for the new units
+## M69: Hard for the new units ✅ (done)
 **Effort:** `max` · **Plan mode:** design first, then pre-approved · **Decision:** D-078 (amends D-067)
 
 > **Measure first.**
@@ -3296,6 +3296,138 @@ core, state, action, event or JSON change, no new decision and no client change.
 - Zero rejections, reverts and fallbacks.
 - V1, the bot scenarios and Strike play identically (hashes). Replays are unchanged.
 - Tests `M69_`.
+
+**Results (2026-11-08):** design in D-078 (amends D-067), measured and written first and approved with conditions before
+any code (compact storage and parallel table builds added at the review). Bot only (`src/ai`): no rule, core, state,
+action, event or JSON change, no new decision and no client change. Normal and Easy are untouched.
+- **Measured first** (the M68 binary, Release, `--trace` seed 1; D-078 has the profile): Hard as the Chaos Space Marines
+  against Normal took 555 s a game (p95 20.3 s, max 36.7 s, peak RSS 2.87 GB), as the Tyranids 852 s (p95 24.2 s, max
+  33.7 s, 2.59 GB). The time was chain-table thrash: 30 pairs of unit types against an 8-table cache, every Evaluator
+  asking for all 30 in the same order, so the first decision built 240 tables in 35.7 of its 36.0 s. With that fixed,
+  65% of the instructions were core's line of sight (D-074's oval path), a third of it the army value's per-pair
+  `best_shooting`. Every Hard reason read "draw 100%": D-007's army value can't see a points win.
+- **What changed** (`src/ai/hard/*`, D-078):
+  - *One chain cache per game* (`hard::ChainCache`, now a handle on a shared store). Its capacity is the larger of 8 and
+    the pairs the latest army Evaluator needs (30 on the rosters). Table bytes are capped at 640 MiB, and the least
+    recently used table goes first (a lookup counter, so the order is deterministic), never one in use. The half-turns
+    already played are trimmed at each Hard decision. The arena's two Hard bots share one cache
+    (`Bot::share_chain_cache`).
+  - *The tables' form.* A side whose unit type starts with more than 20 wounds gets a coarse wounds grid (a level every
+    ceil(W / 20) wounds, plus W: the Chaos Terminators' 16 levels). A volley's outcomes between levels are split in
+    proportion and lookups interpolate. When the game's tables would take more than 256 MiB at full precision (the
+    rosters), they are stored as floats (compact). Every table now has a position-major layout and no rows for 0
+    wounds. The rosters' 30 tables take about 525 MB at the first decision instead of 1.45 GB. V1, both bot scenarios
+    and Strike keep exact, full-precision tables, the same value for value as M68's (fingerprints).
+  - *Parallel builds:* up to `LookaheadWeights::table_workers` `std::thread`s (default min(4, the hardware's)). Each
+    worker has its own `OddsCache` and output table, every worker is joined before the Evaluator returns, errors are
+    rethrown after the join, and the cache changes only on the calling thread, in pair order. The client's path is
+    safe: `BotDriver` runs one decision at a time, and its config changes wait until no worker runs.
+  - *Loadout groups:* a unit whose models differ in loadout (the Havocs, the squads' champions) is its own models in
+    keep order (Normal's `model_worth` against the pair's other unit type), padded with its most common loadout. Its
+    volley is the engine-shaped sum of those models' picks.
+  - *[HAZARDOUS] and 17.01:* a [HAZARDOUS] profile is priced at Normal's `hazard_rate` in the chain and in the half-turn
+    in progress. In the rollouts' translations a MONSTER/VEHICLE passes enemy infantry.
+  - *The points tiebreak in the army value:* under `points_destroyed`, V = P(A wipes B out) - P(B wipes A out) +
+    P(neither) x T, where T = erf(mu / (sigma sqrt 2)) comes from the engine's tally and increments (Abramowitz–Stegun
+    7.1.28; the exact sign when sigma = 0). A finished game, or one with every half-turn played, takes the engine's
+    result exactly. One unit a side keeps the army path under the rule (`duel_play`).
+  - *Rollout budget by units:* when a Monte Carlo starts with more than 7 units with models, its rollouts and action
+    budget scale by 7 / n, with at least 3 rollouts (14 units: 3 rollouts and 3,000 actions;
+    `LookaheadWeights::full_budget_units = 7`).
+  - *Shared shot options:* the half-turn in progress computes each shooter's `shot_options` once per evaluation
+    (`analysis::shot_option_sets` and a `best_shooting` overload; the plans are the same).
+  - *Strength, after the design* (D-078 part 11; gated on facts the old scenarios don't have, as the go-ahead allowed):
+    - Under the points rule there is no keep-away move: D-067's furthest move, which plays for D-007's draw.
+    - A side with more than 7 units with models moves as Normal (`BotWeights::move_search_units = 7`) and still makes
+      Hard's own charge, casualty, coherency and consolidation decisions.
+  - *Arena:* `--weights` takes `full_budget_units`, `table_workers` and `move_search_units`.
+- **Tests** (`tests/ai/m69_test.cpp`: 17, plus 1 disabled; all pass; no existing test changed):
+  - `M69_Cache`:
+    - `TheRostersArmyNeedsThirtyTablesAndOneCacheHoldsThemAll`;
+    - `EvictionTakesTheLeastRecentlyUsedTableAndNeverOneInUse`;
+    - `TrimmingDropsOnlyTheHalfTurnsAlreadyPlayed`;
+    - `TheOldScenariosTablesAreTheM68Codes` (V1, both bot scenarios and Strike against M68's table fingerprints; glibc
+      only);
+    - `OneWorkerAndFourBuildTheSameTablesAndHardDecidesAlike`.
+  - `M69_Grid`:
+    - `OnlyASideOverTwentyWoundsIsCoarseAndOnlyTheRostersAreCompact`;
+    - `ACoarseSideInterpolatesBetweenLevelsAndKeepsTheExpectedWoundsOfAVolley`.
+  - `M69_Loadouts.TheChainsVolleyIsTheSumOfTheUnitsLoadoutGroups`.
+  - `M69_Rollouts`:
+    - `AMonstersTranslationPassesThroughInfantryButNotInfantrys`;
+    - `TheBudgetScalesWithTheUnitsWithModelsWhenEachMonteCarloStarts`.
+  - `M69_Points`:
+    - `AnIncrementIsWhatTheEnginesTallyAddsWhenTheUnitIsDestroyed`;
+    - `TheLeadIsTheExactSignWithoutVarianceAndErfOtherwise`;
+    - `AFinishedGameIsValuedAsTheEngineDecidedIt`;
+    - `ThePointsRuleSettlesTheDrawAndWithoutItTheArmyValueIsDSevens`;
+    - `UnderThePointsRuleHardOffersNoKeepAwayMove`.
+  - `M69_Moves.ASideWithMoreThanSevenUnitsWithModelsMovesAsNormal`.
+  - `M69_Games.HardAgainstNormalInEachSeatPlaysTheRostersClean` (two-round games, 36 s in Debug) and the disabled
+    `DISABLED_FullGamesOfHardOnTheRostersAreClean`.
+  - ctest (Debug and Release): 1141 -> 1158 tests, all pass. The disabled full-games test passes in 59 s in Release:
+    4 games in each seat and 2 Hard vs Hard, 2.9–10.3 s a game.
+- **Acceptance** (Release arena, `data/scenarios/rosters_44x60.json`, seeds 1–200 a seat; the two seats ran at once on
+  the 4-core machine, under `/usr/bin/time -v`):
+  - *Hard beats Normal in at least 60% of games in each seat:* **met.**
+    - Hard as the Chaos Space Marines (A) against Normal: 159 wins, 41 losses, 0 draws (79.5%). Every game went to
+      points after battle round 5; on average 331.3 points destroyed to 207.6. Normal's own Chaos Space Marines won 60 of
+      200 against Normal (M68).
+    - Hard as the Tyranids (B) against Normal: 137 wins, 63 losses, 0 draws (68.5%). Every game went to points after
+      battle round 5; on average 423.8 to 344.5. This is no better than Normal's own Tyranids, which won 140 of 200
+      against Normal (M68). The design as first built won 93 of 200 here (46.5%); part 11's two changes raised it, the
+      second by playing Normal's moves while the Tyranids have more than 7 units (Open, below).
+  - *Hard's decision time p95 ≤ 500 ms and max ≤ 3 s, including the first decision:* **met.** Each decision is timed
+    around `Bot::decide` by the arena (steady clock, Release, the per-side report line):
+    - as the Chaos Space Marines: p50 0.009 ms, p95 231 ms, max 1.91 s;
+    - as the Tyranids: p50 0.008 ms, p95 9.3 ms, max 1.71 s;
+    - Normal against them: p95 7.0 / 11.0 ms, max 100 / 312 ms.
+    - The first decision, quiet machine, one process, `--trace` seeds 1–3 in each seat:
+      - default workers (4 here): 895–927 ms as the Chaos Space Marines (a MoveUnits), 753–871 ms as the Tyranids
+        (their first Hard decision, an OrderCasualties);
+      - 1 worker (what a 1–2 core PC sees, at this machine's speed per core): 2.78–2.92 s and 2.73–2.83 s.
+      - In every traced game the first decision is the slowest. The maxima above (1.7–1.9 s) are first decisions with
+        two processes' table workers sharing the 4 cores.
+  - *Zero rejected actions, reverted moves, fallbacks and unfinished games:* **met** in the 400 games and in Hard vs
+    Hard (below). Normal's side removed models for coherency in 2 games (seeds 64 and 158), as at M68.
+  - *Peak memory (the go-ahead's 1 GB per arena process):* **met.** Maximum resident set size: Hard vs Normal 662 MB,
+    Normal vs Hard 651 MB, Hard vs Hard (two Hard bots sharing the cache) 610 MB and 574 MB (M68: 2.59–2.87 GB).
+  - *Hard vs Hard on the rosters* (8 games, seeds 1–8, in two runs of 4): clean. The Chaos Space Marines won all 8 on
+    points (402.9 to 205.6 on average). 33.3 s and 31.8 s for each run of 4, about 8 s a game. Hard as A: p95
+    237 / 191 ms, max 1.63 / 1.26 s; Hard as B: p95 12.7 / 19.8 ms, max 216 / 434 ms.
+  - *V1, both bot scenarios and Strike play identically:* **met.**
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line (actions, final state and
+      trace hashes) for all 24 pairings of V1, both bot scenarios and Strike: 4,380 games (`baseline/run.sh`, run on its
+      own).
+    - `Replay.DISABLED_RegenerateReplays` and the five ai regenerations (M45, M46, M47, M58, M68) leave
+      `tests/replays` byte-identical (`git status --short tests/replays` is empty).
+    - `M47_`, `M58_` and `M68_Replay.TheSavedFileMatchesTheGame` pass in Debug and Release.
+  - *Normal's roster play identical to M68:* **met.** `--per-game` on the rosters, seeds 1–200, matches the M68 binary
+    on every `game` line for Easy–Easy, Normal–Easy, Easy–Normal and Normal–Normal (800 games). The M68 replay
+    (`m68_rosters_normal_bot_game.json`) regenerates byte-identical.
+  - *Strike timing* (quiet machine, alternating with `verify_arena_m68`):
+    - Normal vs Normal, 60 games, 4 runs each: **met.** M68 9.09, 8.98, 8.82, 9.30 s (mean 9.05); M69 8.99, 9.07, 9.04,
+      8.81 s (mean 8.98): -0.8%. Decision p95 5.81–5.97 against 5.78–5.92 ms.
+    - Hard vs Hard, `--games 20`, 3 runs each: **met** on the run time. M68 60.05, 59.67, 59.90 s (mean 59.87); M69
+      61.67, 61.61, 59.89 s (mean 61.06): +2.0%. The decision p95 is 5.7% higher (134.3–136.3 against 127.9–128.8
+      ms), and the max is lower (501–550 against 549–570 ms).
+  - *Tests `M69_`:* **met** (above).
+- **Not added:** a replay. M69's flow is Hard's play on the rosters, which M70's weight sweep will change, and M70's
+  plan adds the Hard vs Hard rosters replay (`m70_rosters_bot_game.json`). M57 did the same (its bot-game replay came
+  in M58).
+- **Open:**
+  - *Hard's own move search for a big army:* the rosters' Tyranids (9 units) win with Normal's moves. With Hard's own
+    search they won 35 of 60 seeds against 44 with Normal's. The army value is optimistic for them early (a win at
+    60–100% in battle round 1), so the search holds units back while the Chaos Space Marines shoot them. Calibrating the
+    chain for these units is left to M70's sweep or later. Part 11 lists what was tried and not kept: `margin` 0.05,
+    points payoffs in the pair chains, a wider points lead, 6 rollouts at every size, and `share` 0.8.
+  - *Strike's Hard vs Hard decision p95* is up 5.7% at the same play. The run time is within the acceptance; the cause
+    was not profiled.
+  - From D-078 part 10:
+    - the chain has no state for a third unit, so an engaged target's 17.03 -1 and a MONSTER's close-quarters shot at
+      another unit appear only in the half-turn in progress;
+    - ovals are not turned;
+    - the Desperate Escape guard checks one to three failed rolls.
 
 ---
 

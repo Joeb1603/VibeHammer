@@ -15,6 +15,7 @@
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
+#include "core/model/keywords.hpp"
 #include "core/rules/charge.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
@@ -107,6 +108,12 @@ struct MoveSetup {
     std::vector<core::BaseExtents> extents;  // of `bases` at `facings` (round: the radius both ways)
     Position enemy_centroid;
     bool through_enemies = false;  // 09.07 Desperate Escape
+    // D-078 (M69), 17.01: the moving unit's models that may pass enemy models other than MONSTER/VEHICLE models (a
+    // Normal or Advance move of a MONSTER/VEHICLE, the engine's moves_through_non_monster_enemies), and which enemy
+    // models (in `enemies`' order) are MONSTER/VEHICLE models, which still block them.
+    std::vector<bool> passes_infantry;
+    std::vector<bool> enemy_mv;
+    bool any_passes = false;
     float width = 0.0f;
     float depth = 0.0f;
 };
@@ -125,12 +132,20 @@ std::optional<MoveSetup> setup_of(const Evaluator& eval, const GameState& s) {
         const std::optional<float> max = core::max_move_distance_mm(s, model.id);
         if (!start || !max) return std::nullopt;
         m.ids.push_back(model.id);
+        m.passes_infantry.push_back(core::moves_through_non_monster_enemies(s.flow.move->type, *u, model));
+        m.any_passes = m.any_passes || m.passes_infantry.back();
         m.bases.push_back(model.base);
         m.facings.push_back(core::move_start_facing_deg(s, model.id).value_or(model.facing_deg));
         m.starts.push_back(*start);
         m.max_mm = m.max_mm < 0.0f ? *max : std::min(m.max_mm, *max);
     }
     m.enemies = core::posed_enemy_models(s, u->side);
+    if (m.any_passes) {  // in posed_enemy_models' order: units in order, then their models
+        for (const core::Unit& e : s.units) {
+            if (e.side == u->side) continue;
+            for (const core::Model& em : e.models) m.enemy_mv.push_back(core::is_monster_or_vehicle(e, em));
+        }
+    }
     for (const core::Unit& o : s.units) {
         if (o.side != u->side || o.id == u->id) continue;
         for (const core::Model& p : o.models) m.others.push_back(core::posed_of(p));
@@ -149,8 +164,9 @@ std::optional<MoveSetup> setup_of(const Evaluator& eval, const GameState& s) {
 }
 
 // The unit translated by (dx, dy) * t passes the cheap checks (the engine still decides): bases on the
-// battlefield, straight lines clear of enemy bases (unless the move may pass through them), ends outside
-// engagement range (09.05-09.07) and not on another model. A translation keeps the unit's coherency.
+// battlefield, straight lines clear of enemy bases (unless the move may pass through them: a Desperate Escape, or
+// D-078 a MONSTER/VEHICLE model's Normal or Advance move past models that aren't MONSTER/VEHICLE models, 17.01), ends
+// outside engagement range (09.05-09.07) and not on another model. A translation keeps the unit's coherency.
 bool translation_ok(const MoveSetup& m, float dx, float dy, float t) {
     if (core::more_than(t, m.max_mm)) return false;
     for (std::size_t i = 0; i < m.starts.size(); ++i) {
@@ -165,9 +181,11 @@ bool translation_ok(const MoveSetup& m, float dx, float dy, float t) {
             return false;
         }
         const float r = m.radius[i];
+        const bool passes = m.any_passes && m.passes_infantry[i];
         for (std::size_t k = 0; k < m.enemies.size(); ++k) {
             const core::PosedModel& e = m.enemies[k];
-            if (!m.through_enemies && client::point_segment_distance(e.position, a, b) < r + m.enemy_radius[k]) {
+            const bool passable = m.through_enemies || (passes && !m.enemy_mv[k]);
+            if (!passable && client::point_segment_distance(e.position, a, b) < r + m.enemy_radius[k]) {
                 return false;
             }
             // avoid_gap_mm (base_distance's formula with the circumscribed radii)
@@ -423,6 +441,13 @@ private:
 
 }  // namespace
 
+std::optional<std::vector<GameAction>> rollout_translation(const Evaluator& eval, const GameState& state, float dx,
+                                                           float dy, float mm) {
+    const std::optional<MoveSetup> m = setup_of(eval, state);
+    if (!m) return std::nullopt;
+    return plan_translation(*m, dx, dy, mm, true);
+}
+
 std::uint64_t rollout_seed(const GameState& state) {
     Fnv1a h;
     h.u64(0x6c6f6f6b61686561ull);  // "lookahea"
@@ -444,6 +469,18 @@ std::uint64_t rollout_seed(const GameState& state) {
     return h.value();
 }
 
+RolloutBudget rollout_budget(const LookaheadWeights& weights, const GameState& start) {
+    RolloutBudget b{weights.rollouts, weights.rollout_actions, weights.budget_actions};
+    std::size_t units = 0;
+    for (const core::Unit& u : start.units) units += u.models.empty() ? 0 : 1;
+    const std::size_t full = weights.full_budget_units;
+    if (full == 0 || units <= full) return b;
+    // D-078: scaled by full / units, rounded down; at least 3 rollouts (or the weights' own, if fewer).
+    b.rollouts = std::max(std::min<std::size_t>(3, weights.rollouts), weights.rollouts * full / units);
+    b.budget_actions = weights.budget_actions * full / units;
+    return b;
+}
+
 MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, const GameState& start,
                              core::Side side, std::uint64_t seed, const LookaheadWeights& weights,
                              const Opening& opening, std::vector<RolloutTrace>* traces) {
@@ -451,9 +488,11 @@ MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, c
     if (!eval.ok()) return out;
     const int h_start = half_turn_of(start);
     const int h_stop = start.pending && core::turn_side(start) == side ? h_start + 2 : h_start + 1;
+    // D-078: the budget by the units with models now (as LookaheadWeights for at most full_budget_units of them).
+    const RolloutBudget budget = rollout_budget(weights, start);
     double sum = 0.0;
     double sum_v = 0.0;
-    for (std::size_t i = 0; i < weights.rollouts && out.actions < weights.budget_actions; ++i) {
+    for (std::size_t i = 0; i < budget.rollouts && out.actions < budget.budget_actions; ++i) {
         Fnv1a rs;
         rs.u64(seed);
         rs.u64(static_cast<std::uint64_t>(i));
@@ -467,7 +506,7 @@ MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, c
             const GameState& s = sim.state();
             if (s.result || !s.pending) break;
             if (half_turn_of(s) >= h_stop) break;
-            if (steps >= weights.rollout_actions || out.actions >= weights.budget_actions) {
+            if (steps >= budget.rollout_actions || out.actions >= budget.budget_actions) {
                 cut = true;
                 break;
             }
