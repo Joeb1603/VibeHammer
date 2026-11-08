@@ -25,6 +25,15 @@ namespace wh40k::core {
 // (positive is counter-clockwise; a half turn is +180).
 [[nodiscard]] float rotation_delta_deg(float from_deg, float to_deg) noexcept;
 
+// D-074 part 2 (M65): an oval's footprint is the same at f and f + 180, so the engine keeps one facing per footprint,
+// in (-90, 90]. Exact for float inputs (fmod and adding 180 are exact); a non-finite input gives 0; never -0.
+[[nodiscard]] float footprint_facing_deg(float deg) noexcept;
+
+// D-074 part 2 (M65): the turn from the footprint at `from_deg` to the footprint at `to_deg` the shorter way, in
+// (-90, 90] (positive is counter-clockwise; a quarter turn is +90, as the kernel's half turn is +180). In double, so a
+// caller can add it to an unwrapped facing without first rounding the turn.
+[[nodiscard]] double footprint_turn_deg(float from_deg, float to_deg) noexcept;
+
 // Where a base is and which way it faces.
 struct BasePose {
     Position position;

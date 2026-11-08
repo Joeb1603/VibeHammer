@@ -2,6 +2,7 @@
 
 // Internal helpers shared by the serialization .cpp files.
 
+#include <cmath>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,6 +38,18 @@ void get_opt(const Json& j, const char* key, std::optional<T>& v) {
 
 [[noreturn]] inline void bad_enum(std::string_view type, const Json& j) {
     throw DataError("state JSON: invalid " + std::string(type) + ": " + j.dump());
+}
+
+// D-074 part 2 (M65): a stored facing: a finite number of degrees, in the stored form (-90, 90] (an oval's facing
+// modulo 180, footprint_facing_deg). `what` names it in the error.
+inline float stored_facing(const Json& e, std::string_view what) {
+    if (!e.is_number()) throw DataError("state JSON: D-074: " + std::string(what) + " must be a number: " + e.dump());
+    const float f = e.get<float>();
+    if (!std::isfinite(f) || !(f > -90.0f && f <= 90.0f)) {
+        throw DataError("state JSON: D-074: " + std::string(what) + " " + e.dump() +
+                        " is not in (-90, 90] (an oval's facing is stored modulo 180)");
+    }
+    return f;
 }
 
 }  // namespace wh40k::core::json_detail

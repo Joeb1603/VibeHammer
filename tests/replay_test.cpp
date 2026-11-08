@@ -16,6 +16,7 @@
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
@@ -39,6 +40,7 @@ constexpr std::uint64_t kM60Seed = 2;  // M60: picked by Replay.DISABLED_SearchM
 constexpr std::uint64_t kM61Seed = 1;  // M61: picked by Replay.DISABLED_SearchM61Seed
 constexpr std::uint64_t kM62Seed = 10;  // M62: picked by Replay.DISABLED_SearchM62Seed
 constexpr std::uint64_t kM63Seed = 1;   // M63: picked by Replay.DISABLED_SearchM63Seed
+constexpr std::uint64_t kM65Seed = 1;   // M65: picked by Replay.DISABLED_SearchM65Seed
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -508,6 +510,137 @@ Replay m63_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     if (failed || !g.pending || *g.pending != PendingDecision{Side::A, decision::Charge{}}) return r;
     r.expect = replay_expectation(g);
     ok = lascannons_at_minus_one && pistols_unmodified;
+    return r;
+}
+
+// M65 (D-074 part 2): the Tyrannofex layout (tests/support/monster_fixtures.hpp: a few units of the Tyrannofex fixture
+// placed by hand), embedded. `ok` says whether the seed shows what the replay is about: the Tyrannofex ends its Normal
+// move turned to 45 degrees after 3.00" (so [HEAVY] still applies: the turn doesn't count, 24.16), fires both guns with
+// the fleshborer hive's batch at +1, makes its charge move turned back to 0 and engaged, and fights; `problem`, the
+// first refused step (none expected).
+Replay m65_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    namespace tf = wh40k::test::tyrannofex;
+    ok = false;
+    Replay r;
+    r.description =
+        "M65: Oval bases in the engine (01.04, 03.01, 11.04, D-074 part 2) on the Tyrannofex layout (roster units placed by "
+        "hand on the 44\"x60\" board; embedded state). Round 1, Side B first: the Tyrannofex (a 120 x 92 mm oval, facing "
+        "0, its length south to north) turns 45 degrees and makes a 3.00\" Normal move south (03.01: the turn adds "
+        "nothing to the distance, so no model has moved more than 3\" and its [HEAVY] fleshborer hive gets +1, 24.16); "
+        "it fires its stinger salvoes and fleshborer hive at the chainsword Legionaries; it declares a charge at them, "
+        "turns back to 0 and moves straight at them, ending engaged (11.04, closer than its start at either facing); it "
+        "fights first and the Legionaries fight back (every other decision takes the first legal action; casualties in "
+        "unit order). Stops at Side A's first Move Units decision.";
+    GameState init = tf::fixture(Side::B);
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    start_game(g);
+    bool failed = false;
+    std::vector<GameEvent> events;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    auto answer = [&]() -> GameAction {
+        const DecisionKind& k = g.pending->kind;
+        if (std::holds_alternative<decision::Shoot>(k)) return action::EndShootStep{};
+        if (std::holds_alternative<decision::Charge>(k)) return action::EndChargeStep{};
+        if (std::holds_alternative<decision::PileIn>(k)) return action::EndPileIns{};
+        if (std::holds_alternative<decision::Consolidate>(k)) return action::EndConsolidations{};
+        if (const auto* o = std::get_if<decision::OverrunPileIn>(&k)) return action::SkipPileIn{o->unit};
+        if (const auto* d = std::get_if<decision::DeclareMeleeAttacks>(&k)) return wh40k::test::first_melee_options(g, d->unit);
+        GameAction a = legal_actions(g, decider(g)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g.find_unit(oc->target));
+        }
+        return a;
+    };
+    const UnitId tyrannofex = g.units[tf::kTyrannofex].id;
+    const UnitId legionaries = g.units[tf::kLegionaries].id;
+    const ModelId tyrannofex_model = g.units[tf::kTyrannofex].models[0].id;
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::B, decision::MoveUnits{}})) act(answer());
+    // The Normal move: a turn to 45, then 3" south.
+    const Position start = g.units[tf::kTyrannofex].models[0].position;
+    const Position moved{start.x, start.y - wh40k::test::in(3.0f), 0.0f};
+    act(action::StartMove{tyrannofex, MoveType::Normal, std::nullopt});
+    act(action::ProposeModelMove{tyrannofex_model, {moved}, {45.0f}});
+    act(action::CommitUnitMove{});
+    if (failed || g.units[tf::kTyrannofex].models[0].position != moved ||
+        g.units[tf::kTyrannofex].models[0].facing_deg != 45.0f || g.units[tf::kTyrannofex].turn_flags.moved_over_3in) {
+        return r;
+    }
+    while (!failed && g.pending && std::holds_alternative<decision::MoveUnits>(g.pending->kind)) act(answer());
+    if (failed || !g.pending || !std::holds_alternative<decision::Shoot>(g.pending->kind)) return r;
+    // Both guns at the Legionaries.
+    std::size_t before = events.size();
+    {
+        action::Shoot guns{tyrannofex, ShootingType::Normal, {}};
+        for (const ShotDeclaration& d : shot_options(g, g.units[tf::kTyrannofex], ShootingType::Normal)) {
+            const bool taken = std::any_of(guns.shots.begin(), guns.shots.end(),
+                                           [&](const ShotDeclaration& x) { return x.weapon_index == d.weapon_index; });
+            if (d.target == legionaries && !taken) guns.shots.push_back(d);
+        }
+        if (guns.shots.size() != 2) return r;
+        act(guns);
+    }
+    while (!failed && g.flow.attack) act(answer());
+    bool heavy = false;
+    for (std::size_t i = before; i < events.size(); ++i) {
+        if (const auto* b = std::get_if<event::AttackBatchesGathered>(&events[i])) {
+            for (const AttackBatch& batch : b->batches) {
+                // The fleshborer hive's batch (its [TWIN-LINKED] marks it): [HEAVY] +1 (24.16).
+                const bool hive = std::any_of(batch.profile.attack_time_abilities.begin(),
+                                              batch.profile.attack_time_abilities.end(), [](const WeaponAbility& a) {
+                                                  return std::holds_alternative<ability::TwinLinked>(a);
+                                              });
+                if (hive) heavy = batch.profile.hit_modifier == 1;
+            }
+        }
+    }
+    act(action::EndShootStep{});
+    if (failed || g.units[tf::kLegionaries].models.empty()) return r;
+    // The charge: turned back to 0, then straight at them by the gap at that facing (never onto a model: no line of
+    // that length can make the gap negative).
+    act(action::DeclareCharge{tyrannofex});
+    if (failed || !g.pending || !std::holds_alternative<decision::SelectChargeTargets>(g.pending->kind)) return r;
+    act(action::StartChargeMove{tyrannofex, {legionaries}});
+    {
+        const Position from = *move_start_position(g, tyrannofex_model);
+        const float gap = *model_distance_to_unit(BasePose{from, g.units[tf::kTyrannofex].models[0].base, 0.0f},
+                                                  g.units[tf::kLegionaries]);
+        const float step = std::min(gap, max_move_distance_mm(g, tyrannofex_model).value_or(0.0f));
+        act(action::ProposeModelMove{tyrannofex_model, {Position{from.x, from.y - step, 0.0f}}, {0.0f}});
+    }
+    act(action::CommitUnitMove{});
+    if (failed || !g.units[tf::kTyrannofex].turn_flags.made_charge_move || g.units[tf::kTyrannofex].models[0].facing_deg != 0.0f) {
+        return r;
+    }
+    before = events.size();
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::A, decision::MoveUnits{}})) act(answer());
+    bool fought = false;
+    bool fought_back = false;
+    for (std::size_t i = before; i < events.size(); ++i) {
+        if (const auto* m = std::get_if<event::MeleeAttacksDeclared>(&events[i])) {
+            fought = fought || (m->unit == tyrannofex && !m->selections.empty());
+            fought_back = fought_back || (m->unit == legionaries && !m->selections.empty());
+        }
+    }
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::A, decision::MoveUnits{}}) return r;
+    r.expect = replay_expectation(g);
+    ok = heavy && fought && fought_back;
     return r;
 }
 
@@ -1134,6 +1267,49 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m63_problem.empty()) << m63_problem;
     EXPECT_TRUE(m63_shows_it) << "seed " << kM63Seed << " no longer shows the -1 and the close-quarters exception";
     save_if_clean(m63, kReplayDir / "m63_monsters.json");
+
+    // M65: Oval bases in the engine (D-074 part 2): the Tyrannofex turns and moves 3" ([HEAVY] still applies), shoots,
+    // charges turned back and fights. Stops at Side A's first Move Units decision, before anything M66-M70 change (the
+    // client and bots, the real scenario and its points result).
+    bool m65_shows_it = false;
+    std::string m65_problem;
+    const Replay m65 = m65_replay(kM65Seed, m65_shows_it, m65_problem);
+    ASSERT_TRUE(m65_problem.empty()) << m65_problem;
+    EXPECT_TRUE(m65_shows_it) << "seed " << kM65Seed << " no longer shows the [HEAVY] +1, the charge and the fight";
+    save_if_clean(m65, kReplayDir / "m65_oval_tyrannofex.json");
+}
+
+TEST(Replay, DISABLED_SearchM65Seed) {
+    for (std::uint64_t seed = 1; seed <= 200; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m65_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M65 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
+}
+
+TEST(Replay, RandomGamesFromTheTyrannofexFixtureReplayIdentically) {
+    // M65 (D-074 part 2): games with turns (the random fills give the oval facings) replay identically, through JSON.
+    int with_facings = 0;
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+        GameState initial = seed % 2 == 0 ? wh40k::test::tyrannofex::fixture(Side::B, seed == 4)
+                                          : wh40k::test::load_tyrannofex_fixture_closer(26.0f);
+        initial.dice.seed = seed;
+        Match match(initial);
+        TestRng rng(seed);
+        random_play(match, rng, 1500);
+        for (const ReplayStep& step : match.steps()) {
+            if (const auto* p = std::get_if<action::ProposeModelMove>(&step.action); p != nullptr && !p->facings.empty()) {
+                ++with_facings;
+            }
+        }
+        expect_replays_identically(match);
+    }
+    EXPECT_GT(with_facings, 0);
 }
 
 TEST(Replay, DISABLED_SearchM63Seed) {

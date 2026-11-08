@@ -266,7 +266,7 @@ void apply_details(GameState& state, Side side, const action::StartPileIn& a, Di
     mv.unit = u.id;
     mv.type = MoveType::PileIn;
     mv.targets = a.targets;  // 12.03 Before Moving
-    for (const Model& m : u.models) mv.starts.push_back(ModelStart{m.id, m.position});
+    for (const Model& m : u.models) mv.starts.push_back(ModelStart{m.id, m.position, m.facing_deg});
     state.flow.move = std::move(mv);
 }
 
@@ -477,7 +477,7 @@ void apply_details(GameState& state, Side side, const action::StartConsolidation
     mv.type = MoveType::Consolidation;
     mv.targets = a.targets;
     mv.consolidation_mode = mode;
-    for (const Model& m : u.models) mv.starts.push_back(ModelStart{m.id, m.position});
+    for (const Model& m : u.models) mv.starts.push_back(ModelStart{m.id, m.position, m.facing_deg});
     state.flow.move = std::move(mv);
 }
 

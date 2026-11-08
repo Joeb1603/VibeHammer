@@ -72,23 +72,24 @@ bool engaged_with(const GameState& state, const Unit& unit, UnitId other) {
 }
 
 // 06.01: the models that can block a line of sight from a model of `own` to `target`: every model on the
-// battlefield except those in the observing and observed units.
-std::vector<PlacedModel> visibility_blockers(const GameState& state, const Unit* own, const Unit& target) {
-    std::vector<PlacedModel> blockers;
+// battlefield except those in the observing and observed units. D-074: each with its facing.
+std::vector<PosedModel> visibility_blockers(const GameState& state, const Unit* own, const Unit& target) {
+    std::vector<PosedModel> blockers;
     for (const Unit& u : state.units) {
         if (u.id == target.id || (own != nullptr && u.id == own->id)) {
             continue;  // 06.01: models in the observing and observed units are ignored
         }
-        for (const Model& m : u.models) blockers.push_back(PlacedModel{m.id, m.position, m.base});
+        for (const Model& m : u.models) blockers.push_back(posed_of(m));
     }
     return blockers;
 }
 
-// 06.01 Unit Visible: one or more of the target's models are visible to `observer` past `blockers`.
-bool visible_past(const Model& observer, const Unit& target, std::span<const PlacedModel> blockers) {
-    const PlacedModel from{observer.id, observer.position, observer.base};
+// 06.01 Unit Visible: one or more of the target's models are visible to `observer` past `blockers` (D-074: the
+// posed overload; with only round bases it is D-017's answer, bit-identical).
+bool visible_past(const Model& observer, const Unit& target, std::span<const PosedModel> blockers) {
+    const PosedModel from = posed_of(observer);
     for (const Model& m : target.models) {
-        if (has_line_of_sight(from, PlacedModel{m.id, m.position, m.base}, blockers)) {
+        if (has_line_of_sight(from, posed_of(m), blockers)) {
             return true;
         }
     }
@@ -138,7 +139,7 @@ private:
     std::vector<std::pair<UnitId, bool>> target_engaged_;
     std::map<std::pair<std::uint32_t, std::uint32_t>, bool> visible_;  // (model, target unit)
     // by (observing unit id + 1, or 0 for none; target unit)
-    std::map<std::pair<std::uint64_t, std::uint32_t>, std::vector<PlacedModel>> blockers_;
+    std::map<std::pair<std::uint64_t, std::uint32_t>, std::vector<PosedModel>> blockers_;
 };
 
 // 04.02 / 10.06: the target rules for one declaration (the target unit exists and is an enemy).
@@ -346,9 +347,9 @@ bool target_within_range(const Model& model, const WeaponProfile& profile, const
     if (!profile.range_mm) {
         return false;
     }
-    const PlacedModel from{model.id, model.position, model.base};
-    const auto targets = placed_models(target);
-    const auto d = closest_distance(std::span<const PlacedModel>(&from, 1), targets);
+    const PosedModel from = posed_of(model);  // D-074: each base with its facing
+    const auto targets = posed_models(target);
+    const auto d = closest_distance(std::span<const PosedModel>(&from, 1), std::span<const PosedModel>(targets));
     return d.has_value() && within(*d, *profile.range_mm);  // D-009 Within, 01.04 edge to edge
 }
 

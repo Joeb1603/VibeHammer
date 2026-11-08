@@ -199,6 +199,7 @@ void to_json(Json& j, const Model& v) {
              {"position", v.position},
              {"wounds_remaining", v.wounds_remaining},
              {"weapons", v.weapons}};
+    if (v.facing_deg != 0.0f) j["facing_deg"] = v.facing_deg;  // D-074: omitted when 0, so old files are unchanged
 }
 void from_json(const Json& j, Model& v) {
     j.at("id").get_to(v.id);
@@ -208,6 +209,16 @@ void from_json(const Json& j, Model& v) {
     j.at("position").get_to(v.position);
     j.at("wounds_remaining").get_to(v.wounds_remaining);
     j.at("weapons").get_to(v.weapons);
+    v.facing_deg = 0.0f;
+    if (j.contains("facing_deg")) {
+        // D-074 part 2: the stored form; a round base has no facing.
+        const std::string what = "model " + std::to_string(v.id.v) + "'s facing_deg";
+        v.facing_deg = json_detail::stored_facing(j.at("facing_deg"), what);
+        if (v.base.shape == BaseShape::Round && v.facing_deg != 0.0f) {
+            throw DataError("state JSON: D-074: model " + std::to_string(v.id.v) +
+                            " has a round base, which has no facing (facing_deg must be 0)");
+        }
+    }
 }
 
 void to_json(Json& j, const AbilityText& v) { j = Json{{"name", v.name}, {"text", v.text}}; }

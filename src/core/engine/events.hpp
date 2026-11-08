@@ -84,6 +84,9 @@ struct ModelMoveProposed {  // 03.01: a model's path (start position first)
     ModelId model;
     std::vector<Position> path;
     float distance_mm = 0.0f;
+    // D-074 (M65): as ModelPath::facings: empty when the path turns the model nowhere, otherwise one per path point
+    // (the start's first). Omitted from JSON when empty.
+    std::vector<float> facings{};
     friend bool operator==(const ModelMoveProposed&, const ModelMoveProposed&) = default;
 };
 struct UnitMoveCommitted {  // 03.01 Ending a Move: the move ended

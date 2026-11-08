@@ -35,7 +35,8 @@ add_executable(wh40k_tests
     m63_monsters_test.cpp
     m64_oval_distance_test.cpp
     m64_oval_sweep_test.cpp
-    m64_oval_visibility_test.cpp)
+    m64_oval_visibility_test.cpp
+    m65_oval_engine_test.cpp)
 
 target_link_libraries(wh40k_tests PRIVATE wh40k_core GTest::gtest_main)
 target_include_directories(wh40k_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

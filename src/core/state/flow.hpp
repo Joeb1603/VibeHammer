@@ -112,6 +112,7 @@ struct AttackFlow {
 struct ModelStart {
     ModelId model;
     Position position;
+    float facing_deg = 0.0f;  // D-074: its facing then (returned to with the position); omitted from JSON when 0
     friend bool operator==(const ModelStart&, const ModelStart&) = default;
 };
 
@@ -119,6 +120,10 @@ struct ModelStart {
 struct ModelPath {
     ModelId model;
     std::vector<Position> points;
+    // D-074 (M65): empty when the path turns the model nowhere (it keeps its start facing); otherwise one facing per
+    // point, the start's first, each normalised modulo 180 (03.01: it turns at points[i] to facings[i + 1], then moves
+    // to points[i + 1]). Omitted from JSON when empty.
+    std::vector<float> facings{};
     friend bool operator==(const ModelPath&, const ModelPath&) = default;
 };
 

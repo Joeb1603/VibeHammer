@@ -114,6 +114,20 @@ std::vector<PathViolation> check_model_path(ModelId mover, const Base& base, std
             if (e.id == mover) {
                 continue;
             }
+            if (round_base && e.base.shape == BaseShape::Round) {
+                // M65: a round pair takes the round-only check's loop above (the same test and reason, bit-identical,
+                // with the limit worked out once per enemy model).
+                const float limit = base_radius(base) + base_radius(e.base) - EPS_MM;
+                for (std::size_t s = 0; s + 1 < points.size(); ++s) {
+                    if (point_segment_distance(e.position, points[s], points[s + 1]) < limit) {
+                        out.push_back({PathViolationKind::CrossesEnemyModel, e.id, s,
+                                       "03.01: " + model_name(mover) + "'s base cannot be moved through enemy " +
+                                           model_name(e.id) + " (segment " + std::to_string(s + 1) + ")"});
+                        break;  // one report per enemy model
+                    }
+                }
+                continue;
+            }
             const BasePose obstacle = e.pose();
             for (std::size_t s = 0; s + 1 < points.size(); ++s) {
                 if (turns(s) && rotation_against_base(BasePose{points[s], base, facing(s)}, facing(s + 1), obstacle).blocked) {

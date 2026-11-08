@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <regex>
 #include <string>
@@ -126,10 +127,23 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
         core::action::ProposeModelMove filled = *pm;
         const core::Position start = core::move_start_position(gs, pm->model).value();
         const float max = core::max_move_distance_mm(gs, pm->model).value();
+        // M65 (D-074 part 2): an oval base also gets turns. Only its fills draw the extra numbers, so every game
+        // without an oval plays exactly as before.
+        const core::Model* model = core::find_model(gs, pm->model);
+        const bool oval = model != nullptr && model->base.shape != core::BaseShape::Round;
+        const auto random_facing = [&rng] { return static_cast<float>(rng.below(3600)) * 0.1f - 180.0f; };
         if (corrupt) {
-            switch (rng.below(3)) {
+            switch (rng.below(oval ? 5 : 3)) {
                 case 0: filled.path = {core::Position{start.x + max + in(2), start.y, 0.0f}}; break;  // too far
                 case 1: filled.path = {core::Position{-in(1), start.y, 0.0f}}; break;  // off the battlefield
+                case 3:  // D-074: one facing too many
+                    filled.path = {start};
+                    filled.facings = {random_facing(), random_facing()};
+                    break;
+                case 4:  // D-074: not a number
+                    filled.path = {start};
+                    filled.facings = {std::numeric_limits<float>::quiet_NaN()};
+                    break;
                 default: filled.path.clear(); break;
             }
             return filled;
@@ -143,6 +157,24 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
             at = core::Position{at.x + length * std::cos(angle), at.y + length * std::sin(angle), 0.0f};
             filled.path.push_back(at);
             budget -= length;
+        }
+        if (oval) {
+            const float keep = core::move_start_facing_deg(gs, pm->model).value_or(0.0f);
+            switch (rng.below(4)) {
+                case 0: break;  // no turn (as for a round base)
+                case 1:         // a facing at every vertex: a turn before each straight line
+                    for (std::size_t i = 0; i < filled.path.size(); ++i) filled.facings.push_back(random_facing());
+                    break;
+                case 2:  // a turn without moving (03.01): one vertex at the start
+                    filled.path = {start};
+                    filled.facings = {random_facing()};
+                    break;
+                default:  // a last turn after the last straight line (a zero-length segment)
+                    filled.facings.assign(filled.path.size(), keep);
+                    filled.path.push_back(filled.path.back());
+                    filled.facings.push_back(random_facing());
+                    break;
+            }
         }
         return filled;
     }
@@ -329,6 +361,34 @@ inline core::action::Fight first_melee_options(const core::GameState& gs, core::
         if (extra(o.weapon_index) || !have_other) a.declarations.push_back(o);
     }
     return a;
+}
+
+// M65: the neutral answer to the pending decision: remain stationary, end every step, skip pile-ins and
+// consolidations, fight with the first options (first_melee_options), casualties in unit order; a move in progress
+// commits when it can end, else resets.
+inline core::GameAction neutral_action(const core::GameState& gs) {
+    const core::DecisionKind& k = gs.pending->kind;
+    if (std::holds_alternative<core::decision::Shoot>(k)) return core::action::EndShootStep{};
+    if (std::holds_alternative<core::decision::Charge>(k)) return core::action::EndChargeStep{};
+    if (std::holds_alternative<core::decision::PileIn>(k)) return core::action::EndPileIns{};
+    if (std::holds_alternative<core::decision::Consolidate>(k)) return core::action::EndConsolidations{};
+    if (const auto* o = std::get_if<core::decision::OverrunPileIn>(&k)) return core::action::SkipPileIn{o->unit};
+    if (const auto* d = std::get_if<core::decision::DeclareMeleeAttacks>(&k)) return first_melee_options(gs, d->unit);
+    if (std::holds_alternative<core::decision::MoveModels>(k)) {
+        if (core::move_end_problems(gs).empty()) return core::action::CommitUnitMove{};
+        return core::action::ResetUnitMove{};
+    }
+    core::GameAction a = core::legal_actions(gs, decider(gs)).front();
+    if (auto* oc = std::get_if<core::action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+        oc->priority = model_ids(*gs.find_unit(oc->target));
+    }
+    return a;
+}
+
+// M65: neutral answers (neutral_action) until `done(gs)`, at most `guard` of them.
+template <typename Done>
+void play_neutral_until(core::GameState& gs, Done done, int guard = 800) {
+    for (int i = 0; i < guard && gs.pending && !done(gs); ++i) core::apply_action(gs, decider(gs), neutral_action(gs));
 }
 
 // D-047: the Consolidate step after after_successful_charge's fight (as R12 FullFightPhase): no pile-ins,

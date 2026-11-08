@@ -111,11 +111,13 @@ nlohmann::json replay_expectation(const GameState& state) {
     Json models = Json::array();
     for (const Unit& u : state.units) {
         for (const Model& m : u.models) {
-            models.push_back(Json{{"unit", u.id},
-                                  {"model", m.id},
-                                  {"wounds_remaining", m.wounds_remaining},
-                                  {"x_mm", m.position.x},
-                                  {"y_mm", m.position.y}});
+            Json e{{"unit", u.id},
+                   {"model", m.id},
+                   {"wounds_remaining", m.wounds_remaining},
+                   {"x_mm", m.position.x},
+                   {"y_mm", m.position.y}};
+            if (m.facing_deg != 0.0f) e["facing_deg"] = m.facing_deg;  // D-074: omitted when 0 (old files unchanged)
+            models.push_back(std::move(e));
         }
     }
     Json result = nullptr;

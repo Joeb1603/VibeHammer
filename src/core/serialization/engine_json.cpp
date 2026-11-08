@@ -198,6 +198,7 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, ProposeModelMove>) {
                 j["model"] = a.model;
                 j["path"] = a.path;
+                if (!a.facings.empty()) j["facings"] = a.facings;  // D-074: omitted when there are none
             } else if constexpr (std::is_same_v<T, Shoot>) {
                 j["unit"] = a.unit;
                 j["type"] = a.type;
@@ -243,7 +244,9 @@ void from_json(const Json& j, GameAction& v) {
         if (j.contains("fall_back_mode")) a.fall_back_mode = j.at("fall_back_mode").get<FallBackMode>();
         v = a;
     } else if (kind == "ProposeModelMove") {
-        v = ProposeModelMove{j.at("model").get<ModelId>(), j.at("path").get<std::vector<Position>>()};
+        ProposeModelMove a{j.at("model").get<ModelId>(), j.at("path").get<std::vector<Position>>(), {}};
+        if (j.contains("facings")) j.at("facings").get_to(a.facings);  // D-074 (validation checks them)
+        v = std::move(a);
     } else if (kind == "CommitUnitMove") {
         v = CommitUnitMove{};
     } else if (kind == "ResetUnitMove") {
@@ -331,6 +334,7 @@ void to_json(Json& j, const GameEvent& v) {
                 j["model"] = e.model;
                 j["path"] = e.path;
                 j["distance_mm"] = e.distance_mm;
+                if (!e.facings.empty()) j["facings"] = e.facings;  // D-074: omitted when the path turns nowhere
             } else if constexpr (std::is_same_v<T, UnitMoveCommitted>) {
                 j["unit"] = e.unit;
                 j["move_type"] = e.move_type;
@@ -458,8 +462,10 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "MortalWoundsInflicted") {
         v = MortalWoundsInflicted{j.at("unit").get<UnitId>(), j.at("result").get<MortalWoundsResult>()};
     } else if (kind == "ModelMoveProposed") {
-        v = ModelMoveProposed{j.at("unit").get<UnitId>(), j.at("model").get<ModelId>(),
-                              j.at("path").get<std::vector<Position>>(), j.at("distance_mm").get<float>()};
+        ModelMoveProposed e{j.at("unit").get<UnitId>(), j.at("model").get<ModelId>(),
+                            j.at("path").get<std::vector<Position>>(), j.at("distance_mm").get<float>(), {}};
+        if (j.contains("facings")) j.at("facings").get_to(e.facings);  // D-074
+        v = std::move(e);
     } else if (kind == "UnitMoveCommitted") {
         v = UnitMoveCommitted{j.at("unit").get<UnitId>(), j.at("move_type").get<MoveType>()};
     } else if (kind == "UnitMoveReverted") {

@@ -305,12 +305,8 @@ std::vector<Vec> sample_points(const Shape& s) {
 bool has_line_of_sight(const PosedModel& observer, const PosedModel& observed, std::span<const PosedModel> blockers) {
     const auto is_round = [](const PosedModel& m) { return m.base.shape == BaseShape::Round; };
     if (is_round(observer) && is_round(observed) && std::all_of(blockers.begin(), blockers.end(), is_round)) {
-        // Round bases only: D-017, bit-identical.
-        std::vector<PlacedModel> round_blockers;
-        round_blockers.reserve(blockers.size());
-        for (const PosedModel& b : blockers) round_blockers.push_back(PlacedModel{b.id, b.position, b.base});
-        return has_line_of_sight(PlacedModel{observer.id, observer.position, observer.base},
-                                 PlacedModel{observed.id, observed.position, observed.base}, round_blockers);
+        // Round bases only: D-017, bit-identical (M65: the same code on these spans, no copy).
+        return visibility_detail::round_line_of_sight(observer, observed, blockers);
     }
     const double half_width = kLineOfSightWidthMm / 2.0;
     const Shape from = shape_of(observer, 0.0);
