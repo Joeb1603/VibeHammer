@@ -30,6 +30,7 @@ std::string_view action_name(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "OrderCasualties";
+            else if constexpr (std::is_same_v<T, action::RerollWoundRolls>) return "RerollWoundRolls";
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -61,6 +62,7 @@ std::string_view action_rule(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "05.04";
+            else if constexpr (std::is_same_v<T, action::RerollWoundRolls>) return "24.38";
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);

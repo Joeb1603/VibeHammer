@@ -35,6 +35,8 @@ void to_json(Json& j, const WoundRoll& v);
 void from_json(const Json& j, WoundRoll& v);
 void to_json(Json& j, const WoundRolls& v);
 void from_json(const Json& j, WoundRolls& v);
+void to_json(Json& j, const WoundReroll& v);
+void from_json(const Json& j, WoundReroll& v);
 void to_json(Json& j, SaveOutcome v);
 void from_json(const Json& j, SaveOutcome& v);
 void to_json(Json& j, const SaveCheck& v);

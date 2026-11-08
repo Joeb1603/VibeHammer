@@ -74,9 +74,11 @@ HelpEntry weapon_ability_help(const core::WeaponAbility& ability) {
                 h.rule = "24.05";
                 h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::TwinLinked>) {
-                h.summary = "You can re-roll the wound roll. Not in this game yet: weapons with it can't be "
-                            "selected.";
+                h.summary = "You can re-roll the wound roll. After the wound rolls, if any of them failed, the "
+                            "attacker picks which to re-roll (failed or not, or none); each is re-rolled once, "
+                            "before modifiers.";
                 h.rule = "24.38";
+                h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::Torrent>) {
                 h.summary = "Hits automatically: no hit roll is made.";
                 h.rule = "24.37";
@@ -218,6 +220,9 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
             line.kind = EffectKind::Active;
         } else if (std::holds_alternative<ab::Hazardous>(a)) {
             line.text = "Hazardous: a hazard roll for the unit after its attacks (1-2: a mortal wound)";
+            line.kind = EffectKind::Active;
+        } else if (std::holds_alternative<ab::TwinLinked>(a)) {
+            line.text = "Twin-linked: the wound rolls can be re-rolled";  // 24.38 (D-072)
             line.kind = EffectKind::Active;
         } else if (std::holds_alternative<ab::ExtraAttacks>(a)) {
             if (context.type == core::AttackType::Fighting) {

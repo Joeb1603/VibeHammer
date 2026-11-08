@@ -16,6 +16,7 @@
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/rules/attack_sequence.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
@@ -34,6 +35,7 @@ namespace {
 
 const std::filesystem::path kReplayDir{WH40K_REPLAY_DIR};
 constexpr std::uint64_t kM60Seed = 2;  // M60: picked by Replay.DISABLED_SearchM60Seed
+constexpr std::uint64_t kM61Seed = 1;  // M61: picked by Replay.DISABLED_SearchM61Seed
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -166,6 +168,122 @@ Replay m60_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     if (failed || !g.pending || g.pending->side != Side::B) return r;
     r.expect = replay_expectation(g);
     ok = hazard_failed && talons_killed;
+    return r;
+}
+
+// M61 (D-072): the Havocs vs Hive Tyrant fixture as it is, so the Tyrant fights with its [TWIN-LINKED] bonesword and
+// its scything talons (24.11). Embedded initial state, so the file needs no tests/data scenario. `ok` says whether the
+// seed shows what the replay is about: a bonesword wound roll fails, the Tyrant re-rolls every failed one (24.38) and
+// at least one re-roll wounds; `problem`, the first refused step (none expected).
+Replay m61_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M61: the Havocs vs Hive Tyrant fixture (D-070). Round 1, Side A: the Havocs remain stationary and don't shoot. "
+        "Side B: the Tyrant moves 4\" south, declares a charge at the Havocs and moves into base contact with the middle "
+        "Havoc; it fights first with its bonesword and lash whip ([TWIN-LINKED], 24.38) and its scything talons "
+        "([EXTRA ATTACKS], 24.11), resolving the bonesword first (04.03). A bonesword wound roll fails, so Side B is "
+        "asked which wound rolls to re-roll (D-072) and re-rolls every failed one (D-011: once, before modifiers); "
+        "then the saves, casualties in unit order, the talons, and the Havocs fighting back. Stops at Side B's first "
+        "Consolidate decision.";
+    GameState init = load_scenario(repo_root() / wh40k::test::kHavocsVsTyrantFixture, repo_root());
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    start_game(g);
+    bool failed = false;
+    std::vector<GameEvent> events;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    auto first_legal = [&]() -> GameAction {
+        GameAction a = legal_actions(g, decider(g)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g.find_unit(oc->target));
+        }
+        return a;
+    };
+    const UnitId havocs = g.units[0].id;
+    const UnitId tyrant = g.units[1].id;
+    act(action::StartMove{havocs, MoveType::RemainStationary, std::nullopt});
+    act(action::EndShootStep{});
+    act(action::EndChargeStep{});
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::B, decision::MoveUnits{}})) act(first_legal());
+    act(action::StartMove{tyrant, MoveType::Normal, std::nullopt});
+    if (failed) return r;
+    const Position p = *move_start_position(g, g.units[1].models[0].id);
+    act(action::ProposeModelMove{g.units[1].models[0].id, {Position{p.x, p.y - wh40k::test::in(4), 0}}});
+    act(action::CommitUnitMove{});
+    while (!failed && g.pending && std::holds_alternative<decision::Shoot>(g.pending->kind)) act(first_legal());
+    act(action::DeclareCharge{tyrant});
+    if (failed || !g.pending || !std::holds_alternative<decision::SelectChargeTargets>(g.pending->kind)) return r;
+    act(action::StartChargeMove{tyrant, {havocs}});
+    {
+        // Straight at the middle Havoc: into base contact if the roll allows, else as far as it goes.
+        const Model& t = g.units[1].models[0];
+        const Model& h = g.units[0].models[2];
+        const Position from = *move_start_position(g, t.id);
+        const float dx = h.position.x - from.x;
+        const float dy = h.position.y - from.y;
+        const float centre = std::sqrt(dx * dx + dy * dy);
+        const float contact = centre - base_radius(t.base) - base_radius(h.base);
+        const float step = std::min(contact, max_move_distance_mm(g, t.id).value_or(0.0f));
+        act(action::ProposeModelMove{t.id, {Position{from.x + dx / centre * step, from.y + dy / centre * step, 0}}});
+    }
+    act(action::CommitUnitMove{});
+    if (failed || g.flow.stage != Stage::Charge) return r;
+    act(action::EndChargeStep{});
+    while (!failed && g.pending && std::holds_alternative<decision::PileIn>(g.pending->kind)) act(action::EndPileIns{});
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::B, decision::SelectUnitToFight{}}) return r;
+    act(action::SelectToFight{tyrant, FightType::Normal});
+    const Model& t = g.units[1].models[0];
+    act(action::Fight{tyrant,
+                      {MeleeDeclaration{t.id, 0, 0, {MeleeTarget{havocs, t.weapons[0].profiles[0].attacks.fixed_value()}}},
+                       MeleeDeclaration{t.id, 1, 0, {MeleeTarget{havocs, t.weapons[1].profiles[0].attacks.fixed_value()}}}}});
+    bool asked = false;
+    bool a_reroll_wounded = false;
+    if (!failed && g.pending && std::holds_alternative<decision::SelectAttackBatch>(g.pending->kind)) {
+        std::size_t bonesword = 0;
+        for (std::size_t i = 0; i < g.flow.attack->batches.size(); ++i) {
+            if (twin_linked(g.flow.attack->batches[i].profile)) bonesword = i;
+        }
+        act(action::SelectAttackBatch{bonesword});
+    }
+    while (!failed && g.flow.attack) {
+        if (g.pending && std::holds_alternative<decision::RerollWoundRolls>(g.pending->kind)) {
+            asked = true;
+            const std::size_t before = events.size();
+            act(first_legal());  // 24.38: every failed wound roll (listed first)
+            for (std::size_t i = before; i < events.size(); ++i) {
+                if (const auto* w = std::get_if<event::WoundRollsRerolled>(&events[i])) {
+                    for (const WoundReroll& x : w->rerolls) a_reroll_wounded |= x.after.outcome != WoundOutcome::Fail;
+                }
+            }
+        } else {
+            act(first_legal());
+        }
+    }
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::A, decision::SelectUnitToFight{}}) return r;
+    act(action::SelectToFight{havocs, FightType::Normal});
+    act(wh40k::test::first_melee_options(g, havocs));
+    while (!failed && g.flow.attack) act(first_legal());
+    while (!failed && g.pending && !std::holds_alternative<decision::Consolidate>(g.pending->kind)) act(first_legal());
+    if (failed || !g.pending || g.pending->side != Side::B) return r;
+    r.expect = replay_expectation(g);
+    ok = asked && a_reroll_wounded;
     return r;
 }
 
@@ -757,6 +875,29 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(shows_it) << "seed " << kM60Seed << " no longer shows a failed hazard roll and a Havoc slain by the talons";
     save_if_clean(m60, kReplayDir / "m60_hazard_and_extra_attacks.json");
+
+    // M61: the Hive Tyrant's [TWIN-LINKED] bonesword and the re-roll decision (24.38, D-072). Stops at Side B's first
+    // Consolidate decision, before anything M62-M70 change (no random A/D, no shooting at the engaged MONSTER, round
+    // bases only).
+    bool m61_shows_it = false;
+    std::string m61_problem;
+    const Replay m61 = m61_replay(kM61Seed, m61_shows_it, m61_problem);
+    ASSERT_TRUE(m61_problem.empty()) << m61_problem;
+    EXPECT_TRUE(m61_shows_it) << "seed " << kM61Seed << " no longer shows a failed bonesword wound roll re-rolled into a wound";
+    save_if_clean(m61, kReplayDir / "m61_twin_linked_reroll.json");
+}
+
+TEST(Replay, DISABLED_SearchM61Seed) {
+    for (std::uint64_t seed = 1; seed <= 200; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m61_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M61 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
 }
 
 TEST(Replay, DISABLED_SearchM60Seed) {

@@ -116,6 +116,8 @@ void to_json(Json& j, const ShotDeclaration& v);
 void from_json(const Json& j, ShotDeclaration& v);
 void to_json(Json& j, const BatchInProgress& v);
 void from_json(const Json& j, BatchInProgress& v);
+void to_json(Json& j, const PendingWoundRerolls& v);
+void from_json(const Json& j, PendingWoundRerolls& v);
 void to_json(Json& j, const AttackFlow& v);
 void from_json(const Json& j, AttackFlow& v);
 void to_json(Json& j, const FlowState& v);

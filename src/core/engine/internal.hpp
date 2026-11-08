@@ -163,16 +163,19 @@ void start_attacks(GameState& state, UnitId attacker, const AttackContext& conte
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectAttackBatch& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::DeclareAllocationOrder& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::OrderCasualties& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RerollWoundRolls& d);
 
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::SelectAttackBatch& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
                                                 const action::DeclareAllocationOrder& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::OrderCasualties& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::RerollWoundRolls& a);
 
 void apply_details(GameState& state, Side side, const action::SelectAttackBatch& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::DeclareAllocationOrder& a, DiceSource& dice,
                    Events& events);
 void apply_details(GameState& state, Side side, const action::OrderCasualties& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::RerollWoundRolls& a, DiceSource& dice, Events& events);
 
 // ---- helpers ----
 // Every non-empty subset of `ids` (at most 2^10 - 1), in bit order: the target sets legal_actions lists

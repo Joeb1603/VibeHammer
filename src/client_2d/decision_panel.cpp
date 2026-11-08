@@ -145,6 +145,7 @@ void DecisionPanel::sync(const GameSession& session) {
     shots_.clear();
     melee_.reset();
     casualties_.reset();
+    rerolls_ = RerollPicks(session.state());  // M61: inactive unless the decision is RerollWoundRolls
     auto_move_message_.clear();
     for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
@@ -179,7 +180,7 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
     // D-051: casualties are picked on the board; without the board only the default order is offered.
     if (casualties_) {
         if (!begin_bar("Use default order")) return std::nullopt;
-        headline(gs, session.pending()->side, core::describe(*session.pending()));
+        headline(gs, session.pending()->side, core::describe(gs, *session.pending()));
         ImGui::TextWrapped("Pick the casualties on the board, or use the default order.");
         ImGui::TableNextColumn();
         if (primary_button("Use default order", false)) chosen = casualties_->action();
@@ -187,11 +188,35 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
         ImGui::EndTable();
         return chosen;
     }
+    // M61 (D-072): [TWIN-LINKED] wound rolls to re-roll. The dice are picked in the pop-up; the bar offers the
+    // engine's two answers (every failed die first, so --steps picks it, then none) and the picks.
+    if (rerolls_.active()) {
+        if (!begin_bar("Re-roll all failed (00)")) return std::nullopt;
+        // A short headline (describe()'s full text is too wide for the bar beside its buttons).
+        headline(gs, session.pending()->side, "Re-roll wound rolls? ([TWIN-LINKED], 24.38)");
+        const std::string line = std::to_string(rerolls_.failed_count()) + " of " +
+                                 std::to_string(rerolls_.dice().size()) + " wound rolls failed (need " +
+                                 std::to_string(rerolls_.required()) +
+                                 "+). Click dice in the pop-up to pick the ones to re-roll, or:";
+        ImGui::TextWrapped("%s", line.c_str());
+        ImGui::TableNextColumn();
+        ButtonRow row;
+        for (std::size_t i = 0; i < view.buttons.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i));
+            if (row.button(action_label(gs, view.buttons[i]))) chosen = view.buttons[i];
+            ImGui::PopID();
+        }
+        if (rerolls_.custom() && row.button("Re-roll selected (" + std::to_string(rerolls_.selected().size()) + ")")) {
+            chosen = rerolls_.action();
+        }
+        ImGui::EndTable();
+        return chosen;
+    }
     // D-030: a lone button with no editor is the bar's main action, drawn large on the right.
     const bool lone = view.buttons.size() == 1 && view.templates.empty();
     if (!begin_bar(lone ? action_label(gs, view.buttons.front()) : std::string())) return std::nullopt;
 
-    headline(gs, session.pending()->side, core::describe(*session.pending()));
+    headline(gs, session.pending()->side, core::describe(gs, *session.pending()));
     bool path_hint = false;
     for (const core::GameAction& t : view.templates) {
         switch (*editor_kind(t)) {
@@ -239,7 +264,7 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
 
     // D-029: while picking a target the headline says so; otherwise it is the decision.
     const std::string prompt = board.prompt(gs);
-    headline(gs, session.pending()->side, prompt.empty() ? core::describe(*session.pending()) : prompt);
+    headline(gs, session.pending()->side, prompt.empty() ? core::describe(gs, *session.pending()) : prompt);
     ImGui::TextWrapped("%s", board.hint(gs).c_str());
     // D-031: weapons are only chosen after the target; "Custom..." on the target edits them per model here.
     ShotPlan* custom = board.custom_shot() ? board.shot_plan() : nullptr;

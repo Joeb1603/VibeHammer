@@ -305,8 +305,9 @@ void check_against_samples(const std::vector<GridCase>& cases, OddsCache& cache,
 
 }  // namespace
 
-// The full grid: 16 accepted profiles (the Thunder Hammer, spinefist, Shardlauncher and Strangleweb are rejected),
-// 22 profile/context variants, 3 targets = 66 cases x 20,000 engine batches. About 6 minutes in Debug, so ctest runs
+// The full grid: 17 accepted profiles (the Thunder Hammer, Shardlauncher and Strangleweb are rejected; the spinefist's
+// [TWIN-LINKED] is resolved since M61, D-072, which adds its variant), 23 profile/context variants, 3 targets = 69 cases
+// x 20,000 engine batches. About 6 minutes in Debug, so ctest runs
 // the representative subset below and this runs on purpose (Release: a few seconds):
 //   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M40_ExpectedDamage.DISABLED_*
 // It passed in full in Debug and Release when M40 landed (recorded in D-054, M40 notes).
@@ -316,7 +317,7 @@ TEST(M40_ExpectedDamage, DISABLED_FullGridEveryV1ProfileContextAndTarget) {
     wounded.models[2].wounds_remaining = 1;
     OddsCache cache;
     const auto cases = grid({&intercessors(gs), &termagants(gs), &wounded}, cache);
-    EXPECT_EQ(cases.size(), 3u * 22u);
+    EXPECT_EQ(cases.size(), 3u * 23u);  // M61: + the [TWIN-LINKED] spinefist
     check_against_samples(cases, cache, 20000);
 }
 
@@ -328,7 +329,7 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
     wounded.models[2].wounds_remaining = 1;
     OddsCache cache;
     const auto all = grid({&intercessors(gs), &termagants(gs), &wounded}, cache);
-    ASSERT_EQ(all.size(), 3u * 22u);
+    ASSERT_EQ(all.size(), 3u * 23u);  // M61: + the [TWIN-LINKED] spinefist (D-072)
     const std::vector<std::string> picks{
         "Bolt Rifle - Focused Fire +heavy half-range vs Termagants",
         "Bolt Rifle - Focused Fire vs Intercessor Squad (wounded)",
@@ -338,6 +339,7 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
         "Grenade Launcher - Frag vs Termagants",
         "Hand flamer vs Termagants",
         "Spike rifle +heavy vs Intercessor Squad x",
+        "Termagant spinefist vs Intercessor Squad x",  // M61: [TWIN-LINKED] (24.38), every failed wound roll re-rolled
     };
     std::vector<GridCase> subset;
     for (const GridCase& c : all) {
@@ -351,7 +353,7 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
 
 TEST(M40_ExpectedDamage, RejectedProfilesAreExcluded) {
     EXPECT_FALSE(profile_supported(profile_named("Thunder Hammer")));        // [DEVASTATING WOUNDS], D-026
-    EXPECT_FALSE(profile_supported(profile_named("Termagant spinefist")));   // [TWIN-LINKED], D-026
+    EXPECT_TRUE(profile_supported(profile_named("Termagant spinefist")));    // [TWIN-LINKED]: resolved since M61 (D-072)
     EXPECT_FALSE(profile_supported(profile_named("Shardlauncher")));         // A D3, D-002
     EXPECT_FALSE(profile_supported(profile_named("Strangleweb")));           // A D6, D-002
     EXPECT_TRUE(profile_supported(profile_named("Plasma pistol - supercharge")));  // [HAZARDOUS] is implemented

@@ -146,6 +146,12 @@ struct OrderCasualties {
     std::vector<ModelId> priority;
     friend bool operator==(const OrderCasualties&, const OrderCasualties&) = default;
 };
+// 24.38 [TWIN-LINKED] (D-072): re-roll these wound rolls of the batch (indices into its wound rolls, distinct, any
+// order; successful rolls too). Empty: keep them all ("re-roll none"). Never a template.
+struct RerollWoundRolls {
+    std::vector<std::size_t> indices;
+    friend bool operator==(const RerollWoundRolls&, const RerollWoundRolls&) = default;
+};
 }  // namespace action
 
 using GameAction = std::variant<action::StartMove, action::ProposeModelMove, action::CommitUnitMove,
@@ -155,7 +161,7 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::PassFight, action::Fight, action::StartConsolidation,
                                 action::EndConsolidations, action::RemoveModelForCoherency,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
-                                action::OrderCasualties>;
+                                action::OrderCasualties, action::RerollWoundRolls>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"

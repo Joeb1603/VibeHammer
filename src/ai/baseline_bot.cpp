@@ -17,6 +17,7 @@
 #include "core/engine/movement.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/units.hpp"
+#include "core/rules/attack_sequence.hpp"
 #include "core/state/queries.hpp"
 #include "decision_view.hpp"
 #include "fight_move_skip.hpp"
@@ -293,11 +294,29 @@ std::optional<GameAction> closest_target_charge(const GameState& gs, core::UnitI
 
 }  // namespace
 
+std::optional<PolicyResult> reroll_failed_wound_rolls(const GameState& gs) {
+    if (!gs.pending || !std::holds_alternative<core::decision::RerollWoundRolls>(gs.pending->kind) ||
+        !gs.flow.attack || !gs.flow.attack->wound_rerolls) {
+        return std::nullopt;
+    }
+    const std::vector<std::size_t> failed = core::failed_wound_rolls(gs.flow.attack->wound_rerolls->rolls);
+    return PolicyResult{core::action::RerollWoundRolls{failed},
+                        "Re-roll the " + std::to_string(failed.size()) + " failed wound roll" +
+                            (failed.size() == 1 ? "" : "s") + " ([TWIN-LINKED], 24.38)",
+                        {}};
+}
+
 PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
                          std::uint64_t seed, Generation gen) {
     using namespace core;
     const client::DecisionView view = client::make_decision_view(legal);
     const DecisionKind& kind = gs.pending->kind;
+    if (std::holds_alternative<decision::RerollWoundRolls>(kind)) {
+        // 24.38 (M61, D-072): every level re-rolls every failed wound roll and no other (no critical-wound effect is in
+        // the game, so a re-rolled success can only fail). Normal and Hard, and the lookahead's rollouts, fall through
+        // to this answer.
+        if (auto r = reroll_failed_wound_rolls(gs)) return std::move(*r);
+    }
     if (std::holds_alternative<decision::MoveUnits>(kind) && !view.buttons.empty()) {
         return move_units(gs, side, view, seed, gen);
     }

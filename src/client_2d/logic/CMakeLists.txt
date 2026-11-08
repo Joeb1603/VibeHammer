@@ -14,12 +14,14 @@ add_library(wh40k_client_logic STATIC
     drop_fix.cpp
     event_text.cpp
     fight_move_skip.cpp
+    launch_options.cpp
     melee_plan.cpp
     move_plan.cpp
     ring_outline.cpp
     overlay_plan.cpp
     phase_track.cpp
     reach_area.cpp
+    reroll_picks.cpp
     datasheet_view.cpp
     measure.cpp
     rules_help.cpp

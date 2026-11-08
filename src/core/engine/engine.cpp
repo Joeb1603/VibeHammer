@@ -58,6 +58,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::DeclareAllocationOrder>(d);
             else if constexpr (std::is_same_v<T, action::OrderCasualties>)
                 return std::holds_alternative<decision::OrderCasualties>(d);
+            else if constexpr (std::is_same_v<T, action::RerollWoundRolls>)
+                return std::holds_alternative<decision::RerollWoundRolls>(d);
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -192,13 +194,14 @@ ValidationResult validate_action(const GameState& state, Side side, const GameAc
         throw std::logic_error("validate_action: the game is running but no decision is pending");
     }
     const PendingDecision& pending = *state.pending;
+    // M61: the rule as it applies now (06.02 for a casualty decision over mortal wounds, D-072).
     if (side != pending.side) {
-        return ValidationResult::failure(std::string(decision_rule(pending)) + ": waiting for " + describe(pending) +
-                                         "; " + detail::side_label(side) + " cannot act now");
+        return ValidationResult::failure(std::string(decision_rule(state, pending)) + ": waiting for " +
+                                         describe(state, pending) + "; " + detail::side_label(side) + " cannot act now");
     }
     if (!answers(pending.kind, action)) {
         return ValidationResult::failure(std::string(action_rule(action)) + ": " + std::string(action_name(action)) +
-                                         " is not possible now; waiting for " + describe(pending));
+                                         " is not possible now; waiting for " + describe(state, pending));
     }
     return std::visit([&](const auto& a) { return detail::validate_details(state, side, a); }, action);
 }

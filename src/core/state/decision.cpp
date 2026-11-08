@@ -2,6 +2,8 @@
 
 #include <type_traits>
 
+#include "core/state/game_state.hpp"
+
 namespace wh40k::core {
 
 namespace {
@@ -29,6 +31,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "04.03";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "05.04";
+            else if constexpr (std::is_same_v<T, decision::RerollWoundRolls>) return "24.38";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         d.kind);
@@ -53,13 +56,16 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::SelectAttackBatch>) return "SelectAttackBatch";
             else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "OrderCasualties";
+            else if constexpr (std::is_same_v<T, decision::RerollWoundRolls>) return "RerollWoundRolls";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         kind);
 }
 
-std::string describe(const PendingDecision& d) {
-    const std::string what = std::visit(
+namespace {
+
+std::string what_to_do(const PendingDecision& d) {
+    return std::visit(
         [](const auto& k) -> std::string {
             using T = std::decay_t<decltype(k)>;
             if constexpr (std::is_same_v<T, decision::MoveUnits>) {
@@ -92,12 +98,34 @@ std::string describe(const PendingDecision& d) {
                 return "declare the allocation order for unit " + std::to_string(k.target.v);
             } else if constexpr (std::is_same_v<T, decision::OrderCasualties>) {
                 return "order the casualties for unit " + std::to_string(k.target.v);
+            } else if constexpr (std::is_same_v<T, decision::RerollWoundRolls>) {
+                return "choose the wound rolls to re-roll for unit " + std::to_string(k.attacker.v) +
+                       " ([TWIN-LINKED])";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled decision");
             }
         },
         d.kind);
-    return side_label(d.side) + ": " + what + " (" + std::string(decision_rule(d)) + ")";
+}
+
+}  // namespace
+
+std::string describe(const PendingDecision& d) {
+    return side_label(d.side) + ": " + what_to_do(d) + " (" + std::string(decision_rule(d)) + ")";
+}
+
+std::string_view decision_rule(const GameState& state, const PendingDecision& d) {
+    if (std::holds_alternative<decision::OrderCasualties>(d.kind)) {
+        // 06.02 Select Model for mortal wounds: [HAZARDOUS] after a unit's attacks (24.15), or Desperate Escape (09.07)
+        // outside an attack; otherwise 05.04 for an attack's save rolls.
+        if (!state.flow.attack || state.flow.attack->pending_mortal_wounds > 0) return "06.02";
+        return "05.04";
+    }
+    return decision_rule(d);
+}
+
+std::string describe(const GameState& state, const PendingDecision& d) {
+    return side_label(d.side) + ": " + what_to_do(d) + " (" + std::string(decision_rule(state, d)) + ")";
 }
 
 }  // namespace wh40k::core

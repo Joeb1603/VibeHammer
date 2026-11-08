@@ -30,10 +30,11 @@ const std::array<std::vector<std::pair<int, int>>, 7> kPips{{
     {{0, 0}, {2, 0}, {0, 1}, {2, 1}, {0, 2}, {2, 2}},
 }};
 
-enum class Look { FaceDown, Tumbling, Shown };
+using Look = DieLook;
 
-// One die at `p` (top-left), `size` pixels square.
-void draw_die(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, Look look, int tumble_face) {
+}  // namespace
+
+void draw_die_face(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, DieLook look, int tumble_face) {
     const float round = size * 0.18f;
     const ImVec2 q(p.x + size, p.y + size);
     ImU32 fill = rgba(235, 235, 235);
@@ -72,6 +73,8 @@ void draw_die(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, Look loo
                             r, pip);
     }
 }
+
+namespace {
 
 bool big_button(const char* label, bool green) {
     if (green) {
@@ -242,7 +245,7 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
         const float row_w = static_cast<float>(in_row) * die + static_cast<float>(in_row - 1) * gap;
         const ImVec2 p(origin.x + (inner - row_w) * 0.5f + static_cast<float>(col) * (die + gap),
                        origin.y + static_cast<float>(row) * (die + gap));
-        draw_die(dl, p, die, card.dice[static_cast<std::size_t>(i)], look, (tick + i * 5) % 6 + 1);
+        draw_die_face(dl, p, die, card.dice[static_cast<std::size_t>(i)], look, (tick + i * 5) % 6 + 1);
     }
     ImGui::Dummy(ImVec2(inner, rows_h));
     ImGui::Spacing();
@@ -254,7 +257,9 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     const bool buttons = !pace.has_value();
     if (revealed_) {
         ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.3f);
+        ImGui::PushTextWrapPos(0.0f);  // M61: a re-roll card's result can be long (the window edge wraps it)
         ImGui::TextUnformatted(card.result.c_str());
+        ImGui::PopTextWrapPos();
         ImGui::PopFont();
         const bool last = queue_.size() == 1;
         const char* label = last ? (needs_roll(card) ? "Done" : "OK") : "Continue";

@@ -30,10 +30,10 @@ namespace wh40k::core {
 
 [[nodiscard]] AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context);
 
-// D-026 / D-071: V1 rejects weapons with an ability it does not implement yet ([TWIN-LINKED] 24.38,
-// [DEVASTATING WOUNDS] 24.10, and every ability it doesn't recognise, ability::Unknown, e.g. [LETHAL HITS] or
-// [ANTI-X Y+]), when they are selected, as D-002 does for random characteristics. Rule-cited reason, or
-// nullopt if the profile can be used.
+// D-026 / D-071: V1 rejects weapons with an ability it does not implement yet ([DEVASTATING WOUNDS] 24.10, and
+// every ability it doesn't recognise, ability::Unknown, e.g. [LETHAL HITS] or [ANTI-X Y+]), when they are selected,
+// as D-002 does for random characteristics. [TWIN-LINKED] (24.38) is implemented since M61 (D-072). Rule-cited
+// reason, or nullopt if the profile can be used.
 [[nodiscard]] std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon);
 
 // 24.36 [SUSTAINED HITS X]: the X of an attack profile, 0 without the ability. D-071: with two instances
@@ -67,7 +67,8 @@ struct AbilityEffect {
     WeaponAbility ability;
     // It changes these attacks: [RAPID FIRE] / [BLAST] add dice, [HEAVY] adds 1 to hit, [TORRENT] hits
     // automatically, [SUSTAINED HITS] adds hits on critical hits, [HAZARDOUS] makes a hazard roll after the
-    // unit's attacks and [EXTRA ATTACKS] is fought with in addition to another melee weapon (D-071).
+    // unit's attacks and [EXTRA ATTACKS] is fought with in addition to another melee weapon (D-071); with
+    // [TWIN-LINKED] the wound rolls can be re-rolled (D-072).
     // [ASSAULT] and [CLOSE-QUARTERS] act when the shooting type is chosen (10.05, 10.06), and unimplemented
     // abilities never act, so they are never active here.
     bool active = false;

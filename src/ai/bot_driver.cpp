@@ -35,7 +35,9 @@ double base_pause_seconds(const core::GameAction& action) {
         std::holds_alternative<Fight>(action) || std::holds_alternative<StartConsolidation>(action)) {
         return kActivation;
     }
-    return kCommit;  // CommitUnitMove, and the step buttons (End..., Pass, Skip...)
+    // CommitUnitMove, the step buttons (End..., Pass, Skip...), and the attacker's choices in its own attacks: the
+    // batch to resolve next (04.03) and the wound rolls to re-roll (24.38, D-072).
+    return kCommit;
 }
 
 double pause_seconds(const core::GameAction& action, BotSpeed speed) {

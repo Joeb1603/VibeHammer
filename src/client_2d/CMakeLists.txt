@@ -8,6 +8,7 @@ add_executable(wh40k_client_2d
     dice_popup.cpp
     help_widgets.cpp
     overlays.cpp
+    reroll_popup.cpp
     start_screen.cpp)
 
 target_link_libraries(wh40k_client_2d PRIVATE wh40k_ai wh40k_client_logic imgui_rlimgui raylib)

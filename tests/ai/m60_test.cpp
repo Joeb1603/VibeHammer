@@ -46,11 +46,17 @@ AttackProfile bolt_rifle(const GameState& gs, int x) {
 }
 
 // The fixture with the Hive Tyrant in base contact with the middle Havoc, Side B first, at its DeclareMeleeAttacks
-// decision. `usable_bonesword`: a stand-in bonesword without [TWIN-LINKED] (until M61).
+// decision. `usable_bonesword`: a stand-in bonesword without [TWIN-LINKED] (written before M61); otherwise a
+// stand-in the engine refuses (an unknown ability, D-071), as the real [TWIN-LINKED] bonesword was until M61 (D-072).
 GameState tyrant_declaring(bool usable_bonesword) {
     GameState gs = havocs_fixture();
     gs.first_turn = Side::B;
-    if (usable_bonesword) gs.units[1].models[0].weapons[0].profiles[0].abilities.clear();
+    WeaponProfile& bonesword = gs.units[1].models[0].weapons[0].profiles[0];
+    if (usable_bonesword) {
+        bonesword.abilities.clear();
+    } else {
+        bonesword.abilities.push_back(ability::Unknown{"Lethal Hits"});
+    }
     const Model& havoc = gs.units[0].models[2];
     Model& tyrant = gs.units[1].models[0];
     tyrant.position = Position{havoc.position.x, havoc.position.y + base_radius(havoc.base) + base_radius(tyrant.base), 0};
@@ -125,12 +131,14 @@ TEST(M60_Odds, AbilitiesTheEngineRefusesAreNotSupported) {
 }
 
 TEST(M60_Odds, TheMeleeVolleyAddsTheExtraAttacksWeapon) {
-    // 24.11: the Hive Tyrant fights with its bonesword and its scything talons (A6 and A4); with the bonesword refused
-    // (D-026, until M61), with the talons alone.
+    // 24.11: the Hive Tyrant fights with its bonesword and its scything talons (A6 and A4); with the bonesword refused,
+    // with the talons alone. (Until M61 the real [TWIN-LINKED] bonesword was refused, D-026; now a stand-in with an
+    // unknown ability is, D-071, and the real one is usable, D-072.)
     OddsCache cache;
     for (const bool usable : {true, false}) {
         GameState gs = havocs_fixture();
-        if (usable) gs.units[1].models[0].weapons[0].profiles[0].abilities.clear();
+        WeaponProfile& bonesword = gs.units[1].models[0].weapons[0].profiles[0];
+        if (!usable) bonesword.abilities.push_back(ability::Unknown{"Lethal Hits"});
         const Volley v = unit_melee_volley(cache, gs.units[1], gs.units[0]);
         int dice = 0;
         for (const VolleyBatch& b : v) dice += b.attack_dice;

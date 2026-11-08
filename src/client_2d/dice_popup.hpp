@@ -3,6 +3,7 @@
 // The dice roll pop-up (M20, D-033): one DiceCard at a time over the board, face-down until the player
 // presses Roll, then the real faces (already rolled by the engine), the result and Continue. Display only.
 
+#include <imgui.h>
 #include <raylib.h>
 
 #include <deque>
@@ -13,6 +14,12 @@
 #include "watch_controls.hpp"
 
 namespace wh40k::client {
+
+// One die at `p` (top-left), `size` pixels square: face down, tumbling (showing `tumble_face`), or its face, green
+// when it passed (M61: shared with the [TWIN-LINKED] re-roll pop-up).
+enum class DieLook { FaceDown, Tumbling, Shown };
+void draw_die_face(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, DieLook look = DieLook::Shown,
+                   int tumble_face = 1);
 
 // D-054 (M39): a bot's own dice, rolled and continued by themselves while the bots aren't paused (M51, D-062):
 // the pause before the roll and how long the result stays up. Enter / Space, or a left click on the pop-up or the

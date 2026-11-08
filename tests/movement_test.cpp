@@ -401,6 +401,26 @@ TEST(R06_03_HazardRolls, DesperateEscapeCasualtiesAreChosenByTheOwner) {
     ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::MoveModels{unit}}));
 }
 
+TEST(D072_DecisionRule, DesperateEscapeCasualtiesCite0602) {
+    // M61 (the M60 carry-over): the casualty decision for Desperate Escape's mortal wounds (09.07, 06.03) answers
+    // 06.02 Select Model, and its "waiting for" text says so (it said 05.04 before).
+    GameState gs = movement_state();
+    engage_first_marine(gs);
+    gs.units[kMarines].battle_shocked = true;
+    gs.pending = compute_decision(gs);
+    ScriptedDice dice{1, 6, 6, 6, 6};
+    apply_action(gs, Side::A, start(gs, MoveType::FallBack, FallBackMode::DesperateEscape), dice);
+    const UnitId unit = gs.units[kMarines].id;
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::OrderCasualties{unit}}));
+    EXPECT_EQ(decision_rule(gs, *gs.pending), "06.02");
+    const std::string text = describe(gs, *gs.pending);
+    EXPECT_EQ(text.substr(text.size() - 7), "(06.02)") << text;
+    const ValidationResult other =
+        validate_action(gs, Side::B, action::OrderCasualties{unit, wh40k::test::model_ids(gs.units[kMarines])});
+    ASSERT_FALSE(other.ok());
+    EXPECT_TRUE(starts_with(other.reasons.at(0), "06.02: waiting for Side A")) << other.reasons[0];
+}
+
 TEST(D051_CasualtyPreview, MortalWoundsFromHazardsArePickedOneModelAtATime) {
     GameState gs = movement_state();
     engage_first_marine(gs);

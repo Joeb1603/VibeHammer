@@ -15,6 +15,7 @@
 #include "decision_view.hpp"
 #include "core/engine/actions.hpp"
 #include "melee_plan.hpp"
+#include "reroll_picks.hpp"
 #include "session.hpp"
 #include "shot_plan.hpp"
 
@@ -45,6 +46,12 @@ public:
         undo_step_requested_ = false;
         return requested;
     }
+    // M61 (D-072): the [TWIN-LINKED] re-roll picks for the session's current decision (the pop-up toggles them), or
+    // nullptr when that is not the decision or the panel hasn't been drawn for it yet.
+    [[nodiscard]] RerollPicks* reroll_picks(const GameSession& session) noexcept {
+        if (synced_step_ != session.history().size() || !rerolls_.active()) return nullptr;
+        return &rerolls_;
+    }
 
 private:
     std::optional<core::GameAction> draw_shot_editor(const GameSession& session, const core::action::Shoot& tmpl,
@@ -66,6 +73,7 @@ private:
     std::vector<ShotPlan> shots_;
     std::optional<MeleePlan> melee_;
     std::optional<CasualtyPlan> casualties_;  // the default order, without the board (D-051)
+    RerollPicks rerolls_;                     // M61: the [TWIN-LINKED] re-roll picks (D-072)
     bool undo_step_available_ = false;  // D-039
     bool undo_step_requested_ = false;
     bool cancel_requested_ = false;  // D-041

@@ -167,7 +167,8 @@ Applied as (`dice/modifiers.hpp`):
   6 with +1 is a 7. Critical hits/wounds still need an **unmodified** 6, and an unmodified 1 still fails
   (05.01, 05.02, 05.04 tables).
 - Re-rolls: not used in V1 (no V1 weapon has [TWIN-LINKED], no stratagems). When implemented: re-roll
-  the raw die once, then apply modifiers.
+  the raw die once, then apply modifiers. **Since M61 (D-072):** [TWIN-LINKED] wound rolls are re-rolled this way,
+  at the attacker's choice.
 
 ## D-012: Target No Longer Eligible or Viable (04 "See also", app-only rule)
 **Decided:** 2026-11-02 (wording supplied by the user, AI-sourced; **not verified against the app**)
@@ -469,6 +470,8 @@ of the charge for that reason.
   (`rules/attacks.cpp`) and update this entry.
 - **Extended by D-071 (M60):** every ability the engine does not recognise (`ability::Unknown`) is refused the same
   way. [HAZARDOUS], [SUSTAINED HITS X] and [EXTRA ATTACKS] are implemented.
+- **Amended by D-072 (M61):** [TWIN-LINKED] is implemented (the attacker chooses which wound rolls to re-roll) and
+  no longer refused. [DEVASTATING WOUNDS] (24.10) and the D-071 unknown abilities still are.
 
 ## D-027: A proposed model move may not end on another model (03.01, M14)
 **Decided:** 2026-11-05 (agreed with the user)
@@ -2420,6 +2423,8 @@ crashes on a datasheet it can't read. The engine's unit loader reads the two new
     counts as absent. So while the Hive Tyrant's bonesword is refused ([TWIN-LINKED], until M61), the talons alone
     are its legal selection, and with the bonesword the declaration is refused for the bonesword. Once M61 makes the
     bonesword selectable, the Tyrant must take both. A model with only [EXTRA ATTACKS] weapons selects those alone.
+    *Since M61 (D-072)* the bonesword is selectable, so the Tyrant takes both; the tests of the "refused weapon
+    counts as absent" case use a stand-in bonesword with an ability the engine doesn't know.
   - The ability is used up at selection, so it is excluded from D-006's attack-time abilities, like [ASSAULT].
   - `is_extra_attacks_weapon` (rules/attacks.hpp) lets clients and bots build the selection from `melee_options`.
 - **Default plans (client, D-001 / D-016 UI rule; used by the Shoot and Fight buttons, the board menus, `--steps`,
@@ -2541,7 +2546,8 @@ conservative choice.
 - **Client.**
   - *Action bar:* the decision panel's headline, a line saying how many wound rolls failed and what they needed, and
     the two legal buttons: "Re-roll all failed (n)" first, so `--steps` and the bots' fallback pick it, then "Keep".
-    "Re-roll selected (k)" appears once dice are picked.
+    "Re-roll selected (k)" appears once the picked dice are other than every failed one. The bar's headline is a short
+    "Re-roll wound rolls? ([TWIN-LINKED], 24.38)": `describe`'s full text doesn't fit beside the buttons.
   - *Pop-up:* once the wound card has closed, the attacker's wound dice show over the board (`RerollPicks` in
     `wh40k_client_logic`, drawn in `src/client_2d`). Failed dice are outlined, and a click toggles a die (any die, a
     success too). Its buttons are "Re-roll all failed", "Re-roll selected" and "Keep". It is shown only for a human's
@@ -2549,8 +2555,8 @@ conservative choice.
   - *Text:*
     - The wound card notes that a Twin-linked attacker may re-roll any of the dice.
     - The hit card's ability lines include "Twin-linked: the wound rolls can be re-rolled".
-    - A dice card "Wound re-rolls" (24.38) shows the new faces, a line per die ("die 2: 1 -> 5, wounds") and the new
-      totals. "Keep" has no card.
+    - A dice card "Wound re-rolls" (24.38). Before the roll it names the re-rolled dice and what they were ("Re-rolling
+      die 2 (a 1)"); after it, their new faces, old -> new per die and the new totals. "Keep" has no card.
     - Log text and action text cover every answer.
     - The help text says 24.38 is in the game.
   - *Bots' dice:* a bot's re-roll card follows the M48/M49/M51 pacing like its other cards.
@@ -2561,6 +2567,12 @@ conservative choice.
     - Against a bot, Undo goes back to the human's last input (D-054).
   - *Settings:* "Allocate damage automatically" and "Skip steps with nothing to do" never answer the decision. It is
     the attacker's choice, like the batch order (D-036, D-038).
+  - *Screenshots (agreed at review):* `--steps` can't reach a human's re-roll decision (the Shoot and Fight
+    declarations are templates). `--load <save.json>` starts the client on a saved game (the sidebar's Save / Load
+    format). It can't be combined with `--scenario`, `--replay` or `--seed`; the save's players apply unless `--bot` /
+    `--bot-level` are given; a missing or unreadable file, or one that fails to load, exits with code 2.
+    `--pick-dice <i,j,...>` picks those wound dice (0-based) in the first re-roll pop-up, as clicks would, and submits
+    nothing. The flags are parsed in `wh40k_client_logic` (`launch_options`, moved there from `main.cpp`).
 - **Bots.**
   - *Every level re-rolls every failed wound roll and never a success.* No critical-wound effect is in the game, so a
     re-rolled success can only fail and a re-rolled failure can only succeed.

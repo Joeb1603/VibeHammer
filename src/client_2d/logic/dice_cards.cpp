@@ -143,6 +143,9 @@ DiceCard wound_card(const core::GameState& state, const AttackContext& c, const 
     DiceCard card{"Wound rolls", attack_purpose(state, c), "", "", "05.02", core::Side::A, {}};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
     card.need = "Need " + std::to_string(rolls.required) + "+ to wound; an unmodified 6 is a critical wound";
+    if (const core::AttackBatch* batch = current_batch(c); batch != nullptr && core::twin_linked(batch->profile)) {
+        card.need += "; [TWIN-LINKED]: the attacker may re-roll any of them (24.38)";
+    }
     int wounds = 0;
     int criticals = 0;
     for (const core::WoundRoll& r : rolls.rolls) {
@@ -157,6 +160,39 @@ DiceCard wound_card(const core::GameState& state, const AttackContext& c, const 
     card.result = plural(wounds, "wound", "wounds");
     if (criticals > 0) card.result += " (" + std::to_string(criticals) + " critical)";
     if (rolls.rolls.empty()) card.result = "No hits to roll for";
+    return card;
+}
+
+// 24.38 (D-072): the re-rolled dice with their new faces. Before the roll the card says which dice are re-rolled (and
+// what they were); the result gives each die's old -> new roll and the batch's new totals.
+DiceCard reroll_card(const core::GameState& state, const AttackContext& c, const core::event::WoundRollsRerolled& e) {
+    DiceCard card{"Wound re-rolls", attack_purpose(state, c), "", "", "24.38", core::Side::A, {}};
+    if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
+    card.need = "Need " + std::to_string(e.rolls.required) +
+                "+ to wound ([TWIN-LINKED]: each die re-rolled once, before modifiers); an unmodified 6 is a critical "
+                "wound";
+    const auto outcome = [](const core::WoundRoll& r) -> std::string {
+        if (r.outcome == core::WoundOutcome::CriticalWound) return "critical wound";
+        return r.outcome == core::WoundOutcome::Wound ? "wounds" : "fails";
+    };
+    std::string before;
+    std::string after;
+    for (const core::WoundReroll& r : e.rerolls) {
+        DieFace d;
+        d.value = r.after.unmodified;
+        d.critical = r.after.outcome == core::WoundOutcome::CriticalWound;
+        d.pass = r.after.outcome != core::WoundOutcome::Fail;
+        card.dice.push_back(d);
+        const std::string die = "die " + std::to_string(r.index + 1);
+        before += (before.empty() ? "" : ", ") + die + " (a " + std::to_string(r.before.unmodified) + ")";
+        after += (after.empty() ? "" : ", ") + die + ": " + std::to_string(r.before.unmodified) + " -> " +
+                 std::to_string(r.after.unmodified) + " (" + outcome(r.after) + ")";
+    }
+    card.notes.push_back(EffectLine{"Re-rolling " + before, EffectKind::Info});
+    card.result = after + ". Now " + plural(e.rolls.wounds(), "wound", "wounds");
+    if (e.rolls.critical_wounds() > 0) card.result += " (" + std::to_string(e.rolls.critical_wounds()) + " critical)";
+    card.result += " from " + plural(static_cast<int>(e.rolls.rolls.size()), "wound roll", "wound rolls");
+    card.result[0] = static_cast<char>(card.result[0] - 'a' + 'A');  // "Die 2: ..."
     return card;
 }
 
@@ -238,6 +274,10 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                     } else if constexpr (std::is_same_v<T, ev::WoundRollsMade>) {
                         c.batch = e.batch;
                         if (show) cards.push_back(wound_card(state, c, e.rolls));
+                    } else if constexpr (std::is_same_v<T, ev::WoundRollsRerolled>) {
+                        c.batch = e.batch;
+                        // D-053: "Keep" re-rolls nothing, so it has no card (the log says so).
+                        if (show && !e.rerolls.empty()) cards.push_back(reroll_card(state, c, e));
                     } else if constexpr (std::is_same_v<T, ev::SaveRollsMade>) {
                         if (show) cards.push_back(save_card(state, c, e.target, e.rolls));
                     } else if constexpr (std::is_same_v<T, ev::AdvanceRolled>) {

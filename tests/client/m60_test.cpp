@@ -118,10 +118,17 @@ const std::string& weapon_of(const GameState& gs, ModelId model, std::size_t wea
 }
 
 // The Hive Tyrant in base contact with the middle Havoc, Side B first, at its DeclareMeleeAttacks decision.
+// `usable_bonesword`: a stand-in bonesword without [TWIN-LINKED] (written before M61); otherwise a stand-in the engine
+// refuses (an unknown ability, D-071), as the real [TWIN-LINKED] bonesword was until M61 (D-072).
 GameState tyrant_declaring(bool usable_bonesword) {
     GameState gs = havocs_fixture();
     gs.first_turn = Side::B;
-    if (usable_bonesword) gs.units[1].models[0].weapons[0].profiles[0].abilities.clear();  // stand-in: no [TWIN-LINKED]
+    WeaponProfile& bonesword = gs.units[1].models[0].weapons[0].profiles[0];
+    if (usable_bonesword) {
+        bonesword.abilities.clear();  // stand-in: no [TWIN-LINKED]
+    } else {
+        bonesword.abilities.push_back(ability::Unknown{"Lethal Hits"});  // stand-in: refused
+    }
     const Model& havoc = gs.units[0].models[2];
     Model& tyrant = gs.units[1].models[0];
     tyrant.position = Position{havoc.position.x, havoc.position.y + base_radius(havoc.base) + base_radius(tyrant.base), 0};
@@ -281,7 +288,7 @@ TEST(M60_DefaultPlans, TheHiveTyrantFightsWithItsTalonsWhileItsBoneswordIsRefuse
 }
 
 TEST(M60_DefaultPlans, TheHiveTyrantFightsWithBothWeaponsWhenItCan) {
-    // Stand-in: a bonesword without [TWIN-LINKED] (M61). 24.11: the talons are added to the main weapon.
+    // Stand-in: a bonesword without [TWIN-LINKED] (written before M61). 24.11: the talons are added to the main weapon.
     const GameState gs = tyrant_declaring(true);
     const ModelId tyrant = gs.units[1].models[0].id;
     MeleePlan plan(gs, gs.units[1].id);

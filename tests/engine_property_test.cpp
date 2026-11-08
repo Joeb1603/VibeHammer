@@ -15,6 +15,7 @@
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
@@ -223,9 +224,9 @@ TEST(D004_LegalActions, RandomPlayFromTheStrikeScenario) {
 
 namespace {
 
-// D-002 / D-026 / D-071: a profile the engine can resolve today: fixed A and D, no [TWIN-LINKED] or
-// [DEVASTATING WOUNDS], and no ability the engine doesn't recognise (M60; [HAZARDOUS], [SUSTAINED HITS] and
-// [EXTRA ATTACKS] are implemented).
+// D-002 / D-026 / D-071: a profile the engine can resolve today: fixed A and D, no [DEVASTATING WOUNDS], and no
+// ability the engine doesn't recognise (M60; [HAZARDOUS], [SUSTAINED HITS] and [EXTRA ATTACKS] are implemented, and
+// [TWIN-LINKED] since M61, D-072).
 bool resolvable(const WeaponProfile& p) {
     return p.attacks.is_fixed() && p.damage.is_fixed() && !unimplemented_ability_problem(p) &&
            !p.has<ability::Unknown>();
@@ -267,8 +268,8 @@ ActionHook record_weapons(WeaponUse& use) {
 TEST(D004_LegalActions, RandomPlayFromTheRostersFixture) {
     // The D-004 properties with the two rosters (13 units, D-070) on the 44"x60" board. Every game ends,
     // the state round-trips, and no weapon the engine can't resolve yet is ever fired or fought with:
-    // random A or D (D-002) and [TWIN-LINKED] (D-026) are refused by validation, never by the engine
-    // throwing into the D-026 rollback.
+    // random A or D (D-002) is refused by validation, never by the engine throwing into the D-026 rollback.
+    // (M61: the Hive Tyrant's [TWIN-LINKED] bonesword is resolved since D-072, so it may be used.)
     WeaponUse use;
     for (std::uint64_t seed = 1; seed <= 2; ++seed) {
         GameState gs = wh40k::test::load_rosters_fixture();
@@ -292,7 +293,7 @@ TEST(D004_LegalActions, RandomPlayFromTheRostersFixture) {
     }
     EXPECT_GT(use.shoots, 0);
     EXPECT_GT(use.fights, 0);
-    for (const char* refused : {"Havoc lascannon", "Bio-plasmic scream", "Monstrous bonesword and lash whip"}) {
+    for (const char* refused : {"Havoc lascannon", "Bio-plasmic scream"}) {  // D-002 (M62)
         EXPECT_EQ(use.used.count(refused), 0u) << refused;
     }
 }
@@ -323,8 +324,10 @@ namespace {
 
 // M60: the roster fixture with stand-ins so random play meets every new ability: the Havocs' lascannons and the
 // Legionaries' boltguns are swapped for their datasheets' heavy bolters ([SUSTAINED HITS 1]; the rosters equip none),
-// and the Hive Tyrant's bonesword loses [TWIN-LINKED] (M61's), so the Tyrant has an [EXTRA ATTACKS] weapon and
-// another one. The plasma guns and pistols keep their [HAZARDOUS] supercharge profiles.
+// and the Hive Tyrant's bonesword loses [TWIN-LINKED] (then refused), so the Tyrant has an [EXTRA ATTACKS] weapon and
+// another one. The plasma guns and pistols keep their [HAZARDOUS] supercharge profiles. (M61 implements
+// [TWIN-LINKED]; the stand-in bonesword is kept so these games stay as they were, and M61's own random play uses the
+// real one.)
 GameState rosters_with_new_abilities(float closer_in) {
     GameState gs = wh40k::test::load_rosters_fixture_closer(closer_in);
     const Datasheet havocs = load_datasheet(wh40k::test::repo_root() / "data/units/havocs.json");
@@ -392,6 +395,79 @@ TEST(D004_LegalActions, RandomPlayExercisesHazardousSustainedHitsAndExtraAttacks
     EXPECT_GT(use.used.count("Havoc heavy bolter") + use.used.count("Heavy bolter"), 0u);
 }
 
+namespace {
+
+// M61: the roster fixture with the Hive Tyrant's real [TWIN-LINKED] bonesword, and the Tyrannofex's fleshborer hive
+// ([HEAVY], [SUSTAINED HITS 1], [TWIN-LINKED]; the Tyrannofex arrives in M65) as a stand-in for the Screamer-killers'
+// bio-plasmic scream (random A, refused until M62).
+GameState rosters_with_twin_linked(float closer_in) {
+    GameState gs = wh40k::test::load_rosters_fixture_closer(closer_in);
+    const Datasheet tyrannofex = load_datasheet(wh40k::test::repo_root() / "data/units/tyrannofex.json");
+    const Weapon* hive = tyrannofex.find_weapon("Fleshborer hive");
+    EXPECT_TRUE(hive != nullptr);
+    for (Unit& u : gs.units) {
+        for (Model& m : u.models) {
+            for (Weapon& w : m.weapons) {
+                if (w.name == "Bio-plasmic scream" && hive != nullptr) w = *hive;
+            }
+        }
+    }
+    return gs;
+}
+
+}  // namespace
+
+TEST(D004_LegalActions, RandomPlayExercisesTwinLinkedReRolls) {
+    // M61 (D-072): the D-004 properties with [TWIN-LINKED] weapons in play. Random play answers the re-roll decision
+    // with every failed roll, none, or any other subset; Sustained Hits' extra wound rolls are re-rolled too.
+    WeaponUse use;
+    std::vector<GameEvent> events;
+    int all_failed = 0;
+    int none = 0;
+    int other = 0;
+    const ActionHook hook = [&](const GameState& gs, const GameAction& a) {
+        record_weapons(use)(gs, a);
+        const auto* r = std::get_if<action::RerollWoundRolls>(&a);
+        if (r == nullptr) return;
+        EXPECT_TRUE(gs.flow.attack && gs.flow.attack->wound_rerolls);
+        std::vector<std::size_t> picked = r->indices;
+        std::sort(picked.begin(), picked.end());
+        if (picked.empty()) {
+            ++none;
+        } else if (picked == failed_wound_rolls(gs.flow.attack->wound_rerolls->rolls)) {
+            ++all_failed;
+        } else {
+            ++other;
+        }
+    };
+    for (std::uint64_t seed = 31; seed <= 34; ++seed) {
+        GameState gs = rosters_with_twin_linked(seed % 2 == 0 ? 26.0f : 35.5f);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, hook, &events);
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;
+    }
+    int rerolled = 0;
+    int sustained_rerolled = 0;
+    int sustained = 0;  // the sustained hits of the batch whose dice were rolled last
+    for (const GameEvent& e : events) {
+        if (const auto* h = std::get_if<event::HitRollsMade>(&e)) sustained = h->rolls.sustained_hits;
+        if (const auto* w = std::get_if<event::WoundRollsRerolled>(&e)) {
+            ++rerolled;
+            if (sustained > 0 && !w->rerolls.empty()) ++sustained_rerolled;
+        }
+    }
+    EXPECT_GT(all_failed, 0);
+    EXPECT_GT(none, 0);
+    EXPECT_GT(other, 0);
+    EXPECT_EQ(rerolled, all_failed + none + other);  // one event per answer, "Keep" included
+    EXPECT_GT(sustained_rerolled, 0);
+    EXPECT_GT(use.used.count("Monstrous bonesword and lash whip"), 0u);
+    EXPECT_GT(use.used.count("Fleshborer hive"), 0u);
+}
+
 TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWithARuleCitedReason) {
     // Side A's first Shooting phase on the roster fixture: the Havoc lascannons (D6+1 damage, D-002) are
     // in range of the east Termagants (48") but never offered, and declaring them is a rule-cited refusal.
@@ -417,11 +493,15 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
         << r.reasons.front();
     for (const auto& reason : r.reasons) EXPECT_TRUE(is_rule_cited(reason)) << reason;
 
-    // Melee: the Hive Tyrant's bonesword ([TWIN-LINKED], D-026) is refused. (Its scything talons are an [EXTRA
-    // ATTACKS] weapon since M60, D-071: with the bonesword refused, the talons alone are the legal selection.)
+    // Melee: the Hive Tyrant's bonesword was refused for [TWIN-LINKED] until M61 (D-026); it is resolved since D-072.
+    // A stand-in with [DEVASTATING WOUNDS] (24.10, still refused) takes its place here. (Its scything talons are an
+    // [EXTRA ATTACKS] weapon since M60, D-071: with the bonesword refused, the talons alone are the legal selection.)
     GameState close = load_scenario(wh40k::test::repo_root() / wh40k::test::kHavocsVsTyrantFixture,
                                     wh40k::test::repo_root());
     Unit& tyrant = close.units[1];
+    ASSERT_TRUE(tyrant.models[0].weapons[0].profiles[0].has<ability::TwinLinked>());
+    EXPECT_FALSE(unimplemented_ability_problem(tyrant.models[0].weapons[0].profiles[0]).has_value());  // M61
+    tyrant.models[0].weapons[0].profiles[0].abilities.push_back(ability::DevastatingWounds{});
     const Model& target = close.units[0].models[2];
     tyrant.models[0].position = Position{target.position.x,
                                          target.position.y + base_radius(target.base) + base_radius(tyrant.models[0].base),
@@ -430,6 +510,6 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
         MeleeDeclaration{tyrant.models[0].id, 0, 0, {MeleeTarget{close.units[0].id, 6}}}};
     const auto problems = melee_problems(close, tyrant, bonesword);
     ASSERT_FALSE(problems.empty());
-    EXPECT_EQ(problems.front().rfind("24.38: ", 0), 0u) << problems.front();
+    EXPECT_EQ(problems.front().rfind("24.10: ", 0), 0u) << problems.front();
     for (const MeleeDeclaration& d : melee_options(close, tyrant)) EXPECT_NE(d.weapon_index, 0u);  // never offered
 }

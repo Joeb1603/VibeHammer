@@ -261,11 +261,18 @@ TEST(R24_37_Torrent, AutomaticallyHitsWithoutRolling) {
     EXPECT_EQ(dice.consumed(), 0u);
 }
 
-TEST(R24_38_TwinLinked, IsRefusedUntilReRollsAreImplemented) {
+TEST(R24_38_TwinLinked, IsResolvedWhileDevastatingWoundsIsStillRefused) {
+    // M61 (D-072): [TWIN-LINKED] is implemented, so its hit and wound rolls are made as usual (the re-roll is the
+    // attacker's decision, in the engine). [DEVASTATING WOUNDS] (24.10, D-026) still throws as the second safety net.
     AttackProfile p = test_profile(4, 3, 0, 1);
     p.attack_time_abilities = {ability::TwinLinked{}};
-    ScriptedDice dice{4};
-    EXPECT_THROW((void)make_hit_rolls(dice, p, 1), std::logic_error);
+    ScriptedDice dice{4, 2};
+    EXPECT_EQ(make_hit_rolls(dice, p, 1).hits(), 1);
+    EXPECT_EQ(make_wound_rolls(dice, p, 1, 4).wounds(), 0);  // 2 < 4+: failed, re-rollable
+    AttackProfile dw = test_profile(4, 3, 0, 1);
+    dw.attack_time_abilities = {ability::DevastatingWounds{}};
+    ScriptedDice more{4};
+    EXPECT_THROW((void)make_hit_rolls(more, dw, 1), std::logic_error);
 }
 
 // ==== D-011 Modifying Dice Rolls ====

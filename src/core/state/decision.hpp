@@ -82,6 +82,12 @@ struct OrderCasualties {
     UnitId target;
     friend bool operator==(const OrderCasualties&, const OrderCasualties&) = default;
 };
+// 24.38 [TWIN-LINKED]: the attacking unit's player chooses which of a batch's wound rolls to re-roll, asked only when
+// at least one of them failed (D-072).
+struct RerollWoundRolls {
+    UnitId attacker;
+    friend bool operator==(const RerollWoundRolls&, const RerollWoundRolls&) = default;
+};
 }  // namespace decision
 
 using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, decision::Shoot, decision::Charge,
@@ -89,7 +95,7 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::SelectUnitToFight, decision::DeclareMeleeAttacks,
                                   decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
-                                  decision::OrderCasualties>;
+                                  decision::OrderCasualties, decision::RerollWoundRolls>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)
@@ -97,11 +103,19 @@ struct PendingDecision {
     friend bool operator==(const PendingDecision&, const PendingDecision&) = default;
 };
 
-// The rule the decision comes from, e.g. "09.02".
+// The rule the decision comes from, e.g. "09.02". OrderCasualties gives 05.04 here; the state-aware form below
+// tells 06.02's mortal wounds apart.
 [[nodiscard]] std::string_view decision_rule(const PendingDecision& d);
 // The decision kind's name, e.g. "MoveUnits"; also its JSON name.
 [[nodiscard]] std::string_view decision_name(const DecisionKind& kind);
 // Human-readable, e.g. "Side A: select a unit to move (09.02)".
 [[nodiscard]] std::string describe(const PendingDecision& d);
+
+struct GameState;
+// M61: the rule as it applies in `state`. OrderCasualties is 06.02 when the attack in progress has mortal wounds to
+// inflict ([HAZARDOUS], 24.15) or no attack is in progress (Desperate Escape, 09.07), else 05.04 (D-071, D-072).
+[[nodiscard]] std::string_view decision_rule(const GameState& state, const PendingDecision& d);
+// describe() with that rule.
+[[nodiscard]] std::string describe(const GameState& state, const PendingDecision& d);
 
 }  // namespace wh40k::core

@@ -56,27 +56,40 @@ struct HitRolls {
 // (std::logic_error). Also throws for a unit with no models.
 [[nodiscard]] int target_toughness(const Unit& target);
 
-enum class WoundOutcome : std::uint8_t { Fail, Wound, CriticalWound };
-
-struct WoundRoll {
-    int unmodified = 0;
-    int modified = 0;
-    WoundOutcome outcome = WoundOutcome::Fail;
-    friend bool operator==(const WoundRoll&, const WoundRoll&) = default;
-};
-
-struct WoundRolls {
-    int required = 0;
-    std::vector<WoundRoll> rolls;
-    [[nodiscard]] int wounds() const;  // includes critical wounds
-    [[nodiscard]] int critical_wounds() const;
-    friend bool operator==(const WoundRolls&, const WoundRolls&) = default;
-};
+// WoundOutcome, WoundRoll and WoundRolls are in attack_types.hpp (M61: the attack flow stores a batch's wound
+// rolls while its attacker decides which to re-roll, 24.38).
 
 // One wound roll per hit (HitRolls::hits(), sustained hits included). Unmodified 1 fails, unmodified 6 is a critical wound, otherwise the
 // modified result (D-011) must be >= required_wound_roll(S, T).
 [[nodiscard]] WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits,
                                           int toughness);
+
+// 05.02 for one die: the first row of the table that applies to `unmodified`, with the (already capped, D-011)
+// wound modifier, against the required result. make_wound_rolls and reroll_wound_rolls both use it.
+[[nodiscard]] WoundRoll wound_roll_result(int unmodified, int modifier, int required);
+
+// ---- 24.38 [TWIN-LINKED]: re-rolling wound rolls (D-011, D-072) ----
+
+// Does the profile have [TWIN-LINKED] (24.38)?
+[[nodiscard]] bool twin_linked(const AttackProfile& profile);
+
+// The indices of the wound rolls that failed (05.02: an unmodified 1, or a modified result below the required roll),
+// in ascending order.
+[[nodiscard]] std::vector<std::size_t> failed_wound_rolls(const WoundRolls& rolls);
+
+// One re-rolled die: its index into WoundRolls::rolls and its roll before and after.
+struct WoundReroll {
+    std::size_t index = 0;
+    WoundRoll before;
+    WoundRoll after;
+    friend bool operator==(const WoundReroll&, const WoundReroll&) = default;
+};
+
+// D-011 Re-rolls: each listed wound roll is rolled again (one D6 each, in ascending index order whatever the order
+// of `indices`), then the profile's capped wound modifier is applied; the new roll replaces the old one in `rolls`.
+// Preconditions (std::logic_error otherwise): the indices are in range and distinct.
+std::vector<WoundReroll> reroll_wound_rolls(DiceSource& dice, const AttackProfile& profile, WoundRolls& rolls,
+                                            std::span<const std::size_t> indices);
 
 // ---- 05.03 Save Rolls ----
 
@@ -148,6 +161,9 @@ using ModelChooser = std::function<ModelId(const Unit& target, std::span<const M
 using AllocationOrderChooser = std::function<std::vector<std::size_t>(
     const Unit& target, std::span<const AllocationGroup> groups,
     std::span<const std::vector<std::size_t>> legal_orders)>;
+// 24.38 (D-072): the attacker's choice of a [TWIN-LINKED] batch's wound rolls to re-roll (indices into
+// rolls.rolls), asked only when at least one of them failed, as the engine asks.
+using WoundRerollChooser = std::function<std::vector<std::size_t>(const WoundRolls& rolls)>;
 
 struct SaveStep {
     std::optional<std::size_t> group;  // index into the ordered groups; nullopt: attack lost
@@ -178,18 +194,22 @@ struct InflictDamageResult {
 
 struct BatchResult {
     HitRolls hits;
-    WoundRolls wounds;
+    WoundRolls wounds;                   // after any re-rolls (24.38)
+    std::vector<WoundReroll> rerolls;    // 24.38: the re-rolled wound rolls, if any
     std::vector<AllocationGroup> allocation_order;  // empty if nothing wounded
     std::vector<int> save_rolls;                    // in roll order
     InflictDamageResult damage;
     friend bool operator==(const BatchResult&, const BatchResult&) = default;
 };
 
-// Resolves the attack sequence for one batch of attack dice against `target`.
+// Resolves the attack sequence for one batch of attack dice against `target`, in the engine's dice order: hit
+// rolls, wound rolls, the attacker's re-rolls of a [TWIN-LINKED] batch (24.38; `choose_rerolls` is called only when a
+// wound roll failed, and is required then), save rolls.
 // Precondition: the target still has models ("Target No Longer Eligible or Viable" is an app-only rule
 // not yet supplied; std::logic_error otherwise).
 [[nodiscard]] BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBatch& batch,
                                                const AllocationOrderChooser& choose_order,
-                                               const ModelChooser& choose_model);
+                                               const ModelChooser& choose_model,
+                                               const WoundRerollChooser& choose_rerolls = {});
 
 }  // namespace wh40k::core

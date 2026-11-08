@@ -6,6 +6,7 @@
 //                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
 //                        [--scenario <file>] [--dice <n>] [--menu <0|1>] [--bot A|B|both|none]
 //                        [--bot-level easy|normal|hard] [--bot-speed slow|normal|fast|instant] [--bot-steps <n>]
+//                        [--load <save.json>] [--pick-dice <i,j,...>]
 //   M38 (D-055): with no flags the exe opens on the start screen and uses the settings saved next to it. Any flag
 //   skips the start screen and runs with the default settings (nothing is read or saved), so scripted runs are
 //   reproducible; --menu 1 shows the start screen anyway (for screenshots).
@@ -18,6 +19,11 @@
 //   --bot-speed set its level and pacing; --bot-steps n: after --steps, run up to n bot decisions at once
 //   before the first frame (it stops at a human's decision; their dice pop-ups are dropped unless --dice).
 //   M45: --bot-steps prints "bot-steps: <taken> of <n> bot actions taken" to stdout (package.ps1 checks it).
+//   M61: --load <save.json>: start on a saved game (the sidebar's Save / Load format), for screenshots of decisions
+//   --steps can't reach. Not with --scenario, --replay or --seed. The save's players unless --bot / --bot-level
+//   are given. A missing or unreadable file, or one that fails to load, exits with code 2.
+//   M61: --pick-dice <i,j,...>: pick those wound dice (0-based) in the first re-roll pop-up, as clicks would (for
+//   screenshots); it submits nothing.
 
 #include <imgui.h>
 #include <raylib.h>
@@ -60,11 +66,13 @@
 #include "drop_fix.hpp"
 #include "event_text.hpp"
 #include "help_widgets.hpp"
+#include "launch_options.hpp"
 #include "measure.hpp"
 #include "move_plan.hpp"
 #include "overlays.hpp"
 #include "phase_track.hpp"
 #include "reach_area.hpp"
+#include "reroll_popup.hpp"
 #include "saved_game.hpp"
 #include "session.hpp"
 #include "settings.hpp"
@@ -103,67 +111,6 @@ const fs::path kExportPath = kRepoRoot / "replays/exported_replay.json";  // git
 // M38 (D-055): the saved settings live next to the exe (under build/ in a source build, so not in the repo).
 fs::path settings_path() { return fs::path(GetApplicationDirectory()) / "vibehammer_settings.json"; }
 
-struct Options {
-    std::optional<std::string> replay;
-    std::optional<std::size_t> frame;
-    std::optional<float> zoom;
-    std::optional<std::string> screenshot;
-    int steps = 0;
-    std::optional<unsigned> select_unit;
-    std::optional<unsigned> select_model;
-    std::optional<std::uint64_t> seed;
-    std::optional<std::string> scenario;
-    int dice = 0;  // --dice: 1 keeps the dice pop-ups from --steps, 2 also shows the first card's faces
-    bool menu = false;  // --menu 1: show the start screen even with other flags (M38)
-    BotSides bots{false, false};        // --bot (M39)
-    std::optional<BotLevel> bot_level;  // --bot-level
-    std::optional<BotSpeed> bot_speed;  // --bot-speed
-    int bot_steps = 0;                  // --bot-steps
-};
-
-// Throws std::invalid_argument naming the flag when a value can't be parsed.
-Options parse_args(int argc, char** argv) {
-    Options o;
-    for (int i = 1; i + 1 < argc; i += 2) {
-        const std::string key = argv[i];
-        const std::string value = argv[i + 1];
-        try {
-        if (key == "--replay") o.replay = value;
-        else if (key == "--frame") o.frame = static_cast<std::size_t>(std::stoul(value));
-        else if (key == "--zoom") o.zoom = std::stof(value);
-        else if (key == "--screenshot") o.screenshot = value;
-        else if (key == "--steps") o.steps = std::stoi(value);
-        else if (key == "--select") o.select_unit = static_cast<unsigned>(std::stoul(value));
-        else if (key == "--select-model") o.select_model = static_cast<unsigned>(std::stoul(value));
-        else if (key == "--seed") o.seed = std::stoull(value);
-        else if (key == "--scenario") o.scenario = value;
-        else if (key == "--dice") o.dice = std::stoi(value);
-        else if (key == "--menu") {
-            if (value != "0" && value != "1") throw std::invalid_argument("not 0 or 1");
-            o.menu = value == "1";
-        } else if (key == "--bot") {
-            if (value == "A") o.bots = {true, false};
-            else if (value == "B") o.bots = {false, true};
-            else if (value == "both") o.bots = {true, true};
-            else if (value == "none") o.bots = {false, false};
-            else throw std::invalid_argument("not A, B, both or none");
-        } else if (key == "--bot-level") {
-            o.bot_level = bot_level_from_key(value);
-            if (!o.bot_level) throw std::invalid_argument("not easy, normal or hard");
-        } else if (key == "--bot-speed") {
-            o.bot_speed = bot_speed_from_key(value);
-            if (!o.bot_speed) throw std::invalid_argument("not slow, normal, fast or instant");
-        } else if (key == "--bot-steps") {
-            o.bot_steps = std::stoi(value);
-            if (o.bot_steps < 0) throw std::invalid_argument("negative");
-        }
-        } catch (const std::exception&) {
-            throw std::invalid_argument("invalid value for " + key + ": '" + value + "'");
-        }
-    }
-    return o;
-}
-
 std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Side B"; }
 
 float distance_px(Vector2 a, Vector2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
@@ -197,7 +144,8 @@ class App {
 public:
     // M38 (D-055): `settings` are the saved ones (persist: written back when they change) or, in a scripted run,
     // the defaults with the CLI's overrides (never written). The game starts on the start screen if `menu`.
-    App(AppSettings settings, bool persist, std::optional<std::string> scenario_override, bool menu, BotSides bots)
+    App(AppSettings settings, bool persist, std::optional<std::string> scenario_override, bool menu, BotSides bots,
+        std::optional<LoadedGame> loaded = std::nullopt)
         : settings_(std::move(settings)), saved_settings_(settings_), persist_(persist), bot_sides_(bots) {
         if (scenario_override) scenario_override_ = fs::path(*scenario_override);
         std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
@@ -205,6 +153,8 @@ public:
         std::snprintf(export_path_, sizeof(export_path_), "%s", kExportPath.string().c_str());
         if (menu) {
             open_menu();
+        } else if (loaded) {
+            start_loaded(std::move(*loaded), "the --load save");  // M61
         } else {
             new_game();
         }
@@ -360,15 +310,18 @@ public:
 
     void load_game() {
         try {
-            LoadedGame loaded = load_game_file(save_path_);
-            bot_sides_ = loaded.players.bots;  // M39 (D-054): an old save has no players block: hotseat
-            game_bot_level_ = loaded.players.bot_level;
-            start_session(std::move(loaded.session));
-            status_ = std::string("Loaded ") + save_path_ + " (seed " + std::to_string(session_->seed()) + "). " +
-                      players_text();
+            start_loaded(load_game_file(save_path_), save_path_);
         } catch (const std::exception& e) {
             status_ = std::string("Could not load the save: ") + e.what();
         }
+    }
+
+    // A loaded game, with its players (M39, D-054: an old save has no players block, so hotseat).
+    void start_loaded(LoadedGame loaded, const std::string& from) {
+        bot_sides_ = loaded.players.bots;
+        game_bot_level_ = loaded.players.bot_level;
+        start_session(std::move(loaded.session));
+        status_ = "Loaded " + from + " (seed " + std::to_string(session_->seed()) + "). " + players_text();
     }
 
     void export_replay() {
@@ -433,6 +386,9 @@ public:
         // M45: package.ps1's second smoke test checks the bot really acted.
         if (n > 0) std::printf("bot-steps: %d of %d bot actions taken\n", taken, n);
     }
+
+    // --pick-dice (M61): the wound dice the first re-roll pop-up picks, as clicks would.
+    void pick_dice(std::vector<std::size_t> dice) { cli_dice_picks_ = std::move(dice); }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
         if (unit) selected_unit_ = core::UnitId{*unit};
@@ -1494,6 +1450,14 @@ private:
         if (has_view()) draw_datasheets();  // D-034
         // D-033: the dice pop-up, over everything else.
         if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale(), bot_dice_pace());
+        // M61 (D-072): the [TWIN-LINKED] re-roll pop-up, once the dice have been shown, for a human's decision.
+        if (has_view() && mode_ == Mode::Play && session_ && !dice_.active() && !bot_deciding() && !end_warning_) {
+            if (RerollPicks* picks = panel_.reroll_picks(*session_)) {
+                for (const std::size_t i : cli_dice_picks_) picks->toggle(i);  // --pick-dice: once, as clicks
+                cli_dice_picks_.clear();
+                if (const auto chosen = draw_reroll_popup(board_area(), ui_scale(), state(), *picks)) submit(*chosen);
+            }
+        }
         if (mode_ == Mode::Play) {
             draw_end_warning();  // D-038
             draw_victory();
@@ -1999,7 +1963,7 @@ private:
         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", timeline_.frame(frame_).label.c_str());
         ImGui::PopFont();
         std::string info = timeline_.source();
-        if (state().pending) info += "  |  Waiting for: " + core::describe(*state().pending);
+        if (state().pending) info += "  |  Waiting for: " + core::describe(state(), *state().pending);  // M61
         ImGui::TextDisabled("%s", info.c_str());
         if (!timeline_.error().empty()) {
             ImGui::SameLine();
@@ -2195,6 +2159,7 @@ private:
     StartScreen start_screen_;
     bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
     bool quit_ = false;            // the start screen's Quit
+    std::vector<std::size_t> cli_dice_picks_;  // --pick-dice (M61), applied once
 };
 
 }  // namespace
@@ -2202,9 +2167,16 @@ private:
 
 int main(int argc, char** argv) {
     using namespace wh40k::client;
-    Options options;
+    LaunchOptions options;
+    std::optional<LoadedGame> loaded;
     try {
-        options = parse_args(argc, argv);
+        options = parse_launch_args(std::vector<std::string>(argv + 1, argv + argc));
+        if (options.load) {
+            // M61: loaded before the window opens, so a bad file exits with code 2 like a bad flag value.
+            LoadedGame game = load_launch_save(*options.load, kRepoRoot);
+            game.players = launch_players(game.players, options);
+            loaded.emplace(std::move(game));
+        }
     } catch (const std::exception& e) {
         std::fprintf(stderr, "wh40k_client_2d: %s\n", e.what());
         return 2;
@@ -2241,7 +2213,7 @@ int main(int argc, char** argv) {
     }
     if (options.bot_level) settings.bot_level = *options.bot_level;  // M39
     if (options.bot_speed) settings.bot_speed = *options.bot_speed;
-    App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots);
+    App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots, std::move(loaded));
     app.set_auto_scale(std::max({1.0f, dpi, by_height}));
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
@@ -2249,6 +2221,7 @@ int main(int argc, char** argv) {
     app.bot_steps(options.bot_steps);  // M39
     app.cli_dice(options.dice);
     app.select(options.select_unit, options.select_model);
+    app.pick_dice(options.pick_dice);  // M61
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;

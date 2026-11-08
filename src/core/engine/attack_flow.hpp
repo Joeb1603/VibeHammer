@@ -4,7 +4,8 @@
 // players' choices: batch order (attacker, 04.03), allocation order (opposing player, 05.03) and
 // casualties (opposing player, 05.04 via D-013). D-012 applies to batches whose target is gone. Once every batch
 // is resolved, the attacking unit makes its [HAZARDOUS] hazard rolls (24.15, 06.03) and its player allocates the
-// mortal wounds (06.02, OrderCasualties for the attacking unit; D-071).
+// mortal wounds (06.02, OrderCasualties for the attacking unit; D-071). A [TWIN-LINKED] batch with a failed wound roll
+// waits for its attacker's RerollWoundRolls answer (24.38, D-011, D-072).
 
 #include <vector>
 

@@ -101,6 +101,13 @@ void add(Fnv1a& h, const core::FlowState& f) {
             h.i32(a.hazard_rolls);
             h.i32(a.pending_mortal_wounds);
         }
+        // M61 (24.38): only when set, so a state without pending re-rolls hashes as before.
+        if (a.wound_rerolls) {
+            h.u64(0x7477696eull);  // "twin": apart from the fields above
+            h.u64(a.wound_rerolls->batch);
+            h.u64(a.wound_rerolls->rolls.rolls.size());
+            for (const core::WoundRoll& r : a.wound_rerolls->rolls.rolls) h.i32(r.unmodified);
+        }
     }
     h.flag(f.move.has_value());
     if (f.move) {
