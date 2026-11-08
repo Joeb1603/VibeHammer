@@ -4,8 +4,12 @@ A Warhammer 40,000 (11th edition) skirmish for Windows. It is a deterministic C+
 top-down client. Space Marine Intercessor Squads fight Tyranid Termagants following the core rules, either
 hotseat or against a bot. The default scenario is one unit each on a 24" x 24" board. The **Strike**
 scenario (pick `strike_44x60.json` in the start screen's Scenario list) is a full-size 60" x 44" battlefield
-with three Intercessor Squads against four units of Termagants. Each unit has its own shade of its side's
-colour and a number on the board.
+with three Intercessor Squads against four units of Termagants. The **Incursion** scenario
+(`rosters_44x60.json`) puts two armies on a 44" x 60" portrait battlefield. The Chaos Space Marines field a
+Chaos Lord, two squads of Legionaries, Chaos Terminators and Havocs. The Tyranids field a Hive Tyrant,
+Termagants, Genestealers, Tyrant Guard, two Screamer-killers and a Tyrannofex. Wiping the other side out
+still wins. Otherwise, after battle round 5, the side that destroyed more points wins. Each unit has its own
+shade of its side's colour and a number on the board.
 
 ![Bot vs bot: the Termagants advance away from the Intercessors](docs/images/bot_vs_bot.png)
 
@@ -21,8 +25,9 @@ page, unzip the whole folder and run `VibeHammer.exe`. If SmartScreen warns you,
 - **Continue saved game** or **Watch a replay**.
 
 Follow the decision panel at the top of the screen. Click the board to pick units, targets and casualties,
-and drag models to move them. Every roll shows in a dice pop-up. The event log cites the rule number behind
-each step.
+and drag models to move them. While you drag a model on an oval base (the Tyrannofex), Q and E turn it 15°
+and Shift+mouse wheel turns it 5°. Every roll shows in a dice pop-up. The event log cites the rule number
+behind each step.
 
 ## What's implemented
 
@@ -30,7 +35,15 @@ each step.
   battle rounds. This includes battle-shock, the attack sequence (hit, wound, save, damage), allocation
   groups, and pile-in and consolidation.
 - **Geometry:** distances are measured edge to edge between bases, with 2" Engagement Range and unit
-  coherency. Moves are checked along their whole path, not only where they end.
+  coherency. Moves are checked along their whole path, not only where they end. Oval bases have a facing
+  and can turn as they move.
+- **Weapon abilities:** Assault, Heavy, Pistol, Rapid Fire, Blast, Torrent, Hazardous, Sustained Hits,
+  Extra Attacks and Twin-linked. Twin-linked asks which wound rolls to re-roll when one fails. Random
+  Damage (D6, D6+1, ...) and random Attacks on ranged weapons are rolled as the attack resolves. A weapon
+  with an ability that isn't implemented yet (Lethal Hits, Devastating Wounds, Anti, Melta, ...) can't be
+  selected.
+- **Monsters and vehicles:** they can move through enemy infantry. They can also shoot, and be shot at,
+  while in Engagement Range.
 - **The bot** (`src/ai`) plays only through the same validated actions a human uses, and it never sees the
   game's future dice.
   - **Easy:** a baseline.
@@ -40,10 +53,12 @@ each step.
   exactly. The saved replays in `tests/replays/` double as regression tests.
 
 - **Several units per side:** every phase handles any number of units, and all three bot levels plan across
-  their whole army.
+  their whole army. On the Incursion scenario Normal and Hard weigh units by their points and play for the
+  points result. Hard's first decision of a game there takes a second or two, and it uses about 0.6 GB of memory.
 
-**Not yet:** terrain, objectives and missions, stratagems, interactive deployment, unit-specific abilities, and
-other unit types. `PLAN.md` lists what comes next.
+**Not yet:** terrain, objectives and missions, stratagems, interactive deployment, unit abilities (including
+Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
+`PLAN.md` lists what comes next.
 
 ## Building from source
 
@@ -83,10 +98,12 @@ it and publishes it.
 | `data/units/`, `data/scenarios/` | unit datasheets generated from BSData, and the scenarios |
 | `docs/decisions.md` | rule interpretations and design decisions (D-001 ...), cited in code |
 | `docs/rules/` | the core rules text the engine follows (private; see below) |
+| `docs/datasheets/` | the two army rosters behind the Incursion scenario (private; see below) |
 | `PLAN.md`, `CLAUDE.md` | the milestone plan, and the architecture and conventions |
 
 ## Rules text and copyright
 
 Warhammer 40,000 and its rules are © Games Workshop. VibeHammer is an unofficial fan project and is not
-endorsed by Games Workshop. `docs/rules/` holds Games Workshop's copyrighted text and is committed only
-because this repository is private. Never publish it, and never include it in a release.
+endorsed by Games Workshop. `docs/rules/` and `docs/datasheets/` hold Games Workshop's copyrighted text and
+are committed only because this repository is private. Never publish them, and never include them in a
+release. The scenario files keep only each unit's points and loadout.

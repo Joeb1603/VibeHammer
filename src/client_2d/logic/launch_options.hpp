@@ -11,6 +11,8 @@
 // M63 (D-073): --click-units <id,id,...> clicks those units (by id) on the board, in order, in the first decision the
 // board handles, as clicks would (a shooter, then its target, opens the target's weapon menu next to it). It stops at
 // a click that would submit an action, so it submits nothing.
+// M70: --window <w>x<h> opens the window at that size in pixels (each 320 to 16384) instead of maximized, for
+// screenshots of a small window.
 
 #include <array>
 #include <cstddef>
@@ -36,6 +38,13 @@ struct CliTurn {
     friend bool operator==(const CliTurn&, const CliTurn&) = default;
 };
 
+// M70: --window <w>x<h>.
+struct CliWindow {
+    int width = 0;
+    int height = 0;
+    friend bool operator==(const CliWindow&, const CliWindow&) = default;
+};
+
 struct LaunchOptions {
     std::optional<std::string> replay;
     std::optional<std::size_t> frame;
@@ -58,6 +67,7 @@ struct LaunchOptions {
     std::vector<unsigned> pick_models;   // --pick-models (M62)
     std::vector<unsigned> click_units;   // --click-units (M63)
     std::optional<CliTurn> turn;         // --turn (M66)
+    std::optional<CliWindow> window;     // --window (M70)
 };
 
 // argv[1..]: "--key value" pairs.

@@ -1617,9 +1617,10 @@ private:
             ImGui::End();
 
             // D-030: the action bar under the phase bar. A fixed height (long content goes in popups and
-            // tooltips) so the board never refits while a decision is made.
-            const float action = ImGui::GetFrameHeightWithSpacing() * 3.0f + ImGui::GetFontSize() * 0.5f +
-                                 style.WindowPadding.y * 2.0f;
+            // tooltips) so the board never refits while a decision is made. M70: four rows (three and a half
+            // before), measured to hold the casualty decision at the default window size: the 1.25x headline, a
+            // three-line hint and the "Damage left to allocate" box.
+            const float action = ImGui::GetFrameHeightWithSpacing() * 4.0f + style.WindowPadding.y * 2.0f;
             if (action != action_height_) {
                 action_height_ = action;
                 fit_pending_ = true;
@@ -2450,14 +2451,16 @@ int main(int argc, char** argv) {
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
     const std::string title = "VibeHammer " + std::string(wh40k::core::engine_version());
-    InitWindow(kWindowWidth, kWindowHeight, title.c_str());
+    // M70: --window opens at that size (for screenshots of a small window) and is not maximized.
+    InitWindow(options.window ? options.window->width : kWindowWidth,
+               options.window ? options.window->height : kWindowHeight, title.c_str());
     SetTargetFPS(60);
     SetExitKey(KEY_NULL);  // Esc cancels a board selection (D-029), it doesn't quit
     rlImGuiSetup(true);
 
     // D-028: open maximized and scale the UI to the screen: the larger of the monitor's DPI scale and its
     // height relative to 1080 pixels (some high-DPI screens report a DPI scale of 1).
-    MaximizeWindow();
+    if (!options.window) MaximizeWindow();
     const int monitor = GetCurrentMonitor();
     const float dpi = GetWindowScaleDPI().y;
     const float by_height = static_cast<float>(GetMonitorHeight(monitor)) / 1080.0f;

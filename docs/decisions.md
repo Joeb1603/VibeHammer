@@ -594,6 +594,14 @@ logic).
 - **Rejections** show in a red strip over the top of the board, under the bar, until dismissed.
 - **Replay mode** puts the replay controls (step buttons, frame slider, step label, source) in the bar.
 - **Sidebar** keeps the toolbar, Game, Log (now taller) and Files.
+- **Amended (M70):** the bar is **four rows high** (three and a half before), still fixed. Measured at UI scale 1 (15 px
+  font, 25 px rows with spacing): the casualty decision (D-051, D-069) needs the 1.25x headline row (29 px), a three-line
+  hint at the default 1400 x 860 window (49 px) and the "Damage left to allocate" box (21 px), 99 px, against the 82.5 px
+  the bar held, so the box was only reachable by scrolling. Four rows hold 100 px. The headline drops describe()'s
+  leading "Side A: " (the tag in the side's colour already says it; the decision's words and rule number stay), and
+  when tag and text are still wider than the column at 1.25x they are drawn at the body size, wrapping rather than
+  running under the buttons. At a narrow window (about 1024 px wide, the sidebar keeping its width) a long hint can
+  still push the box below the bar's bottom; the bar scrolls, as before. Layout only: no rules or client-logic change.
 
 ## D-031: Custom shots after picking the target (M18)
 **Decided:** 2026-11-05 (agreed with the user). Client only; amends D-029 "Shooting" and D-030.

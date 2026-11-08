@@ -1,6 +1,7 @@
 # Builds the client in Release and packs it into VibeHammer.zip (repo root, gitignored) for sending to
 # someone to play. The zip holds the exe, the VC++ runtime DLLs, data/ and the example replays; the exe
-# finds data/ next to itself (main.cpp find_data_root). Never add docs/rules/ or the PDF (GW copyright).
+# finds data/ next to itself (main.cpp find_data_root). Never add docs/rules/, docs/datasheets/ or the PDF
+# (GW copyright; the datasheets are New Recruit exports of GW datasheets).
 #
 # Usage (from the repo root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1
 # M52 (D-063), for the release workflow only: -Generator "Visual Studio 17 2022" configures build/default with
@@ -46,19 +47,29 @@ How to play
   1. Unzip this whole folder somewhere (don't run the exe from inside the zip).
   2. Double-click VibeHammer.exe. It opens on the start screen:
      - Play hotseat: two players share the computer.
-     - Play vs bot: choose the side you play (Space Marines or Tyranids); the bot plays the other.
+     - Play vs bot: choose the side you play (the scenario's two armies); the bot plays the other.
      - Watch bot vs bot: the bot plays both sides. In any game with a bot, the sidebar has
        "Pause the bots" (key P); the bar above the board has Step (one action, or the bot's
        next dice roll) and the bot speed (keys N, + and -).
      - Continue saved game (when there is one), Watch a replay, Quit.
-  3. Space Marine Intercessors vs Tyranid Termagants. Follow the decision panel at the top;
-     click the board to pick units, targets and moves. Pick strike_44x60.json in the start
-     screen's Scenario list for a full-size 60" x 44" battlefield with 3 Intercessor Squads
-     against 4 Termagant units (the default is one unit each on 24" x 24").
+  3. Follow the decision panel at the top; click the board to pick units, targets and moves.
+     The start screen's Scenario list has, among others:
+     - v1_skirmish.json (the default): Space Marine Intercessors vs Tyranid Termagants, one
+       unit each on a 24" x 24" battlefield;
+     - strike_44x60.json: a full-size 60" x 44" battlefield with 3 Intercessor Squads against
+       4 Termagant units;
+     - rosters_44x60.json: two armies on a 44" x 60" portrait battlefield, Chaos Space Marines
+       (a Chaos Lord, two squads of Legionaries, Chaos Terminators, Havocs) against Tyranids
+       (a Hive Tyrant, Termagants, Genestealers, Tyrant Guard, Screamer-killers, a Tyrannofex).
+       A side that wipes the other out wins; otherwise, after battle round 5, the side that
+       destroyed more points wins (the Game panel shows the points destroyed so far).
+     While dragging a model on an oval base (the Tyrannofex), Q / E turn it 15 degrees and
+     Shift+mouse wheel 5 degrees; let go without moving to turn it where it stands.
 
 The bot
   Levels: Easy, Normal and Hard (Hard is the default). Speed: Slow, Normal, Fast or Instant;
-  it can be changed during the game. The bot's dice pop-ups roll and continue by
+  it can be changed during the game. On rosters_44x60.json, Hard's first decision of a game
+  takes a second or two while it prepares. The bot's dice pop-ups roll and continue by
   themselves, with no Roll button (pause the bots, key P, to roll them yourself). The log (Events tab) shows what the bot did
   and why; hover a bot line for its full reasoning.
 

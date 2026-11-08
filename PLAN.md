@@ -1950,6 +1950,35 @@ milestone per session" and "agree each milestone first" for these milestones onl
   - random A is rolled when the weapon's batch resolves (04.03);
   - random-A melee weapons can't split their attacks across targets.
 
+**What the batch added (summary, M70):**
+- *Data:* the fetch tool's fixes and the nine roster datasheets (M59: 02.04–02.07, D-070), the fixture scenarios under
+  `tests/data/scenarios/`, and the playable scenario `data/scenarios/rosters_44x60.json` (M67: 14 units, 44"x60"
+  portrait, unit points from the rosters, D-076).
+- *Weapon abilities:* unknown abilities refused when selected (M60, D-071); [HAZARDOUS] (24.15, with 06.02 and 06.03),
+  [SUSTAINED HITS] (24.36), [EXTRA ATTACKS] (24.11) and mixed-loadout default plans (04.01) (M60); [TWIN-LINKED]
+  (24.38) with a wound re-roll decision (M61, D-072 applying D-011).
+- *Random characteristics:* random A rolled per model and weapon when its batch resolves, random D after the model
+  is selected (M62: 04.03, 05.04; D-069 replaces D-002, amends D-013 and D-051; app-only wording approved by the user).
+- *MONSTERS and VEHICLES:* moving through enemy infantry (17.01), shooting at and from Engagement Range with the -1s
+  (17.03), and the 10.06 penalty added (M63, D-073).
+- *Oval bases with a facing:* the geometry kernel (M64: 01.04, 03.01, 06.01), the engine (M65: 01.04, 03.01, 03.02,
+  09.04, 11.04, 12.03, 12.08), the client and the bots (M66: dragging and turning an oval with Q / E and Shift+wheel,
+  big-base polish; D-074, D-075).
+- *The result:* the points tiebreak for the roster scenario only (M67: 07.03 via D-076; every other scenario keeps
+  D-007), shown in the Game panel and the victory pop-up; ten unit shades per side (D-065 extended).
+- *The bots:* Easy and Normal for the roster units (M68, D-077: per-model loadouts, [HAZARDOUS], the -1s, engaged
+  MONSTERS, 17.01, material by points, the tiebreak); Hard for them (M69, D-078: one chain cache per game, the coarse
+  wounds grid and compact tables, loadout groups, the tiebreak in the army value, the rollout budget by units, Normal's
+  moves for a side of more than 7 units); M70's weight sweep on the rosters (PLAN.md M70 Results).
+- *The client:* `--load`, `--pick-dice`, `--pick-models`, `--click-units`, `--turn` and `--window` screenshot flags; the
+  re-roll pop-up; the action bar four rows high, fitting the casualty decision (M70).
+- *Replays added:* `m59_rosters_fixture_round1`, `m60_hazard_and_extra_attacks`, `m61_twin_linked_reroll`,
+  `m62_random_characteristics`, `m63_monsters`, `m65_oval_tyrannofex`, `m67_rosters_round1`,
+  `m68_rosters_normal_bot_game` (Normal vs Normal) and `m70_rosters_bot_game` (Hard vs Hard).
+- *Play elsewhere unchanged:* V1, both bot scenarios and Strike play exactly as before the batch (the arena's
+  `--per-game` hashes against the pre-batch baseline, every milestone), and every pre-batch replay regenerates
+  byte-identically.
+
 ---
 
 ## M59: Fetch tool fixes and the nine new datasheets ✅ (done)
@@ -3431,7 +3460,7 @@ action, event or JSON change, no new decision and no client change. Normal and E
 
 ---
 
-## M70: Bot-game replay, docs, final verification
+## M70: Bot-game replay, docs, final verification ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-08)
 
 > **Tuning.** A `BotWeights` sweep on the new scenario.
@@ -3448,6 +3477,106 @@ action, event or JSON change, no new decision and no client change. Normal and E
 - A mid-game bot screenshot on the new board.
 - Manual check left for the user: play the new scenario by mouse on Windows, including rotating the Tyrannofex,
   the re-roll prompt and the tiebreak.
+
+**Results (2026-11-08):** no decision added (no default and no bot behaviour changed); the client layout fix amends
+D-030. Bot code (`src/ai`) untouched: the clean Release arena binary is byte-identical to M69's.
+- **Tuning: `BotWeights{}` unchanged.** Release arena, `rosters_44x60.json`, against Normal; `--weights` on the M69
+  binary, two processes at a time, about 1.4 process-hours in all (well inside the 6-hour budget).
+  - *Target:* the Tyranid seat (Normal vs Hard), where Hard won 137 of 200 at M69 against Normal's own 140. Defaults
+    on seeds 1–60: 44 wins.
+  - *Screened on seeds 1–60 (Tyranid wins):* margin 0.05: 47; margin -1 (Normal's answer just one more candidate): 42;
+    tempo 0.4: 42; tempo 0: 43; material 0.2: 42; material 0: 43. With the Tyranids' 9 units moving by Hard's own
+    search (`move_search_units=9`), combined with what D-078 part 11 had not tried: rollouts only (`share=1`): 22;
+    `margin=0.03,share=0.8`: 23 (M69's own search, with the defaults: 35). The moves are what matter there, and Hard's
+    search loses the seat even when its plans are valued by the engine-played rollouts alone (one turn and the
+    enemy's reply), not only through the chain's optimism: holding back looks better than closing over that horizon.
+  - *Confirmed on seeds 1–200:* margin 0.05 (only the Tyranids' charge, casualty, coherency and consolidation
+    decisions change while they move as Normal): 140 against the defaults' 137, +3, short of the +10 needed, so it was
+    not run on seeds 201–400 and not kept.
+  - *The defaults on seeds 201–400* (for the comparison): Hard won 130 as the Tyranids (70 losses) and 156 as the
+    Chaos Space Marines (44 losses).
+  - *Every run* was clean: 0 rejected, reverted, fallbacks or unfinished.
+- **Bot-game replay** `tests/replays/m70_rosters_bot_game.json`: Hard vs Hard (the arena's play, both bots sharing one
+  chain cache) on `rosters_44x60.json`, dice seed 93, 501 steps, decided on points destroyed after battle round 5
+  (Side A 329.5, Side B 523: a Tyranid win), not at the step cap.
+  - *Choosing the seed* (`M70_Replay.DISABLED_SearchRostersSeed`, Release, seeds 1–100, 13 min): Hard vs Hard on the
+    rosters rarely fights. Hard's Chaos Space Marines hold back and shoot, and its Tyranid side moves as Normal (D-078).
+    Only 8 seeds have a Fight from each side, and 93 is the only one of the 100 where each side also loses a whole unit.
+    In it the Chaos Terminators charge a Screamer-killer in round 5, a Screamer-killer and the Hive Tyrant charge the
+    Terminators back, and both sides fight.
+  - *Regeneration:* twice in Release and once in Debug, all byte-identical.
+- **Client: the casualty decision fits the action bar** (D-030 amended, layout only; `decision_panel.cpp`,
+  `main.cpp`):
+  - The bar is four rows high (three and a half before). Measured at UI scale 1, the casualty decision needs 99 px
+    (the 1.25x headline, a three-line hint at 1400 x 860, the "Damage left to allocate" box), against the 82.5 px the
+    bar held.
+  - The headline drops describe()'s "Side A: " (the coloured tag says it) and drops to the body size when it is
+    still too wide, wrapping rather than running under the buttons.
+  - New screenshot flag `--window <w>x<h>` (`launch_options`), which opens the window at that size, not maximized.
+  - Screenshots (scratchpad `m70/client/`, `--load` of M62's saves at a random-damage casualty decision, before and
+    after, at 1400x860 and 1024x700): `before_/after_damage_decision_*.png`, `before_/after_guard_casualties_*.png`.
+    At 1400x860 the headline ("Order the casualties for unit 11 (05.04)") is whole beside "Use default order", and
+    the hint and the box show without a scrollbar; before, the headline lost its ")" and the box was cut in half.
+    At 1024x700 the headline wraps to two lines and the four-line hint still pushes the box below the bar (it
+    scrolls, as before; Open).
+- **Tests** (no existing test changed):
+  - ai `tests/ai/m70_test.cpp`:
+    - `M70_Replay.TheRostersBotGameReplaysToItsResultWithCoreOnly`: the whole file through the engine twice, the
+      expect block, the points result after round 5, 14 units, a Fight from each side and a unit lost by each side
+      (0.4 s in Debug).
+    - `M70_Replay.TheSavedFileMatchesTheGame`: Hard vs Hard with seed 93, the arena's shared cache, plays the saved
+      actions through battle round 1, with nothing rejected, reverted or answered by the fallback (8.8 s alone in
+      Debug, 13.5 s under `ctest -j4`; 1.8 s in Release).
+    - `M70_Replay.BotsWithChainCachesOfTheirOwnPlayTheSameActions`: two Hard bots with separate caches play the same
+      saved actions through round 1 (11.5 s alone in Debug, 16.7 s under `ctest -j4`). Two rounds took 19 and 22 s
+      alone in Debug, so the tests stop after round 1.
+    - `M70_Replay.DISABLED_TheWholeSavedFileMatchesTheGame`: the whole game, shared and separate caches (115 s in
+      Debug, 21 s in Release; passes in both).
+    - `M70_Replay.DISABLED_SearchRostersSeed` and `M70_Replay.DISABLED_RegenerateRostersBotGameReplay`.
+  - client `M70_LaunchOptions.WindowOpensAtTheGivenSize` (`tests/client/m70_test.cpp`).
+  - `Replay.SavedReplayFilesPass` picks the new file up.
+  - ctest (Debug and Release): 1158 -> 1162 tests, all pass.
+- **Docs:**
+  - `tools/package.ps1`'s README text lists the three playable scenarios (`rosters_44x60.json` with its points rule
+    beside `strike_44x60.json`), the oval-turn keys, and that Hard's first roster decision takes a second or two.
+  - The staging list copies only the exe, `data/units`, `data/scenarios`, `tests/replays` and the VC++ DLLs, so
+    never `docs/rules/`, `docs/datasheets/` or the PDF. The script's header now names `docs/datasheets/` too.
+  - The batch's summary and the open items carried are in this section's header and in Later item 5.
+  - CLAUDE.md and README are left for the user's pass (the items are listed for it).
+- **Acceptance:**
+  - *Clean Debug and Release builds* (build directories deleted and reconfigured; no warnings outside third-party
+    code) *and all of ctest:* **met.**
+  - *`git diff main -- tests/replays` shows only new files:* **met.** `Replay.DISABLED_RegenerateReplays` and the M45,
+    M46, M47, M58, M68 and M70 regenerations leave every tracked replay byte-identical. Against `main` the only
+    replay files are the batch's nine new ones.
+  - *A mid-game bot screenshot on the new board:* **met** (scratchpad `m70/client/`):
+    - `hard_both_150.png`, `hard_both_220.png` (seed 1, the brief's command, round 3);
+    - `hard_both_seed93_400.png`, `hard_both_seed93_440.png` (the replay's game in round 5, after the Terminators'
+      charge, with a Screamer-killer destroyed);
+    - `normal_both_120.png`, `normal_both_200.png` (Normal, round 2).
+    - No seed of the 100 searched has units engaged in round 2 or 3 in Hard vs Hard, so the engaged board is in
+      round 5.
+  - *Old play unchanged:* **met.**
+    - The 24 `--per-game` files of V1, both bot scenarios and Strike match `baseline/m60` on every `game` line.
+    - Normal's roster play (Easy–Easy, Normal–Easy, Easy–Normal, Normal–Normal, seeds 1–200) matches M69's.
+  - *Strike timing against the M69 binary*, alternating, 3 runs each: **met.**
+    - Normal vs Normal (60 games): 8.90 against 8.87 s.
+    - Hard vs Hard (20 games): 60.39 against 60.65 s (+0.4%; decision p95 133.0–134.1 against 131.7–134.3 ms).
+  - *Hard vs Normal on the rosters, seeds 1–200 each seat* (final binary, the two seats at once, `/usr/bin/time -v`),
+    the same as M69:
+    - Hard as the Chaos Space Marines: 159 wins and 41 losses (points destroyed 331.3 to 207.6), p95 230 ms, max
+      1.91 s, peak RSS 622 MB.
+    - Hard as the Tyranids: 137 wins and 63 losses (423.8 to 344.5), p95 9.1 ms, max 1.75 s, peak RSS 617 MB.
+    - 0 rejected, reverted or fallbacks.
+  - *Manual check for the user* (by mouse on Windows: the roster scenario, turning the Tyrannofex, the re-roll prompt,
+    the tiebreak): **open.**
+- **Open:**
+  - Hard is still no better than Normal from the Tyranid seat (137 against Normal's 140). The sweep's numbers above
+    show that the move horizon, not only the army value, keeps Hard's own search from closing in. Carried to Later
+    item 5.
+  - At a narrow window the casualty decision's box can still fall below the bar's bottom (the bar scrolls).
+  - During the sweep one Hard decision took 2.65 s (max), with two arenas and a build sharing the 4 cores. Under the
+    3 s limit; the quiet final runs' maximum was 1.91 s.
 
 ---
 
@@ -3469,5 +3598,24 @@ action, event or JSON change, no new decision and no client change. Normal and E
      FRAME (17.02); unit abilities stay out of scope until item 3.
    - **Candidate units:** Assault/Heavy Intercessors, Infernus, Bladeguard, Hellblasters; Hormagaunts, Neurogaunts,
      Tyranid Warriors.
+   - **Open items carried from M59–M70** (each where it was left):
+     - *Bots, Hard on the rosters:* Hard's Tyranids (9 units) move as Normal and win no more than Normal's own from
+       that seat; Hard's own move search lost there because the army value is optimistic for the bigger army early
+       (M69, D-078 part 11; M70's sweep found no clearly better setting, and its search lost even with the plans valued by
+       the engine-played rollouts alone). Calibrating the army value and the move horizon for big armies is left.
+     - *Bots, Hard's chain:* no state for a third unit, so an engaged target's 17.03 -1 and a MONSTER's close-quarters
+       shot at another unit appear only in the half-turn in progress (M69, D-078 part 10).
+     - *Bots:* they never turn an oval (M66, M68, M69); random damage is planned at the preview's maximum (M62, M68);
+       the Desperate Escape guard checks one to three failed hazard rolls (M68, M69); the firer's own hazard loss is
+       priced in the choice of profile but not taken off Normal's move score, and D-071's "no hazard roll after the
+       last enemy model is destroyed" is ignored there (M68); Normal's two-half-turn horizon keeps far units holding
+       (M68: measured right for these armies).
+     - *Bots, speed:* Strike's Hard vs Hard decision p95 rose 5.7% at M69 at the same play (not profiled).
+     - *Client:* the per-model editors choose one declaration per model, and the Split popup splits only the main
+       weapon (M60); no setting re-rolls [TWIN-LINKED] automatically (M61); at a narrow window the action bar can
+       still clip a long casualty hint or the "Damage left to allocate" box (scroll the bar; M70).
+     - *Engine:* the oval-against-oval turn check is conservative (M65; the rosters have one oval).
+     - *Fetch tool / datasheets:* a mixed ranged/melee weapon's profiles list under the first profile's type, and
+       ability-name modifiers (Deadly Demise X, Scouts X) and hidden-ability conditions are not evaluated (M59).
 6. **Networking:** a server-authoritative host runs the engine, clients send `GameAction`s and receive events or snapshots, and spectators subscribe to events. The engine API shouldn't need to change. If it does, that's a bug in the earlier design.
 7. **Attached units, transports, reserves, aircraft** (17–23).
