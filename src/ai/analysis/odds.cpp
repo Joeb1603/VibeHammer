@@ -10,6 +10,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
+#include "core/rules/random_characteristics.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/state/queries.hpp"
 
@@ -91,21 +92,34 @@ bool allowed_for_type(const core::Unit& unit, const core::Model& model, const co
     return false;
 }
 
-void add_to_volley(Volley& volley, const core::AttackProfile& profile, int dice) {
-    if (dice <= 0) return;
+void add_to_volley(Volley& volley, const core::AttackProfile& profile, int dice,
+                   const std::vector<core::DiceExpr>& random = {}) {
+    if (dice <= 0 && random.empty()) return;
     for (VolleyBatch& b : volley) {
         if (b.profile == profile) {  // D-006: identical attacks are one batch
             b.attack_dice += dice;
+            b.random_attacks.insert(b.random_attacks.end(), random.begin(), random.end());  // D-069
             return;
         }
     }
-    volley.push_back(VolleyBatch{profile, dice});
+    volley.push_back(VolleyBatch{profile, dice, random});
 }
 
 Volley to_volley(std::span<const core::AttackBatch> batches) {
     Volley v;
-    for (const core::AttackBatch& b : batches) v.push_back(VolleyBatch{b.profile, b.attack_dice});
+    for (const core::AttackBatch& b : batches) v.push_back(volley_batch(b));
     return v;
+}
+
+// D-069: [a + b] = sum of P(a) P(b).
+std::vector<double> convolve(const std::vector<double>& a, const std::vector<double>& b) {
+    if (a.empty() || b.empty()) return {};
+    std::vector<double> out(a.size() + b.size() - 1, 0.0);
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (a[i] == 0.0) continue;
+        for (std::size_t j = 0; j < b.size(); ++j) out[i + j] += a[i] * b[j];
+    }
+    return out;
 }
 
 // One candidate weapon of a model: its value alone against the fresh target.
@@ -180,6 +194,60 @@ double OddsCache::unsaved(const core::AllocationGroup& group, int armour_penetra
     return it->second;
 }
 
+const std::vector<double>& OddsCache::value_pmf(const core::DiceExpr& expr) {
+    ++lookups_;
+    const ExprKey key{expr.num_dice, expr.sides, expr.modifier};
+    auto it = values_.find(key);
+    if (it == values_.end()) {
+        ++computed_;
+        std::vector<double> pmf{1.0};  // the sum of no dice is 0
+        if (expr.num_dice > 0) {
+            // One die of the expression, through core's own roll (01.05: a D3 halves the D6, rounding up).
+            const core::DiceExpr one{1, expr.sides, 0};
+            std::vector<double> die(static_cast<std::size_t>(one.max_value()) + 1, 0.0);
+            for (int face = 1; face <= kFaces; ++face) {
+                core::ScriptedDice d{face};
+                die[static_cast<std::size_t>(core::roll_characteristic(d, one).value)] += 1.0 / kFaces;
+            }
+            for (int i = 0; i < expr.num_dice; ++i) pmf = convolve(pmf, die);
+        }
+        std::vector<double> shifted(static_cast<std::size_t>(std::max(0, static_cast<int>(expr.modifier))), 0.0);
+        shifted.insert(shifted.end(), pmf.begin(), pmf.end());
+        it = values_.emplace(key, std::move(shifted)).first;
+    }
+    return it->second;
+}
+
+const std::vector<double>& OddsCache::sum_pmf(std::span<const core::DiceExpr> exprs) {
+    ++lookups_;
+    std::vector<ExprKey> key;
+    for (const core::DiceExpr& e : exprs) key.emplace_back(e.num_dice, e.sides, e.modifier);
+    std::sort(key.begin(), key.end());
+    auto it = sums_.find(key);
+    if (it == sums_.end()) {
+        ++computed_;
+        std::vector<double> pmf{1.0};
+        for (const core::DiceExpr& e : exprs) pmf = convolve(pmf, value_pmf(e));
+        it = sums_.emplace(std::move(key), std::move(pmf)).first;
+    }
+    return it->second;
+}
+
+double pmf_mean(const std::vector<double>& pmf) {
+    double m = 0.0;
+    for (std::size_t v = 0; v < pmf.size(); ++v) m += static_cast<double>(v) * pmf[v];
+    return m;
+}
+
+VolleyBatch volley_batch(const core::AttackBatch& batch) {
+    VolleyBatch v{batch.profile, batch.attack_dice, {}};
+    for (const core::RandomAttackDice& r : batch.random_attacks) {
+        v.attack_dice += r.bonus;  // D-069: added after the roll; the same count either way
+        v.random_attacks.push_back(r.attacks);
+    }
+    return v;
+}
+
 // ---- TargetSnapshot ----
 
 int TargetSnapshot::wounds_left() const noexcept {
@@ -242,9 +310,64 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
     dist[static_cast<std::size_t>(target.slots[0].wounds_left)] = 1.0;
 
     for (const VolleyBatch& batch : volley) {
-        if (batch.attack_dice <= 0) continue;
+        const bool random_a = !batch.random_attacks.empty();  // D-069
+        if (batch.attack_dice <= 0 && !random_a) continue;
         const HitWoundOdds& hw = cache.hit_wound(batch.profile, target.toughness);
-        const int damage = batch.profile.damage.fixed_value();  // D-002
+        // D-069: a random D branches over its values; a fixed one takes the single transition it always did.
+        const bool random_d = !batch.profile.damage.is_fixed();
+        const int damage = random_d ? 0 : batch.profile.damage.fixed_value();
+        const std::vector<double>* d_pmf = random_d ? &cache.value_pmf(batch.profile.damage) : nullptr;
+        // D-069: the random A's dice, P(n) for n = 0..; and their mean, for the expected counts.
+        const std::vector<double>* a_pmf = random_a ? &cache.sum_pmf(batch.random_attacks) : nullptr;
+        const double extra_dice = random_a ? pmf_mean(*a_pmf) : 0.0;
+        // `mass` lands on slot s, which had w wounds left, after `d` damage: the excess is lost if it is destroyed
+        // (05.04, Appendix: Destroyed).
+        const auto land = [&](std::vector<double>& to, std::size_t s, std::size_t w, int d, double mass) {
+            const int left = static_cast<int>(w) - d;
+            if (left > 0) {
+                to[s * width + static_cast<std::size_t>(left)] += mass;
+            } else {
+                const std::size_t ns = s + 1;
+                const std::size_t nw = ns < slots ? static_cast<std::size_t>(target.slots[ns].wounds_left) : 0;
+                to[ns * width + nw] += mass;
+            }
+        };
+        // One step that inflicts damage on slot s with chance chance[its group]: from -> to.
+        const auto apply_one = [&](const std::vector<double>& from, std::vector<double>& to,
+                                   const std::vector<double>& chance) {
+            std::fill(to.begin(), to.end(), 0.0);
+            to[slots * width] += from[slots * width];  // the unit is destroyed: excess attacks are lost
+            for (std::size_t s = 0; s < slots; ++s) {
+                const double qs = chance[target.slots[s].group];
+                for (std::size_t w = 1; w < width; ++w) {
+                    const double p = from[s * width + w];
+                    if (p == 0.0) continue;
+                    to[s * width + w] += p * (1.0 - qs);
+                    if (d_pmf == nullptr) {
+                        land(to, s, w, damage, p * qs);
+                    } else {
+                        for (std::size_t d = 1; d < d_pmf->size(); ++d) {
+                            if ((*d_pmf)[d] != 0.0) land(to, s, w, static_cast<int>(d), p * qs * (*d_pmf)[d]);
+                        }
+                    }
+                }
+            }
+        };
+        // The batch's dice, one die at a time: the fixed ones, then (D-069) the random A's, each count weighted by its
+        // chance (04.03).
+        const auto run_dice = [&](const auto& one_die) {
+            for (int die = 0; die < batch.attack_dice; ++die) one_die();
+            if (!random_a) return;
+            std::vector<double> mix(dist.size(), 0.0);
+            for (std::size_t i = 0; i < dist.size(); ++i) mix[i] = (*a_pmf)[0] * dist[i];
+            for (std::size_t n = 1; n < a_pmf->size(); ++n) {
+                one_die();
+                const double pn = (*a_pmf)[n];
+                if (pn == 0.0) continue;
+                for (std::size_t i = 0; i < dist.size(); ++i) mix[i] += pn * dist[i];
+            }
+            dist.swap(mix);
+        };
         if (hw.sustained > 0) {
             // 24.36 (M60): a die scores 0, 1 or 1 + X hits; each hit wounds and gets past the save independently.
             // P(k wounds from one die), then k one-wound steps (the front model can change between them).
@@ -265,68 +388,45 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
             out.hits += batch.attack_dice * hits_per_die;
             out.wounds += batch.attack_dice * hits_per_die * hw.wound;
             out.unsaved += batch.attack_dice * hits_per_die * hw.wound * u[target.slots[0].group];
+            if (random_a) {
+                out.attack_dice += extra_dice;
+                out.hits += extra_dice * hits_per_die;
+                out.wounds += extra_dice * hits_per_die * hw.wound;
+                out.unsaved += extra_dice * hits_per_die * hw.wound * u[target.slots[0].group];
+            }
             std::vector<double> step(dist.size(), 0.0);
             std::vector<double> acc(dist.size(), 0.0);
-            for (int die = 0; die < batch.attack_dice; ++die) {
+            run_dice([&]() {
                 for (std::size_t i = 0; i < dist.size(); ++i) acc[i] = pk[0] * dist[i];
                 for (int k = 1; k <= x + 1; ++k) {
                     // One more wound: dist -> step (the same transition as below, with u for the slot's group).
-                    std::fill(step.begin(), step.end(), 0.0);
-                    step[slots * width] += dist[slots * width];
-                    for (std::size_t s = 0; s < slots; ++s) {
-                        const double us = u[target.slots[s].group];
-                        for (std::size_t w = 1; w < width; ++w) {
-                            const double p = dist[s * width + w];
-                            if (p == 0.0) continue;
-                            step[s * width + w] += p * (1.0 - us);
-                            const int left = static_cast<int>(w) - damage;
-                            if (left > 0) {
-                                step[s * width + static_cast<std::size_t>(left)] += p * us;
-                            } else {
-                                const std::size_t ns = s + 1;
-                                const std::size_t nw =
-                                    ns < slots ? static_cast<std::size_t>(target.slots[ns].wounds_left) : 0;
-                                step[ns * width + nw] += p * us;
-                            }
-                        }
-                    }
+                    apply_one(dist, step, u);
                     dist.swap(step);
                     for (std::size_t i = 0; i < dist.size(); ++i) acc[i] += pk[static_cast<std::size_t>(k)] * dist[i];
                 }
                 dist.swap(acc);
-            }
+            });
             continue;
         }
-        std::vector<double> q(target.groups.size(), 0.0);       // P(one die inflicts damage | group)
-        for (std::size_t g = 0; g < q.size(); ++g) {
-            q[g] = hw.hit * hw.wound * cache.unsaved(target.groups[g], batch.profile.armour_penetration);
-        }
-        out.attack_dice += batch.attack_dice;
-        out.hits += batch.attack_dice * hw.hit;
-        out.wounds += batch.attack_dice * hw.hit * hw.wound;
-        out.unsaved += batch.attack_dice * q[target.slots[0].group];
-        for (int die = 0; die < batch.attack_dice; ++die) {
-            std::fill(next.begin(), next.end(), 0.0);
-            next[slots * width] += dist[slots * width];  // the unit is destroyed: excess attacks are lost
-            for (std::size_t s = 0; s < slots; ++s) {
-                const double qs = q[target.slots[s].group];
-                for (std::size_t w = 1; w < width; ++w) {
-                    const double p = dist[s * width + w];
-                    if (p == 0.0) continue;
-                    next[s * width + w] += p * (1.0 - qs);
-                    const int left = static_cast<int>(w) - damage;
-                    if (left > 0) {
-                        next[s * width + static_cast<std::size_t>(left)] += p * qs;
-                    } else {
-                        // Destroyed; the excess damage is lost (05.04, Appendix: Destroyed).
-                        const std::size_t ns = s + 1;
-                        const std::size_t nw =
-                            ns < slots ? static_cast<std::size_t>(target.slots[ns].wounds_left) : 0;
-                        next[ns * width + nw] += p * qs;
-                    }
-                }
+        {
+            std::vector<double> q(target.groups.size(), 0.0);  // P(one die inflicts damage | group)
+            for (std::size_t g = 0; g < q.size(); ++g) {
+                q[g] = hw.hit * hw.wound * cache.unsaved(target.groups[g], batch.profile.armour_penetration);
             }
-            dist.swap(next);
+            out.attack_dice += batch.attack_dice;
+            out.hits += batch.attack_dice * hw.hit;
+            out.wounds += batch.attack_dice * hw.hit * hw.wound;
+            out.unsaved += batch.attack_dice * q[target.slots[0].group];
+            if (random_a) {
+                out.attack_dice += extra_dice;
+                out.hits += extra_dice * hw.hit;
+                out.wounds += extra_dice * hw.hit * hw.wound;
+                out.unsaved += extra_dice * q[target.slots[0].group];
+            }
+            run_dice([&]() {
+                apply_one(dist, next, q);
+                dist.swap(next);
+            });
         }
     }
 
@@ -383,6 +483,11 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
     const int models_before = static_cast<int>(stripped.models.size());
     out.models_destroyed_pmf.assign(static_cast<std::size_t>(models_before) + 1, 0.0);
 
+    // D-069: each batch's random A, rolled by resolve_attack_batch with the same dice.
+    std::vector<std::vector<core::RandomAttackDice>> random(volley.size());
+    for (std::size_t b = 0; b < volley.size(); ++b) {
+        for (const core::DiceExpr& e : volley[b].random_attacks) random[b].push_back(core::RandomAttackDice{0, {}, e, 0});
+    }
     core::DiceState dice_state{seed, 0};  // the bot's own dice (D-054)
     core::SeededDice dice(dice_state);
     const core::AllocationOrderChooser first_order =
@@ -400,9 +505,10 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
     for (int i = 0; i < samples; ++i) {
         core::Unit unit = stripped;
         int damage = 0;
-        for (const VolleyBatch& vb : volley) {
+        for (std::size_t b = 0; b < volley.size(); ++b) {
+            const VolleyBatch& vb = volley[b];
             if (unit.models.empty()) break;  // the rest of the volley has nothing to attack
-            const core::AttackBatch batch{unit.id, vb.profile, {}, vb.attack_dice};
+            const core::AttackBatch batch{unit.id, vb.profile, {}, vb.attack_dice, random[b]};
             const core::BatchResult r =
                 core::resolve_attack_batch(dice, unit, batch, first_order, first_model, all_failed);
             for (const core::SaveStep& step : r.damage.steps) {
@@ -430,8 +536,9 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
 // ---- profiles ----
 
 bool profile_supported(const core::WeaponProfile& profile) {
-    return profile.attacks.is_fixed() && profile.damage.is_fixed() &&  // D-002
-           !core::unimplemented_ability_problem(profile);               // D-026 ([TWIN-LINKED] is resolved, D-072)
+    // D-026 / D-071 ([TWIN-LINKED] is resolved, D-072). D-069: a random A or D is rolled; a random-A melee profile is
+    // refused by the same check.
+    return !core::unimplemented_ability_problem(profile);
 }
 
 bool within_half_range(const core::WeaponProfile& profile, float gap_mm) {
@@ -475,7 +582,7 @@ std::vector<TargetOutcome> evaluate_batches(OddsCache& cache, const core::GameSt
         if (unit == nullptr) continue;
         Volley v;
         for (const core::AttackBatch& b : batches) {
-            if (b.target == t) v.push_back(VolleyBatch{b.profile, b.attack_dice});
+            if (b.target == t) v.push_back(volley_batch(b));
         }
         out.push_back(TargetOutcome{t, expected_outcome(cache, v, snapshot_of(*unit))});
     }
@@ -605,6 +712,7 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
     struct Pick {
         core::AttackProfile profile;
         int dice = 0;
+        std::vector<core::DiceExpr> random;  // D-069: a random A, with its bonus dice in `dice`
     };
     for (const core::Model& model : attacker.models) {
         std::vector<Candidate<Pick>> cands;
@@ -617,15 +725,18 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
                 sel.target_within_half_range = within_half_range(p, context.gap_mm);       // 24.30
                 sel.target_models_at_selection = static_cast<int>(target.models.size());  // 24.05
                 const core::AttackProfile ap = core::make_attack_profile(p, attack);
-                const int dice = core::gather_attack_dice(p, sel, attack);
-                const VolleyBatch one[] = {VolleyBatch{ap, dice}};
-                cands.push_back({Pick{ap, dice}, expected_outcome(cache, one, snap).model_equivalents,
+                const core::SelectionDice sd = core::selection_dice(p, sel, attack);
+                std::vector<core::DiceExpr> random;
+                if (sd.random) random.push_back(*sd.random);  // D-069
+                const int dice = sd.dice + sd.bonus;
+                const VolleyBatch one[] = {VolleyBatch{ap, dice, random}};
+                cands.push_back({Pick{ap, dice, random}, expected_outcome(cache, one, snap).model_equivalents,
                                  is_close_quarters(p), w});
             }
         }
         const bool one_set =
             context.type != core::ShootingType::CloseQuarters && !core::is_monster_or_vehicle(attacker, model);
-        for (const Pick& pick : pick_model_set(cands, one_set)) add_to_volley(volley, pick.profile, pick.dice);
+        for (const Pick& pick : pick_model_set(cands, one_set)) add_to_volley(volley, pick.profile, pick.dice, pick.random);
     }
     return volley;
 }

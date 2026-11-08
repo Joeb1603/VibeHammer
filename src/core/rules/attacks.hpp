@@ -31,8 +31,9 @@ namespace wh40k::core {
 [[nodiscard]] AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context);
 
 // D-026 / D-071: V1 rejects weapons with an ability it does not implement yet ([DEVASTATING WOUNDS] 24.10, and
-// every ability it doesn't recognise, ability::Unknown, e.g. [LETHAL HITS] or [ANTI-X Y+]), when they are selected,
-// as D-002 does for random characteristics. [TWIN-LINKED] (24.38) is implemented since M61 (D-072). Rule-cited
+// every ability it doesn't recognise, ability::Unknown, e.g. [LETHAL HITS] or [ANTI-X Y+]), when they are selected.
+// [TWIN-LINKED] (24.38) is implemented since M61 (D-072). D-069: a random A or D is rolled (M62), except a random A on
+// a melee profile, which is refused here too (04.02 splits a known number of attacks; none in the data). Rule-cited
 // reason, or nullopt if the profile can be used.
 [[nodiscard]] std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon);
 
@@ -48,16 +49,28 @@ namespace wh40k::core {
 // between targets counts once (D-071). Throws std::logic_error for an unknown model or index.
 [[nodiscard]] int hazardous_weapons_selected(const GameState& state, std::span<const WeaponSelection> selections);
 
-// 04.03 Gather Attack Dice for one selection: A (D-002: must be fixed), plus [RAPID FIRE X] if the
-// target was within half range at selection (24.30), plus [BLAST X] per five target models at
-// selection (24.05). A melee selection that split its attacks gathers exactly its declared attacks.
-// Throws std::logic_error on a weapon type that doesn't match the context or an invalid split.
+// 04.03 Gather Attack Dice for one selection, before anything is rolled: A, plus [RAPID FIRE X] if the target was
+// within half range at selection (24.30), plus [BLAST X] per five target models at selection (24.05). A melee
+// selection that split its attacks gathers exactly its declared attacks.
+struct SelectionDice {
+    int dice = 0;                    // the dice known now: a fixed A with its bonus dice; 0 for a random A
+    std::optional<DiceExpr> random;  // D-069: a random A, rolled when the batch is gathered for resolution
+    int bonus = 0;                   // D-069: with a random A, its [RAPID FIRE] / [BLAST] dice, added after the roll
+    friend bool operator==(const SelectionDice&, const SelectionDice&) = default;
+};
+// Throws std::logic_error on a weapon type that doesn't match the context, an invalid split, or a random A on a melee
+// weapon (refused when selected, D-069).
+[[nodiscard]] SelectionDice selection_dice(const WeaponProfile& weapon, const WeaponSelection& selection,
+                                           const AttackContext& context);
+// The same for a weapon with a fixed A: selection_dice(...).dice. Precondition (std::logic_error otherwise): the A is
+// fixed (D-069: a random A is rolled when its batch is resolved).
 [[nodiscard]] int gather_attack_dice(const WeaponProfile& weapon, const WeaponSelection& selection,
                                      const AttackContext& context);
 
 // 04.03 steps 1-2 for a whole attacking unit: groups the selections into batches of identical attacks
 // per target. Batches are in first-appearance order (by target, then profile). The active player
-// chooses which batch to resolve next (04.03 Select Enemy Unit / Gather Attack Dice; M5 engine).
+// chooses which batch to resolve next (04.03 Select Enemy Unit / Gather Attack Dice; M5 engine). D-069: a selection
+// with a random A is kept in its batch's random_attacks, to be rolled when the batch is resolved.
 [[nodiscard]] std::vector<AttackBatch> gather_attack_batches(const GameState& state,
                                                              std::span<const WeaponSelection> selections,
                                                              const AttackContext& context);

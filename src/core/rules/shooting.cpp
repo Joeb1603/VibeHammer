@@ -189,11 +189,10 @@ bool target_ok(const Unit& unit, const Model& model, const WeaponProfile& profil
     return target_within_range(model, profile, target) && facts.visible(model, target);  // 04.02, 06.01
 }
 
-// M54: the checks of declaration_problem that don't depend on the target, as a yes/no (04.01, D-002, D-026,
-// 10.05, 10.06).
+// M54: the checks of declaration_problem that don't depend on the target, as a yes/no (04.01, D-026, D-071,
+// 10.05, 10.06). D-069: a random A or D is rolled, so it is no reason to refuse (D-002 is replaced).
 bool profile_selectable(const Unit& unit, const Model& model, const WeaponProfile& profile, ShootingType type) {
     if (profile.kind != WeaponKind::Ranged || !profile.range_mm) return false;
-    if (!profile.attacks.is_fixed() || !profile.damage.is_fixed()) return false;
     if (unimplemented_ability_problem(profile)) return false;
     if (type == ShootingType::Assault && !profile.has<ability::Assault>()) return false;
     if (type == ShootingType::CloseQuarters && !is_monster_or_vehicle(unit, model) && !is_close_quarters(profile)) {
@@ -244,10 +243,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
     if (profile.kind != WeaponKind::Ranged || !profile.range_mm) {
         return "04.01: '" + profile.name + "' is not a ranged weapon; models shoot with ranged weapons";
     }
-    if (!profile.attacks.is_fixed() || !profile.damage.is_fixed()) {
-        return "D-002: '" + profile.name + "' has a random characteristic, which V1 does not roll";
-    }
-    if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026
+    if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026, D-071 (D-069: random A / D are rolled)
     if (type == ShootingType::Assault && !profile.has<ability::Assault>()) {
         return "10.05: '" + profile.name + "' is not an [ASSAULT] weapon; assault shooting can only select "
                                            "[ASSAULT] weapons";

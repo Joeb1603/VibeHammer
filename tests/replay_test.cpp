@@ -36,6 +36,7 @@ namespace {
 const std::filesystem::path kReplayDir{WH40K_REPLAY_DIR};
 constexpr std::uint64_t kM60Seed = 2;  // M60: picked by Replay.DISABLED_SearchM60Seed
 constexpr std::uint64_t kM61Seed = 1;  // M61: picked by Replay.DISABLED_SearchM61Seed
+constexpr std::uint64_t kM62Seed = 10;  // M62: picked by Replay.DISABLED_SearchM62Seed
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -284,6 +285,93 @@ Replay m61_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     if (failed || !g.pending || g.pending->side != Side::B) return r;
     r.expect = replay_expectation(g);
     ok = asked && a_reroll_wounded;
+    return r;
+}
+
+// M62 (D-069): the Havocs vs Hive Tyrant fixture with the Tyrant's bonesword replaced by a heavy venom cannon (A D3, D3,
+// [BLAST]; a datasheet option, as in m60). Embedded initial state. `ok` says whether the seed shows what the replay is
+// about: two or more lascannon attacks inflict damage, each rolling its D6+1 on the Tyrant, which survives; `problem`, the
+// first refused step (none expected).
+Replay m62_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M62: the Havocs vs Hive Tyrant fixture (D-070), the Tyrant with a heavy venom cannon (A D3, D3, [BLAST]) instead "
+        "of its bonesword. Round 1, Side A: the Havocs remain stationary and their four lascannons (D D6+1) fire at the "
+        "Tyrant, 8\" away. Side B orders the casualties once for the batch (D-013); each attack that inflicts damage then "
+        "rolls its D6+1 after the Tyrant is selected (D-069, 05.04), and the wounded Tyrant (W10) takes every roll and "
+        "survives. Side B: the Tyrant remains stationary and fires its heavy venom cannon at the five Havocs: its A is "
+        "rolled (D3) when the attacks are resolved, then +1 [BLAST] for the five models (04.03, 24.05); casualties in "
+        "unit order. Every other decision takes the first legal action. Stops at Side B's first Charge decision.";
+    GameState init = load_scenario(repo_root() / wh40k::test::kHavocsVsTyrantFixture, repo_root());
+    const Datasheet tyrant_sheet = load_datasheet(repo_root() / "data/units/hive_tyrant.json");
+    init.units[1].models[0].weapons[0] = *tyrant_sheet.find_weapon("Heavy venom cannon");
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    start_game(g);
+    bool failed = false;
+    std::vector<GameEvent> events;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    auto first_legal = [&]() -> GameAction {
+        GameAction a = legal_actions(g, decider(g)).front();
+        if (auto* oc = std::get_if<action::OrderCasualties>(&a); oc != nullptr && oc->priority.empty()) {
+            oc->priority = wh40k::test::model_ids(*g.find_unit(oc->target));
+        }
+        return a;
+    };
+    const UnitId havocs = g.units[0].id;
+    const UnitId tyrant = g.units[1].id;
+    act(action::StartMove{havocs, MoveType::RemainStationary, std::nullopt});
+    {
+        action::Shoot lascannons{havocs, ShootingType::Normal, {}};
+        for (const Model& m : g.units[0].models) {
+            if (m.weapons[0].name == "Havoc lascannon") lascannons.shots.push_back(ShotDeclaration{m.id, 0, 0, tyrant});
+        }
+        act(lascannons);
+    }
+    while (!failed && g.flow.attack) act(first_legal());
+    int damage_rolls = 0;
+    for (const GameEvent& e : events) {
+        if (const auto* s = std::get_if<event::SavesResolved>(&e)) {
+            for (const SaveStep& step : s->result.steps) damage_rolls += step.damage_roll ? 1 : 0;
+        }
+    }
+    const bool tyrant_alive = !g.units[1].models.empty();
+    if (failed || !tyrant_alive) return r;
+    act(action::EndShootStep{});
+    act(action::EndChargeStep{});
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::B, decision::MoveUnits{}})) act(first_legal());
+    act(action::StartMove{tyrant, MoveType::RemainStationary, std::nullopt});
+    if (failed || !g.pending || !std::holds_alternative<decision::Shoot>(g.pending->kind)) return r;
+    const std::size_t before = events.size();
+    act(action::Shoot{tyrant, ShootingType::Normal, {ShotDeclaration{g.units[1].models[0].id, 0, 0, havocs}}});
+    while (!failed && g.flow.attack) act(first_legal());
+    bool cannon_rolled = false;
+    for (std::size_t i = before; i < events.size(); ++i) {
+        if (const auto* a = std::get_if<event::AttackDiceRolled>(&events[i])) {
+            cannon_rolled = a->rolls.size() == 1 && a->rolls[0].bonus == 1;
+        }
+    }
+    act(action::EndShootStep{});
+    if (failed || !g.pending || *g.pending != PendingDecision{Side::B, decision::Charge{}}) return r;
+    r.expect = replay_expectation(g);
+    ok = damage_rolls >= 2 && cannon_rolled;
     return r;
 }
 
@@ -786,8 +874,8 @@ TEST(Replay, DISABLED_RegenerateReplays) {
         "Units 1-5 Chaos Space Marines (Chaos Lord, Legionaries with chainswords, Legionaries with boltguns, "
         "Chaos Terminators, Havocs), 6-13 Tyranids (Hive Tyrant, Termagants west and east, Genestealers front "
         "and held back, Tyrant Guard, Screamer-killers west and east). Round 1: the Lord moves 5\" north, both "
-        "Legionaries squads 6\", the Terminators 5\"; the Havocs remain stationary; nothing is in range to "
-        "shoot. The Hive Tyrant moves 6\" south, the west Termagants 6\", the east Termagants advance 3\", the "
+        "Legionaries squads 6\", the Terminators 5\"; the Havocs remain stationary; only the Havocs' lascannons "
+        "(48\") are in range, and Side A ends its Shooting phase without firing. The Hive Tyrant moves 6\" south, the west Termagants 6\", the east Termagants advance 3\", the "
         "front Genestealers 8\" and the held-back ones 6\", the Tyrant Guard 5\"; the Screamer-killers remain "
         "stationary. Round 2: the boltgun Legionaries move 6\" north and fire their boltguns at the front "
         "Genestealers (16\" away); casualties in unit order (D-013). Every other unit remains stationary and "
@@ -829,8 +917,13 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     r_move(3, MoveType::Normal, 6);
     r_move(4, MoveType::Normal, 5);
     r_move(5, MoveType::RemainStationary, 0);
-    for (std::uint32_t id = 1; id <= 5; ++id) {
+    for (std::uint32_t id = 1; id <= 4; ++id) {
         ASSERT_TRUE(shot_options(g59, r_unit(id), ShootingType::Normal).empty()) << "unit " << id;
+    }
+    // M62 (D-069): the Havoc lascannons' random D is rolled now, and they reach the Tyranids (48"); nothing else does.
+    ASSERT_FALSE(shot_options(g59, r_unit(5), ShootingType::Normal).empty());
+    for (const ShotDeclaration& d : shot_options(g59, r_unit(5), ShootingType::Normal)) {
+        ASSERT_EQ(find_model(r_unit(5), d.model)->weapons.at(d.weapon_index).name, "Havoc lascannon");
     }
     r_act(action::EndShootStep{});
     r_act(action::EndChargeStep{});
@@ -885,6 +978,29 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m61_problem.empty()) << m61_problem;
     EXPECT_TRUE(m61_shows_it) << "seed " << kM61Seed << " no longer shows a failed bonesword wound roll re-rolled into a wound";
     save_if_clean(m61, kReplayDir / "m61_twin_linked_reroll.json");
+
+    // M62: random characteristics (D-069): the lascannons' D6+1 rolled per attack after the Tyrant is selected, and the
+    // heavy venom cannon's D3 attacks rolled when they are resolved, +1 [BLAST]. Stops at Side B's first Charge decision,
+    // before anything M63-M70 change (no move through models, no shooting at an engaged MONSTER, round bases only).
+    bool m62_shows_it = false;
+    std::string m62_problem;
+    const Replay m62 = m62_replay(kM62Seed, m62_shows_it, m62_problem);
+    ASSERT_TRUE(m62_problem.empty()) << m62_problem;
+    EXPECT_TRUE(m62_shows_it) << "seed " << kM62Seed << " no longer shows two lascannon damage rolls and the cannon's roll";
+    save_if_clean(m62, kReplayDir / "m62_random_characteristics.json");
+}
+
+TEST(Replay, DISABLED_SearchM62Seed) {
+    for (std::uint64_t seed = 1; seed <= 200; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m62_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M62 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
 }
 
 TEST(Replay, DISABLED_SearchM61Seed) {

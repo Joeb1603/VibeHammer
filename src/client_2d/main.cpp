@@ -389,6 +389,8 @@ public:
 
     // --pick-dice (M61): the wound dice the first re-roll pop-up picks, as clicks would.
     void pick_dice(std::vector<std::size_t> dice) { cli_dice_picks_ = std::move(dice); }
+    // --pick-models (M62): the models the first casualty decision picks on the board, as clicks would.
+    void pick_models(std::vector<unsigned> models) { cli_model_picks_ = std::move(models); }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
         if (unit) selected_unit_ = core::UnitId{*unit};
@@ -629,6 +631,12 @@ private:
         board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(session_->state(), session_->legal())
                                                              : BoardInteraction();
         if (!first) tidy_selection();  // D-043: a new decision (Reset move, Commit, any submit, undo)
+        // --pick-models (M62): the first casualty decision's picks, once, as clicks would (screenshots, D-069).
+        if (const CasualtyPicks* picks = board_.casualty_picks(); picks != nullptr && !cli_model_picks_.empty()) {
+            const core::UnitId target = picks->target();
+            for (const unsigned id : cli_model_picks_) board_.click_model(session_->state(), target, core::ModelId{id});
+            cli_model_picks_.clear();
+        }
     }
 
     // What a board click or a menu choice led to: submit it, or offer its menu at the cursor.
@@ -1123,6 +1131,9 @@ private:
                                          &r.damage}) {
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(s->c_str());
+                // D-069: hovering a random A or D explains Random Characteristics.
+                if (s == &r.attacks && r.attacks_help) help_tooltip_for_last_item({*r.attacks_help});
+                if (s == &r.damage && r.damage_help) help_tooltip_for_last_item({*r.damage_help});
             }
             // D-037: each ability is hoverable; abilities this game doesn't apply are orange.
             ImGui::TableNextColumn();
@@ -1206,7 +1217,8 @@ private:
                 const Color colour = mark.destroyed ? Color{255, 90, 90, 255} : Color{255, 170, 60, 255};
                 const Vector2 c = camera_.to_screen(m->position);
                 const float r = camera_.to_px(m->base.diameter_mm * 0.5f) + 3.0f * s;
-                DrawRing(c, r - s, r + 2.5f * s, 0.0f, 360.0f, 48, colour);
+                // D-069: a provisional mark (reached only after an earlier random roll) has a thin ring.
+                DrawRing(c, r - s, r + (mark.provisional ? 0.5f : 2.5f) * s, 0.0f, 360.0f, 48, colour);
                 if (mark.destroyed) {
                     // A black outline under the red cross, so it shows on red (Termagant) bases too.
                     const float k = m->base.diameter_mm * 0.35f;
@@ -1219,7 +1231,8 @@ private:
                     DrawLineEx(a0, a1, 3.0f * s, colour);
                     DrawLineEx(b0, b1, 3.0f * s, colour);
                 }
-                const std::string text = "-" + std::to_string(mark.wounds_lost);
+                // D-069: "-7?" is the most a random D can do (the preview's stand-in).
+                const std::string text = "-" + std::to_string(mark.wounds_lost) + (mark.stand_in ? "?" : "");
                 const int tx = static_cast<int>(c.x + r + 2.0f * s);
                 const int ty = static_cast<int>(c.y - r);
                 const int size = static_cast<int>(kRulerText * s);
@@ -2160,6 +2173,7 @@ private:
     bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
     bool quit_ = false;            // the start screen's Quit
     std::vector<std::size_t> cli_dice_picks_;  // --pick-dice (M61), applied once
+    std::vector<unsigned> cli_model_picks_;    // --pick-models (M62), applied once
 };
 
 }  // namespace
@@ -2222,6 +2236,7 @@ int main(int argc, char** argv) {
     app.cli_dice(options.dice);
     app.select(options.select_unit, options.select_model);
     app.pick_dice(options.pick_dice);  // M61
+    app.pick_models(options.pick_models);  // M62
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;

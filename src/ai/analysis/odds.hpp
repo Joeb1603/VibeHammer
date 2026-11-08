@@ -58,6 +58,12 @@ public:
     [[nodiscard]] const HitWoundOdds& hit_wound(const core::AttackProfile& profile, int toughness);
     // P(a save roll against `group` with this AP inflicts damage), from check_save_roll for faces 1-6 (05.04).
     [[nodiscard]] double unsaved(const core::AllocationGroup& group, int armour_penetration);
+    // D-069: P(value) of a random characteristic, [v] for v = 0..its maximum, from core's roll_characteristic on each
+    // face of one die, convolved over its dice and shifted by its modifier. A fixed value is certain.
+    [[nodiscard]] const std::vector<double>& value_pmf(const core::DiceExpr& expr);
+    // D-069: P(total) of several random A rolled together (one per model and weapon), [n] for n = 0..the sum of their
+    // maxima: the convolution of their value_pmf. Empty input: certain 0.
+    [[nodiscard]] const std::vector<double>& sum_pmf(std::span<const core::DiceExpr> exprs);
 
     [[nodiscard]] std::size_t entries() const noexcept { return hit_wound_.size() + saves_.size(); }
     [[nodiscard]] std::size_t computed() const noexcept { return computed_; }
@@ -68,8 +74,12 @@ private:
     using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
+    // (dice, sides, modifier)
+    using ExprKey = std::tuple<int, int, int>;
     std::map<HitWoundKey, HitWoundOdds> hit_wound_;
     std::map<SaveKey, double> saves_;
+    std::map<ExprKey, std::vector<double>> values_;
+    std::map<std::vector<ExprKey>, std::vector<double>> sums_;  // keyed by the sorted expressions
     std::size_t computed_ = 0;
     std::size_t lookups_ = 0;
 };
@@ -104,10 +114,17 @@ struct TargetSnapshot {
 // One batch of identical attacks (04.03, D-006): the profile the engine resolves and its attack dice.
 struct VolleyBatch {
     core::AttackProfile profile;
-    int attack_dice = 0;
+    int attack_dice = 0;  // the fixed dice, and the bonus dice of the random A below ([BLAST], [RAPID FIRE])
+    // D-069: the random A of the batch's models (one per model and weapon), rolled when it is resolved. Empty for fixed A.
+    std::vector<core::DiceExpr> random_attacks{};
     friend bool operator==(const VolleyBatch&, const VolleyBatch&) = default;
 };
 using Volley = std::vector<VolleyBatch>;  // resolved in order against one target
+
+// The volley batch of an engine batch: its dice, with any random A not rolled yet (D-069) and its bonus dice.
+[[nodiscard]] VolleyBatch volley_batch(const core::AttackBatch& batch);
+// D-069: the mean of a pmf ([v] = P(value v)).
+[[nodiscard]] double pmf_mean(const std::vector<double>& pmf);
 
 struct AttackOutcome {
     double attack_dice = 0.0;  // total attack dice
@@ -131,7 +148,9 @@ struct AttackOutcome {
 
 // The exact outcome of `volley` against `target`. Exact for a target with one allocation group (every V1 unit);
 // with several groups each attack's save uses the group the next damage would go to (it ignores 05.04's
-// lowest-roll-first ordering across groups).
+// lowest-roll-first ordering across groups). D-069: it mixes exactly over a random A (the fixed dice, then each count
+// the random A can give, weighted by its chance) and a random D (each damaging step branches over the D's values); a
+// batch with fixed A and D takes the arithmetic it always did.
 [[nodiscard]] AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> volley,
                                              const TargetSnapshot& target);
 
@@ -147,13 +166,15 @@ struct SampledOutcome {
 // `samples` resolutions of `volley` by core::resolve_attack_batch, each on a fresh copy of `target` (weapons
 // stripped, for speed), with the bot's own dice seeded by `seed` (D-054). The defender's choices are the
 // engine's first legal ones (the first allocation order, the first selectable model); the attacker re-rolls every
-// failed wound roll of a [TWIN-LINKED] batch (24.38, D-072).
+// failed wound roll of a [TWIN-LINKED] batch (24.38, D-072). A random A and D are rolled there too, with the same
+// dice (D-069), never the game's.
 [[nodiscard]] SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::Unit& target,
                                             std::uint64_t seed, int samples);
 
 // ---- profiles ----
 
-// D-002 / D-026 / D-071: can the engine resolve this profile (fixed A and D, no unimplemented ability)?
+// D-026 / D-071: can the engine resolve this profile (no unimplemented ability)? D-069: a random A or D is rolled, but
+// a random A on a melee profile is refused (unimplemented_ability_problem).
 [[nodiscard]] bool profile_supported(const core::WeaponProfile& profile);
 
 // 24.30 [RAPID FIRE]: is `gap_mm` within half the profile's range? The same test select_weapon_target records

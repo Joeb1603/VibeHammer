@@ -35,8 +35,8 @@ std::optional<int> parse_uint(std::string_view s, std::size_t& pos) {
 
 int DiceExpr::fixed_value() const {
     if (!is_fixed()) {
-        // D-002: random characteristics are not rolled in V1.
-        throw std::logic_error("D-002: random characteristic " + to_string(*this) +
+        // D-069: a random value is rolled (roll_characteristic); asking for a fixed one is a programmer error.
+        throw std::logic_error("D-069: random characteristic " + to_string(*this) +
                                " used where a fixed value is required");
     }
     return modifier;

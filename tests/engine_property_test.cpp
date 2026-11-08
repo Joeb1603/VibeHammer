@@ -224,12 +224,12 @@ TEST(D004_LegalActions, RandomPlayFromTheStrikeScenario) {
 
 namespace {
 
-// D-002 / D-026 / D-071: a profile the engine can resolve today: fixed A and D, no [DEVASTATING WOUNDS], and no
-// ability the engine doesn't recognise (M60; [HAZARDOUS], [SUSTAINED HITS] and [EXTRA ATTACKS] are implemented, and
-// [TWIN-LINKED] since M61, D-072).
+// D-026 / D-071: a profile the engine can resolve today: no [DEVASTATING WOUNDS], and no ability the engine doesn't
+// recognise (M60; [HAZARDOUS], [SUSTAINED HITS] and [EXTRA ATTACKS] are implemented, and [TWIN-LINKED] since M61,
+// D-072). M62 (D-069): a random A or D is rolled, except a random A on a melee weapon, which is still refused.
 bool resolvable(const WeaponProfile& p) {
-    return p.attacks.is_fixed() && p.damage.is_fixed() && !unimplemented_ability_problem(p) &&
-           !p.has<ability::Unknown>();
+    return !unimplemented_ability_problem(p) && !p.has<ability::Unknown>() &&
+           !(p.kind == WeaponKind::Melee && !p.attacks.is_fixed());
 }
 
 struct WeaponUse {
@@ -267,9 +267,10 @@ ActionHook record_weapons(WeaponUse& use) {
 
 TEST(D004_LegalActions, RandomPlayFromTheRostersFixture) {
     // The D-004 properties with the two rosters (13 units, D-070) on the 44"x60" board. Every game ends,
-    // the state round-trips, and no weapon the engine can't resolve yet is ever fired or fought with:
-    // random A or D (D-002) is refused by validation, never by the engine throwing into the D-026 rollback.
-    // (M61: the Hive Tyrant's [TWIN-LINKED] bonesword is resolved since D-072, so it may be used.)
+    // the state round-trips, and no weapon the engine can't resolve yet is ever fired or fought with: such a weapon is
+    // refused by validation, never by the engine throwing into the D-026 rollback.
+    // (M61: the Hive Tyrant's [TWIN-LINKED] bonesword is resolved since D-072, so it may be used. M62: the Havoc
+    // lascannons' random D and the bio-plasmic scream's random A are rolled since D-069, so they are used.)
     WeaponUse use;
     for (std::uint64_t seed = 1; seed <= 2; ++seed) {
         GameState gs = wh40k::test::load_rosters_fixture();
@@ -293,9 +294,51 @@ TEST(D004_LegalActions, RandomPlayFromTheRostersFixture) {
     }
     EXPECT_GT(use.shoots, 0);
     EXPECT_GT(use.fights, 0);
-    for (const char* refused : {"Havoc lascannon", "Bio-plasmic scream"}) {  // D-002 (M62)
-        EXPECT_EQ(use.used.count(refused), 0u) << refused;
+    for (const char* random : {"Havoc lascannon", "Bio-plasmic scream"}) {  // D-069 (M62): no longer refused
+        EXPECT_GT(use.used.count(random), 0u) << random;
     }
+}
+
+TEST(D004_LegalActions, RandomPlayRollsTheRostersRandomAttacksAndDamage) {
+    // M62 (D-069): the D-004 properties with the rosters' random characteristics in play: the Screamer-killers'
+    // bio-plasmic scream (A D6+3, [BLAST] dice added after the roll) and the Havocs' lascannons (D D6+1, rolled per
+    // attack after its model is selected). Every game ends and round-trips; every roll is an event.
+    WeaponUse use;
+    std::vector<GameEvent> events;
+    for (std::uint64_t seed = 41; seed <= 44; ++seed) {
+        GameState gs = wh40k::test::load_rosters_fixture_closer(seed % 2 == 0 ? 26.0f : 20.0f);
+        gs.dice.seed = seed;
+        start_game(gs);
+        TestRng rng(seed);
+        const PlayStats stats = play_and_check(gs, rng, 4000, record_weapons(use), &events);
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << "seed " << seed << " after " << stats.actions << " actions";
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << "seed " << seed;
+    }
+    int attack_rolls = 0;
+    int with_bonus = 0;
+    int damage_rolls = 0;
+    for (const GameEvent& e : events) {
+        if (const auto* a = std::get_if<event::AttackDiceRolled>(&e)) {
+            for (const AttackDiceRoll& r : a->rolls) {
+                ++attack_rolls;
+                with_bonus += r.bonus > 0 ? 1 : 0;
+                EXPECT_GE(r.roll.value, r.attacks.min_value());
+                EXPECT_LE(r.roll.value, r.attacks.max_value());
+            }
+        }
+        if (const auto* s = std::get_if<event::SavesResolved>(&e)) {
+            for (const SaveStep& step : s->result.steps) {
+                if (!step.damage_roll) continue;
+                ++damage_rolls;
+                EXPECT_EQ(step.damage->damage, step.damage_roll->value);
+            }
+        }
+    }
+    EXPECT_GT(use.used.count("Bio-plasmic scream"), 0u);
+    EXPECT_GT(use.used.count("Havoc lascannon"), 0u);
+    EXPECT_GT(attack_rolls, 0);
+    EXPECT_GT(with_bonus, 0);
+    EXPECT_GT(damage_rolls, 0);
 }
 
 TEST(D004_LegalActions, RandomGamesFromTheRostersFixtureFinish) {
@@ -469,9 +512,16 @@ TEST(D004_LegalActions, RandomPlayExercisesTwinLinkedReRolls) {
 }
 
 TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWithARuleCitedReason) {
-    // Side A's first Shooting phase on the roster fixture: the Havoc lascannons (D6+1 damage, D-002) are
-    // in range of the east Termagants (48") but never offered, and declaring them is a rule-cited refusal.
+    // Side A's first Shooting phase on the roster fixture: lascannons the engine refuses are in range of the east
+    // Termagants (48") but never offered, and declaring them is a rule-cited refusal. (Until M62 the real Havoc
+    // lascannons, D6+1 damage, were refused under D-002; D-069 rolls them, so a stand-in with [DEVASTATING WOUNDS],
+    // 24.10, still refused, takes their place.)
     GameState gs = wh40k::test::load_rosters_fixture();
+    for (Model& m : gs.find_unit(UnitId{5})->models) {
+        for (Weapon& w : m.weapons) {
+            if (w.name == "Havoc lascannon") w.profiles[0].abilities.push_back(ability::DevastatingWounds{});
+        }
+    }
     start_game(gs);
     for (std::uint32_t id = 1; id <= 5; ++id) {
         apply_action(gs, Side::A, action::StartMove{UnitId{id}, MoveType::RemainStationary, std::nullopt});
@@ -489,7 +539,7 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
     const ValidationResult r = validate_action(gs, Side::A, lascannon);
     ASSERT_FALSE(r.ok());
     EXPECT_TRUE(std::any_of(r.reasons.begin(), r.reasons.end(),
-                            [](const std::string& s) { return s.rfind("D-002: ", 0) == 0; }))
+                            [](const std::string& s) { return s.rfind("24.10: ", 0) == 0; }))
         << r.reasons.front();
     for (const auto& reason : r.reasons) EXPECT_TRUE(is_rule_cited(reason)) << reason;
 

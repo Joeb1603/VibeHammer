@@ -251,17 +251,51 @@ void from_json(const Json& j, AttackProfile& v) {
     v.attack_time_abilities = abilities_from_json(j.at("attack_time_abilities"));
 }
 
+// ---- D-069 Random Characteristics ----
+
+void to_json(Json& j, const CharacteristicRoll& v) { j = Json{{"dice", v.dice}, {"value", v.value}}; }
+void from_json(const Json& j, CharacteristicRoll& v) {
+    j.at("dice").get_to(v.dice);
+    j.at("value").get_to(v.value);
+}
+
+void to_json(Json& j, const RandomAttackDice& v) {
+    j = Json{{"selection", v.selection}, {"model", v.model}, {"A", v.attacks}, {"bonus", v.bonus}};
+}
+void from_json(const Json& j, RandomAttackDice& v) {
+    j.at("selection").get_to(v.selection);
+    j.at("model").get_to(v.model);
+    j.at("A").get_to(v.attacks);
+    j.at("bonus").get_to(v.bonus);
+}
+
+void to_json(Json& j, const AttackDiceRoll& v) {
+    j = Json{{"selection", v.selection}, {"model", v.model}, {"A", v.attacks},
+             {"dice", v.roll.dice},      {"value", v.roll.value}, {"bonus", v.bonus}};
+}
+void from_json(const Json& j, AttackDiceRoll& v) {
+    j.at("selection").get_to(v.selection);
+    j.at("model").get_to(v.model);
+    j.at("A").get_to(v.attacks);
+    j.at("dice").get_to(v.roll.dice);
+    j.at("value").get_to(v.roll.value);
+    j.at("bonus").get_to(v.bonus);
+}
+
 void to_json(Json& j, const AttackBatch& v) {
     j = Json{{"target", v.target},
              {"profile", v.profile},
              {"selections", v.selections},
              {"attack_dice", v.attack_dice}};
+    if (!v.random_attacks.empty()) j["random_attacks"] = v.random_attacks;  // D-069: omitted when empty
 }
 void from_json(const Json& j, AttackBatch& v) {
     j.at("target").get_to(v.target);
     j.at("profile").get_to(v.profile);
     j.at("selections").get_to(v.selections);
     j.at("attack_dice").get_to(v.attack_dice);
+    v.random_attacks.clear();
+    if (j.contains("random_attacks")) j.at("random_attacks").get_to(v.random_attacks);
 }
 
 void to_json(Json& j, const AllocationGroup& v) {

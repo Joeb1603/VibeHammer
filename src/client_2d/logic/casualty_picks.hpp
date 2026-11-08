@@ -20,6 +20,10 @@ struct CasualtyMark {
     core::ModelId model;
     int wounds_lost = 0;
     bool destroyed = false;
+    // D-069: a random D's damage, at its maximum (the preview's stand-in): "up to" wounds_lost (drawn "-7?").
+    bool stand_in = false;
+    // D-069: the model is first reached after an earlier random roll, so with a lower roll it may not be (thin ring).
+    bool provisional = false;
     friend bool operator==(const CasualtyMark&, const CasualtyMark&) = default;
 };
 

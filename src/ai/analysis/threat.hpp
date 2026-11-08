@@ -55,7 +55,7 @@ struct TurnAllowance {
 struct ThreatRanges {
     float move_mm = 0.0f;                 // M (0 for M '-')
     std::array<float, 7> advance_mm{};    // [f]: M + f" after an advance roll of f (09.06)
-    float max_range_mm = 0.0f;            // longest usable ranged profile (D-002, D-026)
+    float max_range_mm = 0.0f;            // longest usable ranged profile (D-026, D-071)
     float max_assault_range_mm = 0.0f;    // longest usable [ASSAULT] profile (shooting after an Advance)
     float max_close_quarters_range_mm = 0.0f;
 

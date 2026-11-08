@@ -226,6 +226,7 @@ struct AttacksLost {  // D-012: the target is no longer eligible; the batch's at
     UnitId target;
     std::size_t batch = 0;
     int attack_dice = 0;
+    std::vector<RandomAttackDice> random_attacks{};  // D-069: its random A, lost unrolled (JSON omitted when empty)
     friend bool operator==(const AttacksLost&, const AttacksLost&) = default;
 };
 struct GameOver {  // D-007
@@ -238,6 +239,12 @@ struct WoundRollsRerolled {  // 24.38 [TWIN-LINKED], D-011 (D-072): the attacker
     std::vector<WoundReroll> rerolls;  // each re-rolled die (index, before, after), in index order; empty: kept
     WoundRolls rolls;                  // every wound roll of the batch after the re-rolls
     friend bool operator==(const WoundRollsRerolled&, const WoundRollsRerolled&) = default;
+};
+struct AttackDiceRolled {  // 04.03 Gather Attack Dice, D-069: a batch's random A, one per model and weapon
+    std::size_t batch = 0;
+    std::vector<AttackDiceRoll> rolls;  // in selection order; each roll's bonus dice added after it
+    int attack_dice = 0;                // the batch's attack dice once gathered (fixed ones included)
+    friend bool operator==(const AttackDiceRolled&, const AttackDiceRolled&) = default;
 };
 }  // namespace event
 
@@ -253,7 +260,7 @@ using GameEvent =
                  event::BattleShockEnded, event::ModelRemovedForCoherency, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
-                 event::GameOver, event::WoundRollsRerolled>;
+                 event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "core/geometry/units.hpp"
+#include "core/model/dice_expr.hpp"
 
 namespace wh40k::client {
 
@@ -153,9 +154,13 @@ std::string body(const core::GameEvent& e) {
                 return model(x.model) + " of " + unit(x.unit) + " is removed to restore coherency (destroyed)";
             } else if constexpr (std::is_same_v<T, ev::AttackBatchesGathered>) {
                 int dice = 0;
-                for (const auto& b : x.batches) dice += b.attack_dice;
+                std::vector<core::RandomAttackDice> random;  // D-069: rolled when each batch is resolved
+                for (const auto& b : x.batches) {
+                    dice += b.attack_dice;
+                    random.insert(random.end(), b.random_attacks.begin(), b.random_attacks.end());
+                }
                 return unit(x.attacker) + " attacks: " + std::to_string(x.batches.size()) + " batch(es), " +
-                       std::to_string(dice) + " attack dice";
+                       attack_count_text(dice, random) + " attack dice";
             } else if constexpr (std::is_same_v<T, ev::AttackBatchSelected>) {
                 return "Batch " + std::to_string(x.batch) + ": " + std::to_string(x.attack_dice) + " dice at " +
                        unit(x.target);
@@ -175,17 +180,27 @@ std::string body(const core::GameEvent& e) {
                 return "Save rolls for " + unit(x.target) + ": " + ints(x.rolls);
             } else if constexpr (std::is_same_v<T, ev::SavesResolved>) {
                 int failed = 0;
-                for (const auto& s : x.result.steps) failed += s.damage ? 1 : 0;
+                std::string rolls;  // D-069: each random D, rolled once its model was selected
+                for (const auto& s : x.result.steps) {
+                    failed += s.damage ? 1 : 0;
+                    if (!s.damage || !s.damage_roll) continue;
+                    rolls += (rolls.empty() ? "" : ", ") + std::to_string(s.damage->damage) + " (rolled " +
+                             ints(s.damage_roll->dice) + ") on " + model(s.damage->model) +
+                             (s.damage->destroyed ? " (destroyed)" : "");
+                }
                 return std::to_string(failed) + " failed save(s), " + std::to_string(x.result.models_destroyed) +
                        " destroyed" +
                        (x.result.attacks_lost > 0 ? ", " + std::to_string(x.result.attacks_lost) + " attacks lost"
-                                                  : std::string());
+                                                  : std::string()) +
+                       (rolls.empty() ? std::string() : "; damage rolls: " + rolls);
             } else if constexpr (std::is_same_v<T, ev::ModelDestroyed>) {
                 return model(x.model) + " of " + unit(x.unit) + " is destroyed";
             } else if constexpr (std::is_same_v<T, ev::UnitDestroyed>) {
                 return unit(x.unit) + " is destroyed";
             } else if constexpr (std::is_same_v<T, ev::AttacksLost>) {
-                return std::to_string(x.attack_dice) + " attacks against " + unit(x.target) + " are lost";
+                // D-069: a random A not rolled yet is lost unrolled.
+                return attack_count_text(x.attack_dice, x.random_attacks) + " attacks against " + unit(x.target) +
+                       " are lost" + (x.random_attacks.empty() ? "" : " (not rolled)");
             } else if constexpr (std::is_same_v<T, ev::GameOver>) {
                 return "Game over: " + x.reason;
             } else if constexpr (std::is_same_v<T, ev::WoundRollsRerolled>) {
@@ -197,6 +212,15 @@ std::string body(const core::GameEvent& e) {
                     dice += (dice.empty() ? "" : ", ") + wound_roll(r.before) + " -> " + wound_roll(r.after);
                 }
                 return "Wound re-rolls ([TWIN-LINKED]): " + dice + " -> " + total;
+            } else if constexpr (std::is_same_v<T, ev::AttackDiceRolled>) {
+                // 04.03, D-069: each model's random A, its bonus dice added after.
+                std::string rolls;
+                for (const core::AttackDiceRoll& r : x.rolls) {
+                    rolls += (rolls.empty() ? "" : "; ") + model(r.model) + " " + characteristic_roll_text(r.attacks, r.roll);
+                    if (r.bonus > 0) rolls += ", +" + std::to_string(r.bonus) + " = " + std::to_string(r.total());
+                }
+                return "Attack dice (batch " + std::to_string(x.batch) + ", random A): " + rolls + " -> " +
+                       std::to_string(x.attack_dice) + " attack dice";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -206,8 +230,35 @@ std::string body(const core::GameEvent& e) {
 
 }  // namespace
 
+std::string characteristic_roll_text(const core::DiceExpr& expr, const core::CharacteristicRoll& roll) {
+    std::string terms;
+    for (const int face : roll.dice) {
+        if (!terms.empty()) terms += '+';
+        // 01.05: a D3 is a D6 halved, rounding up; the D6 is shown in brackets.
+        terms += expr.sides == 3 ? std::to_string((face + 1) / 2) + "[" + std::to_string(face) + "]" : std::to_string(face);
+    }
+    if (expr.modifier > 0) terms += (terms.empty() ? "" : "+") + std::to_string(expr.modifier);
+    return core::to_string(expr) + " -> " + terms + " = " + std::to_string(roll.value);
+}
+
+std::string attack_count_text(int attack_dice, const std::vector<core::RandomAttackDice>& random) {
+    int known = attack_dice;
+    for (const core::RandomAttackDice& r : random) known += r.bonus;
+    std::string out = random.empty() || known > 0 ? std::to_string(known) : std::string();
+    for (const core::RandomAttackDice& r : random) out += (out.empty() ? "" : " + ") + core::to_string(r.attacks);
+    return out;
+}
+
 bool is_roll_event(const core::GameEvent& event) {
     if (const auto* r = std::get_if<ev::WoundRollsRerolled>(&event)) return !r->rerolls.empty();  // 24.38: dice re-rolled
+    if (std::holds_alternative<ev::AttackDiceRolled>(event)) return true;  // D-069: a random A
+    if (const auto* s = std::get_if<ev::SavesResolved>(&event)) {
+        // D-069: a random D's damage rolls.
+        for (const auto& step : s->result.steps) {
+            if (step.damage_roll) return true;
+        }
+        return false;
+    }
     return std::holds_alternative<ev::HitRollsMade>(event) || std::holds_alternative<ev::WoundRollsMade>(event) ||
            std::holds_alternative<ev::SaveRollsMade>(event) || std::holds_alternative<ev::AdvanceRolled>(event) ||
            std::holds_alternative<ev::ChargeRolled>(event) || std::holds_alternative<ev::HazardRollsMade>(event) ||

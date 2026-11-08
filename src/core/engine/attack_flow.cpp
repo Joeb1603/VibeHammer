@@ -10,6 +10,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/mortal_wounds.hpp"
+#include "core/rules/random_characteristics.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -89,14 +90,15 @@ const BatchInProgress& current_batch(const AttackFlow& f) {
 
 // D-013 / D-051: does any 05.04 save roll inflict damage, so that a model must be selected? The defender is
 // asked whenever one does, even when the selection is forced (D-051: no model takes damage without the
-// player picking it). Run 05.04 on a copy of the target to find out.
+// player picking it). Run 05.04 on a copy of the target to find out. D-069: a random D takes its stand-in (its
+// maximum), so no dice are rolled; any stand-in gives the same answer.
 bool casualty_decision_needed(const GameState& state, const AttackFlow& f) {
     const BatchInProgress& b = current_batch(f);
     const AttackBatch& batch = f.batches[b.batch];
     Unit copy = unit_ref(state, batch.target);
     const ModelChooser first = [](const Unit&, std::span<const ModelId> options) { return options.front(); };
-    const InflictDamageResult r =
-        inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, first);
+    const InflictDamageResult r = inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile,
+                                                 first, false, damage_stand_in);
     return std::any_of(r.steps.begin(), r.steps.end(), [](const SaveStep& s) { return s.damage.has_value(); });
 }
 
@@ -113,12 +115,21 @@ void after_wound_rolls(GameState& state, std::size_t index, const WoundRolls& wo
     f.current = BatchInProgress{index, wounds.wounds(), create_allocation_groups(target), std::nullopt, std::nullopt};
 }
 
-// 04.03 Gather Attack Dice + 05.01 + 05.02 for batch `index`. A [TWIN-LINKED] batch with a failed wound roll waits
-// for its attacker's re-roll choice (24.38, D-072); every other batch goes straight on, with the same dice as before.
+// 04.03 Gather Attack Dice + 05.01 + 05.02 for batch `index`. D-069: the batch's random A are rolled first, one per
+// model and weapon, with their bonus dice added after. A [TWIN-LINKED] batch with a failed wound roll waits for its
+// attacker's re-roll choice (24.38, D-072); every other batch goes straight on, with the same dice as before.
 void start_batch(GameState& state, DiceSource& dice, std::size_t index, Events& events) {
     AttackFlow& f = flow_of(state);
+    f.current_target = f.batches[index].target;  // 04.03 Select Enemy Unit
+    if (!f.batches[index].random_attacks.empty()) {
+        // D-069 (04.03 Gather Attack Dice): each random A for its model and weapon, then the batch is fully gathered.
+        AttackBatch& gathering = f.batches[index];
+        std::vector<AttackDiceRoll> rolls = roll_random_attacks(dice, gathering.random_attacks);
+        for (const AttackDiceRoll& r : rolls) gathering.attack_dice += r.total();
+        gathering.random_attacks.clear();
+        events.push_back(event::AttackDiceRolled{index, std::move(rolls), gathering.attack_dice});
+    }
     const AttackBatch batch = f.batches[index];
-    f.current_target = batch.target;  // 04.03 Select Enemy Unit
     events.push_back(event::AttackBatchSelected{f.attacker, index, batch.target, batch.attack_dice});
 
     const Unit& target = unit_ref(state, batch.target);
@@ -141,8 +152,9 @@ void declare_order(GameState& state, std::vector<std::size_t> order, Events& eve
     events.push_back(event::AllocationOrderDeclared{f.batches[b.batch].target, order_groups(b.groups, *b.order)});
 }
 
-// 05.04 with the casualty priority (D-013), then the batch is done.
-void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, Events& events) {
+// 05.04 with the casualty priority (D-013), then the batch is done. D-069: a random D is rolled from `dice` for each
+// attack that inflicts damage, after the priority has selected its model (the order still answers every step).
+void resolve_casualties(GameState& state, DiceSource& dice, const std::vector<ModelId>& priority, Events& events) {
     AttackFlow& f = flow_of(state);
     const BatchInProgress b = current_batch(f);
     const AttackBatch& batch = f.batches[b.batch];
@@ -156,8 +168,9 @@ void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, 
         }
         throw std::logic_error("05.04: the casualty order has no legal model");
     };
+    const DamageRoller roll = [&dice](const DiceExpr& d) { return roll_characteristic(dice, d); };
     const InflictDamageResult result =
-        inflict_damage(target, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, by_priority);
+        inflict_damage(target, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, by_priority, false, roll);
     events.push_back(event::SavesResolved{target.id, result});
     for (const SaveStep& step : result.steps) {
         if (step.damage && step.damage->destroyed) {
@@ -272,7 +285,7 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
             return;
         }
         // No save roll inflicts damage (D-051): nothing to select, any priority gives the same result.
-        resolve_casualties(state, model_ids(unit_ref(state, batch.target)), events);
+        resolve_casualties(state, dice, model_ids(unit_ref(state, batch.target)), events);
         return;
     }
 
@@ -286,7 +299,9 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
     for (std::size_t i = 0; i < f.batches.size(); ++i) {
         if (!f.batch_done[i] && target_gone(state, f.batches[i])) {
             f.batch_done[i] = true;
-            events.push_back(event::AttacksLost{f.batches[i].target, i, f.batches[i].attack_dice});
+            // D-069: a random A not rolled yet is lost unrolled.
+            events.push_back(
+                event::AttacksLost{f.batches[i].target, i, f.batches[i].attack_dice, f.batches[i].random_attacks});
             dropped = true;
         }
     }
@@ -448,11 +463,11 @@ void apply_details(GameState& state, Side, const action::RerollWoundRolls& a, Di
     after_wound_rolls(state, p.batch, p.rolls);
 }
 
-void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource&, Events& events) {
+void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource& dice, Events& events) {
     if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
         resolve_attack_mortal_wounds(state, a.priority, events);  // 06.02 ([HAZARDOUS] hazards, 24.15)
     } else if (state.flow.attack) {
-        resolve_casualties(state, a.priority, events);  // 05.04
+        resolve_casualties(state, dice, a.priority, events);  // 05.04 (D-069: random D rolled here)
     } else {
         resolve_move_mortal_wounds(state, a.priority, events);  // 06.02 (Desperate Escape hazards)
     }

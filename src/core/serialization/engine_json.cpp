@@ -164,11 +164,14 @@ void to_json(Json& j, const SaveStep& v) {
     put_opt(j, "group", v.group);
     put_opt(j, "check", v.check);
     put_opt(j, "damage", v.damage);
+    if (v.damage_roll) j["damage_roll"] = *v.damage_roll;  // D-069: omitted for a fixed D
 }
 void from_json(const Json& j, SaveStep& v) {
     get_opt(j, "group", v.group);
     get_opt(j, "check", v.check);
     get_opt(j, "damage", v.damage);
+    v.damage_roll.reset();
+    if (j.contains("damage_roll")) v.damage_roll = j.at("damage_roll").get<CharacteristicRoll>();
 }
 
 void to_json(Json& j, const InflictDamageResult& v) {
@@ -409,6 +412,7 @@ void to_json(Json& j, const GameEvent& v) {
                 j["target"] = e.target;
                 j["batch"] = e.batch;
                 j["attack_dice"] = e.attack_dice;
+                if (!e.random_attacks.empty()) j["random_attacks"] = e.random_attacks;  // D-069: omitted when empty
             } else if constexpr (std::is_same_v<T, GameOver>) {
                 put_opt(j, "winner", e.winner);
                 j["reason"] = e.reason;
@@ -416,6 +420,10 @@ void to_json(Json& j, const GameEvent& v) {
                 j["batch"] = e.batch;  // 24.38 (D-072)
                 j["rerolls"] = e.rerolls;
                 j["rolls"] = e.rolls;
+            } else if constexpr (std::is_same_v<T, AttackDiceRolled>) {
+                j["batch"] = e.batch;  // 04.03 (D-069)
+                j["rolls"] = e.rolls;
+                j["attack_dice"] = e.attack_dice;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -512,7 +520,9 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "UnitDestroyed") {
         v = UnitDestroyed{j.at("unit").get<UnitId>()};
     } else if (kind == "AttacksLost") {
-        v = AttacksLost{j.at("target").get<UnitId>(), j.at("batch").get<std::size_t>(), j.at("attack_dice").get<int>()};
+        AttacksLost lost{j.at("target").get<UnitId>(), j.at("batch").get<std::size_t>(), j.at("attack_dice").get<int>(), {}};
+        if (j.contains("random_attacks")) j.at("random_attacks").get_to(lost.random_attacks);  // D-069
+        v = lost;
     } else if (kind == "GameOver") {
         GameOver g;
         get_opt(j, "winner", g.winner);
@@ -521,6 +531,9 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "WoundRollsRerolled") {
         v = WoundRollsRerolled{j.at("batch").get<std::size_t>(), j.at("rerolls").get<std::vector<WoundReroll>>(),
                                j.at("rolls").get<WoundRolls>()};
+    } else if (kind == "AttackDiceRolled") {
+        v = AttackDiceRolled{j.at("batch").get<std::size_t>(), j.at("rolls").get<std::vector<AttackDiceRoll>>(),
+                             j.at("attack_dice").get<int>()};
     } else {
         bad_enum("GameEvent", j);
     }

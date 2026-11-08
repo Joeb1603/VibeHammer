@@ -55,4 +55,12 @@ struct EffectLine {
 // "24\"  A2  BS3+  S4  AP-1  D1" (WS for melee).
 [[nodiscard]] std::string profile_stats(const core::WeaponProfile& weapon);
 
+// D-069 Random Characteristics: help for a random A ("Random A (D6+3)") or D ("Random D (D6+1)"); nullopt when the
+// characteristic is fixed.
+[[nodiscard]] std::optional<HelpEntry> random_attacks_help(const core::WeaponProfile& weapon);
+[[nodiscard]] std::optional<HelpEntry> random_damage_help(const core::WeaponProfile& weapon);
+// D-069: one Info line per random characteristic of `weapon`, for the weapon menus: "Attacks D6+3 per model, rolled
+// when the attacks are resolved (D-069)".
+[[nodiscard]] std::vector<EffectLine> random_characteristic_lines(const core::WeaponProfile& weapon);
+
 }  // namespace wh40k::client

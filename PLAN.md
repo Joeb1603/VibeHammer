@@ -2309,7 +2309,7 @@ milestone per session" and "agree each milestone first" for these milestones onl
 
 ---
 
-## M62: Random characteristics
+## M62: Random characteristics ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** design first, then pre-approved · **Rules:** 04.03, 05.04 · **Decision:** D-069 (replaces D-002, amends D-013)
 
 > **Random A** is rolled per selection when its batch resolves (event `AttackDiceRolled`). Blast is added
@@ -2326,6 +2326,131 @@ milestone per session" and "agree each milestone first" for these milestones onl
 - Tests `D069_`, `R04_03_` and `R05_04_`, including one proving that previews never move the dice position.
 - Client dice cards and a replay.
 - Old play and replays unchanged.
+
+**Results (2026-11-08):** design in D-069 (replaces D-002, amends D-013 and D-051), reviewed before any code. At review,
+random-A melee weapons were made refused rather than declared with a sentinel `attacks` 0 (none in the data).
+- **Engine:**
+  - *Rolling (01.05):* `rules/random_characteristics.{hpp,cpp}` (new). `roll_characteristic` rolls one D6 per die, a
+    D3 halved, plus the modifier. `damage_stand_in` is the maximum (`DiceExpr::max_value`). `roll_random_attacks`
+    rolls a batch's random A.
+  - *Random A (04.03):*
+    - `selection_dice` replaces the fixed-only arithmetic. `gather_attack_batches` keeps each random-A selection
+      unrolled in `AttackBatch::random_attacks` (`{selection, model, A, bonus}`, the [BLAST] / [RAPID FIRE] dice).
+    - `start_batch` rolls them when the batch is gathered for resolution, after it is selected and before its hit
+      rolls: event `AttackDiceRolled` (04.03), then `AttackBatchSelected` with the full count.
+    - A batch lost to D-012 is never rolled; `AttacksLost` lists its unrolled A. `gather_attack_dice` keeps its
+      fixed-A precondition.
+  - *Random D (05.04):* `inflict_damage` takes a `DamageRoller`. The engine rolls from its dice when `OrderCasualties`
+    is applied, for each attack that inflicts damage, after the model is selected. `SaveStep::damage_roll` records the
+    roll; the excess is lost; one order per batch.
+  - *The stand-in:* `casualty_decision_needed` and `preview_casualties` use `damage_stand_in` and roll nothing.
+    `CasualtyPreview` gains `random_damage` (the numbers are "up to") and `provisional_from` / `next_provisional()`.
+  - *Refusals:* the D-002 refusals in shooting, fight and the bots are removed. A random A on a melee profile is
+    refused through `unimplemented_ability_problem` ("D-069: ... it can't be selected"); `selection_dice` throws on
+    one as the safety net.
+  - *`resolve_attack_batch`* follows the engine's dice order (random A first, random D last) and reports
+    `attack_rolls` / `attack_dice`.
+  - *JSON:* `random_attacks` on `AttackBatch` and `AttacksLost`, and `damage_roll` on `SaveStep`, are omitted when
+    empty. `AttackDiceRolled` is appended to the event variant.
+- **Client:**
+  - *Dice cards:* "Attack dice" (04.03; "Bio-plasmic scream: D6+3 -> 4+3 = 7, +2 [BLAST] = 9", one line per model when
+    several roll) before the hit card, whose "N attack dice" counts the rolled dice. "Damage rolls" (05.04) after the
+    casualties ("1+1 = 2 -> model 6 (-2); 5+1 = 6 -> model 6 (-6)", "(destroyed, 1 lost)").
+  - *Log:* text for the three events (a D3 shows its D6 in brackets: "3[5]"); `is_roll_event` includes both.
+  - *Expressions:* the start-of-attacks and lost-attacks lines show a random A as its expression ("2 + D6+3"). The
+    weapon menus add an Info line per random characteristic and a "Random A (D6+3)" / "Random D (D6+1)" help entry
+    citing D-069; the datasheet window shows the same help on hovering A or D.
+  - *Casualty picking:* the hint reads "the next D6+1 damage (up to 7)" and "Thin rings are provisional." once the next
+    pick is. The box reads "Damage left to allocate: up to N (rolled when you confirm)". A stand-in mark reads "-7?",
+    and a provisional mark has a thin ring (`CasualtyMark::stand_in` / `provisional`).
+  - *Flag:* `--pick-models <id,...>` picks models in the first casualty decision, as clicks would (for the
+    screenshot, like M61's `--pick-dice`).
+- **Bots:**
+  - `profile_supported` lets random A and D through. `VolleyBatch` carries its random A expressions (`volley_batch()`
+    converts an engine batch).
+  - `expected_outcome` mixes exactly over A (the fixed dice, then each count up to the maximum, weighted by the
+    convolution of the expressions) and over D (each damaging transition branches over the D's values). The
+    distributions come from `roll_characteristic` on each face (`OddsCache::value_pmf` / `sum_pmf`). Fixed A and D run
+    the same arithmetic as before.
+  - `sample_outcome` rolls both with the bot's own dice through `resolve_attack_batch`.
+  - Hard's chain tables replicate the random A per model. Normal's unpermuted batch order sorts by mean damage. The
+    state hash includes `random_attacks` only while one waits.
+  - The bots plan casualties against the preview's maximum (documented in D-069). Easy's default plans now fire the
+    Havocs' lascannons (fixtures only).
+- **Replay** `tests/replays/m62_random_characteristics.json` (9 steps, seed 10, picked by
+  `Replay.DISABLED_SearchM62Seed`; embedded state):
+  - The Havocs vs Hive Tyrant fixture with the m60 heavy venom cannon.
+  - The four lascannons fire at the Tyrant; two saves fail. Side B orders the casualties once, and the two D6+1 rolls
+    (2, then 6 on the wounded Tyrant) leave it on 2 wounds.
+  - The Tyrant remains stationary and fires the cannon: D3 rolled (a 1), +1 [BLAST] for the five Havocs.
+  - It stops at Side B's first Charge decision. It loads in the replay viewer.
+- **Tests** (40 new, all pass):
+  - `tests/m62_random_characteristics_test.cpp` (21):
+    - `R04_03_GatherAttackDice.*` (6): per model and weapon, Blast after, Rapid Fire after, a fixed and a random A in one
+      batch, Torrent, a D-012 loss never rolled, a fixed A never rolled.
+    - `R05_04_InflictDamage.*` (5): rolled after the model is selected, the excess lost, wounded first, no roll for saved
+      or lost attacks, one order per batch.
+    - `D069_RandomCharacteristics.*` (8): the dice notation; the refused random-A melee stand-in; the preview's maximum
+      and provisional steps; previews and decision checks never move the dice (scripted dice and the state's
+      `DiceState`); damaged models always among the picks (all 216 roll combinations); `resolve_attack_batch` equals
+      the engine on 24 seeds of real weapons; which roster weapons are now usable; none equipped in the old scenarios.
+    - `D069_Json.*` (2): round trips with defaults omitted, and a state waiting with an unrolled random A.
+  - `engine_property_test.cpp`: `D004_LegalActions.RandomPlayRollsTheRostersRandomAttacksAndDamage`.
+  - `tests/ai/m62_test.cpp` (10, + a disabled timing diagnostic): `profile_supported`; the distributions; the exact A
+    mixture equals the average of fixed counts; 20,000 engine batches each for the scream and the heavy venom cannon
+    (random A, Blast) and the lascannon (random D) against the Tyrant, Tyrant Guard, a Screamer-killer and V1
+    Intercessors; the samples' own dice; `volley_batch`; the state hash; every level fires the lascannons; clean games
+    (the duel, the duel with the cannon at every level, the roster fixture at Easy and Normal).
+  - `tests/client/m62_test.cpp` (8): both cards, the log text, the picks' marks and hint, the help, the Havocs' default
+    plan, `--pick-models`.
+  - *Changed, for the rule reason (random A and D are rolled now; each keeps its check, with a still-refused stand-in
+    where it was about a refusal):*
+    - `engine_property_test.cpp`: the `resolvable()` helper drops the fixed-A/D condition (a random-A melee weapon
+      stays unresolvable). `RandomPlayFromTheRostersFixture` now expects the lascannons and scream to be used, where
+      it expected them not to be. `D026_UnimplementedAbilities.RosterWeaponsTheEngineCantResolve...` uses a
+      [DEVASTATING WOUNDS] stand-in lascannon (refusal "24.10: ").
+    - Client `M60_DefaultPlans.TheHavocChampionFiresItsPlasmaGunOnTheStandardProfile` uses [MELTA 2] stand-in
+      lascannons.
+    - ai `M40_ExpectedDamage.RejectedProfilesAreExcluded`: the Shardlauncher is supported; the Strangleweb stays
+      refused, now for [DEVASTATING WOUNDS]. The M40 grid builds its dice with `selection_dice` (a random A at its
+      mean for sizing). The Shardlauncher adds 2 variants (23 -> 25), and a Shardlauncher case joins the ctest picks.
+    - `Serialization.EveryEventKindRoundTrips` lists the new event.
+    - The m59 generator's round-1 check allows the Havoc lascannons (see below).
+    - The `D002_RandomCharacteristics.*` tests are unchanged and pass: a fixed-A precondition, and a random D without
+      a roller.
+  - ctest (Debug and Release): 914 -> 954 tests, all pass. The full M40 grid (75 cases x 20,000 batches) passes in
+    Release.
+- **Acceptance:**
+  - *Tests `D069_`, `R04_03_` and `R05_04_`, incl. previews never moving the dice:* **met** (above).
+  - *Client dice cards and a replay:* **met.** Screenshots in scratchpad `m62/`:
+    - `attack_dice_card.png`: the heavy venom cannon, `--load` with the Easy bot.
+    - `damage_rolls_card.png`: the lascannons on the Tyrant.
+    - `preview_provisional_v1.png`, with crops `preview_provisional_bar.png` and `preview_provisional_marks.png`: V1
+      with stand-in D3 fleshborers (on the 60" board the marks are too small at the fitted zoom). Two picks via
+      `--pick-models 3,2`, both marked "-2?", the second with a thin ring, and the hint and box.
+    - `replay_frame3.png`: the replay viewer.
+  - *Old play and replays unchanged:* **met.**
+    - `Replay.DISABLED_RegenerateReplays` and the four ai regenerations leave every replay byte-identical except
+      `m59_rosters_fixture_round1.json` and the new `m62_random_characteristics.json`.
+    - m59 changes in its description only (agreed at review): its steps and expectation are identical. Its generator's
+      round-1 check now allows the Havoc lascannons, which reach the Tyranids, and the text says the lascannons are in
+      range and Side A ends its Shooting phase without firing.
+    - No step of m59, m60 or m61 stopped validating.
+    - The Release arena's `--per-game` output matches `baseline/m60` on every `game` line for all 24 pairings of V1,
+      both bot scenarios and Strike.
+  - *Normal timings (Release):*
+    - Strike Normal vs Normal, M61 and M62 binaries run alternately on the same machine (three runs each): p95
+      5.46-5.53 ms (M61) and 5.50-5.62 ms (M62); max 68.7-70.9 and 69.6-72.0 ms. That is within about 1.5%, inside the
+      M61 runs' own spread. (`baseline/m60`'s 5.23 ms was measured at another time; M61 itself measures 5.46-5.53 ms
+      now.)
+    - Roster fixture, 40 Normal-vs-Normal games: p95 5.86 ms, max 81.5 ms (M61, without the lascannons and screams:
+      4.72 / 64.6 ms). No rejected action, reverted move or fallback.
+    - The duel: p95 1.25 ms, max 2.6 ms.
+- **Open:**
+  - The action bar's fixed height clips the "Damage left to allocate" box under the three-line casualty hint at the
+    default window size (the M61 open item about the casualty headline). The box is still reachable by scrolling the
+    bar.
+  - The bots plan casualties against the preview's maximum, not the expected damage (an approximation, fixtures only).
 
 ---
 

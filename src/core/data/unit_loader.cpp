@@ -76,7 +76,7 @@ DiceExpr dice_value(const Json& j, const char* key, const std::string& where) {
         return DiceExpr::fixed(e.get<int>());
     }
     if (e.is_string()) {
-        return parse_dice_expr(e.get<std::string>());  // D-002: parsed, never rolled
+        return parse_dice_expr(e.get<std::string>());  // D-069: rolled when needed (A and D only)
     }
     fail(where, std::string("field '") + key + "' must be an integer or dice string, got " + e.dump());
 }

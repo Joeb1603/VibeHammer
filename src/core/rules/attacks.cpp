@@ -104,6 +104,12 @@ WeaponSelection select_weapon_target(const GameState& state, ModelId attacker, s
 }
 
 std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon) {
+    // D-069: a random A on a melee weapon is not implemented (04.02 splits a known number of attacks; no melee profile
+    // in the data has one). A random A or D is rolled otherwise.
+    if (weapon.kind == WeaponKind::Melee && !weapon.attacks.is_fixed()) {
+        return "D-069: '" + weapon.name + "' has a random A (" + to_string(weapon.attacks) +
+               "), which the engine does not implement for melee weapons (none in the data); it can't be selected";
+    }
     // [TWIN-LINKED] (24.38) is implemented since M61 (D-072).
     if (weapon.has<ability::DevastatingWounds>()) {
         return "24.10: '" + weapon.name + "' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)";
@@ -167,17 +173,22 @@ AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackConte
     return p;
 }
 
-int gather_attack_dice(const WeaponProfile& weapon, const WeaponSelection& selection,
-                       const AttackContext& context) {
+SelectionDice selection_dice(const WeaponProfile& weapon, const WeaponSelection& selection,
+                             const AttackContext& context) {
     // 04.01: ranged attacks with ranged weapons while shooting, melee attacks with melee weapons while
     // fighting.
     const WeaponKind expected = context.type == AttackType::Shooting ? WeaponKind::Ranged : WeaponKind::Melee;
     if (weapon.kind != expected) {
         throw std::logic_error("04.01: profile '" + weapon.name + "' cannot be used for this attack type");
     }
-    const int a = weapon.attacks.fixed_value();  // D-002: random A is not rolled in V1
-
+    const bool random = !weapon.attacks.is_fixed();
+    if (random && weapon.kind == WeaponKind::Melee) {
+        // D-069: refused when selected (unimplemented_ability_problem); this is the safety net.
+        throw std::logic_error("D-069: '" + weapon.name + "' has a random A, which is not implemented for melee weapons");
+    }
+    SelectionDice out;
     if (selection.declared_attacks) {
+        const int a = weapon.attacks.fixed_value();
         // 04.02 Splitting Melee Attacks: gather only the attacks declared against this target.
         if (context.type != AttackType::Fighting) {
             throw std::logic_error("04.02: only melee attacks can be split between targets");
@@ -185,17 +196,33 @@ int gather_attack_dice(const WeaponProfile& weapon, const WeaponSelection& selec
         if (*selection.declared_attacks < 1 || *selection.declared_attacks > a) {
             throw std::logic_error("04.02: declared attacks must be between 1 and the weapon's A");
         }
-        return *selection.declared_attacks;
+        out.dice = *selection.declared_attacks;
+        return out;
     }
 
-    int dice = a;
+    int bonus = 0;
     if (const auto* rf = weapon.get<ability::RapidFire>(); rf != nullptr && selection.target_within_half_range) {
-        dice += rf->x;  // 24.30
+        bonus += rf->x;  // 24.30
     }
     if (const auto* blast = weapon.get<ability::Blast>(); blast != nullptr) {
-        dice += blast->x * (selection.target_models_at_selection / 5);  // 24.05, rounding down
+        bonus += blast->x * (selection.target_models_at_selection / 5);  // 24.05, rounding down
     }
-    return dice;
+    if (random) {
+        out.random = weapon.attacks;  // D-069: rolled for this model and weapon when its batch is resolved
+        out.bonus = bonus;            // added after the roll
+    } else {
+        out.dice = weapon.attacks.fixed_value() + bonus;
+    }
+    return out;
+}
+
+int gather_attack_dice(const WeaponProfile& weapon, const WeaponSelection& selection, const AttackContext& context) {
+    const SelectionDice d = selection_dice(weapon, selection, context);
+    if (d.random) {
+        throw std::logic_error("D-069: '" + weapon.name + "' has a random A (" + to_string(*d.random) +
+                               "), which is rolled when its batch is resolved (selection_dice)");
+    }
+    return d.dice;
 }
 
 std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const WeaponSelection& selection,
@@ -243,7 +270,7 @@ std::vector<AttackBatch> gather_attack_batches(const GameState& state,
         const WeaponProfile& wp = selected_profile(state, sel);
         AttackProfile profile = make_attack_profile(wp, context);
         profile.hit_modifier += sel.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
-        const int dice = gather_attack_dice(wp, sel, context);
+        const SelectionDice dice = selection_dice(wp, sel, context);
 
         if (std::find(target_order.begin(), target_order.end(), sel.target) == target_order.end()) {
             target_order.push_back(sel.target);
@@ -252,11 +279,16 @@ std::vector<AttackBatch> gather_attack_batches(const GameState& state,
             return b.target == sel.target && b.profile == profile;
         });
         if (it == batches.end()) {
-            batches.push_back(AttackBatch{sel.target, profile, {}, 0});
+            batches.push_back(AttackBatch{sel.target, profile, {}, 0, {}});
             it = std::prev(batches.end());
         }
         it->selections.push_back(i);
-        it->attack_dice += dice;
+        if (dice.random) {
+            // D-069: rolled for this model and weapon when the batch is gathered for resolution (04.03).
+            it->random_attacks.push_back(RandomAttackDice{i, sel.attacker, *dice.random, dice.bonus});
+        } else {
+            it->attack_dice += dice.dice;
+        }
     }
     // Keep every target's batches together, targets in first-appearance order.
     std::stable_sort(batches.begin(), batches.end(), [&](const AttackBatch& a, const AttackBatch& b) {

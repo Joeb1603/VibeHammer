@@ -8,6 +8,7 @@
 
 #include "core/dice/modifiers.hpp"
 #include "core/model/keywords.hpp"
+#include "core/rules/random_characteristics.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -363,11 +364,16 @@ DamageResult resolve_damage(Unit& target, ModelId model, int damage) {
 
 InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup> ordered_groups,
                                    std::span<const int> save_rolls, const AttackProfile& profile,
-                                   const ModelChooser& choose_model, bool ask_when_forced) {
+                                   const ModelChooser& choose_model, bool ask_when_forced,
+                                   const DamageRoller& roll_damage) {
     InflictDamageResult out;
     std::vector<int> rolls(save_rolls.begin(), save_rolls.end());
     std::sort(rolls.begin(), rolls.end());  // lowest result(s) to highest result(s)
-    const int damage = profile.damage.fixed_value();  // D-002
+    const bool random_damage = !profile.damage.is_fixed();  // D-069: rolled per attack, below
+    if (random_damage && !roll_damage) {
+        throw std::logic_error("D-069: a random D (" + to_string(profile.damage) + ") needs a damage roller");
+    }
+    const int damage = random_damage ? 0 : profile.damage.fixed_value();
 
     for (const int roll : rolls) {
         SaveStep step;
@@ -390,7 +396,13 @@ InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup
                                            " is not a legal choice");
                 }
             }
-            step.damage = resolve_damage(target, chosen, damage);
+            int d = damage;
+            if (random_damage) {
+                // D-069: each attack's random D is rolled once its model is selected (05.04 Resolve Damage).
+                step.damage_roll = roll_damage(profile.damage);
+                d = step.damage_roll->value;
+            }
+            step.damage = resolve_damage(target, chosen, d);
             out.models_destroyed += step.damage->destroyed ? 1 : 0;
         }
         out.steps.push_back(step);
@@ -406,7 +418,10 @@ BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBat
                                "' is destroyed (Target No Longer Eligible or Viable is not implemented)");
     }
     BatchResult r;
-    r.hits = make_hit_rolls(dice, batch.profile, batch.attack_dice);                           // 05.01
+    r.attack_rolls = roll_random_attacks(dice, batch.random_attacks);  // D-069 (04.03): none for a fixed A
+    r.attack_dice = batch.attack_dice;
+    for (const AttackDiceRoll& a : r.attack_rolls) r.attack_dice += a.total();
+    r.hits = make_hit_rolls(dice, batch.profile, r.attack_dice);                               // 05.01
     r.wounds = make_wound_rolls(dice, batch.profile, r.hits.hits(), target_toughness(target));  // 05.02
     if (twin_linked(batch.profile) && !failed_wound_rolls(r.wounds).empty()) {
         // 24.38 (D-072): the attacker picks the wound rolls to re-roll, as the engine asks.
@@ -438,7 +453,8 @@ BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBat
     r.save_rolls = make_save_rolls(dice, wounds);
 
     // 05.04
-    r.damage = inflict_damage(target, r.allocation_order, r.save_rolls, batch.profile, choose_model);
+    const DamageRoller roll = [&dice](const DiceExpr& d) { return roll_characteristic(dice, d); };  // D-069
+    r.damage = inflict_damage(target, r.allocation_order, r.save_rolls, batch.profile, choose_model, false, roll);
     return r;
 }
 

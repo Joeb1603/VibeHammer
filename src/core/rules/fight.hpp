@@ -94,7 +94,7 @@ inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligib
 
 // Every rule problem with `declarations` for `unit`. Rule-cited; empty means valid. Each engaged model that
 // can make melee attacks declares one melee weapon (04.01), or, if it has [EXTRA ATTACKS] weapons, each of
-// those plus one other melee weapon if it has one it can use (24.11; weapons refused under D-002 / D-026 /
+// those plus one other melee weapon if it has one it can use (24.11; weapons refused under D-069 / D-026 /
 // D-071 count as absent). A weapon is declared once; to attack several units it splits its attacks (04.02).
 [[nodiscard]] std::vector<std::string> melee_problems(const GameState& state, const Unit& unit,
                                                       std::span<const MeleeDeclaration> declarations);

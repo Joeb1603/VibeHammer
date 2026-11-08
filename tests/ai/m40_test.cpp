@@ -239,10 +239,10 @@ struct GridCase {
     const Unit* target = nullptr;
 };
 
-// Every V1 weapon profile the engine accepts (D-002, D-026), with and without [HEAVY] and within and outside
-// [RAPID FIRE] half range, against each V1 target (and a wounded Intercessor squad). The attack dice come from
-// gather_attack_dice for one model, times enough models that the target loses about 60% of its wounds on average
-// (so the means are not tiny and not capped).
+// Every V1 weapon profile the engine accepts (D-026; M62: a random A or D is rolled, D-069), with and without [HEAVY]
+// and within and outside [RAPID FIRE] half range, against each V1 target (and a wounded Intercessor squad). The attack
+// dice come from selection_dice for one model (a random A at its mean), times enough models that the target loses about
+// 60% of its wounds on average (so the means are not tiny and not capped).
 std::vector<GridCase> grid(const std::vector<const Unit*>& targets, OddsCache& cache) {
     std::vector<GridCase> out;
     for (const Weapon& w : all_weapons()) {
@@ -264,15 +264,20 @@ std::vector<GridCase> grid(const std::vector<const Unit*>& targets, OddsCache& c
                         sel.target_within_half_range = half;
                         sel.target_models_at_selection = static_cast<int>(target->models.size());
                         const AttackProfile ap = make_attack_profile(p, ctx);
-                        const int per_model = gather_attack_dice(p, sel, ctx);
+                        const SelectionDice dice = selection_dice(p, sel, ctx);  // D-069: a random A is not rolled here
+                        const int fixed_per_model = dice.dice + dice.bonus;
+                        const double per_model =
+                            fixed_per_model + (dice.random ? pmf_mean(cache.value_pmf(*dice.random)) : 0.0);
+                        const double damage =
+                            ap.damage.is_fixed() ? ap.damage.fixed_value() : pmf_mean(cache.value_pmf(ap.damage));
                         const TargetSnapshot snap = snapshot_of(*target);
                         const HitWoundOdds& hw = cache.hit_wound(ap, snap.toughness);
                         const double q = hw.hit * hw.wound * cache.unsaved(snap.groups[0], ap.armour_penetration);
                         const double per_model_unsaved = per_model * q;
                         const int models = std::clamp(
                             static_cast<int>(std::lround(0.6 * snap.wounds_left() /
-                                                         (per_model_unsaved * std::min(ap.damage.fixed_value(),
-                                                                                       snap.slots[0].wounds_char)))),
+                                                         (per_model_unsaved * std::min(damage,
+                                                                                       static_cast<double>(snap.slots[0].wounds_char))))),
                             1, 20);
                         GridCase c;
                         const bool wounded = std::any_of(target->models.begin(), target->models.end(), [](const Model& m) {
@@ -280,7 +285,9 @@ std::vector<GridCase> grid(const std::vector<const Unit*>& targets, OddsCache& c
                         });
                         c.label = p.name + (heavy ? " +heavy" : "") + (half ? " half-range" : "") + " vs " +
                                   target->name + (wounded ? " (wounded)" : "") + " x" + std::to_string(models);
-                        c.volley = Volley{VolleyBatch{ap, per_model * models}};
+                        VolleyBatch vb{ap, fixed_per_model * models, {}};
+                        if (dice.random) vb.random_attacks.assign(static_cast<std::size_t>(models), *dice.random);
+                        c.volley = Volley{vb};
                         c.target = target;
                         out.push_back(std::move(c));
                     }
@@ -305,8 +312,9 @@ void check_against_samples(const std::vector<GridCase>& cases, OddsCache& cache,
 
 }  // namespace
 
-// The full grid: 17 accepted profiles (the Thunder Hammer, Shardlauncher and Strangleweb are rejected; the spinefist's
-// [TWIN-LINKED] is resolved since M61, D-072, which adds its variant), 23 profile/context variants, 3 targets = 69 cases
+// The full grid: 18 accepted profiles (the Thunder Hammer and Strangleweb are rejected; the spinefist's [TWIN-LINKED] is
+// resolved since M61, D-072, which adds its variant, and the Shardlauncher's random A since M62, D-069, which adds its
+// two), 25 profile/context variants, 3 targets = 75 cases
 // x 20,000 engine batches. About 6 minutes in Debug, so ctest runs
 // the representative subset below and this runs on purpose (Release: a few seconds):
 //   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M40_ExpectedDamage.DISABLED_*
@@ -317,7 +325,7 @@ TEST(M40_ExpectedDamage, DISABLED_FullGridEveryV1ProfileContextAndTarget) {
     wounded.models[2].wounds_remaining = 1;
     OddsCache cache;
     const auto cases = grid({&intercessors(gs), &termagants(gs), &wounded}, cache);
-    EXPECT_EQ(cases.size(), 3u * 23u);  // M61: + the [TWIN-LINKED] spinefist
+    EXPECT_EQ(cases.size(), 3u * 25u);  // M61: + the [TWIN-LINKED] spinefist; M62: + the random-A Shardlauncher
     check_against_samples(cases, cache, 20000);
 }
 
@@ -329,7 +337,7 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
     wounded.models[2].wounds_remaining = 1;
     OddsCache cache;
     const auto all = grid({&intercessors(gs), &termagants(gs), &wounded}, cache);
-    ASSERT_EQ(all.size(), 3u * 23u);  // M61: + the [TWIN-LINKED] spinefist (D-072)
+    ASSERT_EQ(all.size(), 3u * 25u);  // M61: + the [TWIN-LINKED] spinefist (D-072); M62: + the Shardlauncher (D-069)
     const std::vector<std::string> picks{
         "Bolt Rifle - Focused Fire +heavy half-range vs Termagants",
         "Bolt Rifle - Focused Fire vs Intercessor Squad (wounded)",
@@ -340,6 +348,7 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
         "Hand flamer vs Termagants",
         "Spike rifle +heavy vs Intercessor Squad x",
         "Termagant spinefist vs Intercessor Squad x",  // M61: [TWIN-LINKED] (24.38), every failed wound roll re-rolled
+        "Shardlauncher +heavy vs Termagants",          // M62: a random A (D3, D-069) with [BLAST] added after
     };
     std::vector<GridCase> subset;
     for (const GridCase& c : all) {
@@ -354,8 +363,8 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
 TEST(M40_ExpectedDamage, RejectedProfilesAreExcluded) {
     EXPECT_FALSE(profile_supported(profile_named("Thunder Hammer")));        // [DEVASTATING WOUNDS], D-026
     EXPECT_TRUE(profile_supported(profile_named("Termagant spinefist")));    // [TWIN-LINKED]: resolved since M61 (D-072)
-    EXPECT_FALSE(profile_supported(profile_named("Shardlauncher")));         // A D3, D-002
-    EXPECT_FALSE(profile_supported(profile_named("Strangleweb")));           // A D6, D-002
+    EXPECT_TRUE(profile_supported(profile_named("Shardlauncher")));          // A D3: rolled since M62 (D-069)
+    EXPECT_FALSE(profile_supported(profile_named("Strangleweb")));           // [DEVASTATING WOUNDS], D-026 (A D6 is rolled)
     EXPECT_TRUE(profile_supported(profile_named("Plasma pistol - supercharge")));  // [HAZARDOUS] is implemented
 }
 
