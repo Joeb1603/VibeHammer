@@ -9,6 +9,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/state/queries.hpp"
+#include "event_text.hpp"
 #include "unit_style.hpp"
 
 namespace wh40k::client {
@@ -196,6 +197,81 @@ DiceCard reroll_card(const core::GameState& state, const AttackContext& c, const
     return card;
 }
 
+// D-069 (04.03): the bonus dice a selection's random A gets after its roll, named by the abilities that give them.
+std::string bonus_text(const core::GameState& state, const AttackContext& c, const core::AttackDiceRoll& r) {
+    if (r.bonus <= 0) return "";
+    std::string names;
+    if (r.selection < c.selections.size()) {
+        const core::WeaponSelection& sel = c.selections[r.selection];
+        if (const core::WeaponProfile* p = selection_profile(state, sel)) {
+            const core::AttackType type = c.melee ? core::AttackType::Fighting : core::AttackType::Shooting;
+            for (const core::AbilityEffect& e : core::ability_effects(*p, sel, core::AttackContext{type, false})) {
+                if (e.extra_attack_dice <= 0) continue;
+                if (std::holds_alternative<core::ability::Blast>(e.ability)) names += names.empty() ? "[BLAST]" : " and [BLAST]";
+                if (std::holds_alternative<core::ability::RapidFire>(e.ability)) {
+                    names += names.empty() ? "[RAPID FIRE]" : " and [RAPID FIRE]";
+                }
+            }
+        }
+    }
+    return ", +" + std::to_string(r.bonus) + (names.empty() ? std::string() : " " + names) + " = " +
+           std::to_string(r.total());
+}
+
+// D-069 (04.03): the batch's random A, one roll per model and weapon, with the bonus dice added after.
+DiceCard attack_dice_card(const core::GameState& state, const AttackContext& c, const core::event::AttackDiceRolled& e) {
+    DiceCard card{"Attack dice", attack_purpose(state, c), "", "", "04.03", core::Side::A, {}};
+    if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
+    card.need = "Random A: rolled for each model and weapon (D-069); [BLAST] and [RAPID FIRE] dice are added after the roll";
+    const core::AttackBatch* batch = current_batch(c);
+    const std::string weapon = batch != nullptr ? weapon_name(state, c, *batch) : std::string();
+    std::string result;
+    for (const core::AttackDiceRoll& r : e.rolls) {
+        for (const int face : r.roll.dice) card.dice.push_back(DieFace{face, true, false, true});
+        std::string line = e.rolls.size() > 1 ? "Model " + std::to_string(r.model.v) : weapon;
+        if (line.empty()) line = "Model " + std::to_string(r.model.v);
+        line += ": " + characteristic_roll_text(r.attacks, r.roll) + bonus_text(state, c, r);
+        result += (result.empty() ? "" : "; ") + line;
+    }
+    if (e.rolls.size() > 1 || (batch != nullptr && e.attack_dice != e.rolls.front().total())) {
+        result += ". " + plural(e.attack_dice, "attack die", "attack dice") + " in all";
+    }
+    card.result = result;
+    return card;
+}
+
+// D-069 (05.04): a random D's damage rolls, one per attack that inflicts damage, rolled once its model was selected.
+std::optional<DiceCard> damage_card(const core::GameState& state, const AttackContext& c,
+                                    const core::InflictDamageResult& result) {
+    const bool any = std::any_of(result.steps.begin(), result.steps.end(),
+                                 [](const core::SaveStep& s) { return s.damage_roll.has_value(); });
+    if (!any) return std::nullopt;
+    DiceCard card{"Damage rolls", attack_purpose(state, c), "", "", "05.04", core::Side::A, {}};
+    if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);  // the attacker's weapon's D
+    const core::AttackBatch* batch = current_batch(c);
+    const core::DiceExpr d = batch != nullptr ? batch->profile.damage : core::DiceExpr{};
+    card.need = "Random D (" + core::to_string(d) +
+                "): rolled for each attack that inflicts damage, once its model is selected (D-069); excess damage is "
+                "lost";
+    std::string text;
+    for (const core::SaveStep& s : result.steps) {
+        if (!s.damage || !s.damage_roll) continue;
+        for (const int face : s.damage_roll->dice) card.dice.push_back(DieFace{face, true, false, true});
+        std::string line = characteristic_roll_text(d, *s.damage_roll);
+        line = line.substr(line.find("-> ") + 3);  // "4+1 = 5"
+        line += " -> model " + std::to_string(s.damage->model.v);
+        if (s.damage->destroyed) {
+            const int lost = s.damage->damage - s.damage->wounds_lost;
+            line += " (destroyed" + (lost > 0 ? ", " + std::to_string(lost) + " lost" : std::string()) + ")";
+        } else {
+            line += " (-" + std::to_string(s.damage->wounds_lost) + ")";
+        }
+        text += (text.empty() ? "" : "; ") + line;
+    }
+    card.result = text;
+    return card;
+}
+
 DiceCard save_card(const core::GameState& state, const AttackContext& c, core::UnitId target,
                    const std::vector<int>& rolls) {
     DiceCard card{"Save rolls", "", "", "", "05.03", core::Side::A, {}};
@@ -280,6 +356,17 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                         if (show && !e.rerolls.empty()) cards.push_back(reroll_card(state, c, e));
                     } else if constexpr (std::is_same_v<T, ev::SaveRollsMade>) {
                         if (show) cards.push_back(save_card(state, c, e.target, e.rolls));
+                    } else if constexpr (std::is_same_v<T, ev::AttackDiceRolled>) {
+                        // D-069: the batch is now gathered; its hit card counts the rolled dice.
+                        c.batch = e.batch;
+                        if (e.batch < c.batches.size()) {
+                            c.batches[e.batch].attack_dice = e.attack_dice;
+                            c.batches[e.batch].random_attacks.clear();
+                        }
+                        if (show) cards.push_back(attack_dice_card(state, c, e));
+                    } else if constexpr (std::is_same_v<T, ev::SavesResolved>) {
+                        if (!show) return;
+                        if (std::optional<DiceCard> card = damage_card(state, c, e.result)) cards.push_back(*card);
                     } else if constexpr (std::is_same_v<T, ev::AdvanceRolled>) {
                         // D-045: a kept roll (D-005) was not rolled again, so there is nothing to roll.
                         if (!show || e.reused) return;

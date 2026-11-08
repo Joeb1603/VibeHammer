@@ -37,7 +37,7 @@ namespace wh40k::core {
 [[nodiscard]] bool target_within_range(const Model& model, const WeaponProfile& profile, const Unit& target);
 
 // Every rule problem with `shots` for `unit` shooting with `type` (04.01, 04.02, 06.01, 10.05, 10.06,
-// 24.07, D-002, D-016). Rule-cited; empty means the declarations are valid. Does not check the unit or
+// 24.07, D-016; D-069: a random A or D is rolled). Rule-cited; empty means the declarations are valid. Does not check the unit or
 // shooting type themselves (see unit_shoot_problem / shooting_type_problem).
 [[nodiscard]] std::vector<std::string> shot_problems(const GameState& state, const Unit& unit, ShootingType type,
                                                      std::span<const ShotDeclaration> shots);

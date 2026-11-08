@@ -59,6 +59,8 @@ DatasheetWeaponRow weapon_row(const core::WeaponProfile& p) {
         r.ability_help.push_back(weapon_ability_help(a));
     }
     r.abilities = join(labels, " ");
+    r.attacks_help = random_attacks_help(p);  // D-069
+    r.damage_help = random_damage_help(p);
     return r;
 }
 

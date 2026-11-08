@@ -6,7 +6,8 @@
 // M61 (D-072): --load <save.json> starts the client on a saved game (the in-game Save / Load format, D-025 / D-054),
 // for screenshots of decisions --steps can't reach. It can't be combined with --scenario, --replay or --seed.
 // --pick-dice <i,j,...> picks those wound dice (0-based) in the first [TWIN-LINKED] re-roll pop-up, as clicks would
-// (for screenshots, like --select-model); it submits nothing.
+// (for screenshots, like --select-model); it submits nothing. M62 (D-069): --pick-models <id,id,...> picks those models
+// (by id) in the first casualty decision picked on the board (D-051), as clicks would; it submits nothing either.
 
 #include <array>
 #include <cstddef>
@@ -40,6 +41,7 @@ struct LaunchOptions {
     int bot_steps = 0;                  // --bot-steps
     std::optional<std::string> load;    // --load (M61)
     std::vector<std::size_t> pick_dice;  // --pick-dice (M61)
+    std::vector<unsigned> pick_models;   // --pick-models (M62)
 };
 
 // argv[1..]: "--key value" pairs.

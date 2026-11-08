@@ -313,6 +313,9 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::AttacksLost{UnitId{2}, 1, 2},
         event::GameOver{Side::A, "D-007: Side B has no models on the battlefield; Side A wins"},
         event::WoundRollsRerolled{0, {WoundReroll{0, wounds.rolls[0], WoundRoll{5, 5, WoundOutcome::Wound}}}, wounds},  // M61
+        event::AttackDiceRolled{0,
+                                {AttackDiceRoll{1, ModelId{3}, DiceExpr{1, 6, 3}, CharacteristicRoll{{4}, 7}, 2}},
+                                9},  // M62 (D-069)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

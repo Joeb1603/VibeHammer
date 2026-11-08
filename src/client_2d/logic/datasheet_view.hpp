@@ -3,6 +3,7 @@
 // What a unit's datasheet window shows (D-034, M21): built from the live unit, so it follows casualties.
 // Display only (D-024).
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,6 +27,8 @@ struct DatasheetWeaponRow {
     std::string range, attacks, skill, strength, armour_penetration, damage;
     std::string abilities;  // e.g. "[ASSAULT] [RAPID FIRE 1]"; empty when none
     std::vector<HelpEntry> ability_help;  // D-037: one per ability, in the same order
+    std::optional<HelpEntry> attacks_help;  // D-069: a random A's help (Random Characteristics); nullopt when fixed
+    std::optional<HelpEntry> damage_help;   // D-069: a random D's
     int carried_by = 0;     // models carrying the weapon
 };
 

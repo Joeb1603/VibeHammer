@@ -385,7 +385,12 @@ void ChainTable::build_distributions(analysis::OddsCache& odds, float bucket) {
                 set.offset.assign(static_cast<std::size_t>(set.max_n * set.max_w), 0);
                 for (int n = 1; n <= set.max_n; ++n) {
                     analysis::Volley volley = single;  // n copies of the representative model
-                    for (analysis::VolleyBatch& vb : volley) vb.attack_dice *= n;
+                    for (analysis::VolleyBatch& vb : volley) {
+                        vb.attack_dice *= n;
+                        // D-069: each copy rolls its own random A.
+                        const std::vector<core::DiceExpr> one = vb.random_attacks;
+                        for (int i = 1; i < n; ++i) vb.random_attacks.insert(vb.random_attacks.end(), one.begin(), one.end());
+                    }
                     for (int w = 1; w <= set.max_w; ++w) {
                         const analysis::AttackOutcome out =
                             analysis::expected_outcome(odds, volley, snaps[static_cast<std::size_t>(w - 1)]);

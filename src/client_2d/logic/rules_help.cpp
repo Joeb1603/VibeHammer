@@ -257,6 +257,49 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
     return out;
 }
 
+std::optional<HelpEntry> random_attacks_help(const core::WeaponProfile& weapon) {
+    if (weapon.attacks.is_fixed()) return std::nullopt;
+    HelpEntry h;
+    h.title = "Random A (" + core::to_string(weapon.attacks) + ")";
+    h.rule = "D-069";
+    if (weapon.kind == core::WeaponKind::Melee) {
+        h.summary = "Random Characteristics: a melee weapon with a random A is not in this game yet, so it can't be "
+                    "selected.";
+        return h;
+    }
+    h.summary = "Random Characteristics: rolled for each model and weapon when its attacks are resolved, before the hit "
+                "rolls. [BLAST] and [RAPID FIRE] dice are added after the roll.";
+    h.in_this_game = true;
+    return h;
+}
+
+std::optional<HelpEntry> random_damage_help(const core::WeaponProfile& weapon) {
+    if (weapon.damage.is_fixed()) return std::nullopt;
+    HelpEntry h;
+    h.title = "Random D (" + core::to_string(weapon.damage) + ")";
+    h.rule = "D-069";
+    h.summary = "Random Characteristics: rolled for each attack that inflicts damage, after the model it is allocated to "
+                "is selected; excess damage is lost. The defender still orders the casualties once per batch: while "
+                "picking, a mark shows the most the roll can do (\"-7?\").";
+    h.in_this_game = true;
+    return h;
+}
+
+std::vector<EffectLine> random_characteristic_lines(const core::WeaponProfile& weapon) {
+    std::vector<EffectLine> out;
+    if (!weapon.attacks.is_fixed() && weapon.kind == core::WeaponKind::Ranged) {
+        out.push_back({"Attacks " + core::to_string(weapon.attacks) +
+                           " per model, rolled when the attacks are resolved (D-069)",
+                       EffectKind::Info});
+    }
+    if (!weapon.damage.is_fixed()) {
+        out.push_back({"Damage " + core::to_string(weapon.damage) +
+                           " per attack, rolled once its model is selected (D-069)",
+                       EffectKind::Info});
+    }
+    return out;
+}
+
 std::string profile_stats(const core::WeaponProfile& weapon) {
     std::string out = weapon.range_mm ? inches(*weapon.range_mm) : std::string("Melee");
     out += "  A" + core::to_string(weapon.attacks);

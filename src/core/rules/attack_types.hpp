@@ -67,13 +67,49 @@ struct AttackProfile {
     friend bool operator==(const AttackProfile&, const AttackProfile&) = default;
 };
 
+// ---- D-069 Random Characteristics (app-only rule; the functions are in random_characteristics.hpp) ----
+
+// One roll of a random characteristic (01.05): the D6 rolled, in order (a D3 is one D6 halved, rounding up), and the
+// result (the dice, halved for a D3, plus the expression's modifier).
+struct CharacteristicRoll {
+    std::vector<int> dice;
+    int value = 0;
+    friend bool operator==(const CharacteristicRoll&, const CharacteristicRoll&) = default;
+};
+
+// D-069 (04.03 Gather Attack Dice): a selection whose weapon has a random A, not rolled yet. It is rolled for that
+// model and weapon when its batch is gathered for resolution; the [BLAST] / [RAPID FIRE] dice are added after.
+struct RandomAttackDice {
+    std::size_t selection = 0;  // index into the WeaponSelection list
+    ModelId model;              // the selection's attacker
+    DiceExpr attacks;           // the weapon's A, e.g. D6+3
+    int bonus = 0;              // 24.05 [BLAST] and 24.30 [RAPID FIRE] dice, added after the roll
+    friend bool operator==(const RandomAttackDice&, const RandomAttackDice&) = default;
+};
+
+// D-069: one selection's random A, rolled.
+struct AttackDiceRoll {
+    std::size_t selection = 0;
+    ModelId model;
+    DiceExpr attacks;
+    CharacteristicRoll roll;  // the A rolled
+    int bonus = 0;            // added after the roll
+    [[nodiscard]] int total() const noexcept { return roll.value + bonus; }
+    friend bool operator==(const AttackDiceRoll&, const AttackDiceRoll&) = default;
+};
+
 // 04.03: the attack dice gathered together because they come from identical attacks (D-006) against
 // the same target.
 struct AttackBatch {
     UnitId target;
     AttackProfile profile;
     std::vector<std::size_t> selections;  // indices into the WeaponSelection list
+    // The dice gathered so far: the fixed-A selections' (with their bonus dice). D-069: a random A is added when it
+    // is rolled, as the batch is gathered for resolution.
     int attack_dice = 0;
+    // D-069: the selections whose random A is still to be rolled (empty for fixed A, and once rolled). Omitted from
+    // JSON when empty.
+    std::vector<RandomAttackDice> random_attacks{};
     friend bool operator==(const AttackBatch&, const AttackBatch&) = default;
 };
 

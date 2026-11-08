@@ -46,17 +46,23 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
             } else if (key == "--load") {
                 if (value.empty()) throw std::invalid_argument("empty");
                 o.load = value;
-            } else if (key == "--pick-dice") {
-                o.pick_dice.clear();
+            } else if (key == "--pick-dice" || key == "--pick-models") {
+                std::vector<std::size_t> items;
                 std::size_t start = 0;
                 while (start <= value.size()) {
                     const std::size_t comma = std::min(value.find(',', start), value.size());
                     const std::string item = value.substr(start, comma - start);
                     if (item.empty() || item.find_first_not_of("0123456789") != std::string::npos) {
-                        throw std::invalid_argument("not a list of dice indices");
+                        throw std::invalid_argument("not a list of numbers");
                     }
-                    o.pick_dice.push_back(static_cast<std::size_t>(std::stoul(item)));
+                    items.push_back(static_cast<std::size_t>(std::stoul(item)));
                     start = comma + 1;
+                }
+                if (key == "--pick-dice") {
+                    o.pick_dice = std::move(items);
+                } else {
+                    o.pick_models.clear();  // M62: model ids
+                    for (const std::size_t i : items) o.pick_models.push_back(static_cast<unsigned>(i));
                 }
             }
         } catch (const std::exception&) {

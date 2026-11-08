@@ -115,7 +115,7 @@ std::vector<analysis::TargetOutcome> evaluate_in_best_order(analysis::OddsCache&
         if (unit == nullptr || unit->models.empty()) continue;
         analysis::Volley v;
         for (const core::AttackBatch& b : batches) {
-            if (b.target == t) v.push_back(analysis::VolleyBatch{b.profile, b.attack_dice});
+            if (b.target == t) v.push_back(analysis::volley_batch(b));
         }
         const analysis::TargetSnapshot snap = analysis::snapshot_of(*unit);
         const std::vector<std::size_t> order = best_batch_order(cache, v, snap);
@@ -207,9 +207,10 @@ std::vector<std::size_t> best_batch_order(analysis::OddsCache& cache, std::span<
     std::iota(order.begin(), order.end(), std::size_t{0});
     if (volley.size() < 2) return order;
     if (volley.size() > kPermutedBatches) {
-        const auto damage = [&](std::size_t i) {
+        const auto damage = [&](std::size_t i) -> double {
             const core::DiceExpr& d = volley[i].profile.damage;
-            return d.is_fixed() ? d.fixed_value() : 0;  // D-002: V1 resolves fixed damage only
+            // D-069: a random D by its mean (a fixed one sorts as before).
+            return d.is_fixed() ? static_cast<double>(d.fixed_value()) : analysis::pmf_mean(cache.value_pmf(d));
         };
         std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return damage(a) > damage(b); });
         return order;
@@ -239,10 +240,10 @@ std::size_t choose_attack_batch(analysis::OddsCache& cache, const core::GameStat
             const core::UnitId t = f->batches[pick->batch].target;
             const core::Unit* target = state.find_unit(t);
             if (target != nullptr && !target->models.empty()) {
-                analysis::Volley v{analysis::VolleyBatch{f->batches[pick->batch].profile, f->batches[pick->batch].attack_dice}};
+                analysis::Volley v{analysis::volley_batch(f->batches[pick->batch])};
                 for (std::size_t j = 0; j < f->batches.size(); ++j) {
                     if (j == pick->batch || f->batch_done[j] || f->batches[j].target != t) continue;
-                    v.push_back(analysis::VolleyBatch{f->batches[j].profile, f->batches[j].attack_dice});
+                    v.push_back(analysis::volley_batch(f->batches[j]));
                 }
                 value = unit_share(*target, best_value_starting_with(cache, v, 0, analysis::snapshot_of(*target)));
             }

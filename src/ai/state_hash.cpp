@@ -78,6 +78,18 @@ void add(Fnv1a& h, const core::FlowState& f) {
         for (const core::AttackBatch& b : a.batches) {
             add(h, b.target);
             h.i32(b.attack_dice);
+            // M62 (D-069): only while a random A waits to be rolled, so other states hash as before.
+            if (!b.random_attacks.empty()) {
+                h.u64(0x72616e64ull);  // "rand": apart from the fields above
+                h.u64(b.random_attacks.size());
+                for (const core::RandomAttackDice& r : b.random_attacks) {
+                    h.u64(r.selection);
+                    h.i32(r.attacks.num_dice);
+                    h.i32(r.attacks.sides);
+                    h.i32(r.attacks.modifier);
+                    h.i32(r.bonus);
+                }
+            }
         }
         for (const bool d : a.batch_done) h.flag(d);
         h.flag(a.current_target.has_value());

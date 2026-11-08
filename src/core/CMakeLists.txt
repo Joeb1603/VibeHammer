@@ -27,6 +27,7 @@ add_library(wh40k_core STATIC
     model/weapon.cpp
     rules/attack_sequence.cpp
     rules/attacks.cpp
+    rules/random_characteristics.cpp
     rules/charge.cpp
     rules/fight.cpp
     rules/leadership.cpp

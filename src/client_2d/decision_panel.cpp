@@ -282,7 +282,10 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     // D-051: how much damage is still to be placed, in a coloured box under the hint.
     if (const CasualtyPicks* picks = board.casualty_picks(); picks != nullptr && picks->preview()) {
         const int left = picks->preview()->damage_left;
-        const std::string text = left > 0 ? "Damage left to allocate: " + std::to_string(left)
+        // D-069: with a random D the preview takes its maximum, so the damage left is "up to".
+        const bool random = picks->preview()->random_damage.has_value();
+        const std::string text = left > 0 ? "Damage left to allocate: " + std::string(random ? "up to " : "") +
+                                                std::to_string(left) + (random ? " (rolled when you confirm)" : "")
                                           : std::string("All damage allocated: confirm the casualties");
         const ImVec4 colour = left > 0 ? ImVec4(0.75f, 0.35f, 0.10f, 1.0f) : ImVec4(0.20f, 0.55f, 0.30f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, colour);

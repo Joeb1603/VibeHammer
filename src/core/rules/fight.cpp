@@ -33,11 +33,11 @@ std::vector<UnitId> enemy_units_within(const GameState& state, const Unit& unit,
 }
 
 
-// A melee profile V1 can resolve: fixed A and D (D-002) and no unimplemented ability (D-026). A model
-// whose only melee weapons fail this cannot make melee attacks in V1, so it is not required to (D-021).
+// A melee profile V1 can resolve: no unimplemented ability (D-026, D-071) and a fixed A (D-069: a random A is refused
+// for melee weapons; a random D is rolled). A model whose only melee weapons fail this cannot make melee attacks in
+// V1, so it is not required to (D-021).
 bool usable_melee_profile(const WeaponProfile& p) {
-    return p.kind == WeaponKind::Melee && p.attacks.is_fixed() && p.damage.is_fixed() &&
-           !unimplemented_ability_problem(p);
+    return p.kind == WeaponKind::Melee && !unimplemented_ability_problem(p);
 }
 
 bool usable_melee_weapon(const Weapon& w) {
@@ -46,7 +46,7 @@ bool usable_melee_weapon(const Weapon& w) {
 
 bool has_melee_weapon(const Model& m) { return std::any_of(m.weapons.begin(), m.weapons.end(), usable_melee_weapon); }
 
-// 24.11 / D-071: what a model must select. Weapons it can't use (D-002, D-026, D-071) count as absent, so a
+// 24.11 / D-071: what a model must select. Weapons it can't use (D-026, D-071, D-069) count as absent, so a
 // model whose only other melee weapon is refused selects its [EXTRA ATTACKS] weapons alone.
 struct MeleeSelectionRule {
     std::vector<std::size_t> extra_attacks;  // usable [EXTRA ATTACKS] weapons: all must be selected
@@ -83,11 +83,8 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
     if (profile.kind != WeaponKind::Melee) {
         return "04.01: '" + profile.name + "' is not a melee weapon; models fight with melee weapons";
     }
-    if (!profile.attacks.is_fixed() || !profile.damage.is_fixed()) {
-        return "D-002: '" + profile.name + "' has a random characteristic, which V1 does not roll";
-    }
-    if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026
-    const int a = profile.attacks.fixed_value();
+    if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026, D-071, D-069 (a random A)
+    const int a = profile.attacks.fixed_value();  // fixed: a random A is refused above (D-069)
     if (d.targets.empty()) {
         return "04.02: select one or more targets for " + model_label(d.model) + "'s '" + profile.name + "'";
     }
@@ -391,6 +388,7 @@ std::vector<MeleeDeclaration> melee_options(const GameState& state, const Unit& 
                     continue;
                 }
                 for (const UnitId target : engaged) {
+                    // A fixed A: usable_melee_profile refuses a random one (D-069).
                     out.push_back(MeleeDeclaration{m.id, w, p, {MeleeTarget{target, profile.attacks.fixed_value()}}});
                 }
             }

@@ -193,9 +193,15 @@ TEST(M60_DefaultPlans, SingleLoadoutUnitsPlanExactlyAsBefore) {
 }
 
 TEST(M60_DefaultPlans, TheHavocChampionFiresItsPlasmaGunOnTheStandardProfile) {
-    // The lascannons (D6+1 damage, D-002) can't fire until M62; the champion's plasma gun is offered on both
-    // profiles, and the default never picks supercharge ([HAZARDOUS]).
+    // Lascannons the engine refuses can't fire; the champion's plasma gun is offered on both profiles, and the default
+    // never picks supercharge ([HAZARDOUS]). (Until M62 the real lascannons, D6+1 damage, were refused under D-002;
+    // D-069 rolls them, so stand-ins with [MELTA 2], still refused under D-071, take their place.)
     GameState gs = havocs_fixture();
+    for (Model& m : gs.units[0].models) {
+        for (Weapon& w : m.weapons) {
+            if (w.name == "Havoc lascannon") w.profiles[0].abilities.push_back(ability::Unknown{"Melta 2"});
+        }
+    }
     to_shoot_step(gs);
     const ShotPlan plan(gs, gs.units[0].id, ShootingType::Normal);
     EXPECT_TRUE(plan.mixed_loadout());

@@ -5,6 +5,7 @@
 
 #include "core/model/keywords.hpp"
 #include "core/rules/mortal_wounds.hpp"
+#include "core/rules/random_characteristics.hpp"
 
 namespace wh40k::core {
 
@@ -64,11 +65,13 @@ std::optional<CasualtyPreview> preview_attack(const GameState& state, std::span<
     Unit copy = *target;
     PickReplay replay(picks);
     const ModelChooser chooser = [&replay](const Unit&, std::span<const ModelId> options) { return replay(options); };
-    const InflictDamageResult r =
-        inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, chooser, true);
+    // D-069: a random D takes its maximum and rolls nothing (damage_stand_in).
+    const InflictDamageResult r = inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile,
+                                                 chooser, true, damage_stand_in);
     if (!replay.valid()) return std::nullopt;
 
     CasualtyPreview out;
+    if (!batch.profile.damage.is_fixed()) out.random_damage = batch.profile.damage;
     std::size_t damaging = 0;
     bool stopped = false;
     for (const SaveStep& s : r.steps) {
@@ -86,6 +89,7 @@ std::optional<CasualtyPreview> preview_attack(const GameState& state, std::span<
         }
     }
     if (!stopped) out.attacks_lost = r.attacks_lost;
+    if (out.random_damage && !out.results.empty()) out.provisional_from = 1;  // after the first random roll
     return out;
 }
 

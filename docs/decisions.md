@@ -2307,6 +2307,8 @@ first), and placed before D-070 to keep the numbers in order.
   Every other characteristic must be a whole number (a dice string there is a data error), and an ability with a
   random X (e.g. [SUSTAINED HITS D3]) stays an unknown ability, refused under D-071. So D-002's refusal is gone for A
   and D, and nothing else can be random.
+- **Out of scope:** a random A on a melee weapon (refused, below; none in the data), and any other random
+  characteristic (none can be loaded).
 - **Rolling (01.05).** `roll_characteristic(dice, expr)` rolls one D6 per die, in order, halves each for a D3 (rounding
   up), and adds the modifier, giving `CharacteristicRoll{dice, value}` (the D6 faces and the result). A fixed value is
   never rolled, so a weapon with fixed A and D consumes exactly the dice it did before: every old replay and bot game
@@ -2318,7 +2320,7 @@ first), and placed before D-070 to keep the numbers in order.
       `AttackBatch::random_attacks` (`{selection, model, A, bonus}`).
     - `attack_dice` counts only the dice already known: the fixed-A selections with their bonuses.
   - *Per model and weapon:* one roll per selection, in selection order. A model selects each weapon once, and a
-    random-A melee weapon can't split (below), so a selection is one (model, weapon).
+    random-A melee weapon is refused (below), so a selection is one (model, weapon).
     - Two weapons with the same expression (e.g. two D6+3) are still identical attacks: A is not one of 04.03's
       compared characteristics (D-006). They share a batch, and each model rolls its own A.
   - *Bonus after the roll:* [BLAST] dice (24.05, per five models in the target at Select Targets) and [RAPID FIRE X]
@@ -2332,14 +2334,15 @@ first), and placed before D-070 to keep the numbers in order.
     random A (`random_attacks`) next to the known `attack_dice`; no dice are rolled for it.
   - *[TORRENT] with a random A* (flamers; the Tyrannofex's acid spray, M65) hits automatically with the rolled number of
     attacks.
-  - *Melee (conservative; agreed in planning):* 04.02 splits "that weapon's attacks" by declaring how many go to each
-    target, which needs a known A.
-    - A melee weapon with a random A selects exactly one target. A split is refused: "D-069 (04.02): '<profile>' has a
-      random A (D3), so its attacks can't be split between targets".
-    - Its one `MeleeTarget` declares `attacks` 0, meaning all of its attacks, rolled when they are gathered; any other
-      number is refused with a D-069 reason. `melee_options` offers it that way.
-    - 04.02's "no more targets than A" can't be broken with one target (every random A is at least 1).
-    - No melee profile in the data has a random A, so the tests use a stand-in.
+  - *Melee: out of scope, refused (reviewed at the design stage).* 04.02 splits "that weapon's attacks" by declaring
+    how many go to each target, which needs a known A, and no melee profile in the data has a random A. So a melee
+    profile with a random A is refused as D-026 refuses an unimplemented ability: "D-069: '<profile>' has a random A
+    (D3), which the engine does not implement for melee weapons (none in the data); it can't be selected".
+    - `melee_options`, the Fight validation and the bots' `profile_supported` leave it out. A model whose only melee
+      weapons are refused counts as unable to make melee attacks (D-026), and 24.11 treats it as absent (D-071).
+    - The attack sequence's safety net still throws on one (a programmer error).
+    - The design first proposed one target with `MeleeTarget::attacks` 0 for "all of them"; it was dropped at review
+      (a sentinel value, CLAUDE.md, for a case the data doesn't have). A stand-in tests the refusal.
 - **Random D (05.04 Resolve Damage).**
   - `inflict_damage` takes a `DamageRoller` (called with the profile's D). At each save roll that inflicts damage, in
     05.04's order (lowest first):
@@ -2389,9 +2392,9 @@ first), and placed before D-070 to keep the numbers in order.
   - *Still refused for another ability:* meltaguns ([MELTA 2], D-071), flamers and the heavy flamer ([IGNORES COVER],
     D-071), and the strangleweb ([DEVASTATING WOUNDS], D-026).
   - None of these is equipped in V1, the two bot scenarios or Strike (a test checks), so their play is unchanged.
-- **The refusal is removed.**
-  - The D-002 checks are gone from `shot_problems` / `profile_selectable`, the fight's `declaration_problem` /
-    `usable_melee_profile`, and the bots' `profile_supported`.
+- **The refusal is removed** (for ranged weapons, and for a random D in melee).
+  - The D-002 checks are gone from `shot_problems` / `profile_selectable` and the bots' `profile_supported`. The
+    fight's `declaration_problem` / `usable_melee_profile` refuse only a random A (above), with the D-069 reason.
   - `DiceExpr::fixed_value` still throws (a programmer error). Each caller checks `is_fixed()` first or works on known
     fixed data:
     - `gather_attack_dice` requires a fixed A (a random A goes through `selection_dice` and the batch);
@@ -2417,16 +2420,18 @@ first), and placed before D-070 to keep the numbers in order.
   - *Text:*
     - Log text for `AttackDiceRolled`, the damage rolls in `SavesResolved` and an unrolled `AttacksLost`.
     - `is_roll_event` includes `AttackDiceRolled` and a `SavesResolved` with a damage roll.
-  - *Expressions where the client counts attacks:* a random A shows its expression: the melee editor ("Termagants x
-    D3"), the log's start-of-attacks line ("4 + D6+3 attack dice"), lost attacks, and an attack-dice line in the weapon
-    menus' effects. The melee editor has no "Split..." for a random-A weapon.
+  - *Expressions where the client counts attacks:* a random A shows its expression: the log's start-of-attacks line
+    ("4 + D6+3 attack dice"), lost attacks, and an attack-dice line in the weapon menus' effects.
   - *Help:* "Random A (D6+3)" and "Random D (D6+1)" entries citing D-069, in the weapon menus' tooltips and the
     datasheet window (hovering A or D).
   - *Casualty picking:*
-    - The hint names the expression ("the next D6+1 damage, up to 7, rolled when you confirm").
-    - The box reads "Damage left to allocate: up to N".
+    - The hint names the expression ("the next D6+1 damage (up to 7)") and, once the next pick is provisional, says
+      "Thin rings are provisional."
+    - The box reads "Damage left to allocate: up to N (rolled when you confirm)".
     - A mark from a stand-in reads "-7?", and the provisional marks have a thin ring.
     - The board still offers only the preview's options.
+    - *Screenshots:* `--pick-models <id,...>` picks those models in the first casualty decision, as clicks would, and
+      submits nothing (like M61's `--pick-dice`).
   - *Undo:* the damage rolls are part of the `OrderCasualties` answer, so Undo restores the dice position (D-025) and
     the same order gives the same rolls. A different order can put the same rolls on other models (as D-072 notes for
     re-rolls).
@@ -2451,12 +2456,20 @@ first), and placed before D-070 to keep the numbers in order.
     instead of a fixed count). A D6-based D makes each damaging transition six branches.
   - *Easy's default plans (D-071)* now fire the Havocs' lascannons. That changes Easy on the fixtures only.
 - **This batch's replays.**
-  - `m59`: its steps and dice don't change, so it regenerates byte-identically. Its generator's check that nothing can shoot in Side A's first Shooting phase
-    now excludes the Havoc lascannons, which reach the Tyranids (48") and don't fire. The description's "nothing is in
-    range to shoot" was written under D-002; it is kept as it is so the file stays byte-identical.
-  - `m60`'s Tyrant carries a heavy venom cannon, now usable. The replay answers its Shoot step with `EndShootStep`, so
-    the file is unchanged.
-  - `m61`'s Tyrant has no ranged weapon, so it is unchanged.
+  - *`m59`:* its steps, dice and expectation are unchanged. Its generator's check that nothing can shoot in Side A's
+    first Shooting phase now excludes the Havoc lascannons, which reach the Tyranids (48") and don't fire. Its
+    description said "nothing is in range to shoot", written under D-002; at review it was corrected to say that only
+    the lascannons are in range and Side A ends its Shooting phase without firing. That one field is the only change
+    to the file.
+  - *`m60`:* the Tyrant's heavy venom cannon is now usable, but the replay answers its Shoot step with `EndShootStep`.
+    The file is byte-identical.
+  - *`m61`:* the Tyrant has no ranged weapon. The file is byte-identical.
+  - *New `m62_random_characteristics.json`* (seed 10, embedded state): the Havocs vs Hive Tyrant fixture with the m60
+    heavy venom cannon.
+    - The four lascannons fire at the Tyrant (W10). Two saves fail, so Side B orders the casualties once, then the two
+      D6+1 rolls (2, then 6 on the wounded Tyrant) are made; it survives on 2 wounds.
+    - The cannon's D3 is rolled (a 1), +1 [BLAST] for the five Havocs: 2 attack dice.
+    - It stops at Side B's first Charge decision.
 
 ## D-070: Fetch tool fixes, the nine roster datasheets and the roster fixtures (M59)
 **Decided:** 2026-11-08 (M59 of the pre-approved M59–M70 batch; ambiguities take the conservative choice).
@@ -2527,7 +2540,8 @@ crashes on a datasheet it can't read. The engine's unit loader reads the two new
   - `havocs_vs_hive_tyrant_24x24.json`: the Havocs 8" from the Hive Tyrant, for focused tests of their weapons.
 - **Weapons the engine can't resolve yet.** On the fixture these are refused by validation with a rule-cited reason,
   never by the engine throwing into the D-026 rollback:
-  - random A or D (D-002): Havoc lascannon, Bio-plasmic scream, Heavy venom and Stranglethorn cannons;
+  - random A or D (D-002): Havoc lascannon, Bio-plasmic scream, Heavy venom and Stranglethorn cannons. *Since M62
+    (D-069)* these are rolled, so they can be used;
   - [TWIN-LINKED] (D-026): Monstrous bonesword and lash whip, Crushing claws.
   - *Accepted silently until M60:* Unknown abilities and [HAZARDOUS] are loaded and ignored. In the fixture's
     loadouts these are the Monstrous scything talons (Extra Attacks) and the plasma pistol / plasma gun supercharge

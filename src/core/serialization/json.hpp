@@ -70,6 +70,12 @@ void to_json(Json& j, const WeaponSelection& v);
 void from_json(const Json& j, WeaponSelection& v);
 void to_json(Json& j, const AttackProfile& v);
 void from_json(const Json& j, AttackProfile& v);
+void to_json(Json& j, const CharacteristicRoll& v);  // D-069
+void from_json(const Json& j, CharacteristicRoll& v);
+void to_json(Json& j, const RandomAttackDice& v);
+void from_json(const Json& j, RandomAttackDice& v);
+void to_json(Json& j, const AttackDiceRoll& v);
+void from_json(const Json& j, AttackDiceRoll& v);
 void to_json(Json& j, const AttackBatch& v);
 void from_json(const Json& j, AttackBatch& v);
 void to_json(Json& j, const AllocationGroup& v);

@@ -164,11 +164,18 @@ using AllocationOrderChooser = std::function<std::vector<std::size_t>(
 // 24.38 (D-072): the attacker's choice of a [TWIN-LINKED] batch's wound rolls to re-roll (indices into
 // rolls.rolls), asked only when at least one of them failed, as the engine asks.
 using WoundRerollChooser = std::function<std::vector<std::size_t>(const WoundRolls& rolls)>;
+// D-069: rolls a random D (the profile's) for one attack that inflicts damage, after its model is selected (05.04).
+// Never called for a fixed D. The engine rolls from its DiceSource; the casualty check and preview use
+// damage_stand_in (random_characteristics.hpp), which rolls nothing.
+using DamageRoller = std::function<CharacteristicRoll(const DiceExpr& damage)>;
 
 struct SaveStep {
     std::optional<std::size_t> group;  // index into the ordered groups; nullopt: attack lost
     std::optional<SaveCheck> check;
     std::optional<DamageResult> damage;
+    // D-069: the random D rolled for this attack once its model was selected (DamageResult::damage is its value).
+    // nullopt for a fixed D; omitted from JSON then.
+    std::optional<CharacteristicRoll> damage_roll{};
     friend bool operator==(const SaveStep&, const SaveStep&) = default;
 };
 
@@ -184,11 +191,12 @@ struct InflictDamageResult {
 // inflicts damage. (Selecting first, as written, gives the same result: every model in a group has
 // the same Sv and InSv, and a failed attack does nothing to the selected model.) `choose_model` is called
 // only when there is more than one legal model, or for every damaging step when `ask_when_forced`
-// (D-051's preview, which follows each step).
+// (D-051's preview, which follows each step). D-069: a random D is rolled by `roll_damage` for each attack that
+// inflicts damage, after its model is selected; a random D without a roller is a programmer error (std::logic_error).
 [[nodiscard]] InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup> ordered_groups,
                                                  std::span<const int> save_rolls,
                                                  const AttackProfile& profile, const ModelChooser& choose_model,
-                                                 bool ask_when_forced = false);
+                                                 bool ask_when_forced = false, const DamageRoller& roll_damage = {});
 
 // ---- One batch, 05.01 to 05.04 ----
 
@@ -199,12 +207,15 @@ struct BatchResult {
     std::vector<AllocationGroup> allocation_order;  // empty if nothing wounded
     std::vector<int> save_rolls;                    // in roll order
     InflictDamageResult damage;
+    std::vector<AttackDiceRoll> attack_rolls{};  // D-069 (04.03): the batch's random A, rolled first
+    int attack_dice = 0;                          // the dice resolved (the batch's, plus its random A)
     friend bool operator==(const BatchResult&, const BatchResult&) = default;
 };
 
-// Resolves the attack sequence for one batch of attack dice against `target`, in the engine's dice order: hit
-// rolls, wound rolls, the attacker's re-rolls of a [TWIN-LINKED] batch (24.38; `choose_rerolls` is called only when a
-// wound roll failed, and is required then), save rolls.
+// Resolves the attack sequence for one batch of attack dice against `target`, in the engine's dice order: the batch's
+// random A (D-069, 04.03), hit rolls, wound rolls, the attacker's re-rolls of a [TWIN-LINKED] batch (24.38;
+// `choose_rerolls` is called only when a wound roll failed, and is required then), save rolls, then a random D for
+// each attack that inflicts damage (D-069, 05.04).
 // Precondition: the target still has models ("Target No Longer Eligible or Viable" is an app-only rule
 // not yet supplied; std::logic_error otherwise).
 [[nodiscard]] BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBatch& batch,

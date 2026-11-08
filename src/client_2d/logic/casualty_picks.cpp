@@ -49,10 +49,13 @@ bool CasualtyPicks::undo_pick(const core::GameState& state) {
 std::vector<CasualtyMark> CasualtyPicks::marks() const {
     std::vector<CasualtyMark> out;
     if (!preview_) return out;
-    for (const core::DamageResult& d : preview_->results) {
+    for (std::size_t i = 0; i < preview_->results.size(); ++i) {
+        const core::DamageResult& d = preview_->results[i];
         auto it = std::find_if(out.begin(), out.end(), [&](const CasualtyMark& m) { return m.model == d.model; });
         if (it == out.end()) {
-            out.push_back(CasualtyMark{d.model, 0, false});
+            // D-069: first reached by this result; provisional if an earlier random roll decides whether it is.
+            const bool provisional = preview_->provisional_from && i >= *preview_->provisional_from;
+            out.push_back(CasualtyMark{d.model, 0, false, preview_->random_damage.has_value(), provisional});
             it = out.end() - 1;
         }
         it->wounds_lost += d.wounds_lost;

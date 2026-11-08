@@ -45,6 +45,9 @@ const core::WeaponProfile* profile_at(const core::GameState& state, core::ModelI
 void add_help(const core::WeaponProfile& p, MenuEntry& entry) {
     entry.detail = profile_stats(p);
     for (const core::WeaponAbility& ab : p.abilities) entry.help.push_back(weapon_ability_help(ab));
+    // D-069: what a random A or D means.
+    if (auto h = random_attacks_help(p)) entry.help.push_back(std::move(*h));
+    if (auto h = random_damage_help(p)) entry.help.push_back(std::move(*h));
 }
 
 // D-037: a whole-unit weapon choice: its stats, and what its abilities do to this volley (core's
@@ -64,6 +67,7 @@ void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& en
     }
     const auto selections = core::make_weapon_selections(state, *u, shoot.type, same);
     entry.effects = effect_lines(*p, selections, core::shooting_context(state, *u), shoot.type);
+    for (EffectLine& line : random_characteristic_lines(*p)) entry.effects.push_back(std::move(line));  // D-069
 }
 
 void describe(const core::GameState& state, const a::Fight& fight, core::UnitId target, MenuEntry& entry) {
@@ -82,6 +86,7 @@ void describe(const core::GameState& state, const a::Fight& fight, core::UnitId 
     }
     const auto selections = core::make_melee_selections(state, same);
     entry.effects = effect_lines(*p, selections, core::AttackContext{core::AttackType::Fighting, false});
+    for (EffectLine& line : random_characteristic_lines(*p)) entry.effects.push_back(std::move(line));  // D-069
 }
 
 // D-038 / D-045: every click menu ends with Cancel. Its action is never submitted (choose() handles the
@@ -336,18 +341,25 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
         case Mode::PickCasualties: {
             const std::string name = unit_name(state, *actor_);
             if (!picks_ || !picks_->preview()) return "";
-            if (picks_->done()) {
-                return "Every casualty of the " + name + " is picked. Confirm them, or Undo pick to change.";
-            }
             const core::CasualtyPreview& p = *picks_->preview();
+            // D-069: a random D is rolled when the casualties are confirmed; the preview shows the most it can do.
+            const std::string random = p.random_damage ? core::to_string(*p.random_damage) : std::string();
+            if (picks_->done()) {
+                std::string text = "Every casualty of the " + name + " is picked. Confirm them, or Undo pick to change.";
+                if (p.random_damage) text += " The " + random + " damage is rolled when you confirm.";
+                return text;
+            }
             const int d = p.next_damage.value_or(1);
+            std::string damage = d == 1 ? std::string("damage") : std::to_string(d) + " damage";
+            if (p.random_damage) damage = random + " damage (up to " + std::to_string(d) + ")";
             // D-058 (M47): or the default order, which keeps the picks so far.
-            std::string text = "Click the model of the " + name + " that takes the next " +
-                               (d == 1 ? std::string("damage") : std::to_string(d) + " damage") +
+            std::string text = "Click the model of the " + name + " that takes the next " + damage +
                                " (05.04 / 06.02), or use the default order" +
                                (picks_->picks().empty() ? "" : " for the rest") +
                                ". A picked model keeps taking the damage forced onto it.";
             if (p.options.size() == 1) text += " Only one model can take it.";
+            // D-069: after a lower roll the model before may survive and take this attack instead.
+            if (p.next_provisional()) text += " Thin rings are provisional.";
             return text;
         }
     }
