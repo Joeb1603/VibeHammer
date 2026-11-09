@@ -117,6 +117,15 @@ struct ArmyProblem {
 // breaks a per-model limit, or a fixed weapon is refused), in model_types order. Empty without list data.
 [[nodiscard]] std::vector<std::string> unavailable_model_types(const Datasheet& sheet);
 
+// D-079 (M75, for the army builder): the loadout a new model of `model_type` takes: the one default_unit gives it (per
+// slot the BSData default if pickable, else the first pickable option; the first playable loadout if that breaks a
+// per-model limit). nullopt when the type is unavailable, unknown, or the datasheet has no list data.
+[[nodiscard]] std::optional<std::vector<std::string>> default_model_weapons(const Datasheet& sheet,
+                                                                            std::string_view model_type);
+// D-079 (M75): why `model_type` is one of unavailable_model_types (a fixed weapon refused, a slot whose every option
+// is refused, or every combination breaking a per-model limit), rule-cited; nullopt when it has a playable loadout.
+[[nodiscard]] std::optional<std::string> unavailable_reason(const Datasheet& sheet, std::string_view model_type);
+
 // One unit's own problems: 02.06 counts, 02.07 slot decomposition, refused weapons, per-model and per-unit limits.
 // (Faction, copies, points and the zone are the army's: army_problems.)
 [[nodiscard]] std::vector<std::string> unit_problems(const Datasheet& sheet, const ArmyUnit& unit);

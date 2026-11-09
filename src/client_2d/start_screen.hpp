@@ -12,7 +12,7 @@ namespace wh40k::client {
 
 // What the player chose on the start screen this frame.
 struct StartRequest {
-    enum class Kind { None, Play, ContinueSaved, WatchReplay, Quit };
+    enum class Kind { None, Play, ContinueSaved, WatchReplay, Quit, CustomBattle };  // CustomBattle: M75
     Kind kind = Kind::None;
     GameMode mode = GameMode::Hotseat;  // Play
     std::string replay;                 // WatchReplay: relative to the data root

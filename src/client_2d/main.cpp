@@ -29,6 +29,11 @@
 //   M66: --turn <model>:<deg>[:<dx>,<dy>]: in the first decision that moves that model, start dragging it (grabbed at
 //   its centre), turned <deg> degrees from its facing, the cursor <dx>, <dy> inches from it (for screenshots of the
 //   turn preview and the reach area at a facing); it submits nothing.
+//   M75 (D-082): --builder 1 opens the army builder ("Custom battle"); --army-a <file>, --army-b <file>, --first A|B and
+//   --deploy auto|hand start a custom battle with those lists (a side without one keeps its stock army), or preload
+//   the builder with --builder 1. Not with --scenario, --replay or --load. In the builder, --select <unit id> selects
+//   that unit (side A's units first, as the battle numbers them) and --open-slot <group>:<slot> opens one of its
+//   wargear combos (for screenshots); they change nothing.
 
 #include <imgui.h>
 #include <raylib.h>
@@ -48,6 +53,8 @@
 #include <vector>
 
 #include "action_text.hpp"
+#include "army_builder.hpp"
+#include "army_builder_screen.hpp"
 #include "auto_actions.hpp"
 #include "base_shape.hpp"
 #include "board_interaction.hpp"
@@ -126,7 +133,15 @@ std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Si
 
 float distance_px(Vector2 a, Vector2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
 
-enum class Mode { Menu, Play, Replay };  // Menu: the start screen (M38)
+enum class Mode { Menu, Play, Replay, Builder };  // Menu: the start screen (M38); Builder: the army builder (M75)
+
+// M75: what the command line asked of the army builder: preloaded (--army-a, ...), opened (--builder 1) or a custom
+// battle started from it.
+struct LaunchCustom {
+    std::optional<ArmyBuilder> builder;
+    bool open_builder = false;
+    bool start = false;
+};
 
 // A drag on the board: one model's next straight line, or the whole unit (the "Move unit" handle).
 struct Drag {
@@ -165,8 +180,9 @@ public:
     // M38 (D-055): `settings` are the saved ones (persist: written back when they change) or, in a scripted run,
     // the defaults with the CLI's overrides (never written). The game starts on the start screen if `menu`.
     App(AppSettings settings, bool persist, std::optional<std::string> scenario_override, bool menu, BotSides bots,
-        std::optional<LoadedGame> loaded = std::nullopt)
+        std::optional<LoadedGame> loaded = std::nullopt, LaunchCustom custom = {})
         : settings_(std::move(settings)), saved_settings_(settings_), persist_(persist), bot_sides_(bots) {
+        builder_ = std::move(custom.builder);  // M75
         if (scenario_override) scenario_override_ = fs::path(*scenario_override);
         std::snprintf(path_, sizeof(path_), "%s", (kReplayDir / "m11_full_game.json").string().c_str());
         std::snprintf(save_path_, sizeof(save_path_), "%s", kSavePath.string().c_str());
@@ -175,6 +191,11 @@ public:
             open_menu();
         } else if (loaded) {
             start_loaded(std::move(*loaded), "the --load save");  // M61
+        } else if (custom.open_builder) {
+            open_builder();  // M75: --builder 1
+        } else if (custom.start && builder_) {
+            custom_setup_ = builder_->setup();  // M75: --army-a, --army-b, --first, --deploy
+            new_game();
         } else {
             new_game();
         }
@@ -203,8 +224,18 @@ public:
             // M13: the dice seed is chosen at game start (shown and editable in the panel). D-038: a new
             // random one each game unless "Fixed seed" is ticked.
             if (!settings_.fixed_seed) settings_.seed = random_seed();
-            const fs::path scenario = scenario_path();
             game_bot_level_ = settings_.bot_level;  // M39: the level this game is played at (saved with it)
+            if (custom_setup_ && builder_) {
+                // M75 (D-082): a custom battle is rebuilt from its setup (the two lists, first turn, deployment).
+                const core::GameState initial =
+                    custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver());
+                start_session(GameSession::new_game(initial, settings_.seed));
+                status_ = "New game: " + initial.scenario_name + ", seed " + std::to_string(settings_.seed) + ". " +
+                          players_text();
+                auto_actions_as_group();  // D-036
+                return;
+            }
+            const fs::path scenario = scenario_path();
             start_session(GameSession::new_game(core::load_scenario(scenario, kRepoRoot), settings_.seed));
             status_ = "New game: " + scenario_info(scenario).name + ", seed " + std::to_string(settings_.seed) + ". " +
                       players_text();
@@ -232,9 +263,74 @@ public:
         return "The bot plays " + side_name(bot) + ", level " + level + ".";
     }
 
+    // ---- M75 (D-082): the army builder ----
+    // Creates the builder on first use, on the last setup from the settings. False (with the reason in the status) if
+    // the factions or stock armies can't be loaded.
+    bool ensure_builder() {
+        if (builder_) return true;
+        try {
+            builder_.emplace(kRepoRoot);
+            builder_->apply(settings_.custom_battle);
+            return true;
+        } catch (const std::exception& e) {
+            status_ = std::string("Could not open the army builder: ") + e.what();
+            return false;
+        }
+    }
+
+    void open_builder() {
+        if (!ensure_builder()) return;
+        open_menu();  // the game is discarded, as for the start screen
+        mode_ = Mode::Builder;
+        builder_screen_.open(*builder_);
+        preview_.reset();
+    }
+
+    void draw_builder() {
+        const BuilderRequest r = builder_screen_.draw(*builder_, settings_, status_);
+        settings_.custom_battle = builder_->settings();  // M75: the builder opens on its last setup
+        if (r.datasheet) {
+            preview_ = builder_->preview_unit(r.datasheet->first, r.datasheet->second);
+            if (!preview_) builder_screen_.set_message("The datasheet can be shown once the unit's own problems are fixed.");
+        }
+        if (preview_) draw_preview();
+        switch (r.kind) {
+            case BuilderRequest::Kind::None: break;
+            case BuilderRequest::Kind::Back: open_menu(); break;
+            case BuilderRequest::Kind::Start:
+                status_.clear();
+                custom_setup_ = builder_->setup();
+                bot_sides_ = bot_sides_for(builder_->play_mode(), settings_.human_side);
+                new_game();  // on failure the builder stays open with the reason
+                if (mode_ != Mode::Play) custom_setup_.reset();
+                break;
+        }
+    }
+
+    // D-034's datasheet window for a unit of the builder (built as a one-unit battle).
+    void draw_preview() {
+        const ImGuiIO& io = ImGui::GetIO();
+        const float em = ImGui::GetFontSize();
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.45f), ImGuiCond_Appearing,
+                                ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(std::min(em * 44.0f, io.DisplaySize.x * 0.9f), std::min(em * 30.0f, io.DisplaySize.y * 0.8f)),
+                                 ImGuiCond_Appearing);
+        const ImVec4 colour = to_imvec(side_color(preview_->side));
+        ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(colour.x * 0.6f, colour.y * 0.6f, colour.z * 0.6f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour);
+        bool open = true;
+        const std::string title = "Datasheet: " + preview_->name + "##builder_sheet";
+        const bool visible = ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoCollapse);
+        ImGui::PopStyleColor(2);
+        if (visible) draw_datasheet(datasheet_view(*preview_));
+        ImGui::End();
+        if (!open) preview_.reset();
+    }
+
     // ---- M38: the start screen ----
     void open_menu() {
         mode_ = Mode::Menu;
+        custom_setup_.reset();  // M75: the builder's Start sets it again
         session_.reset();  // the current game is discarded (the Files section can save it first)
         timeline_ = Timeline{};
         ++generation_;
@@ -271,8 +367,10 @@ public:
         const StartRequest r = start_screen_.draw(settings_, ctx);
         switch (r.kind) {
             case StartRequest::Kind::None: break;
+            case StartRequest::Kind::CustomBattle: open_builder(); break;  // M75
             case StartRequest::Kind::Play:
                 scenario_override_.reset();  // the start screen's scenario from now on
+                custom_setup_.reset();       // M75
                 bot_sides_ = bot_sides_for(r.mode, settings_.human_side);
                 new_game();
                 break;
@@ -338,6 +436,7 @@ public:
 
     // A loaded game, with its players (M39, D-054: an old save has no players block, so hotseat).
     void start_loaded(LoadedGame loaded, const std::string& from) {
+        custom_setup_.reset();  // M75: "New game" after a load starts the scenario, as before
         bot_sides_ = loaded.players.bots;
         game_bot_level_ = loaded.players.bot_level;
         start_session(std::move(loaded.session));
@@ -365,6 +464,7 @@ public:
         try {
             const core::Replay replay = core::load_replay(path);
             timeline_ = Timeline::from_replay(replay, kRepoRoot, "Replay: " + path.filename().string());
+            custom_setup_.reset();  // M75: "New game" from a replay starts the scenario, as before
             ++generation_;
             frame_ = 0;
             mode_ = Mode::Replay;
@@ -413,10 +513,25 @@ public:
     void pick_models(std::vector<unsigned> models) { cli_model_picks_ = std::move(models); }
     // --click-units (M63): the units clicked on the board in the first decision it handles, as clicks would.
     void click_units(std::vector<unsigned> units) { cli_unit_clicks_ = std::move(units); }
+    // --open-slot (M75): open that wargear combo of the builder's selected unit, for screenshots.
+    void open_slot(std::optional<std::pair<std::size_t, std::size_t>> slot) {
+        if (slot) builder_screen_.open_slot(slot->first, slot->second);
+    }
     // --turn (M66): a scripted drag of that model, turned, for screenshots.
     void cli_turn(std::optional<CliTurn> turn) { cli_turn_ = turn; }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
+        if (mode_ == Mode::Builder && builder_ && unit && *unit >= 1) {
+            // M75: the builder's unit with that id in the battle (side A's units first).
+            const std::size_t a = builder_->list(core::Side::A).units.size();
+            const std::size_t i = *unit - 1;
+            if (i < a) {
+                builder_->select(core::Side::A, i);
+            } else {
+                builder_->select(core::Side::B, i - a);
+            }
+            return;
+        }
         if (unit) selected_unit_ = core::UnitId{*unit};
         if (model) selected_model_ = core::ModelId{*model};
     }
@@ -450,6 +565,12 @@ public:
         if (mode_ == Mode::Menu) {
             ClearBackground(Color{18, 20, 24, 255});
             draw_menu();
+            save_settings_if_changed();
+            return;
+        }
+        if (mode_ == Mode::Builder) {  // M75
+            ClearBackground(Color{18, 20, 24, 255});
+            draw_builder();
             save_settings_if_changed();
             return;
         }
@@ -509,7 +630,7 @@ public:
 private:
     // Something to show: a live game in Play mode, a loaded replay in Replay mode.
     bool has_view() const {
-        if (mode_ == Mode::Menu) return false;
+        if (mode_ == Mode::Menu || mode_ == Mode::Builder) return false;
         return mode_ == Mode::Play ? session_.has_value() : timeline_.size() > 0;
     }
 
@@ -2410,6 +2531,10 @@ private:
     std::string bot_reason_;            // why the bot did its last action
     ai::BotLog bot_log_;                // M45: the bot's reasons in the log (client state only, never saved)
     StartScreen start_screen_;
+    std::optional<ArmyBuilder> builder_;           // M75: the army builder, created on first use
+    ArmyBuilderScreen builder_screen_;
+    std::optional<CustomBattleSetup> custom_setup_;  // M75: this game's custom battle ("New game" rebuilds it)
+    std::optional<core::Unit> preview_;             // M75: the builder's datasheet window
     bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
     bool quit_ = false;            // the start screen's Quit
     std::vector<std::size_t> cli_dice_picks_;  // --pick-dice (M61), applied once
@@ -2440,6 +2565,7 @@ int main(int argc, char** argv) {
     using namespace wh40k::client;
     LaunchOptions options;
     std::optional<LoadedGame> loaded;
+    LaunchCustom custom;
     try {
         options = parse_launch_args(std::vector<std::string>(argv + 1, argv + argc));
         if (options.load) {
@@ -2447,6 +2573,13 @@ int main(int argc, char** argv) {
             LoadedGame game = load_launch_save(*options.load, kRepoRoot);
             game.players = launch_players(game.players, options);
             loaded.emplace(std::move(game));
+        }
+        if (options.builder || options.custom_battle()) {
+            // M75: the builder before the window opens, so a bad list exits with code 2 like a bad flag value.
+            custom.builder.emplace(kRepoRoot);
+            apply_launch_armies(options, *custom.builder);
+            custom.open_builder = options.builder;
+            custom.start = !options.builder;
         }
     } catch (const std::exception& e) {
         std::fprintf(stderr, "wh40k_client_2d: %s\n", e.what());
@@ -2486,7 +2619,8 @@ int main(int argc, char** argv) {
     }
     if (options.bot_level) settings.bot_level = *options.bot_level;  // M39
     if (options.bot_speed) settings.bot_speed = *options.bot_speed;
-    App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots, std::move(loaded));
+    App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots, std::move(loaded),
+            std::move(custom));
     app.set_auto_scale(std::max({1.0f, dpi, by_height}));
     if (options.replay) app.load_replay(*options.replay);
     if (options.frame) app.go_to(*options.frame);
@@ -2498,6 +2632,7 @@ int main(int argc, char** argv) {
     app.pick_models(options.pick_models);  // M62
     app.click_units(options.click_units);  // M63
     app.cli_turn(options.turn);            // M66
+    app.open_slot(options.open_slot);      // M75
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
     int frames_left = options.screenshot ? 4 : -1;

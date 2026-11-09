@@ -2,6 +2,7 @@
 
 add_executable(wh40k_client_2d
     main.cpp
+    army_builder_screen.cpp
     board_view.cpp
     camera.cpp
     decision_panel.cpp

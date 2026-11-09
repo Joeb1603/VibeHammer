@@ -4625,3 +4625,123 @@ deployment heuristic.
   degrees on the Screamer-killer's slot (x 41.5", 1/2" back from the zone front so that its turned base is wholly
   within the zone), and the Screamer-killer's proposal comes from the scan (x 36", at the zone front, the Tyrannofex's
   own slot left free).
+
+## D-082: Custom battles in the client: the army builder (M75 part 1); hand deployment (M76 part 2)
+**Decided:** 2026-11-09 (M75 of the pre-approved M71–M77 batch; the conservative readings are marked *conservative*).
+Part 1 is client only: no rule, `GameState` field, action, event or file format changes. Core gains three read-only
+list queries (below). M76 adds part 2 (placing units by hand in the client).
+- **What it is (agreed with the user, PLAN.md "Custom battles").** A "Custom battle..." button on the start screen's
+  Play column opens the army builder (`Mode::Builder`). Each side builds an army of its faction's datasheets (Chaos
+  Space Marines or Tyranids, never both the same) up to 1000 points at Incursion, chooses the first turn (default A),
+  Auto-place or Place by hand, and how it is played (hotseat, against the bot with "You play" A or B, or bot vs bot)
+  at the start screen's bot level. Start builds the battle through core (`custom_battle_scenario` +
+  `build_game_state`, D-079, D-081) and starts a `GameSession` as a scenario's new game does.
+- **Logic and screen (D-024).** `ArmyBuilder` (`src/client_2d/logic/army_builder.*`, raylib- and ImGui-free, tested in
+  `wh40k_client_tests`) holds both lists, the first turn, the deployment mode, the play mode, the selected unit, and
+  per side an "edited since load/save/reset" flag and where the list came from. Every rule comes from core:
+  `unit_points` / `army_points` (with the copy surcharge counted in list order), `army_problems`, `battle_problems`,
+  `option_refusal`, `unavailable_model_types`, `default_unit`, `loadout_fits_slots`, `custom_battle_scenario`. The
+  screen (`src/client_2d/army_builder_screen.*`) only draws the builder's views and calls its edits. New read-only core
+  queries, in `core/data/` (the client-logic include allow-list):
+  - `loadout_weapons(wargear, options)` (`army_rules`): a model's weapons for one option per slot (fixed weapons, then
+    each option's weapons in slot order); the auto-layout's `make_loadout` now uses it (same output);
+  - `default_model_weapons(sheet, type)` (`army_list`): the loadout `default_unit` gives a model of that type (the
+    BSData default per slot if pickable, else the first pickable option; the first playable loadout if that breaks a
+    per-model limit), for a model type added in the builder;
+  - `unavailable_reason(sheet, type)`: why a type is one of `unavailable_model_types` (a refused fixed weapon, a slot
+    whose every option is refused, or every pickable loadout breaking a per-model limit), rule-cited.
+- **Edits and the readings taken.** Each edit returns why it was refused (and then changes nothing).
+  - *Factions: picking the other side's faction swaps the two sides' armies* (lists, edited flags, sources). With two
+    factions, refusing it would make a faction change impossible (each side would block the other); swapping keeps
+    both armies and never makes a mirror match. A faction no side has gives the side its stock army (only possible
+    with a third faction in `data/factions.json`). Loading a list of the other side's faction, or of an unknown
+    faction, is refused (*conservative*). `battle_problems` (a mirror match) can only come from a hand-edited settings
+    file; it is shown on both sides and blocks Start.
+  - *Counts (02.06):* a model type's count stays within its datasheet range and the unit within its maximum size; a
+    group keeps at least one model (Remove takes a group out, refused if its type would drop under its minimum, and a
+    unit keeps one group). *The unit may drop below its minimum size while edited*, shown as the 02.06 problem until
+    fixed: otherwise a unit whose size is fixed (Havocs are exactly 5) could never swap one heavy weapon type for
+    another. Start is disabled meanwhile.
+  - *Add unit:* `default_unit` (its minimum size, playable defaults: a Chaos Lord without the Daemon hammer, a Havoc
+    Champion without the Flamer, Terminators without combi-weapons), appended and selected. Refused for a datasheet of
+    another faction and *at the Incursion copy limit (2, Battleline 4)*, as the add-unit list greys it; Copy inserts
+    the copy after its unit and is refused at the limit too. A list over a limit (loaded or from the settings) shows
+    the problem on the unit.
+  - *Add a model type:* one model with `default_model_weapons`, joining a group of that type with the same weapons
+    (any order) when there is one, else a new group placed in the datasheet's model-type order. Refused for an
+    unavailable type (with its reason) and past the type's or the unit's maximum.
+  - *"+ another loadout" (split):* one model of the group moves into a new group of the same type and loadout right
+    after it, so its options can differ (raise its count with the arrows). Refused for a group of one model and for a
+    type without wargear slots. *Merge* joins a group into the first other group of its type, taking that group's
+    loadout.
+  - *Options (02.07, D-079):* an option with a weapon the engine refuses is greyed out with the engine's rule-cited
+    reason in its tooltip and can't be picked (the edit is refused with the same reason). Picking an option rebuilds the
+    group's weapons with `loadout_weapons` (canonical order: fixed weapons, then the slots in order; a stock list's
+    group keeps its own order until edited). A group whose weapons don't decompose into the slots (a hand-edited file)
+    shows the 02.07 problem; picking an option then starts from the type's default loadout. *Per-model and per-unit
+    wargear limits are not prevented*, only shown as problems (*conservative*: the agreed list greys refused weapons
+    only; a limit often needs two edits to satisfy, as the unit minimum does).
+  - *Save and Load:* Save writes `<data root>/armies/<the army name as a file name>.json` (lower case, other characters
+    as `_`, "army" if empty), creating the folder. A path in `<data root>/data/armies` is refused: *the stock lists are
+    never overwritten, nor is a new file written beside them*. Load offers the `data/armies/*.json` stock lists and the
+    user's `<data root>/armies/*.json` lists of the side's faction (files that aren't army lists are not offered).
+    Reset to stock reloads the faction's `default_army`. Rename changes the list's name (the battle's side name, and
+    the saved file's name).
+- **Views.** Points per side and per unit (the bar is red over 1000); per unit its problems (`army_problems` entries
+  carrying its index), and the army's (no unit) after them; per group the slots with each option's points and refusal;
+  per model type its count, range, whether it has options and, if unavailable, why; the add-unit list (the faction's
+  datasheets, each with its default unit's points as "from N pts", copies in the list / the Incursion limit, and why
+  it can't be added); `can_start()` (no problem on either side) and `start_problem()` ("Side B: <the first problem>",
+  shown beside the disabled Start); `setup()` (`CustomBattleSetup`: both lists, first turn, deployment mode) and
+  `battle_scenario()` / `battle_state()`. Problems are shown with the plain words first and the citation after
+  (`plain_first`: "02.06: unit size 4 outside 5-5" reads "Unit size 4 outside 5-5 (02.06)"); the text is core's.
+- **Unit shades (D-065).** The unit list shows each unit's shade and number as the board will draw them: a unit's
+  number is its position in its side's list (the battle's unit order), with no number for a lone unit; its name is
+  "Legionaries 2" as in the game.
+- **Settings (extends D-055).** `AppSettings::custom_battle` (`CustomBattleSettings`): each side's army embedded as an
+  army list (the army file's JSON), the first turn, the deployment mode and the play mode, under the key
+  `"custom_battle"` (`army_a`, `army_b`, `first_turn`, `deployment`: "auto" / "hand", `play_mode`: "hotseat" /
+  "vs_bot" / "bot_vs_bot"). A side's army is left out while it equals that side's starting stock army, and every key
+  at its default is left out, so with the defaults there is no `"custom_battle"` key and a settings file from before
+  M75 loads and saves byte for byte. Read key by key: a missing or bad key keeps its default; an army that isn't a
+  readable army list, or is of a faction the data doesn't have, is the stock army. The builder opens on the last
+  setup (it writes it back every frame; the file is written only when it changes). Scripted runs never read or write
+  the file (D-055).
+- **Starting and restarting.** Start builds the battle with `custom_battle_state(setup)`, sets the bot sides from the
+  play mode and "You play" (`bot_sides_for`, D-054) and starts a new session with the seed rules of every new game
+  (D-038: a new random seed unless the seed is fixed). The setup is kept, so "New game" (toolbar and victory pop-up)
+  rebuilds the same custom battle with a new seed; if the battle can't be built the builder stays open with the
+  reason. "Main menu" behaves as before (the game is discarded); the start screen's Play buttons, Continue, a loaded
+  save and a loaded replay forget the setup, so their "New game" starts the scenario as before (*conservative*).
+  Place by hand starts the M74 deployment step (D-081); until M76 its panel sets each unit up at the engine's
+  proposal, which the builder's tooltip says.
+- **Datasheet preview (D-034).** The unit editor's "Datasheet" button opens the game's datasheet window for the unit
+  as the battle builds it: `preview_unit` builds a one-unit battle (the unit alone, set up by hand so it needs no
+  formation, D-081) and takes its `core::Unit`. While the unit has problems of its own the window isn't opened and the
+  screen says why; the window's title bar has its side's colour.
+- **Flags (extends D-055, M61–M70).** `--builder 1` opens the builder; `--army-a <file>`, `--army-b <file>` (army
+  lists, as given or under the data root), `--first A|B` and `--deploy auto|hand` start a custom battle with them (a
+  side without a list keeps the stock army, or takes the other faction's stock army when the given list has its
+  faction), or with `--builder 1` preload the builder. Bad values, the same faction twice, a list that can't be read,
+  and (without `--builder 1`) a list with a problem exit with code 2, naming the flag and the problem. Any of them with
+  `--scenario`, `--replay` or `--load`, and `--builder 1` with `--menu 1`, exit 2. For screenshots, in the builder
+  `--select <unit id>` selects the unit with that id in the battle (side A's units first) and `--open-slot
+  <group>:<slot>` opens one of its wargear combos; neither changes anything. Scripted runs still never touch the
+  settings file.
+- **Layout.** Three columns over the battle options: side A (south), the unit editor, side B (north). Each side
+  column: faction, name, points bar, the units (shade, name, models, points, Edit / Copy / Remove), "Add unit...",
+  the problems, then Load / Save / Reset to stock. The editor: per model type its count and range (unavailable types
+  greyed with the reason), per loadout group a count stepper, "+ another loadout", Merge, Remove and a combo per slot
+  (a slot name too long for the label column puts its combo on the next line). Bottom: first turn, deployment, bot
+  level, play mode with "You play", Back and Start. Checked at 1600x1000 and 1280x800 under `xvfb-run`; sizes are in
+  font units, so the UI scale setting (D-028) applies.
+- **Tests and replay.** `tests/client/m75_test.cpp`: `M75_ArmyBuilder.*` (12), `M75_Settings.*`, `M75_CustomBattle.*`,
+  `M75_LaunchOptions.*` (3). `tests/ai/m75_test.cpp`: `M75_Replay.*` (3, plus the disabled regenerate and seed-search
+  tests). Replay `tests/replays/m75_builder_battle.json` (scenario form, seed 1) on the fixture
+  `tests/data/scenarios/m75_builder_battle_44x60.json`, which is the builder's `battle_scenario()` after these edits:
+  side A renamed "Black Legion", its boltgun Legionaries trading one boltgun for a heavy melee weapon (960 points);
+  side B renamed "Hive Fleet Leviathan", the first Termagants split into 9 with Fleshborers and 1 with a spinefist,
+  the Tyrannofex with a Rupture cannon (975 points); Tyranids first, auto-placed. The Easy bot plays both sides
+  through battle round 1, stopping at battle round 2's first decision. Written by
+  `M75_Replay.DISABLED_RegenerateBuilderBattleReplay` (it lives in the ai tests because the Easy bot plays it);
+  `TheSavedFileMatchesTheGame` checks that it is what Easy plays now.

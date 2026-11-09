@@ -22,6 +22,12 @@ struct SlotFit {
 // (depth-first) is returned, so the result is deterministic. Limits are not checked here.
 [[nodiscard]] SlotFit loadout_fits_slots(const ModelWargear& wargear, const std::vector<std::string>& weapons);
 
+// D-079 / 02.07 (M75): a model's weapons for one option of each slot: the fixed weapons, then each chosen option's
+// weapons in slot order (the order default_unit and the stock lists use). Precondition: one option index per slot,
+// each in range.
+[[nodiscard]] std::vector<std::string> loadout_weapons(const ModelWargear& wargear,
+                                                       const std::vector<std::size_t>& options);
+
 // The points of the options a fit chose (0 for a fit that failed).
 [[nodiscard]] int fit_option_points(const ModelWargear& wargear, const SlotFit& fit);
 

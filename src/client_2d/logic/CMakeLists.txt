@@ -2,6 +2,7 @@
 # or other rendering/device headers (checked on every build), so wh40k_client_tests can test it.
 add_library(wh40k_client_logic STATIC
     action_text.cpp
+    army_builder.cpp
     auto_actions.cpp
     auto_charge_move.cpp
     auto_fight_move.cpp

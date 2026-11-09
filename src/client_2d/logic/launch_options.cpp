@@ -92,6 +92,31 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
                     throw std::invalid_argument("out of range");
                 }
                 o.window = size;
+            } else if (key == "--builder") {
+                if (value != "0" && value != "1") throw std::invalid_argument("not 0 or 1");
+                o.builder = value == "1";
+            } else if (key == "--open-slot") {
+                const std::size_t colon = value.find(':');
+                if (colon == std::string::npos) throw std::invalid_argument("expected group:slot");
+                const std::string g = value.substr(0, colon);
+                const std::string sl = value.substr(colon + 1);
+                for (const std::string* part : {&g, &sl}) {
+                    if (part->empty() || part->size() > 4 || part->find_first_not_of("0123456789") != std::string::npos) {
+                        throw std::invalid_argument("not a group and slot number");
+                    }
+                }
+                o.open_slot = std::pair{static_cast<std::size_t>(std::stoul(g)), static_cast<std::size_t>(std::stoul(sl))};
+            } else if (key == "--army-a" || key == "--army-b") {
+                if (value.empty()) throw std::invalid_argument("empty");
+                (key == "--army-a" ? o.army_a : o.army_b) = value;
+            } else if (key == "--first") {
+                if (value == "A") o.first = core::Side::A;
+                else if (value == "B") o.first = core::Side::B;
+                else throw std::invalid_argument("not A or B");
+            } else if (key == "--deploy") {
+                if (value == "auto") o.deploy = core::DeploymentMode::Auto;
+                else if (value == "hand") o.deploy = core::DeploymentMode::Hand;
+                else throw std::invalid_argument("not auto or hand");
             } else if (key == "--pick-dice" || key == "--pick-models" || key == "--click-units") {
                 std::vector<std::size_t> items;
                 std::size_t start = 0;
@@ -126,7 +151,62 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
             if (given) throw std::invalid_argument(std::string("--load can't be combined with ") + flag);
         }
     }
+    if (o.builder || o.custom_battle()) {
+        // M75: the builder and a custom battle make their own game; a scenario, replay or save would contradict it.
+        const char* what = o.builder ? "--builder 1" : o.army_a ? "--army-a" : o.army_b ? "--army-b" : o.first ? "--first" : "--deploy";
+        for (const auto& [given, flag] : {std::pair{o.scenario.has_value(), "--scenario"},
+                                          std::pair{o.replay.has_value(), "--replay"},
+                                          std::pair{o.load.has_value(), "--load"}, std::pair{o.builder && o.menu, "--menu 1"}}) {
+            if (given) throw std::invalid_argument(std::string(what) + " can't be combined with " + flag);
+        }
+    }
     return o;
+}
+
+void apply_launch_armies(const LaunchOptions& options, ArmyBuilder& builder) {
+    std::array<std::optional<core::ArmyList>, 2> lists;
+    for (const core::Side side : {core::Side::A, core::Side::B}) {
+        const std::optional<std::string>& file = side == core::Side::A ? options.army_a : options.army_b;
+        if (!file) continue;
+        const char* flag = side == core::Side::A ? "--army-a" : "--army-b";
+        std::filesystem::path path = *file;
+        std::error_code ec;
+        if (!std::filesystem::exists(path, ec) && std::filesystem::exists(builder.data_root() / path, ec)) {
+            path = builder.data_root() / path;
+        }
+        try {
+            lists[core::side_index(side)] = core::load_army(path);
+        } catch (const std::exception& e) {
+            throw std::invalid_argument(std::string("invalid value for ") + flag + ": '" + *file + "' (" + e.what() + ")");
+        }
+        if (core::find_faction(builder.factions(), lists[core::side_index(side)]->faction) == nullptr) {
+            throw std::invalid_argument(std::string("invalid value for ") + flag + ": '" + *file + "' (D-079: unknown faction '" +
+                                        lists[core::side_index(side)]->faction + "')");
+        }
+    }
+    if (lists[0] && lists[1] && lists[0]->faction == lists[1]->faction) {
+        throw std::invalid_argument("--army-a and --army-b are both '" + lists[0]->faction +
+                                    "' (D-079: a custom battle needs two different factions)");
+    }
+    // The factions first (set_faction swaps the sides when the other has it), then the lists.
+    for (const core::Side side : {core::Side::A, core::Side::B}) {
+        if (const auto& l = lists[core::side_index(side)]) (void)builder.set_faction(side, l->faction);
+    }
+    for (const core::Side side : {core::Side::A, core::Side::B}) {
+        const std::optional<std::string>& file = side == core::Side::A ? options.army_a : options.army_b;
+        if (!file) continue;
+        if (const auto refused = builder.load(side, *file)) {
+            throw std::invalid_argument(std::string("invalid value for ") + (side == core::Side::A ? "--army-a" : "--army-b") +
+                                        ": '" + *file + "' (" + *refused + ")");
+        }
+    }
+    if (options.first) builder.set_first_turn(*options.first);
+    if (options.deploy) builder.set_deployment(*options.deploy);
+    if (!options.builder) {
+        if (const auto problem = builder.start_problem()) {
+            throw std::invalid_argument("the custom battle can't start: " + *problem);
+        }
+    }
 }
 
 LoadedGame load_launch_save(const std::string& file, const std::filesystem::path& data_root) {

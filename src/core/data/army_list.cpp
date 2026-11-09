@@ -78,12 +78,8 @@ struct Loadout {
 Loadout make_loadout(const ModelWargear& w, const std::vector<std::size_t>& options) {
     Loadout l;
     l.options = options;
-    l.weapons = w.fixed;
-    for (std::size_t s = 0; s < options.size(); ++s) {
-        const WargearOption& o = w.slots[s].options[options[s]];
-        l.weapons.insert(l.weapons.end(), o.weapons.begin(), o.weapons.end());
-        l.option_names.push_back(o.name);
-    }
+    l.weapons = loadout_weapons(w, options);
+    for (std::size_t s = 0; s < options.size(); ++s) l.option_names.push_back(w.slots[s].options[options[s]].name);
     return l;
 }
 
@@ -490,6 +486,41 @@ std::vector<std::string> unavailable_model_types(const Datasheet& sheet) {
         if (!default_loadout(sheet, w)) out.push_back(w.model_type);
     }
     return out;
+}
+
+std::optional<std::vector<std::string>> default_model_weapons(const Datasheet& sheet, std::string_view model_type) {
+    if (!sheet.list_building) return std::nullopt;
+    const ModelWargear* w = sheet.list_building->find_wargear(model_type);
+    if (w == nullptr) return std::nullopt;
+    std::optional<Loadout> l = default_loadout(sheet, *w);
+    if (!l) return std::nullopt;
+    return std::move(l->weapons);
+}
+
+std::optional<std::string> unavailable_reason(const Datasheet& sheet, std::string_view model_type) {
+    if (!sheet.list_building) return std::nullopt;
+    const ModelWargear* w = sheet.list_building->find_wargear(model_type);
+    if (w == nullptr || default_loadout(sheet, *w)) return std::nullopt;
+    const std::string type(model_type);
+    for (const std::string& weapon : w->fixed) {
+        if (auto r = weapon_refusal(sheet, weapon)) {
+            return "D-079: every '" + type + "' carries '" + weapon + "', which can't be picked: " + *r;
+        }
+    }
+    for (const WargearSlot& slot : w->slots) {
+        std::optional<std::string> first;
+        bool any = false;
+        for (const WargearOption& o : slot.options) {
+            const std::optional<std::string> r = option_refusal(sheet, o);
+            if (!r) any = true;
+            if (r && !first) first = r;
+        }
+        if (!any) {
+            return "D-079: no option of the '" + type + "' slot '" + slot.name + "' can be picked" +
+                   (first ? ": " + *first : std::string());
+        }
+    }
+    return "D-079: every pickable loadout of '" + type + "' breaks a per-model wargear limit";
 }
 
 std::vector<std::string> unit_problems(const Datasheet& ds, const ArmyUnit& unit) {

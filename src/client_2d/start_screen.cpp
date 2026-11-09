@@ -119,6 +119,11 @@ void StartScreen::draw_play(AppSettings& s, const StartContext& ctx, StartReques
     ImGui::Spacing();
     if (big_button("Watch bot vs bot")) out = StartRequest{StartRequest::Kind::Play, GameMode::BotVsBot, {}};
     ImGui::SetItemTooltip("The bot plays both sides.");
+    ImGui::Spacing();
+    // M75 (D-082): the army builder.
+    if (big_button("Custom battle...")) out.kind = StartRequest::Kind::CustomBattle;
+    ImGui::SetItemTooltip("Build both armies (Chaos Space Marines and Tyranids, up to 1000 points each), then play "
+                          "them hotseat, against the bot or bot vs bot.");
 
     ImGui::SeparatorText("Resume or watch");
     ImGui::BeginDisabled(!ctx.save_exists);
