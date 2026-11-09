@@ -3580,10 +3580,328 @@ D-030. Bot code (`src/ai`) untouched: the clean Release arena binary is byte-ide
 
 ---
 
+## Custom battles: army builder and hand deployment (M71–M77)
+
+**Run note (agreed with the user 2026-11-09):** M71–M77 are pre-approved as one batch and run back to back
+without `/clear` and without per-milestone sign-off, on branch `custom-battles`. This overrides "one
+milestone per session" and "agree each milestone first" for these milestones only.
+- **Process:** each milestone is implemented by a sub-agent at the effort shown, then verified, marked ✅,
+  committed and pushed. Verification means:
+  - clean Debug and Release builds, and all of `ctest`;
+  - every replay regeneration leaves `tests/replays` byte-identical apart from the milestone's new file;
+  - the identity set: Release arena `--per-game` on V1, both bot scenarios, Strike **and the rosters** matches
+    the pre-batch baseline (recorded from `main` at Step 0) wherever play must not change;
+  - screenshots where the client changes.
+- **Design first:** in M71, M73 and M74 the sub-agent writes its decision entry first. It is reviewed against
+  the rules and BSData before any code.
+- **Every milestone also gives:**
+  - new actions and events their log text, action text and dice cards;
+  - undo grouping;
+  - a `fallback.cpp` / bot answer for a new decision;
+  - JSON round trips, with new fields omitted when default so old files stay byte-identical;
+  - a replay of its flow.
+- **Stability rules:**
+  - `state_hash` hashes the `Stage` integer and the decision kind's index, so a new stage, decision, action
+    or event is **appended** at the end of its enum or variant.
+  - New state is hashed behind a tag only when set.
+  - New read-only queries the client logic calls go in `core/state/` or `core/data/` (the client-logic
+    include allow-list).
+- **Missed targets** are recorded as open items, never lowered silently.
+- **Ambiguities** get the conservative reading, recorded in `docs/decisions.md`.
+- **At the end** the branch goes to `main` by a rebase-merged pull request. No release (version stays 0.1.0).
+
+**Agreed with the user (2026-11-09):**
+- **Custom battle mode:** each side builds an army from its faction's datasheets up to a points limit, then
+  plays hotseat, against the bot, or bot vs bot.
+- **Factions:** Chaos Space Marines and Tyranids (the ten roster datasheets).
+  - Space Marines (Intercessors) stay for the old scenarios only.
+  - The two sides must be different factions: no mirror matches.
+- **Battle size:** Incursion only, 1000 pts. The battle is set up as in `rosters_44x60.json`:
+  - 44"x60" portrait, with 12" zones on the south (A) and north (B) edges;
+  - 5 battle rounds;
+  - `result: points_destroyed` (D-076).
+- **List rules from BSData, enforced:**
+  - points by unit size, plus wargear costs;
+  - the surcharge on a datasheet's 3rd+ copy (+10, or +30 for Terminators), kept in the data although it can't
+    trigger at Incursion;
+  - copy limits at Incursion: 2 per datasheet, 4 for Battleline.
+- **Loadouts:** model counts and full wargear slots.
+  - An option with a weapon the engine refuses is greyed out with the reason and can't be picked. Defaults skip
+    such options.
+  - A model type with no playable loadout is shown as unavailable.
+  - A weapon is pickable only if every one of its profiles is playable.
+- **Armies:** either side can be custom; each side's default is its stock Incursion roster. In vs-bot play the
+  bot's side starts on its default roster and the player may edit it.
+- **First turn:** chosen in the builder (default A).
+- **Deployment:** "Auto-place" (generated formations, as today) or "Place by hand".
+  - Place by hand is an engine step through `PendingDecision`.
+  - Players alternate setting up one unit at a time, starting with the side that takes the second turn. Once one
+    side has set up everything, the other sets up the rest. This wording is the user's (mission-pack text, not
+    core rules) and goes in D-081.
+  - Each set-up follows 03.02: coherency (03.03), unengaged (03.04), wholly within its own zone (D-009), no overlap
+    (D-064).
+  - A unit with no legal spot left counts as destroyed, and the opponent scores its points (D-076). This option
+    is offered only when the engine finds no legal spot.
+- **Bots:**
+  - *Deployment:* a simple heuristic. Easy uses the auto-layout spot. Normal and Hard order their units (long-range
+    shooters first and back, melee last and forward) and nudge them toward the enemy.
+  - *Normal's points weighting:* fixed for one-datasheet sides (amends D-077). The one `M68_Points` expectation
+    that pins today's lopsided value is updated, with the reason recorded.
+- **Colours:** the 10 unit shades per side wrap; the board numbers tell units apart.
+
+---
+
+## M71: List-building data from BSData
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09), design first · **Rules:** 02.06, 02.07 · **Decision:** D-079 part 1
+
+> **Fetch tool.** `tools/fetch_bsdata.py` emits one new root key, `list_building`, after `weapons`. Every existing
+> key stays byte-identical. A new `--fetched <date>` flag keeps each file's date. It reads:
+> - points brackets by model count, the copy surcharge, and `max_copies` (`default` and `incursion`);
+> - wargear slots (min 1 / max 1 groups with their default). Nested slots are flattened into composite options;
+> - limits counting `weapons`, `option` or `model_type`, with `max`, `below_models` and `per_models`. This
+>   includes the "models < T and count > K" error groups and per-model mutual exclusions;
+> - option costs.
+>
+> Only limits scoped to the model, the unit, `parent` or `force`/`roster` count. Limits scoped to other datasheets
+> are dropped (e.g. the Berzerker plasma-pistol limit). Non-weapon subtrees (Marks, icons, Unholy Patronage,
+> Warlord, Boons, Weapon Upgrades, the D-070 list) are skipped once they are confirmed to cost 0. Anything
+> unrecognised in scope warns.
+>
+> **Data.** Regenerate the 10 CSM and Tyranid files at `0f90355`. `intercessor_squad.json` is untouched.
+>
+> **Core.** `Datasheet::list_building` (optional) with `WargearOption`, `WargearSlot`, `WargearLimit`,
+> `ModelWargear`, `PointsBracket`, `CopySurcharge` and `ListBuilding`. Inconsistent data is a `DataError` citing
+> D-079. `loadout_fits_slots` goes in `core/data/army_rules.*`. The scenario loader's flat 02.07 check is unchanged.
+>
+> **D-079 part 1** gives the shape, the patterns and a full per-unit table (slots, options, limits, brackets,
+> copies, surcharge) for review. It also gives the readings: Terminators +30; a champion's plasma pistol together
+> with the special "Plasma pistol and Astartes chainsword"; a Hive Tyrant may take two scything talons.
+
+**Acceptance**
+- `git diff data/units` shows only the `list_building` blocks; the old loader and datasheet tests are unchanged.
+- Tests `D079_ListData`:
+  - slots and fixed weapons equal the flat `weapon_options`, and the defaults equal `default_weapons`;
+  - points by size, wargear costs, copy limits, the surcharge and the limits as read;
+  - the stock rosters cost 960 and 955;
+  - malformed data is refused.
+- Tests `R02_02_Datasheet.FilesWithoutListDataStillLoad` and
+  `R02_07_WargearOptions.EveryShippedScenarioFitsTheSlotModel`.
+- Replays and the identity set unchanged.
+
+## M72: Army lists, auto-layout, arena flags
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Rules:** 02.06, 02.07, 03.02, 03.03 · **Decision:** D-079 part 2
+
+> **Core.**
+> - `core/data/formation.*`: the formation code lifted out of the loader verbatim, placing bit for bit as before.
+> - `core/data/zone_layout.*`: the packer.
+> - `core/data/army_list.*`:
+>   - `ArmyList`, `ArmyUnit`, `ArmyModelGroup`, `Faction`, `unit_points` and `load_factions`;
+>   - `army_problems`: faction (opposing factions only), at least one unit, 02.06 counts, 02.07 slot
+>     decomposition, limits, refused weapons, copies, the 1000-pt limit, and fitting the zone. Every problem is
+>     rule-cited;
+>   - `weapon_refusal` and `default_unit` (playable defaults per slot; unavailable model types skipped);
+>   - `random_army` (seeded, capped retries);
+>   - `custom_battle_scenario(a, b, first_turn, mode, resolver)`, which writes rosters-style scenario JSON for
+>     `build_game_state`.
+>
+> **Data.**
+> - `data/factions.json`.
+> - `data/armies/chaos_space_marines_incursion.json` and `tyranids_incursion.json`: the stock rosters as units
+>   and loadouts only, in roster order.
+> - Army file: `{"format":1,"kind":"vibehammer-army","name","faction","units":[{unit_file, models:[{type,count,weapons}]}]}`.
+>   Points are computed, never stored.
+>
+> **Auto-layout (D-079).**
+> - Each unit gets the fewest ranks that make it coherent and fit the zone (20 Termagants 3 ranks, 10
+>   Legionaries 2, 6 Tyrant Guard 1); ovals are at facing 0.
+> - Shelves are packed in list order, west to east, 1" apart, the first touching the zone front; each shelf is
+>   centred.
+> - The fallback is first-fit decreasing by width, else the problem "does not fit".
+> - Positions are on a 1/8" grid, so they round-trip exactly.
+>
+> **Arena.** `--army-a`, `--army-b`, `--first A|B`, `--random-armies 1`. The `--per-game` format is unchanged.
+>
+> **Package.** `tools/package.ps1` ships `data/armies/` and `data/factions.json`. `/armies/` (user lists) is
+> gitignored.
+
+**Acceptance**
+- Tests `D079_ArmyList`, `D079_Points`, `D079_Copies`, `D079_Faction`, `D079_Refused`, `D079_Defaults`,
+  `D079_Layout` and `D079_RandomArmy`:
+  - the stock armies are legal at 960 and 955, and equal the rosters scenario unit for unit;
+  - the limits: Terminator fists, chainfists, Legionary specials, Termagant specials per 10, the Tyrant's one
+    cannon;
+  - 2000 random legal armies per faction fit.
+- Tests `R02_06_*` and `R02_07_*`.
+- Test `R24_11_ExtraAttacks.ATyrantWithTwoScythingTalonsSelectsBoth`.
+- Test `D004_LegalActions.RandomPlayOnRandomLegalArmies`, covering the never-played loadouts.
+- Replay `m72_custom_battle_round2.json`.
+- Easy vs Easy on random armies, seeds 1–200, clean. Every shipped scenario's state, every replay and the identity
+  set unchanged.
+
+## M73: Bots on custom armies
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09), design first · **Decision:** D-080 (amends D-077, D-078)
+
+> Bot work comes before the builder, so nobody can pick Hard against an oversized army.
+>
+> **Hard's guard.** Before any `Evaluator` is built, sum the planned chain tables' bytes and count. Above a budget
+> (about 1 GiB and 40 tables, at least 1.5x the rosters' 30 tables and 0.6 GB), the decision is answered by Normal.
+> The trace gives a D-080 reason. The guard is a pure function of the state and never triggers on the shipped
+> scenarios.
+>
+> **Normal's weighting.** Weight by points whenever every unit has points and either side has several datasheets.
+> Both sides single-datasheet stays at 1. The `M68_Points` one-type expectation is updated, with the reason
+> recorded (agreed).
+>
+> **Budgets.** Measure how often `kMaxLoadouts`, `kMaxAdvanceSteps` and `move_search_units` are hit on random
+> armies. A change is made only if gated, with play elsewhere proven unchanged.
+
+**Acceptance**
+- Tests `M73_HardGuard`, `M73_Weights` and `M73_Arena`.
+- Replay `m73_custom_bot_game.json` (Normal vs Normal on two non-stock armies, to the result), with
+  `TheSavedFileMatchesTheGame` and `M73_Replay.DISABLED_RegenerateCustomBotGameReplay`.
+- Release arena on random armies, seeds 1–200:
+  - pairings: Easy–Easy, Normal–Normal, Hard–Normal in both seats, and Hard–Hard over 20 games;
+  - 0 rejected, reverted, fallback or unfinished;
+  - Hard peak RSS ≤ 1.5 GB and decision max ≤ 3 s.
+- Identity set unchanged (no shipped scenario is affected by the D-077 change).
+
+## M74: Deployment step in the engine
+**Effort:** `max` · **Plan mode:** pre-approved (2026-11-09), design first · **Rules:** 03.02, 03.03, 03.04, 01.03 · **Decision:** D-081 (amends D-003)
+
+> **State.** `GameState::undeployed`: the units not yet set up, in id order, omitted from JSON when empty. They are
+> not in `units`, so no query, bot or board code sees them. A unit set up moves into `units` at its id position.
+>
+> **Scenario.** `"deployment": "alternating"` builds the units into `undeployed`. A formation given with it is
+> refused.
+>
+> **Flow.**
+> - `Stage::Deploy` is appended after `GameOver` (rule 03.02). `start_game` enters it when `undeployed` is
+>   non-empty; otherwise D-003 is unchanged.
+> - The order is derived from the counts: the second-turn side first, then alternating, then the rest for the
+>   side not yet done.
+> - `active_side` is the first-turn side (01.03: neither player's turn).
+> - Round 1 starts after the last unit.
+>
+> **Decision and actions** (appended).
+> - `DeployUnits` is answered by `DeployUnit{unit, models[{model, position, facing_deg}]}`, a D-004 template per
+>   undeployed unit.
+> - `CannotSetUp{unit}` is offered only when no legal spot is found. The unit counts as destroyed, and its points
+>   go to the opponent.
+> - Events `UnitSetUp`, `UnitNotSetUp` and `DeploymentStarted`.
+>
+> **Queries** (`core/state/deployment.*`).
+> - `set_up_problems` checks: each model once; round bases at facing 0; 03.03; 03.04; D-009; D-064.
+> - `propose_set_up`: the auto-layout slot if legal, else a deterministic scan.
+> - `find_undeployed`.
+>
+> **Audit.**
+> - The D-007 wipe-out checks are skipped during Deploy.
+> - `check_points_data` and `from_json` include `undeployed`.
+> - `state_hash` covers `undeployed` only when set.
+> - Unit numbering is stable.
+>
+> **Answers.**
+> - The bots go through a level-independent `deploy_policy` (the lowest-id unit at its proposal) before any level
+>   policy. The fallback gives the same answer, or `CannotSetUp`.
+> - Client logic: log and action text, decision view, phase track, undo groups, and a minimal "Set up <unit>
+>   (auto-place)" panel button.
+
+**Acceptance**
+- Tests `D081_Deploy`, `R03_02_SetUp`, `R03_03_*`, `R03_04_*`, `D009_*`, `D064_*`, `D081_Json`, `D081_Loader`,
+  `D004_LegalActions.RandomPlayWithHandDeployment`, `M74_StateHash`, `M74_Bots`, `M74_UnitStyle` and `M74_Log`.
+- Replay `m74_hand_deployment.json` (fixture `tests/data/scenarios/hand_deployment_44x60.json`, B first, a
+  Tyrannofex at an angle), stopped at A's first Move Units decision.
+- Arena `--deploy hand|auto`: Easy and Normal on random armies, clean. Bots deploying by hand end up exactly where
+  auto-placement puts them.
+- Old replays and saves byte-identical; identity set unchanged.
+
+## M75: Army builder screen
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Decision:** D-082 part 1
+
+> **Logic** (`client_2d/logic/army_builder.*`).
+> - Edits: `set_faction` (opposing factions only), `add_unit`, `remove_unit`, `duplicate_unit`, `set_count`,
+>   `split_group` and `set_option`.
+> - Views: `points`, `problems`, `options` (greyed options with their reason, plus option points),
+>   `unavailable_model_types`, `can_start` and `setup()`.
+>
+> **Screen** (`client_2d/army_builder_screen.*`, a new `Mode::Builder`).
+> - Two columns, each with a faction combo, army name and points bar.
+> - The units, and an add-unit list showing copies x/limit.
+> - A unit editor: counts, slot combos and "+ another loadout".
+> - The problems list.
+> - First turn, Auto-place / Place by hand, the play mode and bot level.
+> - Reset to stock, Save, Load (`data/armies` and `<data root>/armies/`), Start and Back.
+>
+> **Elsewhere.**
+> - The start screen gets a "Custom battle…" button.
+> - `new_game()` rebuilds from the stored setup.
+> - `AppSettings::custom_battle` remembers the setup.
+> - Flags: `--builder 1`, `--army-a`, `--army-b`, `--first`, `--deploy auto|hand`.
+
+**Acceptance**
+- Tests `M75_ArmyBuilder`, `M75_Settings`, `M75_CustomBattle` (a new game equals core's scenario) and
+  `M75_LaunchOptions`.
+- Replay `m75_builder_battle.json`.
+- Screenshots: the stock builder, an edited list with greyed options and a problem, and a custom battle's start.
+
+## M76: Hand deployment in the client
+**Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09) · **Rules:** 03.02 · **Decision:** D-082 part 2
+
+> **Plan.** `client_2d/logic/deploy_plan.*`: `propose`, `translate`, `move_model`, `turn_model` (ovals), `problems`
+> and `action`.
+>
+> **Board.**
+> - The selected unit is drawn as a ghost, and the deploying side's zone is highlighted.
+> - Drag moves the block; Shift-drag moves one model; Q / E and Shift+wheel turn an oval.
+>
+> **Sidebar.**
+> - The undeployed units.
+> - "Auto-place this unit" and "Auto-place the rest".
+> - "Can't be set up", shown with its consequence.
+> - Log lines, and one undo group per unit.
+>
+> **Also.** An audit of the client's `state.units` loops. The builder's "Place by hand" is fully enabled. A new
+> flag, `--deploy-unit <id>:<dx>,<dy>`, makes screenshots.
+
+**Acceptance**
+- Tests `M76_DeployPlan`, `M76_AutoDeploy`, `M76_Undo` and `M76_LaunchOptions`.
+- Screenshots: mid-deployment with a refused ghost, a turned oval, and round 1.
+
+## M77: Bot deployment heuristic, final verification, docs, PR
+**Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Decision:** D-081 extended (bot deployment)
+
+> **Bot deployment.**
+> - Easy keeps the auto-layout spot in list order.
+> - Normal and Hard place long-range shooters first and back, melee last and forward. Each spot is nudged along the
+>   zone toward the enemy's deployed mass where `set_up_problems` passes.
+> - Deterministic. A search-based Hard deployment goes to "Later".
+>
+> **Docs.**
+> - CLAUDE.md: layout, flags, the deployment step, regenerate commands, the saved-file list.
+> - README: custom battles; "interactive deployment" is no longer under "Not yet".
+> - `package.ps1`'s README text.
+> - PLAN.md: results, a batch summary, and the open items moved to "Later".
+
+**Acceptance**
+- Replay `m77_custom_hand_deploy_bot_game.json` (Normal vs Normal with hand deployment, to the result), with
+  `TheSavedFileMatchesTheGame` and `M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay`.
+- Clean Debug and Release builds and all of `ctest`.
+- `git diff main -- tests/replays` shows only new files.
+- Identity set unchanged against the Step 0 baseline.
+- Arena on random armies at every level, in both deployment modes, clean.
+- Screenshots.
+- Manual check left for the user (by mouse on Windows):
+  - build, save and reload two lists;
+  - deploy by hand against the bot, turning the Tyrannofex;
+  - finish a custom battle.
+- Rebase-merged PR.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
-0. **Deployment step** (D-003): alternating unit placement within deployment zones through `PendingDecision`, reusing the M7 placement/validation code and the M12 drag UI.
+0. **Deployment step:** planned as M74 (engine) and M76 (client), in the custom-battles batch (M71–M77).
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
 2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
