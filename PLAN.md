@@ -3624,7 +3624,9 @@ milestone per session" and "agree each milestone first" for these milestones onl
   - points by unit size, plus wargear costs;
   - the surcharge on a datasheet's 3rd+ copy (+10, or +30 for Terminators), kept in the data although it can't
     trigger at Incursion;
-  - copy limits at Incursion: 2 per datasheet, 4 for Battleline.
+  - copy limits at Incursion: 2 per datasheet, 4 for Battleline;
+  - at least one CHARACTER per army (a Chaos Lord or a Hive Tyrant), BSData's roster rule (agreed after M71's
+    survey).
 - **Loadouts:** model counts and full wargear slots.
   - An option with a weapon the engine refuses is greyed out with the reason and can't be picked. Defaults skip
     such options.
@@ -3651,7 +3653,7 @@ milestone per session" and "agree each milestone first" for these milestones onl
 
 ---
 
-## M71: List-building data from BSData
+## M71: List-building data from BSData ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09), design first · **Rules:** 02.06, 02.07 · **Decision:** D-079 part 1
 
 > **Fetch tool.** `tools/fetch_bsdata.py` emits one new root key, `list_building`, after `weapons`. Every existing
@@ -3687,6 +3689,55 @@ milestone per session" and "agree each milestone first" for these milestones onl
 - Tests `R02_02_Datasheet.FilesWithoutListDataStillLoad` and
   `R02_07_WargearOptions.EveryShippedScenarioFitsTheSlotModel`.
 - Replays and the identity set unchanged.
+
+**Results (2026-11-09):** D-079 part 1 was written first and stopped for review (the survey, the shape and the per-unit
+table); it was approved as written, with the "at least one CHARACTER" note reworded (BSData's Army Roster force
+requires one). The user then decided that custom armies must include at least one CHARACTER; M72 enforces it,
+and the batch's agreed list gains it there.
+- **Survey** (every entry, group, link, constraint and modifier under the ten datasheets, links' own children and
+  costs included): nothing unrecognised. Read: copy limits with their Incursion modifiers, 5 size brackets, 5
+  surcharges, 15 slots (+2 nested, flattened), 50 fixed weapons, 2 option costs, 88 per-model maxima (3 bind), 22
+  unit-scoped maxima (15 limits) and 2 model-type error groups. Dropped: other datasheets' scopes (Khorne Berzerkers,
+  Legionaries seen from Havocs, Chosen), Crusade, Boarding Actions, Enhancements cost type, leader associations,
+  display. D-079 has the counts, the patterns and the table.
+- **Fetch tool** (`tools/fetch_bsdata.py`): a D-079 reader (`ListReader`) writes `list_building` after `weapons`
+  (points brackets, `copy_surcharge`, `max_copies`, per model type `fixed` / `slots` / `limits`, `unit_limits`). An
+  entry link's own children, costs, constraints and modifiers count; per-model maxima are written only where they bind;
+  mutual exclusions become one limit; nested slots are flattened ("Power fist and Combi-weapon"). Anything
+  unrecognised in scope is warned about and the datasheet gets no `list_building` (`intercessor_squad.json` would get
+  none: its two unread shapes are warned; Chosen and Gargoyles likewise). New `--fetched <YYYY-MM-DD>`.
+- **Data:** the ten files regenerated at `0f90355` with their own dates. `git diff --numstat data/units`: insertions
+  only (the new block and the comma line), 0 deletions; every existing key byte-identical. `intercessor_squad.json`
+  untouched.
+- **Core** (loader-side only; `GameState`, the scenario loader and its flat 02.07 check unchanged):
+  - `datasheet.hpp`: `WargearOption`, `WargearSlot` (`find_option`), `LimitCounts`, `BelowModels`, `PerModels`,
+    `WargearLimit`, `ModelWargear`, `PointsBracket`, `CopySurcharge`, `ListBuilding` (`find_wargear`) and
+    `std::optional<ListBuilding> Datasheet::list_building`.
+  - `unit_loader.cpp` parses it and refuses inconsistent data with a `DataError` citing D-079 (model types out of step,
+    unknown or out-of-options weapons, empty or duplicate options, bad defaults, brackets, copies, surcharge, limits).
+  - New `core/data/army_rules.{hpp,cpp}`: `loadout_fits_slots` (deterministic depth-first decomposition into fixed
+    weapons plus one option per slot, or a 02.07 / D-079 reason), `fit_option_points`, `bracket_points`, `limit_max`.
+- **Tests** (`tests/list_data_test.cpp`, 14; no existing test changed):
+  - `D079_ListData.*`: `EveryFactionDatasheetHasListData`, `SlotsAndFixedCoverExactlyTheFlatOptions` (no exceptions),
+    `DefaultChoicesGiveTheDefaultWeapons`, `PointsByUnitSize`, `WargearCosts`, `CopyLimits`, `CopySurcharge`,
+    `UnitAndModelLimitsAsRead` (every limit of the ten; the Berzerker plasma limit not applied, the champion's plasma
+    pistol with the composite special allowed, no Terminator combi-weapon limit, two scything talons but one cannon,
+    two Havoc power fists but one accursed weapon, limits by unit size), `StockRostersCost960And955`,
+    `MalformedListDataIsADataError` (26 malformed cases, each refused citing D-079).
+  - `R02_02_Datasheet.FilesWithoutListDataStillLoad`; `R02_07_WargearOptions.ALoadoutDecomposesIntoFixedWeaponsAndOne
+    OptionPerSlot`, `...ALoadoutThatDoesNotDecomposeIsRefusedWithAReason`, `...EveryShippedScenarioFitsTheSlotModel`
+    (50 units of the 8 scenario files: slots, limits and points).
+  - ctest (Debug and Release): 1162 -> 1176 tests, all pass.
+- **No replay:** M71 changes no flow (loader-side data only), so none was added.
+- **Acceptance:**
+  - *`git diff data/units` shows only the `list_building` blocks; the old loader and datasheet tests unchanged:* **met.**
+  - *`D079_ListData` tests, `R02_02_Datasheet.FilesWithoutListDataStillLoad`,
+    `R02_07_WargearOptions.EveryShippedScenarioFitsTheSlotModel`:* **met** (the stock rosters cost 960 and 955).
+  - *Replays unchanged:* **met.** `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58, M68 and M70
+    regenerations leave `tests/replays` byte-identical.
+  - *Identity set unchanged:* **met.** The Release arena's `--per-game` output on V1, both bot scenarios, Strike and
+    the rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line (actions, state and trace
+    hashes).
 
 ## M72: Army lists, auto-layout, arena flags
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Rules:** 02.06, 02.07, 03.02, 03.03 · **Decision:** D-079 part 2

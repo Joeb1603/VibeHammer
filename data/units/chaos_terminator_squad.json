@@ -413,5 +413,239 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 5,
+        "points": 185
+      },
+      {
+        "min_models": 6,
+        "points": 370
+      }
+    ],
+    "copy_surcharge": {
+      "earlier_copies": 2,
+      "points": 30
+    },
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Accursed weapon and combi-bolter",
+        "fixed": [
+          "Combi-bolter",
+          "Accursed weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Accursed weapon and combi-weapon",
+        "fixed": [
+          "Accursed weapon",
+          "Combi-weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Power fist and combi-weapon",
+        "fixed": [
+          "Power fist",
+          "Combi-weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Chainfist and combi-bolter",
+        "fixed": [
+          "Chainfist",
+          "Combi-bolter"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Heavy weapon",
+        "fixed": [],
+        "slots": [
+          {
+            "name": "Ranged weapon",
+            "default": "Heavy flamer",
+            "options": [
+              {
+                "name": "Heavy flamer",
+                "weapons": [
+                  "Heavy flamer"
+                ]
+              },
+              {
+                "name": "Reaper autocannon",
+                "weapons": [
+                  "Reaper autocannon"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Melee weapon",
+            "default": "Accursed weapon",
+            "options": [
+              {
+                "name": "Accursed weapon",
+                "weapons": [
+                  "Accursed weapon"
+                ]
+              },
+              {
+                "name": "Chainfist",
+                "weapons": [
+                  "Chainfist"
+                ]
+              },
+              {
+                "name": "Power fist",
+                "weapons": [
+                  "Power fist"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": []
+      },
+      {
+        "model_type": "Power fist and combi-bolter",
+        "fixed": [
+          "Combi-bolter",
+          "Power fist"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Chainfist and combi-weapon",
+        "fixed": [
+          "Chainfist",
+          "Combi-weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Paired accursed weapons",
+        "fixed": [
+          "Paired accursed weapons"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Terminator Champion",
+        "fixed": [],
+        "slots": [
+          {
+            "name": "Wargear",
+            "default": "Accursed weapon and Combi-bolter",
+            "options": [
+              {
+                "name": "Accursed weapon and Combi-bolter",
+                "weapons": [
+                  "Accursed weapon",
+                  "Combi-bolter"
+                ]
+              },
+              {
+                "name": "Accursed weapon and Combi-weapon",
+                "weapons": [
+                  "Accursed weapon",
+                  "Combi-weapon"
+                ]
+              },
+              {
+                "name": "Chainfist and Combi-bolter",
+                "weapons": [
+                  "Chainfist",
+                  "Combi-bolter"
+                ]
+              },
+              {
+                "name": "Chainfist and Combi-weapon",
+                "weapons": [
+                  "Chainfist",
+                  "Combi-weapon"
+                ]
+              },
+              {
+                "name": "Power fist and Combi-bolter",
+                "weapons": [
+                  "Power fist",
+                  "Combi-bolter"
+                ]
+              },
+              {
+                "name": "Power fist and Combi-weapon",
+                "weapons": [
+                  "Power fist",
+                  "Combi-weapon"
+                ]
+              },
+              {
+                "name": "Paired accursed weapons",
+                "weapons": [
+                  "Paired accursed weapons"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": []
+      }
+    ],
+    "unit_limits": [
+      {
+        "weapons": [
+          "Power fist"
+        ],
+        "max": 6,
+        "below_models": {
+          "models": 10,
+          "max": 3
+        }
+      },
+      {
+        "weapons": [
+          "Chainfist"
+        ],
+        "max": 2,
+        "below_models": {
+          "models": 10,
+          "max": 1
+        }
+      },
+      {
+        "model_type": "Heavy weapon",
+        "max": 2,
+        "below_models": {
+          "models": 10,
+          "max": 1
+        }
+      },
+      {
+        "weapons": [
+          "Paired accursed weapons"
+        ],
+        "max": 2,
+        "below_models": {
+          "models": 10,
+          "max": 1
+        }
+      }
+    ]
   }
 }

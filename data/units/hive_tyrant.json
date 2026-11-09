@@ -156,5 +156,89 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 1,
+        "points": 195
+      }
+    ],
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Hive Tyrant",
+        "fixed": [],
+        "slots": [
+          {
+            "name": "Monstrous Bonesword and Lash Whip",
+            "default": "Monstrous bonesword and lash whip",
+            "options": [
+              {
+                "name": "Monstrous bonesword and lash whip",
+                "weapons": [
+                  "Monstrous bonesword and lash whip"
+                ]
+              },
+              {
+                "name": "Heavy venom cannon",
+                "weapons": [
+                  "Heavy venom cannon"
+                ]
+              },
+              {
+                "name": "Stranglethorn cannon",
+                "weapons": [
+                  "Stranglethorn cannon"
+                ]
+              },
+              {
+                "name": "Monstrous scything talons",
+                "weapons": [
+                  "Monstrous scything talons"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Monstrous Scything Talons",
+            "default": "Monstrous scything talons",
+            "options": [
+              {
+                "name": "Monstrous scything talons",
+                "weapons": [
+                  "Monstrous scything talons"
+                ]
+              },
+              {
+                "name": "Stranglethorn cannon",
+                "weapons": [
+                  "Stranglethorn cannon"
+                ]
+              },
+              {
+                "name": "Heavy venom cannon",
+                "weapons": [
+                  "Heavy venom cannon"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": [
+          {
+            "weapons": [
+              "Heavy venom cannon",
+              "Stranglethorn cannon"
+            ],
+            "max": 1
+          }
+        ]
+      }
+    ],
+    "unit_limits": []
   }
 }

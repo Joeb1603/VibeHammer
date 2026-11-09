@@ -516,5 +516,284 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 5,
+        "points": 95
+      },
+      {
+        "min_models": 6,
+        "points": 180
+      }
+    ],
+    "max_copies": {
+      "default": 6,
+      "incursion": 4
+    },
+    "wargear": [
+      {
+        "model_type": "Aspiring Champion",
+        "fixed": [
+          "Close combat weapon"
+        ],
+        "slots": [
+          {
+            "name": "Replace bolt pistol",
+            "default": "Bolt pistol",
+            "options": [
+              {
+                "name": "Accursed weapon",
+                "weapons": [
+                  "Accursed weapon"
+                ]
+              },
+              {
+                "name": "Astartes chainsword",
+                "weapons": [
+                  "Astartes chainsword"
+                ]
+              },
+              {
+                "name": "Heavy melee weapon",
+                "weapons": [
+                  "Heavy melee weapon"
+                ]
+              },
+              {
+                "name": "Bolt pistol",
+                "weapons": [
+                  "Bolt pistol"
+                ]
+              },
+              {
+                "name": "Plasma pistol",
+                "weapons": [
+                  "Plasma pistol"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Replace boltgun",
+            "default": "Boltgun",
+            "options": [
+              {
+                "name": "Accursed weapon",
+                "weapons": [
+                  "Accursed weapon"
+                ]
+              },
+              {
+                "name": "Astartes chainsword",
+                "weapons": [
+                  "Astartes chainsword"
+                ]
+              },
+              {
+                "name": "Heavy melee weapon",
+                "weapons": [
+                  "Heavy melee weapon"
+                ]
+              },
+              {
+                "name": "Boltgun",
+                "weapons": [
+                  "Boltgun"
+                ]
+              },
+              {
+                "name": "Plasma pistol",
+                "weapons": [
+                  "Plasma pistol"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": [
+          {
+            "weapons": [
+              "Plasma pistol"
+            ],
+            "max": 1
+          }
+        ]
+      },
+      {
+        "model_type": "Legionary w/ boltgun",
+        "fixed": [
+          "Boltgun",
+          "Bolt pistol",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Legionary w/ chainsword",
+        "fixed": [
+          "Astartes chainsword",
+          "Bolt pistol",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Legionary w/ heavy melee weapon",
+        "fixed": [
+          "Heavy melee weapon",
+          "Bolt pistol",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Legionary w/ balefire tome",
+        "fixed": [
+          "Balefire tome",
+          "Bolt pistol",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Legionary w/ other weapon",
+        "fixed": [
+          "Bolt pistol",
+          "Close combat weapon"
+        ],
+        "slots": [
+          {
+            "name": "Weapon",
+            "default": "Havoc autocannon",
+            "options": [
+              {
+                "name": "Havoc autocannon",
+                "weapons": [
+                  "Havoc autocannon"
+                ]
+              },
+              {
+                "name": "Heavy bolter",
+                "weapons": [
+                  "Heavy bolter"
+                ]
+              },
+              {
+                "name": "Lascannon",
+                "weapons": [
+                  "Lascannon"
+                ]
+              },
+              {
+                "name": "Missile launcher",
+                "weapons": [
+                  "Missile launcher"
+                ]
+              },
+              {
+                "name": "Reaper chaincannon",
+                "weapons": [
+                  "Reaper chaincannon"
+                ]
+              },
+              {
+                "name": "Plasma pistol and Astartes chainsword",
+                "weapons": [
+                  "Astartes chainsword",
+                  "Plasma pistol"
+                ]
+              },
+              {
+                "name": "Meltagun",
+                "weapons": [
+                  "Meltagun"
+                ]
+              },
+              {
+                "name": "Flamer",
+                "weapons": [
+                  "Flamer"
+                ]
+              },
+              {
+                "name": "Plasma gun",
+                "weapons": [
+                  "Plasma gun"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": []
+      }
+    ],
+    "unit_limits": [
+      {
+        "model_type": "Legionary w/ other weapon",
+        "max": 2,
+        "below_models": {
+          "models": 10,
+          "max": 1
+        }
+      },
+      {
+        "weapons": [
+          "Havoc autocannon"
+        ],
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Heavy bolter"
+        ],
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Lascannon"
+        ],
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Missile launcher"
+        ],
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Reaper chaincannon"
+        ],
+        "max": 1
+      },
+      {
+        "option": "Plasma pistol and Astartes chainsword",
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Meltagun"
+        ],
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Flamer"
+        ],
+        "max": 1
+      },
+      {
+        "weapons": [
+          "Plasma gun"
+        ],
+        "max": 1
+      }
+    ]
   }
 }

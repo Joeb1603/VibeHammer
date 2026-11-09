@@ -82,5 +82,36 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 5,
+        "points": 75
+      },
+      {
+        "min_models": 6,
+        "points": 140
+      }
+    ],
+    "copy_surcharge": {
+      "earlier_copies": 2,
+      "points": 10
+    },
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Genestealer",
+        "fixed": [
+          "Genestealers claws and talons"
+        ],
+        "slots": [],
+        "limits": []
+      }
+    ],
+    "unit_limits": []
   }
 }

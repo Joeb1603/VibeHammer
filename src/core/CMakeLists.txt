@@ -1,5 +1,6 @@
 add_library(wh40k_core STATIC
     version.cpp
+    data/army_rules.cpp
     data/scenario_loader.cpp
     data/unit_loader.cpp
     dice/dice.cpp

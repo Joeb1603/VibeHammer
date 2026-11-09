@@ -3791,3 +3791,279 @@ stated. Normal and Easy are untouched (their roster play stays as M68's: `--per-
   rollouts and 3000 actions, the cap respected); 17.01 in the translations; no keep-away move under the points rule;
   Normal's moves for a side of more than 7 units (and Hard's own for the 5-unit side); legality: Hard vs Normal and
   Normal vs Hard on the rosters, a few games in ctest, more in a disabled test and the arena.
+
+## D-079: List-building data from BSData: points, copy limits, the surcharge, wargear slots and limits (M71 part 1; M72 part 2)
+**Decided:** 2026-11-09 (M71 of the pre-approved M71–M77 batch; design written before the code and stopped for review,
+as the batch's run note asks; the conservative choices are marked *conservative*). Part 1 (M71): the data, how the
+fetch tool reads it from BSData, and the core types. Part 2 (M72): the army lists, their problems and the auto-layout.
+Loader-side only: `GameState`, the scenario loader's flat 02.07 check and every replay are unchanged.
+- **Where the list rules come from.** 02.06 gives a unit's models and their default wargear; 02.07 lets its wargear
+  options alter its weapons "when you include such a unit in your army". The core rules have no points, battle sizes or
+  limits on how often a datasheet is taken (`docs/rules/` names a Muster Armies step in 19 without its text). Those come
+  from BSData `0f90355`, as agreed with the user (PLAN.md, "List rules from BSData, enforced"): the `pts` cost type
+  (`51b2-306e-1021-d207`), and the Army Roster force with the battle size "1. Incursion (1000 Point limit)"
+  (`d62d-db22-4893-4bc0`, which also sets the force's 1000-point limit).
+- **Survey.** Every selection entry, group, entry link, constraint and modifier under the ten datasheets was dumped
+  (shared entries and links resolved, including the children and costs a link carries itself) and classified:
+  - *read:* 10 force copy limits and their 10 Incursion modifiers; 5 size brackets; 5 surcharges; 15 slots (plus 2
+    nested ones, flattened); 50 fixed weapons; 33 model-type min/max (02.06, already read by D-070); 88 per-model maxima
+    (71 plain, 4 with a mutual-exclusion modifier: the Hive Tyrant's two cannons on both slots, 2 per link with
+    `shared: false`: its talons, 2 lifted by a link's `set -1`: the Havoc Champion's power fists, 9 inside composites),
+    of which 3 bind and are written (below) and the rest are implied by the slots; 22 unit-scoped maxima (8 with a
+    "fewer than 10 models" modifier, 2 with an "at least 10 models" one, 3 with "+1 per 10 models"), written as 15
+    limits; 2 model-type error groups; 2 option costs;
+  - *dropped:* Crusade (constraints on its cost types, the modifier groups for experience names, Legendary Veterans,
+    Weapon Modifications, Dark Destiny, Unrivalled Raiders); Boarding Actions (6 modifiers); the Enhancements cost type
+    (6); leader `associations` (10); display-only modifiers (names, annotations, `hidden`, `info`, `add-info`); the
+    "Heavy" keyword that the Devotees of Destruction detachment appends; 7 maxima and 8 error groups scoped to other
+    datasheets (Khorne Berzerkers, Legionaries seen from Havocs, Chosen);
+  - *skipped subtrees*, each checked to hold no weapon profile and no `pts` cost or modifier (Enhancements apart, below):
+    Mark of Chaos, Chaos icon, Unholy Patronage upgrade, Warlord, Chaos Boons, Weapon Upgrades, and D-070's Crusade,
+    Weapon Modifications, Enhancements and Crusade Relic Upgrades;
+  - *unrecognised:* none. The same reading flags shapes it doesn't know in other datasheets (Chosen, Khorne Berzerkers,
+    Chaos Rhino, Gargoyles, Neurogaunts, Intercessor Squad), so the tool's warning (below) is not idle.
+- **The data:** a root key `list_building`, written after `weapons` by `tools/fetch_bsdata.py`. Every existing key stays
+  byte-identical. The block for the Chaos Terminator Squad, shortened (`...` marks left-out entries):
+  ```json
+  "list_building": {
+    "points": [{"min_models": 5, "points": 185}, {"min_models": 6, "points": 370}],
+    "copy_surcharge": {"earlier_copies": 2, "points": 30},
+    "max_copies": {"default": 3, "incursion": 2},
+    "wargear": [
+      {"model_type": "Accursed weapon and combi-bolter", "fixed": ["Combi-bolter", "Accursed weapon"],
+       "slots": [], "limits": []},
+      ...
+      {"model_type": "Heavy weapon", "fixed": [],
+       "slots": [
+         {"name": "Ranged weapon", "default": "Heavy flamer",
+          "options": [{"name": "Heavy flamer", "weapons": ["Heavy flamer"]},
+                      {"name": "Reaper autocannon", "weapons": ["Reaper autocannon"]}]},
+         {"name": "Melee weapon", "default": "Accursed weapon", "options": [...]}],
+       "limits": []},
+      ...
+      {"model_type": "Terminator Champion", "fixed": [],
+       "slots": [{"name": "Wargear", "default": "Accursed weapon and Combi-bolter",
+                  "options": [{"name": "Accursed weapon and Combi-bolter",
+                               "weapons": ["Accursed weapon", "Combi-bolter"]},
+                              ...,
+                              {"name": "Paired accursed weapons", "weapons": ["Paired accursed weapons"]}]}],
+       "limits": []}
+    ],
+    "unit_limits": [
+      {"weapons": ["Power fist"], "max": 6, "below_models": {"models": 10, "max": 3}},
+      {"weapons": ["Chainfist"], "max": 2, "below_models": {"models": 10, "max": 1}},
+      {"model_type": "Heavy weapon", "max": 2, "below_models": {"models": 10, "max": 1}},
+      {"weapons": ["Paired accursed weapons"], "max": 2, "below_models": {"models": 10, "max": 1}}
+    ]
+  }
+  ```
+  The other forms: an option cost `{"name": "Rupture cannon", "weapons": ["Rupture cannon"], "points": 20}`; a limit
+  counting an option `{"option": "Plasma pistol and Astartes chainsword", "max": 1}`; one per N models
+  `{"weapons": ["Shardlauncher"], "max": 0, "per_models": {"models": 10, "add": 1}}`; a per-model limit over two weapons
+  `"limits": [{"weapons": ["Heavy venom cannon", "Stranglethorn cannon"], "max": 1}]`. (The file itself is written with
+  the tool's usual `indent=2`, one array element per line.)
+- **What the fields mean.**
+  - `points`: size brackets, `min_models` strictly increasing, the first equal to the composition's minimum. A unit of n
+    models costs the last bracket with `min_models <= n`, plus each model's option points.
+  - `copy_surcharge` (absent: none): a copy costs `points` more when at least `earlier_copies` copies of the same
+    datasheet come earlier in the army.
+  - `max_copies`: how many copies an army may hold: `default` (the Army Roster force) and `incursion` (with the
+    Incursion battle size). Custom battles use `incursion` (PLAN.md: Incursion only).
+  - `wargear`: one entry per model type, in `model_types` order. `fixed`: weapons every model of the type carries.
+    `slots`: each model takes exactly one option of each slot (02.07). `default`: the option the slot starts with.
+    An option gives one weapon or several (a composite); `points` is written only when not 0.
+  - A limit counts exactly one of: `weapons` (how many of these weapons the models carry, summed), `option` (how many
+    models took an option of that name) or `model_type` (how many models of that type). Its maximum is `max`; with
+    `below_models` it is `below_models.max` while the unit has fewer than `below_models.models` models; with
+    `per_models` it is `max + add x floor(models / per_models.models)`. A model type's `limits` apply to each model of
+    it (only `weapons` or `option`, never a size term); `unit_limits` apply to the whole unit.
+- **Patterns read** (the BSData shape behind each):
+  - *Brackets:* the unit's `pts` cost is the first bracket; a unit-level `set` of `pts` with the one condition `atLeast N`
+    (or `greaterThan N`) selections of `model` in the datasheet's own scope starts a bracket at N (or N + 1).
+  - *Surcharge:* a unit-level `increment` of `pts` whose one condition group holds one local condition group: at least K
+    selections in scope `parent` (the force) that come `before` this one and are `instanceOf` this datasheet.
+  - *Copies:* the unit's `max` constraint on selections in scope `force`; its `set` modifier with the one condition "at
+    least 1 '1. Incursion (1000 Point limit)' in the roster" gives `incursion`.
+  - *Slots:* a group with min 1 and max 1 in scope `parent`, under a model type at any depth (through groups with no
+    bounds, such as "Wargear"). Default: the group's `defaultSelectionEntryId`, else its first entry (D-070's rule; BSData
+    names none for Legionary w/ other weapon's "Weapon" and the Terminator Heavy weapon's "Ranged weapon").
+  - *Options:* an entry with a weapon profile is that weapon. An entry without one that holds min-1 weapon entries is a
+    composite of them, in BSData order ("Plasma pistol and Astartes chainsword"). An entry that holds min 1 / max 1
+    groups is flattened: one option per combination (the first nested group varying slowest), named by its choices
+    joined ("Power fist and Combi-weapon"), weapons in nested-group order, points summed. Option names must be unique in
+    their slot.
+  - *Fixed weapons:* a weapon entry with min >= 1 in scope `parent` under the model type, outside every slot.
+  - *Option costs:* the entry's `pts`; an entry link's own `pts` replaces the target's (the Acid spray's +10 is on the
+    link, the Rupture cannon's +20 on the entry).
+  - *Per-model maxima:* `max N` on an entry, scoped to the model (`parent` where the parent selection is the model,
+    `model`, or the model type's own id). With `shared: true` it counts the entry through every link in the model, with
+    `shared: false` through this link only. It is written only where it binds: where the model's fixed weapons and
+    slots could give it more than N. A link's unconditional `set -1` removes it. A `max 1` with `set 0` when at least 1
+    of another weapon is in the model, mirrored on that weapon, is one limit over both weapons, max 1. A written limit
+    implied by another (a subset of its weapons, a larger or equal max) is left out.
+  - *Unit maxima:* `max N` on an entry, scoped to the datasheet's own id or to `unit`, with at most one modifier on it:
+    `set M` when fewer than T models (`below_models` {T, M}), `set M` when at least T models (`max` M, `below_models`
+    {T, N}), or `increment A` repeated per N models rounding down (`per_models` {N, A}). It counts the weapon by name
+    when the entry is one weapon and every carrier of that weapon name in the unit is the same BSData entry, and the
+    option when the entry is a composite. A limit read on several links is written once.
+  - *Error groups:* `add error` with one `and` group of exactly "fewer than T models in the unit" and "more than K of X
+    in the unit": X at most K below T models; from T models X's own maximum applies (its unit maximum, or for a model
+    type its 02.06 max). On a model type it is a `model_type` limit.
+- **Dropped** (scope rule: a constraint or condition counts only if its scope is the model, `parent`, the unit itself
+  (its own id or `unit`), `force` or `roster`): anything scoped to another datasheet (the Khorne Berzerkers'
+  plasma-pistol error group, the Legionaries' Meltagun maximum seen from the Havoc Champion, the Chosen's combi-weapon
+  and paired-accursed-weapons maxima seen from the Terminators); other game modes (Crusade, Boarding Actions: any
+  modifier with a condition on another force, `hidden` toggles included); display (names, annotations, categories,
+  `info`, `add-info`, and modifiers that change profiles, such as keyword appends); leader `associations`; the Crusade
+  and Enhancements cost types (constraints on them and modifiers of those constraints); the skipped subtrees. A
+  `hidden` toggle that doesn't depend on another game mode is unrecognised.
+- **Anything else in scope** (a constraint, modifier, group or entry of another shape outside a skipped subtree, e.g. an
+  optional weapon outside a slot, a min 0 / max 1 group, a points modifier of another shape, a hidden weapon option):
+  the tool warns and writes no `list_building` for that datasheet (*conservative*: partial list rules would let the
+  builder accept armies BSData refuses). None in the ten.
+- **Readings** (each the literal BSData; the per-unit table below has the rest):
+  - Model counts include the champion: BSData counts every `model` selection in the unit.
+  - Brackets as BSData has them: a Chaos Terminator Squad costs 370 from 6 models on, not only at 10.
+  - Terminators' surcharge is **+30**; Havocs, Genestealers, Screamer-killer and Tyrannofex +10; Legionaries,
+    Termagants, Chaos Lord, Hive Tyrant and Tyrant Guard have none. At Incursion (2 copies, 4 for Battleline, and no
+    Battleline datasheet has a surcharge) it never applies; it is kept in the data, as agreed. Earlier copies are counted
+    in army order; M72 uses the list's order.
+  - A Legionaries Aspiring Champion's plasma pistol and a "Plasma pistol and Astartes chainsword" special are **both
+    allowed** in one unit: the special's limit counts that option (max 1 per unit), not plasma pistols, and the "Max 1
+    plasma pistol per 5 models" error group is scoped to Khorne Berzerkers.
+  - The Aspiring Champion takes at most one plasma pistol (the shared entry's max 1 per model, over both slots), but may
+    take two accursed weapons, two Astartes chainswords or two heavy melee weapons (each slot has its own entries for
+    those, with no maximum).
+  - The Havoc Champion takes at most one accursed weapon (max 1 per model over both slots) but may take **two power
+    fists** (both of its power fist links set that maximum to -1).
+  - A Hive Tyrant may take **two Monstrous scything talons**, one per slot (each slot's link has its own max 1,
+    `shared: false`), and at most one of Heavy venom cannon and Stranglethorn cannon.
+  - **Terminator combi-weapons have no limit at any unit size**, 10 models included: BSData's combi-weapon limits (max
+    4, "Max 2 {this} per 5 models") are scoped to Chosen. Only the model types bound them (up to 10 in a 10-model unit).
+  - The Terminator Heavy weapon: BSData gives max 2 and an error group (more than 1 below 10 models), so 1 for 5–9
+    models and 2 at 10; for the legal sizes that is the brief's "+1 per 5 models". Legionary w/ other weapon likewise.
+  - Terminator paired accursed weapons count the champion's option too (the same BSData entry): at most 1 below 10
+    models, 2 at 10.
+  - Termagant specials: each of Shardlauncher, Spike rifle and Strangleweb at most 0 + 1 per 10 models (10–19 models:
+    1, 20: 2).
+  - The defaults equal `default_weapons`, including options the engine refuses today (the Chaos Lord's Daemon hammer,
+    the Havoc Champion's Flamer, the Heavy weapon's Heavy flamer). The builder's own defaults skip those (M72, agreed).
+  - Not offered: Enhancements (optional; 5 to 40 pts each in BSData; their rules aren't implemented), Marks of Chaos,
+    Chaos icon, Unholy Patronage, Warlord and Chaos Boons (0 pts). A list without them is legal, so leaving them out
+    never changes a legal list's points.
+- **Noted for part 2 (M72), not part of the data:**
+  - BSData's Army Roster force requires at least one CHARACTER (category constraint, min 1 per roster). **Decided with
+    the user (2026-11-09): custom armies must include at least one CHARACTER** (here a Chaos Lord or a Hive Tyrant;
+    both stock rosters have one). M72 enforces it (D-079 part 2).
+  - Weapons the engine refuses today (D-026, D-071; from their abilities): Daemon hammer, Combi-weapon, Chainfist, Heavy
+    flamer, Reaper autocannon, Meltagun, Flamer, Balefire tome, Strangleweb (marked † below). The data lists them; the
+    builder greys them out (agreed).
+- **Core (M71; `src/core/data/`).**
+  - `datasheet.hpp`: `WargearOption {name, weapons, points}`, `WargearSlot {name, options, std::optional<std::string>
+    default_option}`, `WargearLimit {counts (Weapons / Option / ModelType), names, max, std::optional<BelowModels>
+    below_models, std::optional<PerModels> per_models}`, `ModelWargear {model_type, fixed, slots, limits}`,
+    `PointsBracket {min_models, points}`, `CopySurcharge {earlier_copies, points}`, `ListBuilding {points, surcharge,
+    max_copies_default, max_copies_incursion, wargear, unit_limits}`, and `std::optional<ListBuilding>
+    Datasheet::list_building` (absent in a file without the key: `intercessor_squad.json`).
+  - The loader refuses inconsistent data with a `DataError` citing D-079: a `wargear` list that isn't exactly the model
+    types in order; an unknown weapon (not in the file's `weapons`); a fixed weapon or option weapon outside its model
+    type's `weapon_options`; an empty slot, an option with no weapons, two options of one name in a slot, a default that
+    isn't one of the slot's options; brackets not strictly increasing, not starting at the composition's minimum or
+    past its maximum, or points outside 1..100000 (as D-076); negative option points; copies below 1; a surcharge with
+    `earlier_copies` or `points` below 1; a limit that counts none or several of weapons / option / model type, names an
+    unknown option or model type, has a negative max, both `below_models` and `per_models`, or (per model) a size term
+    or a model type.
+  - `army_rules.{hpp,cpp}` (new, read-only): `loadout_fits_slots(wargear, weapons)` decomposes a model's weapons (a
+    multiset, order ignored) into its fixed weapons plus one option per slot. It returns the option chosen for each slot
+    (the first decomposition in slot order and option order, by backtracking: deterministic) or a reason citing 02.07
+    and D-079. In the ten datasheets every decomposition of one multiset costs the same (the only priced options are
+    the Tyrannofex's, in its one slot). Limits are not part of it (M72's army checks apply them). Also
+    `fit_option_points(wargear, fit)`, `bracket_points(list_building, models)` and `limit_max(limit, models)`, and the
+    finders `ListBuilding::find_wargear` and `WargearSlot::find_option`. M72 builds the army checks on these. The
+    scenario loader doesn't call them (its flat 02.07 check is unchanged); a test checks that every shipped scenario's
+    units fit the slots.
+- **Fetch tool.** `--fetched <YYYY-MM-DD>` writes that date to `source.fetched` (default: today). The ten files are
+  regenerated with their own dates (2026-11-08; `termagants.json` 2026-11-02). The current tool reproduces all ten
+  byte for byte apart from the date (checked before M71), so the diff of each is only the new block and the comma before
+  it. `intercessor_squad.json` is not regenerated.
+- **Per-unit table** (at BSData `0f90355`; † = refused by the engine today; "(d)" = the slot's default; model-type
+  counts are 02.06's min–max):
+  - **Chaos Lord** (CHARACTER). Points: 1 model 95. Copies 3, Incursion 2. Surcharge none.
+    - Chaos Lord (1): fixed none. Slot "Daemon hammer": Daemon hammer† (d), Accursed weapon, Astartes chainblade. Slot
+      "Plasma pistol": Power fist, Plasma pistol (d). No limits.
+    - Stock: Astartes chainblade + Plasma pistol = 95.
+  - **Legionaries** (BATTLELINE). Points: 5 models 95, 6–10 180. Copies 6, Incursion 4. Surcharge none.
+    - Aspiring Champion (1): fixed Close combat weapon. Slot "Replace bolt pistol": Accursed weapon, Astartes
+      chainsword, Heavy melee weapon, Bolt pistol (d), Plasma pistol. Slot "Replace boltgun": Accursed weapon, Astartes
+      chainsword, Heavy melee weapon, Boltgun (d), Plasma pistol. Per model: Plasma pistol at most 1.
+    - Legionary w/ boltgun (0–9): fixed Boltgun, Bolt pistol, Close combat weapon.
+    - Legionary w/ chainsword (0–9): fixed Astartes chainsword, Bolt pistol, Close combat weapon.
+    - Legionary w/ heavy melee weapon (0–1): fixed Heavy melee weapon, Bolt pistol, Close combat weapon.
+    - Legionary w/ balefire tome (0–1): fixed Balefire tome†, Bolt pistol, Close combat weapon.
+    - Legionary w/ other weapon (0–2): fixed Bolt pistol, Close combat weapon. Slot "Weapon": Havoc autocannon (d),
+      Heavy bolter, Lascannon, Missile launcher, Reaper chaincannon, Plasma pistol and Astartes chainsword (Astartes
+      chainsword + Plasma pistol), Meltagun†, Flamer†, Plasma gun.
+    - Unit: each of Havoc autocannon, Heavy bolter, Lascannon, Missile launcher, Reaper chaincannon, Meltagun, Flamer
+      and Plasma gun at most 1; the option "Plasma pistol and Astartes chainsword" at most 1; Legionary w/ other weapon
+      at most 2, 1 below 10 models.
+    - Stock (two units, 10 models each): Aspiring Champion Bolt pistol + Astartes chainsword (+ Close combat weapon)
+      with 9 Legionary w/ chainsword = 180; the same champion with 9 Legionary w/ boltgun = 180.
+  - **Chaos Terminator Squad**. Points: 5 models 185, 6–10 370. Copies 3, Incursion 2. Surcharge +30 from the 3rd copy.
+    - Fixed-only types: Accursed weapon and combi-bolter (0–9): Combi-bolter, Accursed weapon. Accursed weapon and
+      combi-weapon (0–9): Accursed weapon, Combi-weapon†. Power fist and combi-weapon (0–6): Power fist, Combi-weapon†.
+      Chainfist and combi-bolter (0–2): Chainfist†, Combi-bolter. Power fist and combi-bolter (0–6): Combi-bolter,
+      Power fist. Chainfist and combi-weapon (0–2): Chainfist†, Combi-weapon†. Paired accursed weapons (0–2): Paired
+      accursed weapons.
+    - Heavy weapon (0–2): slot "Ranged weapon": Heavy flamer† (d), Reaper autocannon†. Slot "Melee weapon": Accursed
+      weapon (d), Chainfist†, Power fist.
+    - Terminator Champion (1): slot "Wargear": Accursed weapon and Combi-bolter (d), Accursed weapon and Combi-weapon,
+      Chainfist and Combi-bolter, Chainfist and Combi-weapon, Power fist and Combi-bolter, Power fist and Combi-weapon
+      (the six flattened from BSData's "Combi-bolter and accursed weapon", whose nested groups are "Accursed Weapon":
+      Accursed weapon / Chainfist / Power fist and "Combi-bolter": Combi-bolter / Combi-weapon), Paired accursed weapons.
+    - Unit: Power fist at most 6, 3 below 10 models; Chainfist at most 2, 1 below 10; Heavy weapon models at most 2, 1
+      below 10; Paired accursed weapons at most 2, 1 below 10. No combi-weapon limit.
+    - Stock: Terminator Champion "Accursed weapon and Combi-bolter" with 9 Accursed weapon and combi-bolter = 370.
+  - **Havocs**. Points: 5 models 135. Copies 3, Incursion 2. Surcharge +10 from the 3rd copy.
+    - Havoc Champion (1): slot "Melee weapon": Accursed weapon, Power fist, Astartes chainsword (d). Slot "Ranged
+      weapon": Plasma pistol, Accursed weapon, Power fist, Boltgun, Meltagun†, Flamer† (d), Plasma gun. Per model:
+      Accursed weapon at most 1 (two power fists allowed).
+    - Havoc w/ autocannon, w/ lascannon, w/ missile launcher, w/ reaper chaincannon, w/ heavy bolter (0–4 each, 4 in
+      all): fixed that heavy weapon (Havoc autocannon, Havoc lascannon, Havoc missile launcher, Havoc reaper
+      chaincannon, Havoc heavy bolter) and Close combat weapon.
+    - Unit: none.
+    - Stock: Havoc Champion Astartes chainsword + Plasma gun with 4 Havoc w/ lascannon = 135.
+  - **Termagants** (BATTLELINE). Points: 10 models 55, 11–20 110. Copies 6, Incursion 4. Surcharge none.
+    - Termagants (7–20): fixed Chitinous claws and teeth. Slot "Weapons": Fleshborer (d), Termagant spinefist,
+      Termagant devourer.
+    - Termagant w/ Shardlauncher, w/ Spike rifle, w/ Strangleweb (0–2 each): fixed that weapon (Strangleweb†) and
+      Chitinous claws and teeth.
+    - Unit: each of Shardlauncher, Spike rifle and Strangleweb at most 0 + 1 per 10 models.
+    - Stock (two units): 10 Termagants with Fleshborer = 55 each.
+  - **Genestealers**. Points: 5 models 75, 6–10 140. Copies 3, Incursion 2. Surcharge +10 from the 3rd copy.
+    - Genestealer (5–10): fixed Genestealers claws and talons. No slots, no limits.
+    - Stock (two units): 5 Genestealers = 75 each.
+  - **Tyrant Guard**. Points: 3 models 80, 4–6 170. Copies 3, Incursion 2. Surcharge none.
+    - Tyrant Guard (3–6): slot "Wargear": Scything talons and rending claws (d), Bone cleaver, lash whip and rending
+      claws, Crushing claws and rending claws (each one weapon). No limits.
+    - Stock: 3 with Scything talons and rending claws = 80.
+  - **Screamer-killer**. Points: 1 model 125. Copies 3, Incursion 2. Surcharge +10 from the 3rd copy.
+    - Screamer-killer (1): fixed Bio-plasmic scream, Screamer-killer talons.
+    - Stock (two units): 125 each.
+  - **Hive Tyrant** (CHARACTER). Points: 1 model 195. Copies 3, Incursion 2. Surcharge none.
+    - Hive Tyrant (1): slot "Monstrous Bonesword and Lash Whip": Monstrous bonesword and lash whip (d), Heavy venom
+      cannon, Stranglethorn cannon, Monstrous scything talons. Slot "Monstrous Scything Talons": Monstrous scything
+      talons (d), Stranglethorn cannon, Heavy venom cannon. Per model: Heavy venom cannon + Stranglethorn cannon at
+      most 1.
+    - Stock: Monstrous bonesword and lash whip + Monstrous scything talons = 195.
+  - **Tyrannofex**. Points: 1 model 170. Copies 3, Incursion 2. Surcharge +10 from the 3rd copy.
+    - Tyrannofex (1): fixed Powerful limbs, Stinger salvoes. Slot "Fleshborer Hive": Rupture cannon (+20), Fleshborer
+      hive (d), Acid spray (+10).
+    - Stock: Fleshborer hive = 170.
+- **Checked against the flat data and the stock rosters** (with the survey's reading; M71's tests pin each):
+  - For every model type of the ten, its fixed weapons plus every option's weapons are exactly its `weapon_options`
+    (no exceptions), and its fixed weapons plus each slot's default are exactly its `default_weapons`.
+  - Every unit of every scenario in `data/scenarios/` and `tests/data/scenarios/` that uses one of the ten datasheets
+    decomposes into the slots, within the limits, and its `points` (where given) is what the data computes: the
+    Incursion rosters cost **960** (Legionaries 180 x 2, Chaos Lord 95, Chaos Terminator Squad 370, Havocs 135) and
+    **955** (Termagants 55 x 2, Genestealers 75 x 2, Screamer-killer 125 x 2, Tyrant Guard 80, Hive Tyrant 195,
+    Tyrannofex 170). No second copy pays the surcharge (it starts at the third).
