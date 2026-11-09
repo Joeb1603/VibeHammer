@@ -52,6 +52,13 @@ struct BotWeights {
     // own charge, casualty, coherency and consolidation decisions. V1, the bot scenarios and Strike have at most 4 units
     // a side, so they always search. 0: always searches.
     std::size_t move_search_units = 7;
+    // D-080 (M73): Hard's budget for the chain tables of a decision (hard::chain_plan_size: their count and estimated
+    // bytes, from the decision's half-turn on). Over either, the decision is Normal's, with a D-080 reason. 1 GiB keeps
+    // Hard's peak memory near 1.2 GB; 80 is the most tables two legal custom armies can plan (the count drives neither
+    // memory nor time; the bytes do). V1, the bot scenarios and Strike plan one table of at most 21 MB, the rosters 30
+    // of 525 MB. 0: no limit.
+    std::size_t chain_budget_mib = 1024;
+    std::size_t chain_budget_tables = 80;
 };
 
 }  // namespace wh40k::ai::hard

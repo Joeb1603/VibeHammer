@@ -177,6 +177,16 @@ private:
 // estimate), without building them.
 [[nodiscard]] std::vector<ChainTableInfo> plan_chain_tables(const core::GameState& root, ChainWeights weights);
 
+// D-080 (M73): how many tables an Evaluator at `root` would hold and their stored bytes (estimated, from its half-turn
+// on): plan_chain_tables' count and the sum of its estimates, from the unit types and their wounds alone (no spec is
+// built, so it is cheap enough for Hard's budget check at every decision). A pure function of the state.
+struct ChainPlanSize {
+    std::size_t tables = 0;
+    std::size_t bytes = 0;
+    friend bool operator==(const ChainPlanSize&, const ChainPlanSize&) = default;
+};
+[[nodiscard]] ChainPlanSize chain_plan_size(const core::GameState& root);
+
 // The chain's view of one unit in a real state.
 struct UnitView {
     int wounds = 0;          // wounds left, all models

@@ -24,6 +24,8 @@
 // side, its cache holds every pair of unit types in play (dropping the half-turns already played at each decision), and
 // it builds missing tables with LookaheadWeights::table_workers threads, joined before a decision returns. A side with
 // more than BotWeights::move_search_units units with models moves as Normal does (its other decisions stay Hard's).
+// M73 (D-080): before any Evaluator is built, a decision whose chain tables would be over BotWeights::chain_budget_mib
+// or chain_budget_tables (chain_plan_size) is answered by Normal, its reason prefixed "D-080: ...".
 
 #include <cstdint>
 #include <optional>
@@ -46,6 +48,13 @@ struct HardContext {
     BotWeights weights{};
     ChainCache chains;
 };
+
+// D-080 (M73): Hard's budget for a decision's chain tables (BotWeights::chain_budget_mib and chain_budget_tables, 0: no
+// limit), counted before any Evaluator is built: the tables an Evaluator at `state` would hold and their estimated bytes
+// (chain_plan_size). nullopt within it; otherwise the prefix of the reason Normal's answer gets ("D-080: Hard's chain
+// tables here would be ... ; Normal decides: "). A pure function of the state and the two weights.
+[[nodiscard]] std::optional<std::string> chain_budget_problem(const core::GameState& state,
+                                                             const BotWeights& weights);
 
 [[nodiscard]] PolicyResult hard_policy(const core::GameState& state, core::Side side,
                                        const std::vector<core::GameAction>& legal, std::uint64_t seed,

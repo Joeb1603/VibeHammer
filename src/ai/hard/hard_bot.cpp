@@ -900,6 +900,20 @@ std::optional<PolicyResult> hard_answer(const GameState& gs, core::Side side, co
     const bool unit_move = std::holds_alternative<core::decision::MoveUnits>(kind) ||
                            (std::holds_alternative<core::decision::MoveModels>(kind) && is_unit_move(gs));
     if (unit_move && moves_as_normal(gs, side, hc.weights)) return std::nullopt;
+    // The decisions Hard answers itself (each with an Evaluator); every other one is Normal's (hard_policy).
+    const bool hard_decides = unit_move || std::holds_alternative<core::decision::Charge>(kind) ||
+                              std::holds_alternative<core::decision::SelectChargeTargets>(kind) ||
+                              std::holds_alternative<core::decision::OrderCasualties>(kind) ||
+                              std::holds_alternative<core::decision::RestoreCoherency>(kind) ||
+                              std::holds_alternative<core::decision::Consolidate>(kind);
+    if (!hard_decides) return std::nullopt;
+    // D-080 (M73): over the chain tables' budget, Normal's whole answer (the same seed), its reasons prefixed.
+    if (const std::optional<std::string> why = chain_budget_problem(gs, hc.weights)) {
+        PolicyResult r = normal_policy(gs, side, legal, seed);
+        r.reason = *why + r.reason;
+        for (PlannedStep& step : r.rest) step.reason = *why + step.reason;
+        return r;
+    }
     if (std::holds_alternative<core::decision::MoveUnits>(kind)) {
         return hard_move_units(hc, cache, gs, side, legal, seed);
     }
@@ -921,6 +935,22 @@ std::optional<PolicyResult> hard_answer(const GameState& gs, core::Side side, co
 }
 
 }  // namespace
+
+std::optional<std::string> chain_budget_problem(const GameState& gs, const BotWeights& w) {
+    if (w.chain_budget_mib == 0 && w.chain_budget_tables == 0) return std::nullopt;
+    const ChainPlanSize size = chain_plan_size(gs);
+    constexpr std::size_t kMib = std::size_t{1} << 20;
+    const bool over_bytes = w.chain_budget_mib != 0 && size.bytes > w.chain_budget_mib * kMib;
+    const bool over_tables = w.chain_budget_tables != 0 && size.tables > w.chain_budget_tables;
+    if (!over_bytes && !over_tables) return std::nullopt;
+    const std::string mib = w.chain_budget_mib == 0 ? "no limit on bytes" : std::to_string(w.chain_budget_mib) + " MiB";
+    const std::string tables =
+        w.chain_budget_tables == 0 ? "no limit on tables" : std::to_string(w.chain_budget_tables) + " tables";
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "%.1f MiB", static_cast<double>(size.bytes) / static_cast<double>(kMib));
+    return "D-080: Hard's chain tables here would be " + std::to_string(size.tables) + " tables of " + buf +
+           ", over its budget of " + mib + " and " + tables + "; Normal decides: ";
+}
 
 PolicyResult hard_policy(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
                          std::uint64_t seed, HardContext& context) {

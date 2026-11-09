@@ -4248,9 +4248,10 @@ D-077 item 7 (Normal's points weighting). Every shipped scenario plays exactly a
       (seed 197: 894 MB, 931 MiB, 2.17 s).
   - *What answers:* Normal's policy (`normal_policy` with the decision's seed, the call `hard_policy` already makes for
     every decision it leaves to Normal), so the action is exactly Normal's. Its reason gets a prefix, e.g. "D-080: Hard's
-    chain tables here would be 56 tables of 1,382 MiB, over its budget (1,024 MiB, 80 tables); Normal decides:
-    <Normal's reason>" (the trace and the panel show it). The rest of a plan Normal returns with it (a unit move's
-    steps) carries the same prefix.
+    chain tables here would be 56 tables of 1381.5 MiB, over its budget of 1024 MiB and 80 tables; Normal decides:
+    <Normal's reason>" (a limit of 0 reads "no limit on bytes" / "no limit on tables"; the trace and the panel show it).
+    The rest of a plan Normal returns with it (a unit move's steps) carries the same prefix. The check is
+    `hard::chain_budget_problem(state, weights)` (the prefix, or nullopt within the budget).
   - *Where:* in `hard_answer`, after `hard_applies` and D-078's `moves_as_normal`, for exactly the decisions Hard answers
     itself (MoveUnits and a unit move's MoveModels, Charge, SelectChargeTargets, OrderCasualties, RestoreCoherency,
     Consolidate), before any `Evaluator` is built. Every other decision is Normal's already, with its reason unchanged;
@@ -4320,10 +4321,18 @@ D-077 item 7 (Normal's points weighting). Every shipped scenario plays exactly a
     it leaves to Normal; its whole answer, action and plan.
   - "That decision": each decision Hard would answer with an Evaluator; the others are Normal's already.
   - "Several datasheets": several unit names on a side, destroyed units counted (D-077's reading).
-- **Tests (`tests/ai/m73_test.cpp`):** `M73_HardGuard.*` (the shipped scenarios under the budget, printed;
-  `chain_plan_size` equal to `plan_chain_tables` on the shipped scenarios and random armies at several points of a game;
-  the most-bytes armies answer as Normal with the D-080 reason, building no table; a pure function of the state: fresh
-  and used bots alike, a lower budget by weights hands the rosters to Normal, 0 lifts it, a unit type removed brings an
-  army under it), `M73_Weights.*` (a one-datasheet side weighted by points, both single at 1, the shipped scenarios
-  unchanged), `M73_Arena.RandomArmiesFinishCleanAtEveryLevel` (a few short games a level), `M73_Replay.*` (Normal vs
-  Normal on two fixed non-stock armies in `tests/data/armies/`, to the result).
+- **Tests (`tests/ai/m73_test.cpp`):** `M73_HardGuard.*` (the shipped scenarios under the budget, printed and pinned;
+  `chain_plan_size` equal to `plan_chain_tables` on random armies, the worst cases, V1 and the rosters, at a later
+  half-turn, with units destroyed and with models lost; the most-bytes armies answer every decision of Side A's first turn
+  as Normal does, with the D-080 prefix where Hard would decide, building no table; a pure function of the state: fresh
+  and used bots alike, the half-turns, unit types destroyed, each limit and 0, a lower budget handing the rosters to
+  Normal), `M73_Weights.*` (a one-datasheet side weighted by points, both sides single at 1, the shipped scenarios
+  unchanged), `M73_Arena.RandomArmiesFinishCleanAtEveryLevel` (short-enough games at each level and pairing) and
+  `M73_Replay.*`. The fixture armies are in `tests/data/armies/` (the most-bytes and most-tables lists and the replay's
+  two). The replay names its battle as a scenario file, `tests/data/scenarios/m73_custom_battle_44x60.json`
+  (`custom_battle_scenario` of the replay's two army files, written by the regenerate test and checked equal to it), as
+  M68's names the rosters, so no initial state is embedded (*conservative*: the tests over every saved replay that pin
+  the embedded states' result rule and the absence of facings stay unchanged).
+- **The guard's cost** (Release, measured while other arenas ran): `chain_plan_size` takes 0.64 ms on average on random
+  armies (the full plan 3.8 ms), 0.5 ms on the rosters (4.3 ms), 0.2 ms on Strike and 0.07 ms on V1, once at each
+  decision Hard answers itself.

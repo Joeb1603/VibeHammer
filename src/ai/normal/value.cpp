@@ -1,6 +1,7 @@
 #include "normal/value.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 
 #include "analysis/threat.hpp"
@@ -30,20 +31,22 @@ double share_weight(const core::GameState& state, const core::Unit& unit) {
     if (unit.points <= 0) return 1.0;  // no points: as before M68
     std::int64_t total = 0;
     std::int64_t counted = 0;
-    const std::string* type = nullptr;  // the first datasheet of the unit's side
+    std::array<const std::string*, 2> type{};  // each side's first datasheet
     bool several_types = false;
     for (const core::Unit& u : state.units) {
         if (u.points <= 0) return 1.0;  // the scenario doesn't give every unit points
         total += u.points;
         ++counted;
-        if (u.side != unit.side) continue;
-        if (type == nullptr) {
-            type = &u.name;
-        } else if (u.name != *type) {
+        const std::string*& first = type[core::side_index(u.side)];
+        if (first == nullptr) {
+            first = &u.name;
+        } else if (u.name != *first) {
             several_types = true;
         }
     }
-    if (!several_types || total <= 0) return 1.0;  // one unit type on this side (D-077): as before
+    // D-080 (M73, amends D-077; agreed with the user): by points whenever either side has several datasheets, so both
+    // sides' shares are on one scale; both sides of one datasheet each keep weight 1, as before.
+    if (!several_types || total <= 0) return 1.0;
     return static_cast<double>(unit.points) * static_cast<double>(counted) / static_cast<double>(total);
 }
 

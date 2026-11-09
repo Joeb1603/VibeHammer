@@ -1,0 +1,186 @@
+{
+  "format": 1,
+  "kind": "vibehammer-army",
+  "name": "M73 most tables - Chaos Space Marines",
+  "faction": "chaos_space_marines",
+  "units": [
+    {
+      "unit_file": "data/units/chaos_lord.json",
+      "models": [
+        {
+          "type": "Chaos Lord",
+          "count": 1,
+          "weapons": [
+            "Accursed weapon",
+            "Plasma pistol"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/chaos_lord.json",
+      "models": [
+        {
+          "type": "Chaos Lord",
+          "count": 1,
+          "weapons": [
+            "Astartes chainblade",
+            "Plasma pistol"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Close combat weapon",
+            "Bolt pistol",
+            "Boltgun"
+          ]
+        },
+        {
+          "type": "Legionary w/ boltgun",
+          "count": 4,
+          "weapons": [
+            "Boltgun",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Close combat weapon",
+            "Bolt pistol",
+            "Boltgun"
+          ]
+        },
+        {
+          "type": "Legionary w/ chainsword",
+          "count": 4,
+          "weapons": [
+            "Astartes chainsword",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Close combat weapon",
+            "Bolt pistol",
+            "Boltgun"
+          ]
+        },
+        {
+          "type": "Legionary w/ boltgun",
+          "count": 3,
+          "weapons": [
+            "Boltgun",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        },
+        {
+          "type": "Legionary w/ heavy melee weapon",
+          "count": 1,
+          "weapons": [
+            "Heavy melee weapon",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Close combat weapon",
+            "Bolt pistol",
+            "Boltgun"
+          ]
+        },
+        {
+          "type": "Legionary w/ chainsword",
+          "count": 3,
+          "weapons": [
+            "Astartes chainsword",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        },
+        {
+          "type": "Legionary w/ heavy melee weapon",
+          "count": 1,
+          "weapons": [
+            "Heavy melee weapon",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/havocs.json",
+      "models": [
+        {
+          "type": "Havoc Champion",
+          "count": 1,
+          "weapons": [
+            "Astartes chainsword",
+            "Plasma pistol"
+          ]
+        },
+        {
+          "type": "Havoc w/ autocannon",
+          "count": 4,
+          "weapons": [
+            "Havoc autocannon",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/havocs.json",
+      "models": [
+        {
+          "type": "Havoc Champion",
+          "count": 1,
+          "weapons": [
+            "Astartes chainsword",
+            "Plasma pistol"
+          ]
+        },
+        {
+          "type": "Havoc w/ lascannon",
+          "count": 4,
+          "weapons": [
+            "Havoc lascannon",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    }
+  ]
+}
