@@ -116,9 +116,12 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
             ++memo_hits_;
         } else {
             memo_.clear();
-            // D-081 (M74): every level sets its units up the same way, before any level's policy (so Hard never builds
-            // chain tables from a half-deployed army).
-            if (std::optional<PolicyResult> deploy = deploy_policy(state, side, legal)) {
+            // D-081: the set-up step is answered before any level's policy (so Hard never builds chain tables from a
+            // half-deployed army): Easy at Auto-place's spots in id order (M74), Normal and Hard by the M77 heuristic.
+            std::optional<PolicyResult> deploy;
+            if (uses_deploy_heuristic(config_)) deploy = heuristic_deploy_policy(state, side, legal);
+            if (!deploy) deploy = deploy_policy(state, side, legal);
+            if (deploy) {
                 chosen = std::move(deploy);
             } else switch (effective_level(config_.level)) {
                 case BotLevel::Easy:

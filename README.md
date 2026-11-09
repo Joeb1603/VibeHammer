@@ -8,7 +8,8 @@ with three Intercessor Squads against four units of Termagants. The **Incursion*
 (`rosters_44x60.json`) puts two armies on a 44" x 60" portrait battlefield. The Chaos Space Marines field a
 Chaos Lord, two squads of Legionaries, Chaos Terminators and Havocs. The Tyranids field a Hive Tyrant,
 Termagants, Genestealers, Tyrant Guard, two Screamer-killers and a Tyrannofex. Wiping the other side out
-still wins. Otherwise, after battle round 5, the side that destroyed more points wins. Each unit has its own
+still wins. Otherwise, after battle round 5, the side that destroyed more points wins. A **custom battle**
+plays the same way with armies you build yourself, set up automatically or by hand. Each unit has its own
 shade of its side's colour and a number on the board.
 
 ![Bot vs bot: the Termagants advance away from the Intercessors](docs/images/bot_vs_bot.png)
@@ -22,6 +23,8 @@ page, unzip the whole folder and run `VibeHammer.exe`. If SmartScreen warns you,
 - **Play hotseat:** two players share the computer.
 - **Play vs bot:** you choose your side. The bot plays at Easy, Normal or Hard.
 - **Watch bot vs bot**, with Pause (key P), Step (key N) and the bot speed.
+- **Custom battle...:** the army builder (below). Each side builds an army, then you play hotseat, against
+  the bot or bot vs bot.
 - **Continue saved game** or **Watch a replay**.
 
 Follow the decision panel at the top of the screen. Click the board to pick units, targets and casualties,
@@ -49,6 +52,16 @@ behind each step.
   - **Easy:** a baseline.
   - **Normal:** plans from the odds.
   - **Hard:** adds a game-aware evaluator and a lookahead.
+- **Custom battles:** an army builder for Chaos Space Marines against Tyranids at Incursion size (1000
+  points) on the 44" x 60" battlefield. Points by unit size and wargear, unit sizes, wargear options and
+  their limits, and copy limits come from BSData and are enforced; every army needs a CHARACTER. Options
+  with a weapon the engine can't play yet are greyed out with the reason. Lists can be saved and loaded,
+  and you choose who takes the first turn.
+- **Deployment:** "Auto-place" sets both armies up in their zones. "Place by hand" has the sides take turns
+  setting up one unit at a time (the side taking the second turn first), each set-up checked against the
+  core rules (in the zone, coherent, not on another model, out of Engagement Range). Drag a unit to place it,
+  Shift-drag one model, and turn an oval with Q / E. The bot sets its own units up: Easy where Auto-place
+  would put them, Normal and Hard long-range shooters first and back, melee units last and forward.
 - **Replays and saves:** a replay is the starting state plus every action, and it reproduces the game
   exactly. The saved replays in `tests/replays/` double as regression tests.
 
@@ -56,7 +69,7 @@ behind each step.
   their whole army. On the Incursion scenario Normal and Hard weigh units by their points and play for the
   points result. Hard's first decision of a game there takes a second or two, and it uses about 0.6 GB of memory.
 
-**Not yet:** terrain, objectives and missions, stratagems, interactive deployment, unit abilities (including
+**Not yet:** terrain, objectives and missions, stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
 `PLAN.md` lists what comes next.
 
@@ -96,6 +109,7 @@ it and publishes it.
 | `src/ai/` | `wh40k_ai`: the bot, plus `wh40k_bot_arena` for bot vs bot statistics |
 | `tests/` | GoogleTest suites for core, client logic and the bot, plus the saved replays |
 | `data/units/`, `data/scenarios/` | unit datasheets generated from BSData, and the scenarios |
+| `data/factions.json`, `data/armies/` | the custom battles' factions and their stock army lists |
 | `docs/decisions.md` | rule interpretations and design decisions (D-001 ...), cited in code |
 | `docs/rules/` | the core rules text the engine follows (private; see below) |
 | `docs/datasheets/` | the two army rosters behind the Incursion scenario (private; see below) |
