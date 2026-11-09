@@ -4164,3 +4164,166 @@ the shipped scenarios are unchanged.
   plays exactly as before and the `--per-game` format is unchanged.
 - **Package:** `tools/package.ps1` ships `data/armies/*.json` and `data/factions.json`; `.gitignore` ignores `/armies/`
   (the user's own lists, next to the exe, as `/saves/`).
+
+## D-080: Bots on custom armies: a budget in front of Hard's chain tables, Normal's points weighting for a one-datasheet side, the budgets measured (M73; amends D-077 and D-078)
+**Decided:** 2026-11-09 (M73 of the pre-approved M71–M77 batch; measured and written before the code and stopped for
+review, as the batch's run note asks; the conservative choices are marked *conservative*). Bot only (`src/ai`): no rule,
+core, state, action, event or JSON change, no new decision. Amends D-078 (a budget in front of Hard's chain tables) and
+D-077 item 7 (Normal's points weighting). Every shipped scenario plays exactly as before (part 4).
+- **Measured first** (the M72 binary, Release, this machine: 4 cores, 16 GB; scratch probes and an instrumented copy of
+  `src/ai` in the scratchpad, never in the repo, which plays exactly as the Release arena: `--per-game` hashes equal;
+  `hard::plan_chain_tables` gives each table an Evaluator would build, with its estimated bytes, without building it):
+  - *Random armies* (`random_army` as the arena's `--random-armies 1` draws them, seeds 1–10,000; side A Chaos Space
+    Marines, side B Tyranids):
+    - units per side: A 2–8 (mean 4.7; 8 in 11 battles), B 2–9 (mean 5.3; 8 or 9 in 185). A side over D-078's
+      `move_search_units` (7) in 195 battles (2%); more than 7 units in all (D-078's rollout scaling) in 86%;
+    - distinct Hard unit types (D-067 / D-078 `side_key`: the representative model or a mixed unit's composition,
+      keywords, starting strength) per side: A 1–8 (mean 4.5), B 1–8 (mean 4.9); identical units share a type (fewer
+      types than units on 17% of A's sides and 31% of B's);
+    - planned tables (A's types x B's): 1–64, mean 22.1; over the rosters' 30 in 1,684 battles, over 40 in 527, over 48
+      in 70, over 50 in 6; the most 64 (seed 9114: 8 x 8 types, 866 MB);
+    - planned bytes at the first decision (all 10 half-turns): mean 353 MB, p50 327, p90 587, p99 791, the most 1,066 MB
+      (seed 3772: 7 x 7 types, 49 tables); over the rosters' 525 MB in 1,669 battles; compact storage (D-078: the
+      game's tables at full precision over 256 MiB) in 86% (at full precision: mean 681 MB, the most 2,132 MB);
+    - seeds 1–200 (the acceptance's): at most 49 tables (seed 197, 894 MB) and 894 MB.
+  - *The shipped scenarios* (at the first decision; the bytes then only fall, below): V1 and `bot_termagants_first` 1
+    table, 2.1 MB; `bot_20_termagants` 1, 4.2 MB; Strike 1, 20.6 MB; the rosters 30 tables (5 x 6 types), 525.1 MB.
+  - *Hand-built worst cases* (legal lists, checked by `army_problems`). A table's bytes are 102,960 (compact, 10
+    half-turns, the 38-band line) x A's cells x B's cells, a type's cells being its wounds levels above 0 (at most 20,
+    D-078's grid), so the bytes are 102,960 x (sum of A's types' cells) x (sum of B's):
+    - the most bytes: Chaos Space Marines of 7 types and 105 cells (a Chaos Lord; Havocs with autocannons and Havocs
+      with lascannons; three 10-model Legionaries squads of different loadouts and a 5-model one; 1000 pts) against
+      Tyranids of 8 types and 134 cells (a Hive Tyrant; four 20-model Termagant broods of different loadouts; two
+      3-model Tyrant Guard units of different weapons; 10 Genestealers; 935 pts): 56 tables, 1,449 MB;
+    - the most tables: 8 x 10 types (two Chaos Lords, four 5-model Legionaries squads, two Havocs, 840 pts; two Hive
+      Tyrants, four 10-model Termagant broods, two Tyrant Guard units, Genestealers, a Screamer-killer, 970 pts): 80
+      tables, 857 MB. 8 units is the most a Chaos Space Marine Incursion army can field and 10 a Tyranid one (points
+      and copy limits), so 80 is the most tables two legal armies can plan, even after mixed units split (part 1).
+  - *Estimate and memory:* the estimate is within 1% of a cache's real `bytes()` once built (the volley pools are
+    negligible). A game's peak RSS is the tables plus about 20–130 MB: the rosters 525 MB -> 651–662 MB (D-078); seed
+    3772 1,066 MB -> 1,090 (Hard as A) and 1,142 MiB (as B); the most-bytes armies 1,449 MB -> 1,458 and 1,446 MiB;
+    the most-tables armies 857 MB -> 704 and 876 MiB; seed 9114 866 MB -> 806 and 889 MiB.
+  - *Build time follows the bytes, not the count:* about 1.7 ms per MB on 4 workers, alike for 30, 49, 56 and 80
+    tables (alone on the machine: the rosters' 30 tables 0.90 s, the 80 tables 1.36 s, seed 3772's 49 1.84 s, the
+    most-bytes 56 2.40 s; about 3 ms per MB with three other arenas running, seed 9114's 64 tables included). The first
+    Hard decision builds every table and then searches; alone it took 2.64 s (seed 3772, 1,066 MB), 2.68–3.09 s (seed 83,
+    890 MB: two runs), 2.87 s (the most-bytes armies, as A) and 1.15–1.54 s (the 80 tables).
+  - *Tables are built again mid-game:* a mixed unit that loses a model of another loadout gets a new composition key
+    (D-078), so its pairs are built again (seed 188: 7 tables at a battle round 3 casualty decision, 127 ms). The cache's
+    cap bounds what stays (D-078: at most the larger of 640 MiB and the decision's working set).
+  - *Hard's slowest later decisions depend on the units and the position, not the tables:* seed 188 (42 tables) took
+    2.9–3.2 s at battle round 3 Move Units decisions with no table built (13 units on the table, 3 rollouts a Monte
+    Carlo); the most-bytes armies with Hard as the Tyranids 2.2–5.0 s in battle round 2, once that side was down to 7
+    units and searched its own moves for four 20-model broods. An under-budget variant (42 tables, 807 MB, the same
+    four broods with 7 Tyranid units) stayed at 1.70 s (as A) and 1.37 s (as B).
+  - *Hard on random armies, seeds 1–200, the M72 code* (each game traced, four processes at a time, so times run high;
+    the instrumented copy): Hard vs Normal and Normal vs Hard, 200 games each, and Hard vs Hard, 40 games: all finished,
+    no fallback. Hard's decisions p50 0.00 ms, p95 341 / 320 / 298 ms; peak RSS at most 935 / 967 / 704 MiB. The slowest
+    26 games re-run one at a time (the Release arena): maxima 0.95–2.83 s, except seed 83's first decision (3.09 s; 2.68 s
+    in another run) and seed 188's battle round 3 moves (3.22 s; 2.94 s), both with Hard as A. So the 3 s maximum is
+    borderline on these seeds whatever the guard does (part 3).
+- **1. Hard's guard (amends D-078).**
+  - *What is counted:* the tables an `Evaluator` built at the decision's state would hold and their stored bytes: one
+    table per pair of unit types with models (the army, D-067), or the duel's one table (D-007, one unit a side), each
+    `ChainTable::estimate_bytes` from the state's half-turn on, compact as D-078 decides. These are `plan_chain_tables`'
+    count and the sum of its estimates. A new `hard::chain_plan_size(state)` computes them from the unit types and
+    wounds alone (the types, their grids, the line, the half-turns), without the specs' prototypes, threat ranges and
+    hazard rates; a test holds it equal to `plan_chain_tables` (the full plan takes 3.7 ms on average on random
+    armies, 22 ms at most, 3.4 ms on the rosters, and the guard runs at every decision Hard answers). No table is built
+    and the cache is not touched.
+  - *The budget:* `BotWeights::chain_budget_mib = 1024` (1 GiB of planned tables) and `chain_budget_tables = 80`; over
+    either (more than), the decision is Normal's. `--weights chain_budget_mib=...,chain_budget_tables=...` changes them
+    (0: no limit), for the tests and measurements.
+    - *1 GiB of bytes:* memory is the tables plus about 130 MB at most, so Hard's peak RSS at the edge is about 1.2 GB
+      (1,090–1,142 MiB measured at 1,066 MB), under the 1.5 GB target, with D-078's 640 MiB cap below it; the first
+      decision's build follows the bytes (1.84 s of seed 3772's 2.64 s at 1,066 MB). 1.95x the rosters' 525 MB (the
+      brief's floor is 1.5x). No random army of 10,000 is over it; the most-bytes armies (1,449 MB) are. A lower budget
+      would not keep the decisions under 3 s: the slow ones are searches (part 3), and an army a little over a lower
+      budget comes under it at the next half-turn and builds then (*conservative*: memory is what the bytes bound).
+    - *80 tables (conservative: binds nowhere these factions reach):* the count drives neither memory nor time (above:
+      80 small tables cost less than 42 large ones), so the measured limit is the bytes. 80 is the most two legal
+      Incursion armies of these factions can plan, all measured within the targets; the count stays as a guard for
+      datasheets added later, whose many small tables nobody measured. The plan's "about 40" was a starting point: 48
+      (1.6x the rosters') would hand 70 of 10,000 random battles (seed 197 of 1–200) to Normal with no measured gain
+      (seed 197: 894 MB, 931 MiB, 2.17 s).
+  - *What answers:* Normal's policy (`normal_policy` with the decision's seed, the call `hard_policy` already makes for
+    every decision it leaves to Normal), so the action is exactly Normal's. Its reason gets a prefix, e.g. "D-080: Hard's
+    chain tables here would be 56 tables of 1,382 MiB, over its budget (1,024 MiB, 80 tables); Normal decides:
+    <Normal's reason>" (the trace and the panel show it). The rest of a plan Normal returns with it (a unit move's
+    steps) carries the same prefix.
+  - *Where:* in `hard_answer`, after `hard_applies` and D-078's `moves_as_normal`, for exactly the decisions Hard answers
+    itself (MoveUnits and a unit move's MoveModels, Charge, SelectChargeTargets, OrderCasualties, RestoreCoherency,
+    Consolidate), before any `Evaluator` is built. Every other decision is Normal's already, with its reason unchanged;
+    a side moving as Normal under D-078 keeps D-078's unprefixed reason.
+  - *A pure function of the state:* the units with models, their models (characteristics, weapons, bases), starting
+    strengths and keywords, the battlefield, the battle rounds and the half-turn; not the weights' values, the cache or
+    the seed. During a game it falls: the half-turns left fall every turn and a unit type drops out with its last unit,
+    so an army over the budget at the start can come under it later, and Hard then plays (its first decision builds
+    the tables from that half-turn on). It can rise only when two identical mixed units become two types (one loses a
+    model of another loadout); then it may give the decision back to Normal.
+  - *The cache:* unchanged (D-078). A decision the guard answers builds and evicts nothing; the start-of-decision
+    trimming still runs.
+  - *Never on the shipped scenarios:* their figures are at most the rosters' 30 tables and 525 MB, at the first
+    decision. They cannot rise: the rosters' identical units (two Termagant broods, two Genestealer units, two
+    Screamer-killers) have one loadout each and never split, and Strike's three Intercessor Squads could split into at
+    most 3 tables of 21 MB. Shown by `M73_HardGuard.ShippedScenariosAreUnderTheBudget` (it prints them) and the identity
+    set's trace hashes (a triggered guard changes a reason).
+- **2. Normal's points weighting for a one-datasheet side (amends D-077 item 7; agreed with the user).**
+  - *Before:* `share_weight` gave a unit weight 1 when its own side had one datasheet (unit name), even with points on
+    every unit, while the other side's units were weighted by points over the mean, so the two sides' shares were on
+    different scales. Random seed 6: two Chaos Lords (95 pts) weighed 1.00 each against Hive Tyrants (195) at 1.41 and
+    a Termagant brood (110) at 0.80, so a 95-point Lord counted for more than a 110-point brood; seed 24: two Hive
+    Tyrants at 1.00 against Chaos Lords at 0.64 and Legionaries (180) at 1.21.
+  - *Now:* w(u) = points(u) x N / (the sum of the points), N the units in the state (both sides, destroyed ones included,
+    so fixed for the game), whenever every unit has points and **either** side has more than one datasheet; 1 when a unit
+    has no points, a unit in the state has none, or both sides have one datasheet each (as before: a battle of single
+    datasheets keeps M67's arithmetic, and no weight of 1 is multiplied in). Seed 6's Lords become 0.69 and seed 24's
+    Tyrants 1.31; every other weight is unchanged.
+  - *Where it acts:* only where every unit has points and exactly one side has a single datasheet. In custom battles
+    that is a side of its CHARACTER datasheet alone (one or two Chaos Lords, or one or two Hive Tyrants): 503 of 10,000
+    random battles (A 320, B 192; 9 more have both sides single and stay at 1), 13 of seeds 1–200. Hard inherits it
+    where it uses Normal's functions, and through D-078's [HAZARDOUS] rate (part of a table's key).
+  - *The test changed:* `M68_Points.SharesAreWeightedByPointsOnlyForSidesOfSeveralUnitTypes` pins the old value for the
+    rosters with the Tyranids cut to their two Termagant broods: their weight was 1. It becomes 55 x 7 / 1070 (seven
+    units, 960 + 110 points); the Chaos Space Marines' weights are unchanged. The expectation is updated with a comment
+    citing D-080 and the user's agreement, and the rest of that test (the rosters, the old scenarios, Strike with points
+    but one datasheet a side, a unit without points) stays as it is. No shipped scenario has points with a
+    one-datasheet side.
+- **3. The budgets, measured** (the instrumented copy over the games above: Hard vs Normal and Normal vs Hard 200 each,
+  Hard vs Hard 40, Normal vs Normal 200 and Easy vs Easy 200 on random armies, seeds 1–200; 144,315 Hard-game decisions).
+  - *`kMaxLoadouts` (64 per model, Normal's shooting candidates):* 6.2 million models' enumerations (Normal's own and in
+    Hard's rollouts and estimates), none capped; the most combinations wanted 49. It can bind only for an Aspiring
+    Champion with a bolt pistol and a plasma pistol (both [PISTOL], one weapon set, 24.07) with 6 or more eligible
+    targets (2 x t^2 combinations), or in close-quarters shooting with many engaged targets; never seen.
+  - *`kMaxAdvanceSteps` (64, the charge planner's walk to the Charge step):* 35,718 walks, none ran out; the longest 8
+    steps.
+  - *`move_search_units` (7):* 169 of 15,672 Hard unit-move decisions (1.1%) moved as Normal (a side of 8 or 9 units).
+  - *The rollout budget (6 rollouts, 400 actions each, 6,000 a Monte Carlo; scaled by 7/n above 7 units):* 84,392 Monte
+    Carlos, 91% of them scaled; 320,745 rollouts; none cut by the per-rollout cap or the Monte Carlo's action budget and
+    no Monte Carlo short of its rollouts; the longest rollout 167 actions, the largest Monte Carlo 645.
+  - *So nothing is changed* (*conservative*): no budget binds on random armies. The decision time is set by how many
+    Monte Carlos a decision runs and how long a simulated action takes with many units on the table, not by a cap that
+    binds; a change there would have to be gated on facts the shipped scenarios lack, and none was found that the rosters
+    (14 units, sides of 5 and 9) don't share. The rates and the borderline 3 s maximum are open items (M77's sweeps).
+- **4. The shipped scenarios play exactly as before.** The guard never triggers there (part 1) and costs only time; the
+  weighting changes nothing there (the rosters have several datasheets a side, the others no points); no budget or weight
+  that V1, the bot scenarios, Strike or the rosters read changes. Shown by the replays (byte-identical) and the identity
+  set (`--per-game` hashes against the pre-batch baseline, 30 files).
+- **Ambiguities and the readings taken:**
+  - "The planned tables' bytes": the estimate of the tables this decision would hold (`estimate_bytes`, within 1% of
+    what the cache then holds), not the process's memory; from the decision's half-turn on, as they would be built, not
+    the whole game (so Hard can take over later in a game).
+  - "About 1 GiB and 40 tables, at least 1.5x the rosters' 30 tables and 0.6 GB; set it from your measurements": the
+    bytes at 1 GiB (1.95x the rosters'); the tables at 80, because the measurements show the count costs nothing the
+    bytes don't (*conservative*: the count can only add a guard, never remove one).
+  - "Answered by Normal's policy": `normal_policy` with the decision's seed, the same call Hard makes for every decision
+    it leaves to Normal; its whole answer, action and plan.
+  - "That decision": each decision Hard would answer with an Evaluator; the others are Normal's already.
+  - "Several datasheets": several unit names on a side, destroyed units counted (D-077's reading).
+- **Tests (`tests/ai/m73_test.cpp`):** `M73_HardGuard.*` (the shipped scenarios under the budget, printed;
+  `chain_plan_size` equal to `plan_chain_tables` on the shipped scenarios and random armies at several points of a game;
+  the most-bytes armies answer as Normal with the D-080 reason, building no table; a pure function of the state: fresh
+  and used bots alike, a lower budget by weights hands the rosters to Normal, 0 lifts it, a unit type removed brings an
+  army under it), `M73_Weights.*` (a one-datasheet side weighted by points, both single at 1, the shipped scenarios
+  unchanged), `M73_Arena.RandomArmiesFinishCleanAtEveryLevel` (a few short games a level), `M73_Replay.*` (Normal vs
+  Normal on two fixed non-stock armies in `tests/data/armies/`, to the result).
