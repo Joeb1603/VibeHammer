@@ -13,6 +13,9 @@
 // a click that would submit an action, so it submits nothing.
 // M70: --window <w>x<h> opens the window at that size in pixels (each 320 to 16384) instead of maximized, for
 // screenshots of a small window.
+// M76 (D-082 part 2): --deploy-unit <unit>:<dx>,<dy>[:<model>:<x>,<y>] starts placing that unit by hand in its side's
+// first deployment decision, moved (dx, dy) inches from core's proposal, with one model optionally put at (x, y) inches
+// (for screenshots; it submits nothing). --turn <model>:<deg>[:<dx>,<dy>] also works on a model being placed.
 // M75 (D-082): --builder 1 opens the army builder (the "Custom battle" screen); --army-a <file> and --army-b <file> (army
 // lists), --first A|B and --deploy auto|hand start a custom battle with them (a side without a list keeps its stock
 // army), or with --builder 1 preload the builder. None of them goes with --scenario, --replay or --load, and --builder 1
@@ -45,6 +48,20 @@ struct CliTurn {
     friend bool operator==(const CliTurn&, const CliTurn&) = default;
 };
 
+// M76 (D-082 part 2): --deploy-unit <unit>:<dx>,<dy>[:<model>:<x>,<y>]: in the first deployment decision of the side that
+// unit belongs to (a human's, D-081), start placing that unit by hand at core's proposal, move the whole unit `dx`, `dy`
+// inches, then (optionally) put one of its models at (`x`, `y`) inches on the battlefield, for screenshots of the
+// placement editor; it submits nothing.
+struct CliDeployUnit {
+    unsigned unit = 0;
+    float dx_in = 0.0f;
+    float dy_in = 0.0f;
+    std::optional<unsigned> model;
+    float x_in = 0.0f;
+    float y_in = 0.0f;
+    friend bool operator==(const CliDeployUnit&, const CliDeployUnit&) = default;
+};
+
 // M70: --window <w>x<h>.
 struct CliWindow {
     int width = 0;
@@ -75,6 +92,7 @@ struct LaunchOptions {
     std::vector<unsigned> click_units;   // --click-units (M63)
     std::optional<CliTurn> turn;         // --turn (M66)
     std::optional<CliWindow> window;     // --window (M70)
+    std::optional<CliDeployUnit> deploy_unit;  // --deploy-unit (M76)
     bool builder = false;                // --builder 1 (M75)
     std::optional<std::string> army_a;   // --army-a (M75)
     std::optional<std::string> army_b;   // --army-b (M75)

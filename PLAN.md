@@ -4246,7 +4246,7 @@ field, action, event or file format changes.
     change, `make_loadout` now calling `loadout_weapons`).
   - ctest (Debug and Release): 1260 -> 1280 tests, all pass.
 
-## M76: Hand deployment in the client
+## M76: Hand deployment in the client ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09) · **Rules:** 03.02 · **Decision:** D-082 part 2
 
 > **Plan.** `client_2d/logic/deploy_plan.*`: `propose`, `translate`, `move_model`, `turn_model` (ovals), `problems`
@@ -4268,6 +4268,75 @@ field, action, event or file format changes.
 **Acceptance**
 - Tests `M76_DeployPlan`, `M76_AutoDeploy`, `M76_Undo` and `M76_LaunchOptions`.
 - Screenshots: mid-deployment with a refused ghost, a turned oval, and round 1.
+
+**Results (2026-11-09):** D-082 part 2 records the design and every reading taken. Client, plus one read-only core
+query: no rule, `GameState` field, action, event, decision or file format changes.
+- **Core** (`core/state/deployment.*`): `set_up_problem_details` gives `set_up_problems`' reasons (the same texts, in
+  the same order; `set_up_problems` is now built from it) with the models of the unit being set up that cause each, so
+  the client marks them without judging anything (D-024). An engagement reason still names the first pair found and
+  lists every placed model within 2" of that enemy unit; only the validation path collects them, so proposals and the
+  bots are unchanged.
+- **Logic** (`src/client_2d/logic/`):
+  - `deploy_plan.*`: `DeployPlan`, the placement in progress (a value type): `start` (core's proposal; with none, the
+    formation at the middle of the zone's front, which core refuses), `from_action` (a set-up Undo took back),
+    `translate`, `move_model`, `turn_model` (ovals, modulo 180; round bases stay at 0), `rotate_block` (ovals turn with
+    it), `model_at`, `action`, `problems` (core's); `models_at_fault`, `deploy_choices` (the unit's proposal and, only
+    when core lists it, `CannotSetUp`), `first_undeployed`, `cannot_set_up_text`, `models_and_points_text`.
+  - `auto_actions`: `AutoSettings::auto_deploy` ("Auto-place the rest", per side: the first `DeployUnit` button, the
+    lowest-id unit with a legal spot, only on that side's own decisions, never for a bot's side, never `CannotSetUp`),
+    `is_set_up` and `run_auto_actions_grouped` (each automatic set-up its own Undo group, the human's).
+  - `launch_options`: `--deploy-unit <unit>:<dx>,<dy>[:<model>:<x>,<y>]`.
+- **Board and panels** (`main.cpp`, `board_view.*`, `decision_panel.*`), while a human answers `DeployUnits`:
+  - the unit being placed is a translucent ghost in its shade with its number; the models core names are red, and its
+    first reason shows in a strip under the unit;
+  - the deciding side's zone is shaded more strongly and outlined;
+  - a press on the ghost or its diamond drags the whole unit, Shift-press drags one model (with D-075's grab offset);
+    Q / E and Shift+wheel turn a dragged oval, or the whole block in a whole-unit drag; Esc drops a drag; Enter or
+    "Place" submits;
+  - the action bar: "Set up a unit by hand (03.02, D-081)", the unit, core's verdict (all reasons on hover), and
+    Place (disabled while core refuses), "Auto-place this unit" (with a proposal), Reset, "Auto-place the rest" and
+    "Can't be set up" (only when core offers it, with its consequence);
+  - the Game panel: the units set up, then "Side B sets up a unit (03.02, D-081)" and the units not set up yet by side,
+    the deciding side's first (a click starts placing one), the other side's greyed;
+  - Undo takes back the last set-up (one group per unit) and brings it back as the placement to adjust; it stops
+    "Auto-place the rest".
+  - "Fix illegal moves" is not applied to set-ups (conservative, D-082 part 2: core has no set-up area, and building one
+    in the client would be rules logic): a refused ghost stays where it was let go, with its reasons.
+- **Audit** (exe side; D-082 part 2 lists it): the unchecked `find_unit(...)->models` in the drag preview (M74's
+  finding), the whole-unit preview, the move markers and the panel's shot and fight grids now check for null;
+  datasheet windows find units not set up; hover, click and right-click see the ghost first. The board drawing,
+  labels, hit-testing, ruler, pickers, overlays and pop-ups were checked and need no change.
+- **Builder:** "Place by hand" is fully enabled; the tooltip explains the alternating set-up and the dragging.
+- **Bots:** unchanged. In vs-bot play the bot's set-ups come one at a time at the driver's pacing.
+- **Tests** (14 new):
+  - `tests/client/m76_test.cpp` (12): `M76_DeployPlan.*` (6: `StartsAtTheProposal`,
+    `WithNoLegalSpotItStartsAtTheZoneFrontAndCoreRefusesIt`, `TranslateKeepsTheShape`, `ProblemsComeFromCore` (off the
+    battlefield 03.02, out of the zone D-009, a model on another D-064, incoherent 03.03, engaged 03.04 on zones 1"
+    apart; the same reasons as `validate_action`), `OvalTurnKeepsFacingModulo180AndRoundBasesStayAtZero`,
+    `SubmitIsAccepted`), `M76_AutoDeploy.*` (2: `TheRestPlacesAtTheProposalsAndPausesForTheOpponent` (the result
+    equals the auto-placed battle) and `AUnitWithNoLegalSpotIsLeftToThePlayer`), `M76_Undo.OneSetUpPerGroup` (hotseat
+    and against a bot), `M76_CannotSetUp.OfferedOnlyWhenCoreOffersIt`,
+    `M76_Sidebar.UnitsNotSetUpYetShowTheirModelsAndPoints`, `M76_LaunchOptions.ParsesDeployUnit`.
+  - `tests/m76_set_up_problems_test.cpp` (2): `D082_SetUpProblems.TheReasonsOfSetUpProblemsWithTheModelsAtFault` and
+    `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`.
+  - No existing test changed.
+- **Replay:** none (not required): the flow's actions are M74's, whose `m74_hand_deployment.json` already sets a unit up
+  by hand, and the editor makes no game state of its own.
+- **Acceptance:**
+  - *The tests listed:* **met.**
+  - *Screenshots* (`xvfb-run`, 1600x1000, and the bar at 1280x800, looked at): mid-deployment with a ghost moved to a
+    legal spot; refused ghosts (out of the zone, and over a deployed unit with only the three overlapping models red);
+    the Tyrannofex turned 30 degrees (refused across the zone's front, and accepted inside it); a unit with no legal
+    spot left ("Can't be set up" with its consequence, on a narrow-zone scenario); the lists of units not set up; a
+    vs-bot game after the bot set up three units; battle round 1 after a hand deployment (the Tyrannofex turned 90
+    degrees). **Met.** The diamond sits on a one-model unit's number, as in a move.
+  - *Old play unchanged:* **met.** `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58, M68, M70, M73 and M75
+    regenerations leave `tests/replays` byte-identical. The Release arena's `--per-game` output on V1, both bot
+    scenarios, Strike and the rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line (a
+    guard against the core change: `set_up_problems` is now built from `set_up_problem_details`).
+  - ctest (Debug and Release): 1280 -> 1294 tests, all pass.
+  - *Manual check by mouse on Windows:* **open** (for the user): dragging, Shift-dragging, turning with Q / E and
+    Shift+wheel, Enter, and Undo during a hand deployment.
 
 ## M77: Bot deployment heuristic, final verification, docs, PR
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Decision:** D-081 extended (bot deployment)

@@ -27,6 +27,18 @@ std::optional<core::GameAction> next_auto_action(const core::GameState& state,
         if (auto skip = lone_skip(legal)) return skip;
         if (auto skip = pointless_fight_step_skip(state, legal)) return skip;  // D-047
     }
+    // D-082 part 2 (M76): "Auto-place the rest": the first fully specified DeployUnit, which D-081 lists first for the
+    // lowest-id unit with a legal spot (a unit without one has CannotSetUp instead, which this never picks).
+    if (state.pending && std::holds_alternative<core::decision::DeployUnits>(state.pending->kind)) {
+        const std::size_t side = core::side_index(state.pending->side);
+        if (settings.auto_deploy[side] && !settings.bot_controlled[side]) {
+            for (const core::GameAction& a : legal) {
+                const auto* d = std::get_if<core::action::DeployUnit>(&a);
+                if (d != nullptr && !d->models.empty()) return a;
+            }
+        }
+        return std::nullopt;
+    }
     if (settings.auto_allocate && state.pending && !settings.bot_controlled[core::side_index(state.pending->side)]) {
         if (std::holds_alternative<core::decision::DeclareAllocationOrder>(state.pending->kind) && !legal.empty()) {
             return legal.front();  // 05.03: the first legal order, as the panel offers first
@@ -50,6 +62,25 @@ std::vector<core::GameAction> run_auto_actions(GameSession& session, AutoSetting
         done.push_back(*next);
     }
     return done;
+}
+
+bool is_set_up(const core::GameAction& action) {
+    return std::holds_alternative<core::action::DeployUnit>(action) || std::holds_alternative<core::action::CannotSetUp>(action);
+}
+
+std::vector<core::GameAction> run_auto_actions_grouped(GameSession& session, AutoSettings settings, UndoGroups& groups,
+                                                       const std::function<bool(const core::GameAction&)>& submit,
+                                                       std::size_t limit) {
+    return run_auto_actions(
+        session, settings,
+        [&](const core::GameAction& a) {
+            if (is_set_up(a)) {
+                groups.end(session.history().size());  // the group so far (dropped if it added nothing)
+                groups.begin(session.history().size(), InputOwner::Human);
+            }
+            return submit ? submit(a) : session.submit(a).ok();
+        },
+        limit);
 }
 
 std::vector<core::UnitId> units_that_can_still_shoot(const std::vector<core::GameAction>& legal) {

@@ -34,12 +34,16 @@
 //   the builder with --builder 1. Not with --scenario, --replay or --load. In the builder, --select <unit id> selects
 //   that unit (side A's units first, as the battle numbers them) and --open-slot <group>:<slot> opens one of its
 //   wargear combos (for screenshots); they change nothing.
+//   M76 (D-082 part 2): --deploy-unit <unit>:<dx>,<dy>[:<model>:<x>,<y>]: in the first set-up decision of that unit's side
+//   (hand deployment, D-081), start placing it by hand at the engine's proposal moved (dx, dy) inches, one model
+//   optionally put at (x, y) inches; --turn also starts a turned drag of a model being placed. Neither submits anything.
 
 #include <imgui.h>
 #include <raylib.h>
 #include <rlImGui.h>
 
 #include <algorithm>
+#include <array>
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
@@ -70,11 +74,13 @@
 #include "core/engine/replay.hpp"
 #include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
+#include "core/state/deployment.hpp"
 #include "core/state/queries.hpp"
 #include "core/version.hpp"
 #include "datasheet_view.hpp"
 #include "decision_panel.hpp"
 #include "decision_view.hpp"
+#include "deploy_plan.hpp"
 #include "dice_cards.hpp"
 #include "dice_popup.hpp"
 #include "drop_fix.hpp"
@@ -167,6 +173,21 @@ struct Drag {
     float start_facing = 0.0f;
     bool scripted = false;
     [[nodiscard]] bool turned() const { return can_turn && core::footprint_turn_deg(start_facing, facing) != 0.0; }
+};
+
+// M76 (D-082 part 2): a drag of the unit being placed by hand (D-081): the whole block (a press on the ghost or its
+// diamond) or one model (Shift-press on it). The placement changes only when it is let go; meanwhile the ghost is drawn
+// where it would be dropped, with core's verdict on that spot.
+struct DeployDrag {
+    bool whole_unit = true;
+    core::ModelId model;           // !whole_unit: the model dragged
+    core::Position grab;           // world position where the drag started
+    core::Position current;        // world position of the cursor now
+    Vector2 grab_screen{0, 0};
+    core::Position model_at_grab;  // D-075: the model's centre when grabbed (it keeps the grab offset)
+    bool can_turn = false;         // an oval, or the whole block: Q / E and Shift+wheel turn it (03.01, D-074)
+    float turn_deg = 0.0f;         // how far it has been turned in this drag (counter-clockwise positive)
+    bool scripted = false;         // started by --turn: the mouse doesn't move it
 };
 
 // D-035: the measuring ruler, from a left-press on nothing clickable.
@@ -337,6 +358,7 @@ public:
         panel_.reset();
         reasons_.clear();
         drag_.reset();
+        reset_deployment_editor();  // M76
         measure_.reset();
         open_sheets_.clear();
         dice_.clear();
@@ -392,6 +414,7 @@ public:
         ++generation_;
         reasons_.clear();
         drag_.reset();
+        reset_deployment_editor();  // M76: the placement and "Auto-place the rest" belong to the old game
         open_sheets_.clear();  // D-034
         fit_pending_ = true;
         scroll_log_ = true;
@@ -519,6 +542,8 @@ public:
     }
     // --turn (M66): a scripted drag of that model, turned, for screenshots.
     void cli_turn(std::optional<CliTurn> turn) { cli_turn_ = turn; }
+    // --deploy-unit (M76): a unit placed by hand, moved, for screenshots.
+    void cli_deploy_unit(std::optional<CliDeployUnit> d) { cli_deploy_ = d; }
 
     void select(std::optional<unsigned> unit, std::optional<unsigned> model) {
         if (mode_ == Mode::Builder && builder_ && unit && *unit >= 1) {
@@ -607,9 +632,12 @@ public:
                 emphasised = h->unit->id;
             }
         }
+        // M76 (D-082 part 2): the zone of a human setting a unit up is highlighted.
+        const std::optional<core::Side> zone =
+            deploying_human() ? std::optional<core::Side>(session_->pending()->side) : std::nullopt;
         draw_board(
             state(), camera_, [this](core::UnitId id) { return board_.greyed(id); }, emphasised, ui_scale(),
-            [this](core::UnitId unit, core::ModelId model) { return board_.model_dimmed(unit, model); });
+            [this](core::UnitId unit, core::ModelId model) { return board_.model_dimmed(unit, model); }, zone);
         ring_circles_ = ring_circles(state(), plan_overlays(state(), selected_model_, overlays_), drag_overrides(),
                                      drag_facings());
         // Rings stop at the battlefield edge (no model can be beyond it).
@@ -622,6 +650,7 @@ public:
         draw_ring_paths(camera_, outline_paths(ring_circles_), ui_scale());  // D-074 part 3: oval rings
         EndScissorMode();
         draw_selection_and_moves();
+        draw_deploy_ghost();  // M76: over the battlefield's models
         draw_measure();
         draw_ui();
         save_settings_if_changed();
@@ -770,6 +799,8 @@ private:
             menu_.clear();
             open_menu_ = false;
             menu_anchor_.reset();
+            deploy_drag_.reset();  // M76: the bot's set-up is not the human's to place
+            deploy_plan_.reset();
             return;
         }
         const std::size_t step = mode_ == Mode::Play ? session_->history().size() : 0;
@@ -784,6 +815,7 @@ private:
         board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(session_->state(), session_->legal())
                                                              : BoardInteraction();
         if (!first) tidy_selection();  // D-043: a new decision (Reset move, Commit, any submit, undo)
+        sync_deploy_plan();            // M76 (D-082 part 2): the unit a human places by hand
         // --pick-models (M62): the first casualty decision's picks, once, as clicks would (screenshots, D-069).
         if (const CasualtyPicks* picks = board_.casualty_picks(); picks != nullptr && !cli_model_picks_.empty()) {
             const core::UnitId target = picks->target();
@@ -828,6 +860,212 @@ private:
                 cli_turn_.reset();
             }
         }
+        // --turn (M76): on a model being placed by hand, a scripted turned drag of it (its unit is placed first if it isn't
+        // the one being placed).
+        if (cli_turn_ && !deploy_drag_ && deploying_human()) {
+            const core::ModelId id{cli_turn_->model};
+            const core::Unit* owner = nullptr;
+            for (const core::Unit& u : session_->state().undeployed) {
+                for (const core::Model& m : u.models) {
+                    if (m.id == id) owner = &u;
+                }
+            }
+            if (owner != nullptr && owner->side == session_->pending()->side) {
+                if (!deploy_plan_ || deploy_plan_->unit() != owner->id) choose_deploy_unit(owner->id);
+                if (const DeployPlan::Placed* p = deploy_plan_ ? deploy_plan_->find(id) : nullptr) {
+                    DeployDrag d;
+                    d.whole_unit = false;
+                    d.model = id;
+                    d.grab = p->position;
+                    d.model_at_grab = p->position;
+                    d.current = core::Position{p->position.x + core::inches_to_mm(cli_turn_->dx_in),
+                                               p->position.y + core::inches_to_mm(cli_turn_->dy_in), 0.0f};
+                    d.grab_screen = camera_.to_screen(p->position);
+                    d.can_turn = p->base.shape != core::BaseShape::Round;
+                    d.turn_deg = d.can_turn ? cli_turn_->deg : 0.0f;
+                    d.scripted = true;
+                    deploy_drag_ = d;
+                }
+                cli_turn_.reset();
+            }
+        }
+    }
+
+    // ---- M76 (D-082 part 2): placing a unit by hand in the deployment step (D-081) ----
+
+    // A human sets a unit up now (not the bot's decision, nor while dice show; a replay has no editor).
+    bool deploying_human() const {
+        return mode_ == Mode::Play && session_ && session_->pending() && !board_waits() &&
+               std::holds_alternative<core::decision::DeployUnits>(session_->pending()->kind);
+    }
+
+    void reset_deployment_editor() {
+        deploy_plan_.reset();
+        deploy_drag_.reset();
+        deploy_check_.reset();
+        resume_deploy_.reset();
+        auto_deploy_ = {false, false};
+    }
+
+    // The placement for this decision: the one in progress while it is still for a unit of the deciding side waiting to
+    // be set up; else the set-up Undo just took back (to adjust it); else the deciding side's lowest-id unit, at core's
+    // proposal (as the bots pick, D-081).
+    void sync_deploy_plan() {
+        deploy_drag_.reset();
+        if (!deploying_human()) {
+            deploy_plan_.reset();
+            resume_deploy_.reset();
+            return;
+        }
+        const core::GameState& gs = session_->state();
+        const core::Side side = session_->pending()->side;
+        std::optional<DeployPlan> plan;
+        if (resume_deploy_) {
+            if (const core::Unit* u = core::find_undeployed(gs, resume_deploy_->unit); u != nullptr && u->side == side) {
+                plan = DeployPlan::from_action(gs, *resume_deploy_);
+            }
+            resume_deploy_.reset();
+        }
+        if (!plan && deploy_plan_ && deploy_plan_->side() == side &&
+            core::find_undeployed(gs, deploy_plan_->unit()) != nullptr) {
+            plan = deploy_plan_;
+        }
+        if (!plan) {
+            if (const std::optional<core::UnitId> first = first_undeployed(gs, side)) plan = DeployPlan::start(gs, *first);
+        }
+        deploy_plan_ = std::move(plan);
+        // --deploy-unit: once, in the first set-up decision of that unit's side.
+        if (cli_deploy_) {
+            const core::UnitId id{cli_deploy_->unit};
+            if (const core::Unit* u = core::find_undeployed(gs, id); u != nullptr && u->side == side) {
+                if (std::optional<DeployPlan> p = DeployPlan::start(gs, id)) {
+                    p->translate(core::inches_to_mm(cli_deploy_->dx_in), core::inches_to_mm(cli_deploy_->dy_in));
+                    if (cli_deploy_->model) {
+                        (void)p->move_model(core::ModelId{*cli_deploy_->model},
+                                            core::Position{core::inches_to_mm(cli_deploy_->x_in),
+                                                           core::inches_to_mm(cli_deploy_->y_in), 0.0f});
+                    }
+                    deploy_plan_ = std::move(p);
+                }
+                cli_deploy_.reset();
+            }
+        }
+    }
+
+    // A unit of the deciding side picked in the sidebar: placing it starts at core's proposal.
+    void choose_deploy_unit(core::UnitId unit) {
+        if (!deploying_human() || (deploy_plan_ && deploy_plan_->unit() == unit)) return;
+        std::optional<DeployPlan> p = DeployPlan::start(session_->state(), unit);
+        if (!p || p->side() != session_->pending()->side) return;
+        deploy_drag_.reset();
+        deploy_plan_ = std::move(p);
+        reasons_.clear();
+    }
+
+    // The placement as it would be if the drag in progress were let go now.
+    static void apply_deploy_drag(DeployPlan& plan, const DeployDrag& d, const core::Position& cursor) {
+        if (d.whole_unit) {
+            plan.rotate_block(d.turn_deg);
+            plan.translate(cursor.x - d.grab.x, cursor.y - d.grab.y);
+        } else {
+            (void)plan.move_model(d.model, drag_drop(d.model_at_grab, d.grab, cursor));  // D-075: the grab offset
+            (void)plan.turn_model(d.model, d.turn_deg);
+        }
+    }
+
+    // The ghost as drawn: the placement with the drag in progress applied.
+    std::optional<DeployPlan> deploy_preview() const {
+        if (!deploying_human() || !deploy_plan_) return std::nullopt;
+        DeployPlan p = *deploy_plan_;
+        if (deploy_drag_) apply_deploy_drag(p, *deploy_drag_, deploy_drag_->current);
+        return p;
+    }
+
+    // Core's verdict on a placement (D-024: set_up_problem_details, the engine's own check), once per placement shown.
+    struct DeployCheck {
+        std::uint64_t generation = 0;
+        std::size_t step = 0;
+        DeployPlan plan;
+        std::vector<core::SetUpProblem> problems;
+        std::vector<core::ModelId> at_fault;
+    };
+    const DeployCheck& deploy_check(const DeployPlan& plan) {
+        const std::size_t step = session_->history().size();
+        if (!deploy_check_ || deploy_check_->generation != generation_ || deploy_check_->step != step ||
+            !(deploy_check_->plan == plan)) {
+            DeployCheck c;
+            c.generation = generation_;
+            c.step = step;
+            c.plan = plan;
+            c.problems = plan.problems(session_->state());
+            c.at_fault = models_at_fault(c.problems);
+            deploy_check_ = std::move(c);
+        }
+        return *deploy_check_;
+    }
+
+    // The model of the unit being placed under `screen` (the ghost is drawn over the battlefield's models), if any.
+    std::optional<core::ModelId> ghost_model_at(Vector2 screen) const {
+        if (!deploying_human() || !deploy_plan_) return std::nullopt;
+        return deploy_plan_->model_at(camera_.to_world(screen));
+    }
+
+    bool on_ghost_handle(Vector2 screen) const {
+        return deploying_human() && deploy_plan_ &&
+               distance_px(camera_.to_screen(deploy_plan_->centre()), screen) <= kHandlePx * ui_scale();
+    }
+
+    // A press on the ghost: its diamond or a model drags the whole unit, Shift on a model drags that model alone.
+    bool deploy_press(Vector2 mouse) {
+        const bool handle = on_ghost_handle(mouse);
+        const std::optional<core::ModelId> model = ghost_model_at(mouse);
+        if (!handle && !model) return false;
+        const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+        DeployDrag d;
+        d.grab = camera_.to_world(mouse);
+        d.current = d.grab;
+        d.grab_screen = mouse;
+        const DeployPlan::Placed* p = model ? deploy_plan_->find(*model) : nullptr;
+        if (p != nullptr && shift && !handle) {
+            d.whole_unit = false;
+            d.model = p->model;
+            d.model_at_grab = p->position;
+            d.can_turn = p->base.shape != core::BaseShape::Round;  // D-074: an oval can be turned
+        } else {
+            d.whole_unit = true;
+            d.can_turn = true;  // the whole block turns round its centre
+        }
+        deploy_drag_ = d;
+        clear_selection();
+        return true;
+    }
+
+    // Letting go: the placement takes the drag (nothing is submitted: "Place" does that). A press let go where it was is
+    // a click, or, after Q / E, a turn where it stands.
+    void deploy_release(Vector2 mouse) {
+        const DeployDrag d = *deploy_drag_;
+        deploy_drag_.reset();
+        if (!deploy_plan_) return;
+        const bool moved = distance_px(d.grab_screen, mouse) >= kDragThresholdPx * ui_scale();
+        if (!moved && d.turn_deg == 0.0f) return;
+        apply_deploy_drag(*deploy_plan_, d, moved ? d.current : d.grab);
+        reasons_.clear();
+    }
+
+    void turn_deploy_drag(float deg) {
+        if (deploy_drag_ && deploy_drag_->can_turn) deploy_drag_->turn_deg = core::normalise_facing_deg(deploy_drag_->turn_deg + deg);
+    }
+
+    // "Place" or Enter: the placement, submitted (and so validated by the engine) as one Undo group.
+    void place_deploy() {
+        if (!deploying_human() || !deploy_plan_ || deploy_drag_) return;
+        const DeployCheck& c = deploy_check(*deploy_plan_);
+        if (!c.problems.empty()) {
+            reasons_.clear();
+            for (const core::SetUpProblem& p : c.problems) reasons_.push_back(p.reason);
+            return;
+        }
+        if (submit(deploy_plan_->action())) status_ = "Set up " + unit_display_name(session_->state(), deploy_plan_->unit()) + ".";
     }
 
     // What a board click or a menu choice led to: submit it, or offer its menu at the cursor.
@@ -886,11 +1124,25 @@ private:
     // M13 / D-039: undo the last group (a whole drag, a button, with what followed automatically).
     void undo_last() {
         if (!session_) return;
+        const std::vector<core::ReplayStep> before = session_->history();  // M76: what this undo takes back
         // D-054: against the bot, Undo goes back to the human's last input (the bot's moves after it go too).
         if (bot_sides_[0] || bot_sides_[1]) {
             undo_groups_.undo_human(*session_);
         } else {
             undo_groups_.undo(*session_);
+        }
+        // M76 (D-082 part 2): Undo stops "Auto-place the rest"; a unit set up by the deciding side that it took back comes
+        // back as the placement in progress, to adjust it.
+        reset_deployment_editor();
+        if (session_->pending() && std::holds_alternative<core::decision::DeployUnits>(session_->pending()->kind)) {
+            for (std::size_t i = session_->history().size(); i < before.size(); ++i) {
+                const auto* d = std::get_if<core::action::DeployUnit>(&before[i].action);
+                if (d != nullptr && before[i].side == session_->pending()->side &&
+                    core::find_undeployed(session_->state(), d->unit) != nullptr) {
+                    resume_deploy_ = *d;
+                    break;
+                }
+            }
         }
         driver_.invalidate();
         bot_log_.truncate(session_->log().size());  // M45: the undone actions' notes go too
@@ -908,15 +1160,22 @@ private:
     // D-036 / D-038: answer the decisions the settings cover, recording them for Undo.
     void run_auto_actions_now() {
         if (mode_ != Mode::Play || !session_) return;
-        const AutoSettings settings{settings_.skip_empty_steps, settings_.auto_allocate, bot_sides_};
-        const std::vector<core::GameAction> done =
-            run_auto_actions(*session_, settings, [this](const core::GameAction& a) { return submit_one(a); });
+        AutoSettings settings{settings_.skip_empty_steps, settings_.auto_allocate, bot_sides_};
+        settings.auto_deploy = auto_deploy_;  // M76: "Auto-place the rest", each set-up its own Undo group
+        const std::vector<core::GameAction> done = run_auto_actions_grouped(
+            *session_, settings, undo_groups_, [this](const core::GameAction& a) { return submit_one(a); });
         std::string text;
         for (const core::GameAction& a : done) {
             if (!is_skip(a)) continue;  // allocation shows in the dice pop-ups and the log
             text += (text.empty() ? "Skipped (nothing worth doing): " : ", ") + action_label(session_->state(), a);
         }
         if (!text.empty()) status_ = std::move(text);
+        // M76: "Auto-place the rest" leaves a unit with no legal spot to the player (D-081: Can't be set up).
+        if (session_->pending() && std::holds_alternative<core::decision::DeployUnits>(session_->pending()->kind) &&
+            auto_deploy_[core::side_index(session_->pending()->side)] && !bot_sides_[core::side_index(session_->pending()->side)]) {
+            status_ = "Auto-place the rest stopped: no legal spot is left for the units still to place. Place them by "
+                      "hand, or declare them as not set up (D-081).";
+        }
     }
 
     bool submit_one(const core::GameAction& action) {
@@ -1046,7 +1305,9 @@ private:
         const Vector2 mouse = GetMousePosition();
         const float wheel = GetMouseWheelMove();
         const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-        if (wheel != 0.0f && drag_ && drag_->can_turn && shift) {
+        if (wheel != 0.0f && deploy_drag_ && deploy_drag_->can_turn && shift) {
+            turn_deploy_drag(wheel * kFineTurnStepDeg);  // M76: a placement's dragged oval or block
+        } else if (wheel != 0.0f && drag_ && drag_->can_turn && shift) {
             turn_drag(wheel * kFineTurnStepDeg);  // D-074 part 3: Shift+wheel turns the dragged oval
         } else if (wheel != 0.0f) {
             camera_.zoom_by(std::pow(1.15f, wheel), mouse);  // zoom to cursor
@@ -1054,10 +1315,18 @@ private:
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) camera_.pan(GetMouseDelta());
 
         const auto hovered = model_at(state(), camera_, mouse);
-        if (hovered && !drag_ && !measuring()) draw_tooltip(*hovered);
+        // M76: the ghost of a unit being placed is drawn over the battlefield's models, so it is hovered first.
+        const std::optional<core::ModelId> ghost = deploy_drag_ ? std::nullopt : ghost_model_at(mouse);
+        if (ghost && !measuring()) {
+            draw_ghost_tooltip(*ghost);
+        } else if (hovered && !drag_ && !deploy_drag_ && !measuring()) {
+            draw_tooltip(*hovered);
+        }
         // D-034: a right-click (not a right-drag, which pans) on a model opens its unit's datasheet.
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-            right_press_ = RightPress{mouse, hovered ? std::optional(hovered->unit->id) : std::nullopt};
+            std::optional<core::UnitId> unit = hovered ? std::optional(hovered->unit->id) : std::nullopt;
+            if (ghost) unit = deploy_plan_->unit();  // M76: a unit not set up yet has its datasheet too
+            right_press_ = RightPress{mouse, unit};
         }
         if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT) && right_press_) {
             const RightPress p = *right_press_;
@@ -1069,7 +1338,8 @@ private:
             rest_since_ = GetTime();
         }
         const bool rested = GetTime() - rest_since_ >= 0.6;
-        if (!hovered && !drag_ && !measuring() && rested && !board_.picking_target() && menu_.empty()) {
+        if (!hovered && !ghost && !drag_ && !deploy_drag_ && !measuring() && rested && !board_.picking_target() &&
+            menu_.empty()) {
             draw_ring_tooltip(camera_.to_world(mouse));
         }
 
@@ -1089,7 +1359,9 @@ private:
             drag_->current = camera_.to_world(mouse);
             update_drop(*drag_);
         }
+        if (deploy_drag_ && !deploy_drag_->scripted) deploy_drag_->current = camera_.to_world(mouse);  // M76
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && drag_) release(mouse);
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && deploy_drag_) deploy_release(mouse);  // M76
     }
 
     // A click on empty board drops the board selection, but not a custom shot or fight being edited (D-031, D-032).
@@ -1132,6 +1404,7 @@ private:
     }
 
     void press(Vector2 mouse, const std::optional<HoveredModel>& hovered) {
+        if (deploy_press(mouse)) return;  // M76: the unit being placed by hand
         const auto moving = moving_unit();
         if (const auto handle = unit_handle_screen(); handle && distance_px(*handle, mouse) <= kHandlePx * ui_scale()) {
             drag_ = Drag{true, {}, *moving, camera_.to_world(mouse), camera_.to_world(mouse), mouse};
@@ -1258,6 +1531,14 @@ private:
             if (IsKeyPressed(KEY_Q) || IsKeyPressedRepeat(KEY_Q)) turn_drag(kTurnStepDeg);
             if (IsKeyPressed(KEY_E) || IsKeyPressedRepeat(KEY_E)) turn_drag(-kTurnStepDeg);
         }
+        // M76 (D-082 part 2): the same for a placement's dragged oval or block; Esc drops the drag (the ghost stays where
+        // it was), Enter places the unit.
+        if (deploy_drag_ && deploy_drag_->can_turn) {
+            if (IsKeyPressed(KEY_Q) || IsKeyPressedRepeat(KEY_Q)) turn_deploy_drag(kTurnStepDeg);
+            if (IsKeyPressed(KEY_E) || IsKeyPressedRepeat(KEY_E)) turn_deploy_drag(-kTurnStepDeg);
+        }
+        if (deploy_drag_ && IsKeyPressed(KEY_ESCAPE)) deploy_drag_.reset();
+        if (deploying_human() && (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))) place_deploy();
         if (mode_ == Mode::Play && !board_waits() && IsKeyPressed(KEY_ESCAPE)) {
             board_.cancel();
             if (!moving_unit()) clear_selection();  // D-041: as Cancel
@@ -1314,6 +1595,48 @@ private:
         ImGui::EndTooltip();
     }
 
+    // M76 (D-082 part 2): the Game panel's units not set up yet (D-081), by side: the side setting a unit up now first.
+    void draw_not_set_up(const core::GameState& s) {
+        const bool deploying = s.flow.stage == core::Stage::Deploy && s.pending &&
+                               std::holds_alternative<core::decision::DeployUnits>(s.pending->kind);
+        const core::Side now = deploying ? s.pending->side : core::Side::A;
+        ImGui::Spacing();
+        if (deploying) {
+            ImGui::TextColored(to_imvec(side_color(now)), "%s sets up a unit (03.02, D-081)", side_name(now).c_str());
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            ImGui::TextWrapped("%zu of %zu units set up. The sides take turns, the side taking the second turn first; "
+                               "once one is done, the other sets up the rest.",
+                               s.units.size(), s.units.size() + s.undeployed.size());
+            ImGui::PopStyleColor();
+        }
+        for (const core::Side side : {now, core::opponent(now)}) {
+            const bool pickable = deploying && side == now && deploying_human();
+            bool header = false;
+            for (const core::Unit& u : s.undeployed) {  // in id order (D-081)
+                if (u.side != side) continue;
+                if (!header) {
+                    header = true;
+                    const std::string title = side_name(side) + " not set up yet" +
+                                              (pickable ? " (click one to place it):" : ":");
+                    ImGui::TextColored(to_imvec(side_color(side), pickable ? 1.0f : 0.7f), "%s", title.c_str());
+                }
+                unit_swatch(u.id);  // D-065: the shade and number it will have on the board
+                const std::string text =
+                    unit_display_name(s, u.id) + " (" + std::to_string(u.id.v) + "): " + models_and_points_text(u);
+                if (pickable) {
+                    ImGui::PushID(static_cast<int>(u.id.v));
+                    if (ImGui::Selectable(text.c_str(), deploy_plan_ && deploy_plan_->unit() == u.id)) {
+                        choose_deploy_unit(u.id);
+                    }
+                    ImGui::SetItemTooltip("Place %s (unit %u) by hand.", unit_display_name(s, u.id).c_str(), u.id.v);
+                    ImGui::PopID();
+                } else {
+                    ImGui::TextDisabled("%s", text.c_str());
+                }
+            }
+        }
+    }
+
     // ---- D-034: datasheet windows ----
     void open_sheet(core::UnitId unit) {
         if (std::find(open_sheets_.begin(), open_sheets_.end(), unit) == open_sheets_.end()) {
@@ -1322,8 +1645,14 @@ private:
         ImGui::SetWindowFocus(sheet_title(unit).c_str());  // bring an already open sheet to the front
     }
 
-    std::string sheet_title(core::UnitId id) const {
+    // M76 audit: a unit not set up yet (D-081) has its datasheet too.
+    const core::Unit* sheet_unit(core::UnitId id) const {
         const core::Unit* u = state().find_unit(id);
+        return u != nullptr ? u : core::find_undeployed(state(), id);
+    }
+
+    std::string sheet_title(core::UnitId id) const {
+        const core::Unit* u = sheet_unit(id);
         return "Datasheet: " + (u ? unit_display_name(state(), id) : std::string("unit")) + "##sheet" + std::to_string(id.v);
     }
 
@@ -1332,7 +1661,7 @@ private:
         std::vector<core::UnitId> keep;
         for (std::size_t i = 0; i < open_sheets_.size(); ++i) {
             const core::UnitId id = open_sheets_[i];
-            const core::Unit* u = state().find_unit(id);
+            const core::Unit* u = sheet_unit(id);
             if (u == nullptr) continue;  // not in this game
             const float em = ImGui::GetFontSize();
             const float offset = em * 2.0f * static_cast<float>(id.v % 4);
@@ -1423,6 +1752,83 @@ private:
             ImGui::Text("%d", r.carried_by);
         }
         ImGui::EndTable();
+    }
+
+    // M76 (D-082 part 2): the unit being placed by hand, as a ghost where it would be dropped: core's verdict on that
+    // spot marks the models at fault in red, with the first reason under (or over) the unit; the diamond moves it.
+    void draw_deploy_ghost() {
+        const std::optional<DeployPlan> shown = deploy_preview();
+        if (!shown || shown->models().empty()) return;
+        const DeployCheck& check = deploy_check(*shown);
+        std::optional<core::ModelId> emphasised;
+        if (deploy_drag_ && !deploy_drag_->whole_unit) emphasised = deploy_drag_->model;
+        if (!deploy_drag_) emphasised = ghost_model_at(GetMousePosition());
+        std::vector<GhostBase> bases;
+        for (const DeployPlan::Placed& p : shown->models()) {
+            const bool fault = std::find(check.at_fault.begin(), check.at_fault.end(), p.model) != check.at_fault.end();
+            bases.push_back(GhostBase{p.pose(), fault, emphasised == p.model});
+        }
+        const auto style = unit_style(state(), shown->unit());
+        draw_ghost_unit(camera_, bases, unit_color(state(), shown->unit()), style ? style->label : std::string(), ui_scale());
+        const float s = ui_scale();
+        // D-074 part 3: a single oval turned in the drag shows where it stood, at its old facing.
+        if (deploy_drag_ && !deploy_drag_->whole_unit && deploy_drag_->turn_deg != 0.0f) {
+            if (const DeployPlan::Placed* was = deploy_plan_->find(deploy_drag_->model)) {
+                draw_base_outline(camera_, was->pose(), 0.0f, 1.0f, Color{255, 255, 255, 110});
+            }
+            if (const DeployPlan::Placed* now = shown->find(deploy_drag_->model)) {
+                draw_base_outline(camera_, now->pose(), 0.0f, 1.5f * s, YELLOW);
+            }
+        }
+        // The "Move unit" handle (as in a move), at the block's centre.
+        const Vector2 h = camera_.to_screen(shown->centre());
+        DrawPoly(h, 4, kHandlePx * s, 45.0f, Color{255, 220, 80, 230});
+        DrawPolyLines(h, 4, kHandlePx * s, 45.0f, BLACK);
+        if (check.problems.empty()) return;
+        // The first reason, centred under the unit (over it when that would leave the board's area).
+        float top = FLT_MAX;
+        float bottom = -FLT_MAX;
+        for (const DeployPlan::Placed& p : shown->models()) {
+            const Vector2 c = camera_.to_screen(p.position);
+            const float r = camera_.to_px(core::circumscribed_radius(p.base));
+            top = std::min(top, c.y - r);
+            bottom = std::max(bottom, c.y + r);
+        }
+        std::string text = check.problems.front().reason;
+        if (check.problems.size() > 1) text += "  (+" + std::to_string(check.problems.size() - 1) + " more)";
+        const int size = static_cast<int>(kRulerText * 0.9f * s);
+        const Rectangle area = board_area();
+        const float w = static_cast<float>(MeasureText(text.c_str(), size));
+        float y = bottom + 8.0f * s;
+        if (y + static_cast<float>(size) > area.y + area.height) y = top - 8.0f * s - static_cast<float>(size);
+        const float x = std::clamp(h.x - w * 0.5f, area.x + 4.0f * s, std::max(area.x + 4.0f * s, area.x + area.width - w - 4.0f * s));
+        DrawRectangleRec(Rectangle{x - 4.0f * s, y - 3.0f * s, w + 8.0f * s, static_cast<float>(size) + 6.0f * s},
+                         Color{40, 10, 10, 200});
+        DrawText(text.c_str(), static_cast<int>(x), static_cast<int>(y), size, Color{255, 140, 140, 255});
+    }
+
+    // M76: a model of the unit being placed under the cursor.
+    void draw_ghost_tooltip(core::ModelId id) {
+        const DeployPlan::Placed* p = deploy_plan_ ? deploy_plan_->find(id) : nullptr;
+        const core::Unit* u = deploy_plan_ ? core::find_undeployed(state(), deploy_plan_->unit()) : nullptr;
+        if (p == nullptr || u == nullptr) return;
+        std::string type;
+        for (const core::Model& m : u->models) {
+            if (m.id == id) type = m.type_name;
+        }
+        ImGui::BeginTooltip();
+        unit_swatch(u->id);  // D-065
+        ImGui::Text("%s (unit %u, %s): being placed", unit_display_name(state(), u->id).c_str(), u->id.v,
+                    side_name(u->side).c_str());
+        ImGui::Text("Model %u: %s", id.v, type.c_str());
+        if (p->base.shape == core::BaseShape::Round) {
+            ImGui::Text("Base %.1f mm", p->base.diameter_mm);
+        } else {
+            ImGui::Text("Base %.0f x %.0f mm oval, facing %.0f\u00b0", p->base.diameter_mm, p->base.length_mm, p->facing_deg);
+        }
+        ImGui::Text("Position (%.2f\", %.2f\")", core::mm_to_inches(p->position.x), core::mm_to_inches(p->position.y));
+        ImGui::TextDisabled("Drag: move the unit. Shift-drag: this model alone. Right-click: datasheet");
+        ImGui::EndTooltip();
     }
 
     void draw_ruler(Vector2 at, const std::optional<Ruler>& r) {
@@ -1561,8 +1967,7 @@ private:
             }
         }
         // The move in progress: ghost markers at the start positions and the proposed paths.
-        if (gs.flow.move) {
-            const core::Unit* u = gs.find_unit(gs.flow.move->unit);
+        if (const core::Unit* u = gs.flow.move ? gs.find_unit(gs.flow.move->unit) : nullptr) {  // M76 audit: checked
             for (const core::Model& m : u->models) {
                 const std::vector<core::Position> path = model_path(gs, m.id);
                 if (path.size() < 2) continue;
@@ -1597,7 +2002,7 @@ private:
                 const float dy = drag_->drop.y - drag_->grab.y;
                 const core::Unit* u = gs.find_unit(drag_->unit);
                 std::optional<Ruler> worst;
-                for (const core::Model& m : u->models) {
+                for (const core::Model& m : u != nullptr ? u->models : std::vector<core::Model>{}) {  // M76 audit
                     const core::Position to{m.position.x + dx, m.position.y + dy, 0.0f};
                     draw_path_to(gs, m, camera_.to_screen(to), Color{255, 255, 255, 160});
                     fill_base(camera_, core::BasePose{to, m.base, m.facing_deg}, Color{255, 255, 255, 60});
@@ -1607,8 +2012,10 @@ private:
                 draw_ruler(cursor, worst);
             } else {
                 const core::Model* m = nullptr;
-                for (const core::Model& x : gs.find_unit(drag_->unit)->models) {
-                    if (x.id == drag_->model) m = &x;
+                if (const core::Unit* u = gs.find_unit(drag_->unit)) {  // M76 audit: checked
+                    for (const core::Model& x : u->models) {
+                        if (x.id == drag_->model) m = &x;
+                    }
                 }
                 if (m != nullptr) {
                     // D-075: the model keeps its grab offset; the raw drop (before a fix) is there, not at the cursor.
@@ -1956,6 +2363,8 @@ private:
                                   s.battle_rounds);
             ImGui::Spacing();
         }
+        // D-081: the units set up so far (in id order, as before; a unit that couldn't be set up is among them, with no
+        // models).
         for (const core::Unit& u : s.units) {
             ImGui::TextColored(to_imvec(side_color(u.side)), "%s", side_name(u.side).c_str());
             if (mode_ == Mode::Play && bot_sides_[static_cast<std::size_t>(u.side)]) {  // M38
@@ -1968,6 +2377,9 @@ private:
             ImGui::Text("%s (unit %u): %zu/%d models%s", unit_display_name(s, u.id).c_str(), u.id.v, u.models.size(),
                         u.starting_strength, u.battle_shocked ? ", battle-shocked" : "");
         }
+        // M76 (D-082 part 2): the units not set up yet are listed, never left out: the side setting one up now first (a
+        // click on one starts placing it, for a human), then the other side's, greyed.
+        if (!s.undeployed.empty()) draw_not_set_up(s);
         if (mode_ == Mode::Play && (bot_sides_[0] || bot_sides_[1])) {  // M48 (D-059): the bot block, near the top
             ImGui::Spacing();
             bool paused = watch_.paused();
@@ -2196,6 +2608,10 @@ private:
     }
 
     void draw_decision() {
+        if (deploying_human() && deploy_plan_) {  // M76 (D-082 part 2): placing a unit by hand
+            draw_deploy_decision();
+            return;
+        }
         // D-039: "Undo last step" in a move, while the last input moved this unit's models.
         panel_.set_undo_step_available(undo_groups_.last_group_is_move_step(*session_));
         const std::vector<core::GameAction> actions = panel_.draw(*session_, selected_model_, &board_);
@@ -2214,6 +2630,36 @@ private:
             return;
         }
         submit_all(actions);
+    }
+
+    // M76 (D-082 part 2): the action bar while a human places a unit; every button's game change goes through submit.
+    void draw_deploy_decision() {
+        const std::optional<DeployPlan> shown = deploy_preview();  // the drag in progress, if any, is what is judged
+        if (!shown) return;
+        const std::vector<core::SetUpProblem> problems = deploy_check(*shown).problems;
+        const core::UnitId unit = shown->unit();
+        const core::Side side = session_->pending()->side;
+        switch (panel_.draw_deploy(*session_, *shown, problems)) {
+            case DecisionPanel::DeployRequest::None: break;
+            case DecisionPanel::DeployRequest::Place: place_deploy(); break;
+            case DecisionPanel::DeployRequest::AutoPlace:
+                if (const auto a = deploy_choices(session_->legal(), unit).auto_place) submit(*a);
+                break;
+            case DecisionPanel::DeployRequest::CannotSetUp:
+                if (const auto c = deploy_choices(session_->legal(), unit).cannot_set_up) submit(*c);
+                break;
+            case DecisionPanel::DeployRequest::AutoPlaceRest:
+                // Each of this side's set-ups from now on, at core's proposals, while it is its turn (one Undo group
+                // each); the other side still decides its own.
+                auto_deploy_[core::side_index(side)] = true;
+                auto_actions_as_group();
+                break;
+            case DecisionPanel::DeployRequest::Reset:
+                deploy_drag_.reset();
+                if (std::optional<DeployPlan> p = DeployPlan::start(session_->state(), unit)) deploy_plan_ = std::move(p);
+                reasons_.clear();
+                break;
+        }
     }
 
     // In order; stop at the first one rejected (the end-phase button can be several). One Undo group.
@@ -2543,6 +2989,13 @@ private:
     bool cli_menu_at_anchor_ = false;          // --click-units opened the menu: draw it at its anchor
     int cli_menu_frames_ = 0;                  // --click-units: frames until its menu opens
     std::optional<CliTurn> cli_turn_;          // --turn (M66), applied once
+    std::optional<CliDeployUnit> cli_deploy_;  // --deploy-unit (M76), applied once
+    // M76 (D-082 part 2): placing a unit by hand (D-081). Client state only: nothing is in GameState until "Place".
+    std::optional<DeployPlan> deploy_plan_;     // the unit being placed, where it would be set up
+    std::optional<DeployDrag> deploy_drag_;     // a drag of it in progress
+    std::optional<DeployCheck> deploy_check_;   // core's verdict on the placement last shown
+    std::optional<core::action::DeployUnit> resume_deploy_;  // a set-up Undo took back, to place again
+    std::array<bool, 2> auto_deploy_{};         // "Auto-place the rest", per side (cleared by Undo and a new game)
     // D-074 part 3: the shaded area's spans, kept while what they show is unchanged (shapes are found by bisection).
     struct ReachCache {
         std::size_t generation = 0;
@@ -2632,6 +3085,7 @@ int main(int argc, char** argv) {
     app.pick_models(options.pick_models);  // M62
     app.click_units(options.click_units);  // M63
     app.cli_turn(options.turn);            // M66
+    app.cli_deploy_unit(options.deploy_unit);  // M76
     app.open_slot(options.open_slot);      // M75
 
     // --screenshot: render a few frames (ImGui needs them for layout), save the last one, exit.
