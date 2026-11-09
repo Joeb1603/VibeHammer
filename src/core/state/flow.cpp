@@ -40,6 +40,7 @@ constexpr std::array<StageInfo, kStageCount> kStages{{
     {Stage::EndOfTurn, "EndOfTurn", "07.02", Phase::None},
     {Stage::EndOfBattleRound, "EndOfBattleRound", "07.03", Phase::None},
     {Stage::GameOver, "GameOver", "D-007", Phase::None},
+    {Stage::Deploy, "Deploy", "03.02", Phase::None},  // D-081 (M74)
 }};
 
 const StageInfo& info(Stage stage) {

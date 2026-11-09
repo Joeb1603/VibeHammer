@@ -17,6 +17,16 @@
 
 namespace wh40k::core {
 
+// 03.02 / D-081 (M74): where one model of a unit being set up is placed. `facing_deg`: any finite number of degrees;
+// an oval's is stored modulo 180 when the unit is set up (D-074), a round base's must be 0. JSON "facing_deg" is
+// omitted when 0.
+struct ModelPlacement {
+    ModelId model;
+    Position position;
+    float facing_deg = 0.0f;
+    friend bool operator==(const ModelPlacement&, const ModelPlacement&) = default;
+};
+
 namespace action {
 // 09.02: select a friendly unit that has not been selected to move this phase, and its move type
 // (with the fall-back mode for a Fall-back move, 09.07).
@@ -158,8 +168,22 @@ struct RerollWoundRolls {
     std::vector<std::size_t> indices;
     friend bool operator==(const RerollWoundRolls&, const RerollWoundRolls&) = default;
 };
+// 03.02 / D-081 (M74): set up this unit, every one of its models placed exactly once (any order). An empty `models`
+// is the template legal_actions returns (D-004); legal_actions also gives the unit's proposal (propose_set_up) filled.
+struct DeployUnit {
+    UnitId unit;
+    std::vector<ModelPlacement> models;
+    friend bool operator==(const DeployUnit&, const DeployUnit&) = default;
+};
+// D-081 (M74): the unit has no legal spot left (the engine finds none: propose_set_up), so it is not set up and counts
+// as destroyed; the opponent scores its points (D-076). Valid only when propose_set_up finds nothing.
+struct CannotSetUp {
+    UnitId unit;
+    friend bool operator==(const CannotSetUp&, const CannotSetUp&) = default;
+};
 }  // namespace action
 
+// New alternatives are appended at the end, so every existing index stays the same.
 using GameAction = std::variant<action::StartMove, action::ProposeModelMove, action::CommitUnitMove,
                                 action::ResetUnitMove, action::Shoot, action::EndShootStep, action::DeclareCharge,
                                 action::StartChargeMove, action::SkipChargeMove, action::EndChargeStep,
@@ -167,7 +191,8 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::PassFight, action::Fight, action::StartConsolidation,
                                 action::EndConsolidations, action::RemoveModelForCoherency,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
-                                action::OrderCasualties, action::RerollWoundRolls>;
+                                action::OrderCasualties, action::RerollWoundRolls, action::DeployUnit,
+                                action::CannotSetUp>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"
