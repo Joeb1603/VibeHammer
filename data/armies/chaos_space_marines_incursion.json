@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "kind": "vibehammer-army",
+  "name": "Chaos Space Marines",
+  "faction": "chaos_space_marines",
+  "units": [
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Bolt pistol",
+            "Astartes chainsword",
+            "Close combat weapon"
+          ]
+        },
+        {
+          "type": "Legionary w/ chainsword",
+          "count": 9,
+          "weapons": [
+            "Bolt pistol",
+            "Astartes chainsword",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/chaos_lord.json",
+      "models": [
+        {
+          "type": "Chaos Lord",
+          "count": 1,
+          "weapons": [
+            "Plasma pistol",
+            "Astartes chainblade"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/chaos_terminator_squad.json",
+      "models": [
+        {
+          "type": "Terminator Champion",
+          "count": 1,
+          "weapons": [
+            "Combi-bolter",
+            "Accursed weapon"
+          ]
+        },
+        {
+          "type": "Accursed weapon and combi-bolter",
+          "count": 9,
+          "weapons": [
+            "Combi-bolter",
+            "Accursed weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/havocs.json",
+      "models": [
+        {
+          "type": "Havoc Champion",
+          "count": 1,
+          "weapons": [
+            "Plasma gun",
+            "Astartes chainsword"
+          ]
+        },
+        {
+          "type": "Havoc w/ lascannon",
+          "count": 4,
+          "weapons": [
+            "Havoc lascannon",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Bolt pistol",
+            "Astartes chainsword",
+            "Close combat weapon"
+          ]
+        },
+        {
+          "type": "Legionary w/ boltgun",
+          "count": 9,
+          "weapons": [
+            "Boltgun",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    }
+  ]
+}

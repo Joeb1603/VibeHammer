@@ -1,8 +1,11 @@
 add_library(wh40k_core STATIC
     version.cpp
+    data/army_list.cpp
     data/army_rules.cpp
+    data/formation.cpp
     data/scenario_loader.cpp
     data/unit_loader.cpp
+    data/zone_layout.cpp
     dice/dice.cpp
     engine/actions.cpp
     engine/advance.cpp

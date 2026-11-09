@@ -26,6 +26,7 @@
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/queries.hpp"
+#include "support/army_fixtures.hpp"
 #include "support/engine_helpers.hpp"
 #include "support/monster_fixtures.hpp"
 #include "test_helpers.hpp"
@@ -724,4 +725,79 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
     ASSERT_FALSE(problems.empty());
     EXPECT_EQ(problems.front().rfind("24.10: ", 0), 0u) << problems.front();
     for (const MeleeDeclaration& d : melee_options(close, tyrant)) EXPECT_NE(d.weapon_index, 0u);  // never offered
+}
+
+// ---- M72 / D-079 part 2: custom battles on army lists ----
+
+namespace {
+
+// Every Tyranid (side B) model moved `closer_in` inches south, as load_rosters_scenario_closer.
+GameState closer(GameState gs, float closer_in) {
+    for (auto& u : gs.units) {
+        if (u.side != Side::B) continue;
+        for (auto& m : u.models) m.position.y -= wh40k::test::in(closer_in);
+    }
+    return gs;
+}
+
+}  // namespace
+
+TEST(D004_LegalActions, RandomPlayOnRandomLegalArmies) {
+    // The D-004 properties on custom battles (auto-placed, D-079 part 2): the two showcase armies, which carry the
+    // loadouts no shipped scenario plays (Havoc autocannon, reaper chaincannon and missile launcher, Terminator power
+    // fists and paired accursed weapons, Legionary specials, a Hive Tyrant with two scything talons, Termagant
+    // specials, six Tyrant Guard, both Tyrannofex cannons), with the full check; then random legal armies (seeded as
+    // the arena's --random-armies) with plain random play. Tyranids moved 26", 20" or 35.5" closer (10", 16" or 0.5"
+    // between the zones) so the games reach shooting and fighting. Every game ends and round-trips.
+    WeaponUse use;
+    const ActionHook hook = record_weapons(use);
+    int on_points = 0;
+    const auto check_end = [&](const GameState& gs, const std::string& what) {
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver) << what;
+        EXPECT_EQ(Json(gs).get<GameState>(), gs) << what;
+        if (gs.result && gs.result->points) ++on_points;
+    };
+    const std::vector<float> distances{26.0f, 20.0f, 35.5f};
+    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        GameState gs = closer(wh40k::test::custom_battle(wh40k::test::showcase_csm(), wh40k::test::showcase_tyranids(),
+                                                         seed == 2 ? Side::B : Side::A),
+                              distances[seed - 1]);
+        gs.dice.seed = 720 + seed;
+        start_game(gs);
+        TestRng rng(720 + seed);
+        const PlayStats stats = play_and_check(gs, rng, 6000, hook);
+        EXPECT_GT(stats.template_fills, 0);
+        check_end(gs, "showcase seed " + std::to_string(seed));
+    }
+    std::set<std::string> loadouts;
+    for (std::uint64_t seed = 1; seed <= 12; ++seed) {
+        GameState gs = closer(wh40k::test::random_armies_battle(seed), distances[seed % 3]);
+        for (const Unit& u : gs.units) {
+            for (const Model& m : u.models) {
+                for (const Weapon& w : m.weapons) loadouts.insert(w.name);
+            }
+        }
+        gs.dice.seed = 730 + seed;
+        start_game(gs);
+        TestRng rng(730 + seed);
+        for (int actions = 0; gs.pending && actions < 10000; ++actions) {
+            const GameAction a = wh40k::test::random_action(gs, rng);
+            hook(gs, a);
+            apply_action(gs, decider(gs), a);
+        }
+        check_end(gs, "random armies seed " + std::to_string(seed));
+    }
+    const auto used = [&](const std::string& prefix) {
+        return std::any_of(use.used.begin(), use.used.end(), [&](const std::string& p) { return p.rfind(prefix, 0) == 0; });
+    };
+    for (const char* w : {"Havoc autocannon", "Havoc reaper chaincannon", "Havoc missile launcher", "Havoc heavy bolter",
+                          "Power fist", "Paired accursed weapons", "Reaper chaincannon", "Missile launcher",
+                          "Monstrous scything talons", "Shardlauncher", "Spike rifle", "Termagant spinefist",
+                          "Termagant devourer", "Rupture cannon", "Acid spray", "Bone cleaver, lash whip and rending claws",
+                          "Crushing claws and rending claws"}) {
+        EXPECT_TRUE(used(w)) << w;
+    }
+    EXPECT_GT(on_points, 0);
+    std::printf("random legal armies: %zu weapon profiles used, %zu weapons in the random armies, %d games on points\n",
+                use.used.size(), loadouts.size(), on_points);
 }

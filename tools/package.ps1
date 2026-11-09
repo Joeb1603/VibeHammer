@@ -29,11 +29,13 @@ if (-not $crt) { throw "VC++ redist DLLs not found under $vs\VC\Redist\MSVC" }
 
 $stage = Join-Path ([System.IO.Path]::GetTempPath()) "VibeHammer_package\VibeHammer"
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage -Confirm:$false }
-New-Item -ItemType Directory -Force "$stage\data\units", "$stage\data\scenarios", "$stage\tests\replays" | Out-Null
+New-Item -ItemType Directory -Force "$stage\data\units", "$stage\data\scenarios", "$stage\data\armies", "$stage\tests\replays" | Out-Null
 
 Copy-Item "$root\build\default\src\client_2d\Release\wh40k_client_2d.exe" "$stage\VibeHammer.exe"
 Copy-Item "$root\data\units\*.json" "$stage\data\units"
 Copy-Item "$root\data\scenarios\*.json" "$stage\data\scenarios"
+Copy-Item "$root\data\armies\*.json" "$stage\data\armies"   # M72: the stock army lists (D-079)
+Copy-Item "$root\data\factions.json" "$stage\data"
 Copy-Item "$root\tests\replays\*.json" "$stage\tests\replays"
 foreach ($dll in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
     Copy-Item (Join-Path $crt.FullName $dll) $stage
@@ -77,7 +79,8 @@ Settings
   The start screen's options are saved in vibehammer_settings.json next to VibeHammer.exe.
   Delete that file to go back to the defaults.
 
-Keep the "data" folder next to VibeHammer.exe - the game loads its units and scenarios from it.
+Keep the "data" folder next to VibeHammer.exe - the game loads its units, scenarios, factions
+and stock army lists (data\armies) from it.
 "tests/replays" holds example games you can load in the replay viewer.
 Saved games go in a "saves" folder created next to the exe.
 

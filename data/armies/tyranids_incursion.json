@@ -1,0 +1,123 @@
+{
+  "format": 1,
+  "kind": "vibehammer-army",
+  "name": "Tyranids",
+  "faction": "tyranids",
+  "units": [
+    {
+      "unit_file": "data/units/termagants.json",
+      "models": [
+        {
+          "type": "Termagants",
+          "count": 10,
+          "weapons": [
+            "Fleshborer",
+            "Chitinous claws and teeth"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/genestealers.json",
+      "models": [
+        {
+          "type": "Genestealer",
+          "count": 5,
+          "weapons": [
+            "Genestealers claws and talons"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/screamer_killer.json",
+      "models": [
+        {
+          "type": "Screamer-killer",
+          "count": 1,
+          "weapons": [
+            "Bio-plasmic scream",
+            "Screamer-killer talons"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/tyrant_guard.json",
+      "models": [
+        {
+          "type": "Tyrant Guard",
+          "count": 3,
+          "weapons": [
+            "Scything talons and rending claws"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/hive_tyrant.json",
+      "models": [
+        {
+          "type": "Hive Tyrant",
+          "count": 1,
+          "weapons": [
+            "Monstrous bonesword and lash whip",
+            "Monstrous scything talons"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/tyrannofex.json",
+      "models": [
+        {
+          "type": "Tyrannofex",
+          "count": 1,
+          "weapons": [
+            "Powerful limbs",
+            "Stinger salvoes",
+            "Fleshborer hive"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/screamer_killer.json",
+      "models": [
+        {
+          "type": "Screamer-killer",
+          "count": 1,
+          "weapons": [
+            "Bio-plasmic scream",
+            "Screamer-killer talons"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/genestealers.json",
+      "models": [
+        {
+          "type": "Genestealer",
+          "count": 5,
+          "weapons": [
+            "Genestealers claws and talons"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/termagants.json",
+      "models": [
+        {
+          "type": "Termagants",
+          "count": 10,
+          "weapons": [
+            "Fleshborer",
+            "Chitinous claws and teeth"
+          ]
+        }
+      ]
+    }
+  ]
+}
