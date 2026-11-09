@@ -32,6 +32,9 @@ characteristic is a programmer error (an exception) until the rule wording is su
 V1 starts at battle round 1, with both units in the formation that the scenario file defines inside
 their deployment zones. An interactive deployment step (alternating unit placement within zones, done
 through `PendingDecision`) is post-V1; see "Later" in `PLAN.md`.
+- *Amended by D-081 (M74):* a scenario with `"deployment": "alternating"` starts with a deployment step (the units are
+  set up by hand, alternating, through `PendingDecision`); battle round 1 then starts as above. A scenario without it
+  starts exactly as before.
 
 ## D-004: `legal_actions` for continuous decisions (engine API)
 **Decided:** 2026-11-02
@@ -86,6 +89,8 @@ V1 has no mission or objectives, so the end of the game and its result are house
 - The result is emitted as a `GameOver` event carrying the winner (or draw) and the reason.
 - *Amended by D-076 (M67):* a scenario with `"result": "points_destroyed"` is decided after the last battle round by
   the points each side destroyed instead of being a draw; a wipe-out still wins at once.
+- *Amended by D-081 (M74):* not checked during the deployment step (no side has its units on the battlefield yet); it
+  applies from the start of battle round 1.
 
 ## D-008: V1 starting formation (D-003)
 **Decided:** 2026-11-02
@@ -1919,6 +1924,8 @@ Client only (`wh40k_client_logic` `unit_style.{hpp,cpp}`, drawn by `board_view.c
 state, replay or JSON change. Amends D-028 (the client layout) and D-029 (greyed units) only by adding to them.
 - **Per-side index.** A unit's number is its 1-based position among its own side's units in `GameState::units`
   order (the scenario file's order). Destroyed units stay in `units`, so numbers never shift during a game.
+  *Amended by D-081 (M74):* units not yet set up (`GameState::undeployed`) count too, at their id positions, so numbers
+  and shades don't shift as units are set up; with nothing undeployed it is the same loop as before.
 - **Shades (RGB).** Each side has six shades, handed out by index (a seventh unit wraps round to shade 1).
   Side A: 1 (52,110,200) side blue, 2 (130,180,245) light blue, 3 (60,175,200) teal, 4 (28,62,140) navy,
   5 (120,110,225) periwinkle, 6 (175,215,250) pale blue. Side B: 1 (190,60,60) side red, 2 (245,130,105) salmon,
@@ -4336,3 +4343,263 @@ D-077 item 7 (Normal's points weighting). Every shipped scenario plays exactly a
 - **The guard's cost** (Release, measured while other arenas ran): `chain_plan_size` takes 0.64 ms on average on random
   armies (the full plan 3.8 ms), 0.5 ms on the rosters (4.3 ms), 0.2 ms on Strike and 0.07 ms on V1, once at each
   decision Hard answers itself.
+
+## D-081: Deployment by hand: alternating set-up through a pending decision; a unit with no legal spot counts as destroyed (M74; amends D-003, D-007 and D-065; extends D-054 and D-079)
+**Decided:** 2026-11-09 (M74 of the pre-approved M71–M77 batch; written before the code and stopped for review, as the
+batch's run note asks; the conservative choices are marked *conservative*). M77 extends it with the Normal and Hard
+deployment heuristic.
+- **The sequence (agreed with the user, 2026-11-09; the user's own wording, recorded verbatim; mission-pack text, not
+  core rules):**
+  > Players alternate setting up one unit at a time, starting with the side that takes the second turn. Once one side
+  > has set up everything, the other sets up the rest.
+
+  > Each set-up follows 03.02: coherency (03.03), unengaged (03.04), wholly within its own zone (D-009), no overlap
+  > (D-064).
+
+  > A unit with no legal spot left counts as destroyed, and the opponent scores its points (D-076). This option is
+  > offered only when the engine finds no legal spot.
+
+  The core rules have no deployment sequence (07 starts at the battle round; 07.02 leaves the first turn to the
+  mission). "Auto-place" (the scenario's formations, D-003, D-008, D-064, and for custom battles the D-079 auto-layout)
+  stays the default: every existing scenario, replay, save and bot game is unchanged.
+- **Rules read.** 03.01 Ending a Move ("After you have finished setting up all of the models in a unit and/or moving
+  ...": the unit is in coherency, and no model is on another model), so coherency and "not on another model" bind a
+  set-up by the core text, D-064 being the reading of "on another model" (overlap by more than `EPS_MM`; bases in
+  contact are fine). 03.02 Set Up (coherency; unengaged; "All other requirements and restrictions are met": the
+  deployment zone, D-009 wholly within; "If you cannot set up all of the models in a unit, remove that unit ... and
+  return it to its original position": for deployment the user's rule above replaces this: the unit counts as
+  destroyed). 03.03, 03.04. 01.03 ("While it is neither player's turn ..., the player who takes the first turn in each
+  battle round is the active player"). Rules Appendix: Destroyed; Starting Strength ("at the start of the first battle
+  round").
+- **State.** `GameState::undeployed` (`std::vector<Unit>`, in id order): the units not yet set up. They are **not** in
+  `units`, so no query, rule, bot or board code sees them (`find_unit`, `find_model`, `enemy_models`, engagement, ...
+  all read `units`). An undeployed unit is built exactly as today (ids, models, weapons, starting strength, points,
+  starting wounds); its models' positions are the default (0, 0, 0), facing 0, and are never read. Setting a unit up
+  moves it into `units` at its id position (`units` stays in id order, so after the last unit `units` is what the
+  loader builds for a fixed-formation scenario). `undeployed` is non-empty only in `NotStarted` (a hand-deployment
+  scenario as loaded) and `Deploy`. No other new state: whose turn it is to set up is derived from the counts (below),
+  and the deployment mode is not stored (after deployment a hand-deployed game and an auto-placed one are the same
+  `GameState`).
+- **Scenario.** A top-level `"deployment": "alternating"` (absent: fixed formations, D-003, unchanged; any other value
+  is refused, naming it) builds every unit into `undeployed`. With it:
+  - a unit entry with a `formation` is refused (`DataError`, "D-081: ... takes no formation: its units are set up by
+    hand"); see "The formation question" below;
+  - a side with an east or west deployment zone is refused (*conservative*: formations and the auto-layout are north
+    and south only, D-008, D-079);
+  - every unit must have a legal spot with nothing else on the battlefield (`propose_set_up` on the state as built
+    finds one), else the scenario is refused ("D-081: ... cannot be set up in its deployment zone even alone"), as a
+    formation outside its zone is today (D-008, D-064). *Conservative*: it keeps broken data out, and it makes "both
+    sides without models after deployment" impossible (the side that sets up first does so on an empty battlefield, so
+    its first unit is always set up);
+  - 02.06 / 02.07 and D-076's points checks run as now; `check_points_data` covers `undeployed` too.
+  - `custom_battle_scenario(a, b, first_turn, factions, resolve, mode)` gains `DeploymentMode mode = Auto`
+    (`core/data/army_list.hpp`, `enum class DeploymentMode { Auto, Hand }`). `Auto` writes exactly today's JSON;
+    `Hand` writes `"deployment": "alternating"`, no formations, and notes saying so. The name and everything else are
+    the same, so the two build the same units.
+- **Flow.**
+  - `Stage::Deploy` is appended after `GameOver` (name "Deploy", `stage_rule` "03.02", `phase_of` None); `kStageCount`
+    follows. Battle round and turn stay 0 during it.
+  - `start_game` enters `Deploy` when `undeployed` is non-empty (event `DeploymentStarted`), else starts battle round 1
+    exactly as today (D-003).
+  - *Who sets up next* (`side_to_deploy`, derived, so saves and undo need nothing new): S = the side that takes the
+    second turn, F = `first_turn`; a side's units *handled* are its units in `units` (set up, or not set up and
+    destroyed). If only one side has undeployed units, that side; otherwise S when S has handled no more units than F,
+    else F. So S, F, S, F, ... while both have units left, then the rest for the side not yet done. Each decision
+    handles one unit, so a unit that can't be set up uses its side's turn in the alternation (*reading*, below).
+  - `active_side` during `Deploy` is `first_turn` (01.03: neither player's turn); the decision belongs to the
+    deploying side, which may be the opposing player (as 05.03 / 05.04 do).
+  - After the last unit is handled, `next_stage` leaves `Deploy` and starts battle round 1 with the same code as
+    `start_game` today (battle round 1, turn 0, `StartOfBattleRound`, then `advance`): the same events
+    (`BattleRoundStarted`, `TurnStarted`, the Command phase, ...) and the same state as an auto-placed game whose units
+    stand where they were set up.
+  - D-007's wipe-out checks are suspended while the stage is `Deploy` (amends D-007: at the start of deployment no
+    side has a model on the battlefield, and today's check would even throw "both sides lost their last models at
+    once"). They apply again from `StartOfBattleRound` of battle round 1: a side all of whose units could not be set
+    up has then lost (D-007; with D-076 a wipe-out still wins at once).
+- **Decision, actions and events** (each appended at the end of its variant, so every existing index is unchanged).
+  - Decision `decision::DeployUnits{}` (side: the deploying side; rule 03.02; "Side B: set up one of your units
+    (03.02)").
+  - Action `action::DeployUnit{UnitId unit; std::vector<ModelPlacement> models}` with
+    `ModelPlacement{ModelId model; Position position; float facing_deg = 0}` (rule 03.02). `models` empty is the D-004
+    template; filled, every model of the unit exactly once, in any order. As in `ProposeModelMove` (D-074) a facing may
+    be any finite number and an oval's is stored modulo 180 when applied (`footprint_facing_deg`); a round base's must
+    be 0.
+  - Action `action::CannotSetUp{UnitId unit}` (rule D-081): valid only for an undeployed unit of the deciding side for
+    which `propose_set_up` finds nothing.
+  - Events: `DeploymentStarted{Side first}` (D-081; the side that sets up first), `UnitSetUp{UnitId unit; Side side}`
+    (03.02), `UnitNotSetUp{UnitId unit; Side side}` (D-081).
+- **Validation of a `DeployUnit`** (`set_up_problems(state, side, DeployUnit)` in `core/state/deployment.hpp`; the
+  engine's `validate_details` and the client's placement editor (M76) call the same function). Every reason is
+  rule-cited; all are listed, not just the first.
+  1. The unit: it exists, is `side`'s, and is waiting to be set up ("03.02: unit 3 does not exist" / "is not a friendly
+     unit" / "has already been set up"; "D-081: unit 3 could not be set up and counts as destroyed"). Any of these
+     ends the check.
+  2. The placements (03.02 "place its models"): every model of the unit placed exactly once ("is not placed", "is
+     placed more than once", "is not a model of unit 3"); each position finite with z = 0 (no terrain; V1 keeps z at
+     0); each facing finite, and 0 for a round base ("D-074: model X has a round base, which has no facing"). Any of
+     these ends the check (the geometry needs a whole unit).
+  3. On the battlefield: each base wholly on it (03.02 "on the battlefield"); for a base that is, wholly within its own
+     side's deployment zone (D-009 via 03.02 "All other requirements"; the zone rect of `state.side(side)`). Measured
+     with each base's pose (D-074: an oval by its extents at its facing).
+  4. No model on another model (03.01 Ending a Move, D-064): within the unit, and against every model in `units`
+     (either side; undeployed units are not on the battlefield and are ignored). `bases_overlap` (EPS).
+  5. Coherency (03.03, by 03.01 Ending a Move and 03.02) for a unit of more than one model (`unit_coherency` of the
+     placed unit: both clauses, with the model ids).
+  6. Unengaged (03.02, 03.04): no placed model within 2" of a model of an enemy unit in `units`.
+  A `CannotSetUp` is checked by step 1, then "D-081: unit 3 can be set up (the engine finds a legal spot), so it can't
+  be counted as not set up" when `propose_set_up` finds one.
+- **legal_actions (D-004).** For the deploying side's undeployed units, in id order: one fully specified action each
+  (the unit's proposal `DeployUnit`, or `CannotSetUp` when there is none), then one template `DeployUnit{unit, {}}`
+  each (also for a unit with no proposal: a player may still find a spot by hand). The first legal action is therefore
+  always a button for the lowest-id unit (what `--steps`, the fallback and the M74 bot policy pick). Every fully
+  specified action validates (the proposal passes `set_up_problems` by construction; `CannotSetUp` is listed only when
+  there is no proposal). The proposals share one auto-layout per side (`deployment_proposals(state, side)`).
+- **`propose_set_up(state, unit)`** (deterministic, a pure function of the state; `std::optional<action::DeployUnit>`):
+  1. *The auto-layout slot.* `layout_zone` (D-079 part 2) over the bases of the side's units in id order (set up and
+     not, leaving out a unit destroyed by `CannotSetUp`, which has no models), and the unit's slot placed by
+     `place_formation(slot_formation(slot))` (gap 0, facing 0). If the layout fits and the slot passes
+     `set_up_problems`, that is the proposal. For a custom battle this reproduces the auto-placed positions bit for bit:
+     the same bases in the same order give the same slots, and the scenario's 1/8" grid values make inches -> JSON ->
+     mm exact (D-079), so proposals taken in id order end exactly where Auto-place puts the units.
+  2. *Otherwise a scan*, first legal candidate wins, each candidate checked by `set_up_problems`' own predicates (so a
+     proposal always validates and "no proposal" means no candidate on the grid is legal):
+     - ranks r = 1..n (n the unit's models) whose formation (gap 0, facing 0, models in order, as the auto-layout
+       measures it) is coherent, no wider than the battlefield and no deeper than the zone, fewest first;
+     - for each, the depth behind the zone's front line 0, 1/4", 1/2", ... while the block fits the zone (front first,
+       as the auto-layout's first shelf);
+     - for each depth, the formation's centre x at the battlefield's middle, then 1/4", 1/2", ... further west and east
+       alternately (west first) while the block is on the battlefield.
+     Ovals are proposed at facing 0 only (*conservative*: as the auto-layout; a player may turn one by hand).
+  - *Bound:* the layout once per call (per side for `deployment_proposals`), plus at most
+    sum over r of (floor((zone depth - block depth) / 1/4") + 1) x (floor((width - block width) / 1/4") + 1)
+    candidates: for the custom battle's 44"x12" zone at most 49 x 177 = 8,673 per rank count. A candidate costs
+    O(n x M + n^2) at worst (M the models on the battlefield); a bounding-box test per deployed unit, and per model,
+    skips the pairs that can't touch, so far units cost O(1). The scan runs only when the slot is taken (a unit placed
+    by hand elsewhere), would be engaged with an enemy unit (zones close together), or the army doesn't fit the
+    auto-layout; in a custom battle (zones 36" apart) bots placing at proposals never scan.
+- **`CannotSetUp`'s effect.** The unit leaves `undeployed` and goes into `units` at its id position with no models, so
+  it is destroyed (`is_destroyed`, Rules Appendix: Destroyed) and never selectable or targetable. Its points,
+  `starting_wounds` and `starting_strength` stay as built (*conservative*: no field changes meaning; a destroyed unit
+  counts its full points whatever its starting wounds, D-076), so `points_destroyed` gives its full points to the
+  opponent at once and in any later tally. Events: `UnitNotSetUp{unit, side}` then `UnitDestroyed{unit}` (the log's
+  usual line; nothing else reacts to it). It uses its side's turn; if it was the last unit, battle round 1 starts and
+  D-007 applies then.
+- **Queries** (`src/core/state/deployment.{hpp,cpp}`, readable by the client logic and the bots; no `core/rules`
+  include): `find_undeployed(state, id)`, `side_to_deploy(state)` (nullopt with nothing to set up),
+  `set_up_problems(state, side, DeployUnit)`, `propose_set_up(state, unit)`, `deployment_proposals(state, side)`.
+  `zone_layout`'s block measurement (today file-local `measure`) becomes public (`formation_block`) so the scan
+  measures ranks exactly as the auto-layout does; no layout changes.
+- **Bots (extends D-054).** `Bot::decide` answers `DeployUnits` with a level-independent `deploy_policy`
+  (`src/ai/deploy_policy.*`) before any level's policy: the lowest-id undeployed unit at its proposal, or its
+  `CannotSetUp` when it has none (reason "D-081: set up <unit> where Auto-place puts it" / "... can't be set up: no
+  legal spot is left; it counts as destroyed"). So Hard never builds chain tables from a half-deployed army, and a
+  hand-deployed bot army ends where Auto-place puts it (M77 adds Normal's and Hard's heuristic). `fallback.cpp`
+  prefers the same answer. The driver's pause before a `DeployUnit` or `CannotSetUp` is a unit activation's (0.8 s at
+  Normal speed), as before a move.
+- **Client logic (minimal until M76, D-024).** `event_text` ("Deployment starts: Side B sets up first, then the sides
+  alternate (D-081)", "Side A sets up unit 3", "Side A can't set up unit 3: no legal spot is left; it counts as
+  destroyed"); `action_text` ("Set up Legionaries 1 (1) (auto-place)", "Can't be set up: Legionaries 1 (1) (counts as
+  destroyed)"; unit names found in `undeployed` too); `decision_view` (a `DeployUnit` template is the new
+  `EditorKind::Deploy`, which the panel and Easy's template switch skip until M76's editor); `phase_track` (`Deploy` is
+  between turns, before battle round 1, with a `deploying` flag so the bar reads "Deployment (before battle round 1 of
+  5)" instead of "Battle round 0 of 5"); undo needs nothing new (each button or bot action is one group, so one group
+  per unit handled). The board draws `units` only, so units not yet set up simply aren't drawn; the decision panel
+  shows the deploying side and one button per unit.
+- **Unit numbers and shades (amends D-065).** A unit's number is its position among its side's units in id order,
+  units still to set up included (`units` and `undeployed` merged by id; with nothing undeployed this is exactly the
+  old loop over `units`), and the side's unit count includes them, so a unit's number, shade and display name never
+  change as units are set up.
+- **Arena.** `--deploy hand|auto` (default auto) for `--army-a` / `--army-b` / `--random-armies` (`custom_battle_state`
+  and `random_armies_battle` gain the mode); with a scenario it exits 2 (a scenario fixes its own deployment). `auto`
+  plays exactly as before. The game record's starting wounds count units not yet set up (otherwise "wounds lost"
+  would come out negative with `hand`; unchanged for every existing scenario).
+- **The audit** (every place that could see a `NotStarted` or `Deploy` state with units missing from `units`; searched
+  `.units` and `find_unit` in core, the bots and the client logic):
+  - *Needs a change:* D-007's wipe-out in `advance` (above); `next_stage`'s "the next stage in declaration order"
+    (`Deploy` is last, so it gets its own case: battle round 1); `active_side` (`Deploy` listed with the between-turn
+    stages; the old default gave the same side); `check_points_data` (only read `units`: the loader's bound would be
+    checked on an empty set); the state JSON (below); `state_hash` (below); `Bot::decide` (Easy's
+    `switch (*editor_kind(t))` and the panel's would dereference an empty optional for the new template; Normal and
+    Hard assume a battle); `fallback.cpp`; `bot_driver`'s pause; the arena's `wounds_left` (above); `unit_style`
+    (D-065, above: its index came from `units` order and `find_unit`, so an undeployed unit had no style and numbers
+    would shift); `action_text`'s unit names; `phase_track` (`Deploy` would show the first-turn side's turn);
+    `decision_view` / the decision panel (the new `EditorKind`); the phase bar's text.
+  - *Checked, no change:* `points_destroyed` and `points_denominator` (they read `units`: undeployed units have lost
+    nothing, and a unit not set up is in `units`, destroyed, counted in full); `replay_expectation` (deployed models
+    only; the M74 replay stops after deployment); the queries in `queries.cpp`, the `rules/` queries and the phase code
+    in `engine/` (never run during `Deploy`; they read only units on the battlefield, which is the point); the scenario
+    loader's overlap and engagement checks (they read `units`, empty with hand deployment; the per-unit check covers
+    its units); `auto_actions` (`DeployUnits` never has a lone skip, so nothing is automatic); `board_interaction`
+    (inactive for `DeployUnits`, so the sidebar buttons); `dice_cards`, `fight_move_skip`, `overlay_plan`, the auto
+    moves and the casualty code (play decisions only); `session` save, load and undo (they rebuild from the initial
+    state, `undeployed` included); `timeline`; Normal's and Hard's internals (after deployment every unit is in
+    `units`, so e.g. D-080's unit count N is the whole army, as with Auto-place); `bot_log`.
+  - *Client, outside the logic library (M76's audit):* `board_view` draws `units` (undeployed units are not drawn);
+    the Game panel lists `units` (undeployed units appear once set up; M76 lists them); the `find_unit` calls in
+    `main.cpp` check for null, except in the model-drag code, which only runs while a unit is moving (never during
+    `Deploy`; M76's hand placement must not reuse it unguarded).
+  - *Tests that list every alternative:* `Serialization.EveryDecisionKindRoundTrips`, `...EveryActionKindRoundTrips`
+    and `...EveryEventKindRoundTrips` assert the variant sizes, so they gain the new alternatives (as M61 and M62
+    did); `D074_Json.OldFilesLoadTheSame` exempts `m65_` and `m72_` from "no facing in the file", and gains `m74_` (its
+    Tyrannofex is set up at an angle); `fill_template` learns `DeployUnit`. None is weakened.
+- **JSON and hashes** (every new field omitted at its default, so every existing replay, save and settings file loads
+  and saves byte for byte).
+  - State: `"undeployed": [units]` only when non-empty. On load, with `undeployed` non-empty: the stage is
+    `NotStarted` or `Deploy`; unit ids (both vectors) and model ids are unique; `undeployed` is in id order; each of
+    its units has models. A `Deploy` state with nothing undeployed is refused too. A state without `undeployed` gets no
+    new check (*conservative*: no older file can be refused).
+  - Stage `"Deploy"`; decision `{"side", "kind": "DeployUnits"}`; actions `{"kind": "DeployUnit", "unit", "models":
+    [{"model", "position", "facing_deg"}]}` (facing omitted at 0) and `{"kind": "CannotSetUp", "unit"}`; events
+    `DeploymentStarted {"first"}`, `UnitSetUp` and `UnitNotSetUp {"unit", "side"}`, each with its rule.
+  - `state_hash` (D-054): `Stage::Deploy` and `DeployUnits` hash as their appended integer and index; `undeployed` is
+    hashed after the result rule, behind a tag ("undp") and only when non-empty, so every state without it hashes as
+    before (the bots' seeds and plan memo are unchanged on every shipped scenario).
+- **The formation question: refused.** A formation given with `"deployment": "alternating"` is refused (PLAN.md's
+  wording), rather than kept as the suggestion:
+  - one source of suggestions for every hand-deployed battle, the auto-layout (D-079), which is exactly the Auto-place
+    position, so "Auto-place this unit" (M76) and Easy's "the auto-layout spot" (M77) mean the same in both modes, and
+    the bot test "hand ends where auto does" holds by construction;
+  - an undeployed unit has no position: a formation would have to be validated as a set-up that never happens (and in
+    a fixture with zones 1" apart two front-touching formations could not even be legal);
+  - the file says what it means: a scenario either places its units or has them set up by hand;
+  - the cost is small: one layout per side per decision during deployment (the slots don't depend on positions).
+- **Ambiguities and the readings taken.**
+  - "Alternate ... one unit at a time": every decision handles one unit; a unit that can't be set up uses its side's
+    turn (the counts that order the sides count units handled, set up or not).
+  - "Once one side has set up everything": all its units handled.
+  - "No legal spot left" / "the engine finds no legal spot": `propose_set_up` (the slot, then the grid scan at facing 0)
+    finds nothing. The template stays offered, so a player can still set the unit up by hand where the scan found
+    nothing (a spot off the grid, or an oval turned); bots always take the proposal or `CannotSetUp` (M74).
+  - "Counts as destroyed": destroyed in the state (no models), with the `UnitDestroyed` event; its starting strength
+    and wounds stay as built (above).
+  - D-007 during deployment: suspended; the wipe-out applies from the start of battle round 1. Both sides without
+    models then cannot happen for a loadable scenario (the loader check above); a hand-edited state that gets there
+    meets D-007's existing programmer error, which the session reports without applying the action.
+  - The deploying side is the pending side; the active player is the first-turn side throughout (01.03).
+  - "Its own zone" is the side's `deployment_zone` (D-009 wholly within).
+  - Positions must have z = 0 (no terrain; V1); a round base's facing must be 0 (D-074).
+  - The replay's stop: PLAN.md says "A's first Move Units decision" and the M74 brief "the first Move Units decision of
+    battle round 1". With B taking the first turn these differ; the replay follows PLAN.md's acceptance (battle round
+    1, after B's turn of Remain Stationary and step ends), which is also a Move Units decision of battle round 1.
+- **Tests (planned).** `D081_Deploy.*` (the second-turn side first; alternation; the rest once one side is done; battle
+  round 1 after the last unit, the same state and events as D-003's start; undeployed units invisible to the queries;
+  no wipe-out during deployment, D-007 after it; a button and a template per undeployed unit, nothing for the other
+  side; every proposal validates (random hand placements included); proposals in id order reproduce the auto-layout
+  positions (the stock and random armies); `CannotSetUp` only when nothing fits, scoring its full points; the active
+  side), `R03_02_SetUp.*` (every model exactly once; on the battlefield; finite positions with z 0; a round base's
+  facing 0), `R03_03_Coherency.DeployedUnitMustBeCoherent`, `R03_04_Engagement.DeployedUnitMustBeUnengaged` (zones 1"
+  apart: the front-touching spot refused, the proposal 1.25" back), `D009_WhollyWithin.DeployedOvalAtAnAngle`,
+  `D064_SetUp.NoOverlap`, `D081_Json.*` (round trips mid-deployment; old files byte-identical; the refusals above),
+  `D081_Loader.*` (units into `undeployed`; formation, unknown mode, east/west zones and a unit that can't be set up
+  alone refused; points checked; the hand custom battle), `D004_LegalActions.RandomPlayWithHandDeployment`,
+  `M74_StateHash.*` (states without `undeployed` hash as M73's copy; `undeployed` changes the hash), `M74_Bots.*`
+  (every level deploys the lowest-id unit at its proposal; Hard builds no table during deployment; the fallback; hand
+  and auto bot games reach the same state after deployment and the same final state), `M74_UnitStyle.*`,
+  `M74_Log.*` and `M74_Undo.*` (client).
+- **Replay** `tests/replays/m74_hand_deployment.json` (scenario form, so no state is embedded) on the fixture
+  `tests/data/scenarios/hand_deployment_44x60.json`: the stock armies' custom battle in Hand mode, B (Tyranids) taking
+  the first turn, so A (Chaos Space Marines) sets up first: A, B alternately until A's five units are down, then B's
+  rest. Each unit at its proposal except the Tyrannofex, set up by hand at an angle, so a later Tyranid unit's slot is
+  taken and its proposal comes from the scan. Then B's first turn (Remain Stationary, the steps ended) to A's first Move
+  Units decision of battle round 1. Written by `Replay.DISABLED_RegenerateReplays` with the fixture checked equal to
+  `custom_battle_scenario` of the stock lists.
