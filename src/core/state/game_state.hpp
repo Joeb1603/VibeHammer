@@ -51,6 +51,10 @@ struct GameState {
     Side first_turn = Side::A;
     std::array<SideInfo, 2> sides;  // indexed by side_index(Side)
     std::vector<Unit> units;        // ordered by UnitId
+    // D-081 (M74): the units not yet set up (a deployment by hand), ordered by UnitId. They are not on the battlefield
+    // and not in `units`, so no query sees them; setting one up moves it into `units` at its id position. Non-empty
+    // only in Stage::NotStarted and Stage::Deploy. JSON "undeployed", omitted when empty.
+    std::vector<Unit> undeployed;
     DiceState dice;                 // production PRNG (SeededDice) seed and position
     std::array<int, 2> command_points{};  // indexed by side_index; 08.02 (D-023: both start at 0)
     FlowState flow;                 // where the game is (07-12) and what is in progress

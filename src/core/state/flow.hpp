@@ -48,9 +48,13 @@ enum class Stage : std::uint8_t {
     EndOfTurn,             // 07.02 End of Turn step
     EndOfBattleRound,      // 07.03
     GameOver,              // D-007
+    // 03.02 / D-081 (M74): the armies are set up by hand, before battle round 1. Appended after GameOver (the bots'
+    // state_hash hashes the integer), so it is not "the next stage" of anything: start_game enters it and next_stage
+    // leaves it for battle round 1.
+    Deploy,
 };
 
-inline constexpr std::size_t kStageCount = static_cast<std::size_t>(Stage::GameOver) + 1;
+inline constexpr std::size_t kStageCount = static_cast<std::size_t>(Stage::Deploy) + 1;
 
 [[nodiscard]] Phase phase_of(Stage stage);
 [[nodiscard]] std::string_view stage_name(Stage stage);  // "MoveUnits"; also the JSON name

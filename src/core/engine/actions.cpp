@@ -31,6 +31,8 @@ std::string_view action_name(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "DeclareAllocationOrder";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "OrderCasualties";
             else if constexpr (std::is_same_v<T, action::RerollWoundRolls>) return "RerollWoundRolls";
+            else if constexpr (std::is_same_v<T, action::DeployUnit>) return "DeployUnit";
+            else if constexpr (std::is_same_v<T, action::CannotSetUp>) return "CannotSetUp";
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -63,6 +65,8 @@ std::string_view action_rule(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::DeclareAllocationOrder>) return "05.03";
             else if constexpr (std::is_same_v<T, action::OrderCasualties>) return "05.04";
             else if constexpr (std::is_same_v<T, action::RerollWoundRolls>) return "24.38";
+            else if constexpr (std::is_same_v<T, action::DeployUnit>) return "03.02";
+            else if constexpr (std::is_same_v<T, action::CannotSetUp>) return "D-081";
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -80,6 +84,9 @@ bool is_template(const GameAction& a) {
     }
     if (const auto* m = std::get_if<action::ProposeModelMove>(&a)) {
         return m->path.empty();  // D-004: the path is the open parameter
+    }
+    if (const auto* d = std::get_if<action::DeployUnit>(&a)) {
+        return d->models.empty();  // D-081: every model's place is the open parameter
     }
     return false;
 }

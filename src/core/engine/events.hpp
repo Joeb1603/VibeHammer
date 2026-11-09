@@ -251,8 +251,23 @@ struct AttackDiceRolled {  // 04.03 Gather Attack Dice, D-069: a batch's random 
     int attack_dice = 0;                // the batch's attack dice once gathered (fixed ones included)
     friend bool operator==(const AttackDiceRolled&, const AttackDiceRolled&) = default;
 };
+struct DeploymentStarted {  // D-081 (M74): the armies are set up by hand, the sides alternating
+    Side first = Side::A;   // the side that sets up first (the one taking the second turn, if it has units)
+    friend bool operator==(const DeploymentStarted&, const DeploymentStarted&) = default;
+};
+struct UnitSetUp {  // 03.02 (D-081): the unit is set up on the battlefield
+    UnitId unit;
+    Side side = Side::A;
+    friend bool operator==(const UnitSetUp&, const UnitSetUp&) = default;
+};
+struct UnitNotSetUp {  // D-081: no legal spot was left; the unit counts as destroyed (UnitDestroyed follows)
+    UnitId unit;
+    Side side = Side::A;
+    friend bool operator==(const UnitNotSetUp&, const UnitNotSetUp&) = default;
+};
 }  // namespace event
 
+// New alternatives are appended at the end, so every existing index stays the same.
 using GameEvent =
     std::variant<event::BattleRoundStarted, event::BattleRoundEnded, event::TurnStarted, event::TurnEnded,
                  event::PhaseStarted, event::PhaseEnded, event::UnitRemainedStationary, event::MoveStarted,

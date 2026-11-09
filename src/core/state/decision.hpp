@@ -88,14 +88,20 @@ struct RerollWoundRolls {
     UnitId attacker;
     friend bool operator==(const RerollWoundRolls&, const RerollWoundRolls&) = default;
 };
+// 03.02 / D-081 (M74): set up one of your units (a deployment by hand, the sides alternating). The deciding side is
+// the one that sets up next (side_to_deploy, core/state/deployment.hpp); it may be the opposing player (01.03).
+struct DeployUnits {
+    friend bool operator==(const DeployUnits&, const DeployUnits&) = default;
+};
 }  // namespace decision
 
+// Appended at the end only: the bots' state_hash hashes the index (D-054).
 using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, decision::Shoot, decision::Charge,
                                   decision::SelectChargeTargets, decision::PileIn, decision::OverrunPileIn,
                                   decision::SelectUnitToFight, decision::DeclareMeleeAttacks,
                                   decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
-                                  decision::OrderCasualties, decision::RerollWoundRolls>;
+                                  decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)
