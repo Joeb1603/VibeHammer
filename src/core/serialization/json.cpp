@@ -1,5 +1,6 @@
 #include "core/serialization/json.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -337,6 +338,58 @@ void from_json(const Json& j, SideInfo& v) {
     j.at("name").get_to(v.name);
     j.at("deployment_zone").get_to(v.deployment_zone);
 }
+namespace {
+
+// D-081 (M74): the units waiting to be set up. Only checked when there are some (or the stage is Deploy), so no older
+// file gets a new refusal: they exist only before battle round 1, in id order, each with its models, and every unit id
+// and model id of the state is used once.
+void check_undeployed(const GameState& v) {
+    if (v.undeployed.empty()) {
+        if (v.flow.stage == Stage::Deploy) {
+            throw DataError("state JSON: D-081: stage Deploy with no unit waiting to be set up (\"undeployed\" is empty)");
+        }
+        return;
+    }
+    if (v.flow.stage != Stage::NotStarted && v.flow.stage != Stage::Deploy) {
+        throw DataError("state JSON: D-081: units waiting to be set up (\"undeployed\") are only possible before battle "
+                        "round 1 (stage NotStarted or Deploy), not in stage " + std::string(stage_name(v.flow.stage)));
+    }
+    std::vector<std::uint32_t> unit_ids;
+    std::vector<std::uint32_t> model_ids;
+    for (const std::vector<Unit>* list : {&v.units, &v.undeployed}) {
+        for (const Unit& u : *list) {
+            unit_ids.push_back(u.id.v);
+            for (const Model& m : u.models) model_ids.push_back(m.id.v);
+        }
+    }
+    const auto first_repeat = [](std::vector<std::uint32_t> ids) -> std::optional<std::uint32_t> {
+        std::sort(ids.begin(), ids.end());
+        const auto it = std::adjacent_find(ids.begin(), ids.end());
+        return it == ids.end() ? std::nullopt : std::optional<std::uint32_t>(*it);
+    };
+    if (const auto u = first_repeat(unit_ids)) {
+        throw DataError("state JSON: D-081: unit id " + std::to_string(*u) + " is used more than once");
+    }
+    if (const auto m = first_repeat(model_ids)) {
+        throw DataError("state JSON: D-081: model id " + std::to_string(*m) + " is used more than once");
+    }
+    for (std::size_t i = 1; i < v.undeployed.size(); ++i) {
+        if (!(v.undeployed[i - 1].id < v.undeployed[i].id)) {
+            throw DataError("state JSON: D-081: \"undeployed\" must be in unit id order (unit " +
+                            std::to_string(v.undeployed[i].id.v) + " comes after unit " +
+                            std::to_string(v.undeployed[i - 1].id.v) + ")");
+        }
+    }
+    for (const Unit& u : v.undeployed) {
+        if (u.models.empty()) {
+            throw DataError("state JSON: D-081: unit " + std::to_string(u.id.v) +
+                            " is waiting to be set up but has no models");
+        }
+    }
+}
+
+}  // namespace
+
 void to_json(Json& j, const GameState& v) {
     j = Json{{"scenario_name", v.scenario_name},
              {"battlefield", v.battlefield},
@@ -351,6 +404,8 @@ void to_json(Json& j, const GameState& v) {
     put_opt(j, "result", v.result);
     // D-076: omitted at the default (D-007), so older files are unchanged.
     if (v.result_rule == ResultRule::PointsDestroyed) j["result_rule"] = "points_destroyed";
+    // D-081: omitted when empty (every state but a deployment by hand), so older files are unchanged.
+    if (!v.undeployed.empty()) j["undeployed"] = v.undeployed;
 }
 void from_json(const Json& j, GameState& v) {
     j.at("scenario_name").get_to(v.scenario_name);
@@ -372,7 +427,10 @@ void from_json(const Json& j, GameState& v) {
         }
         v.result_rule = ResultRule::PointsDestroyed;
     }
-    check_points_data(v, "state JSON");  // D-076: the points and their bounds
+    v.undeployed.clear();
+    if (j.contains("undeployed")) j.at("undeployed").get_to(v.undeployed);  // D-081
+    check_undeployed(v);
+    check_points_data(v, "state JSON");  // D-076: the points and their bounds (undeployed units included, D-081)
 }
 
 }  // namespace wh40k::core

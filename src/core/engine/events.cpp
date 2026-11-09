@@ -56,6 +56,9 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::GameOver>) return {"GameOver", "D-007"};
     else if constexpr (std::is_same_v<T, event::WoundRollsRerolled>) return {"WoundRollsRerolled", "24.38"};
     else if constexpr (std::is_same_v<T, event::AttackDiceRolled>) return {"AttackDiceRolled", "04.03"};
+    else if constexpr (std::is_same_v<T, event::DeploymentStarted>) return {"DeploymentStarted", "D-081"};
+    else if constexpr (std::is_same_v<T, event::UnitSetUp>) return {"UnitSetUp", "03.02"};
+    else if constexpr (std::is_same_v<T, event::UnitNotSetUp>) return {"UnitNotSetUp", "D-081"};
     else static_assert(sizeof(T) == 0, "unhandled event");
 }
 

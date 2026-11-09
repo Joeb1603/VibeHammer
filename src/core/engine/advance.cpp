@@ -86,6 +86,11 @@ void next_stage(GameState& state, DiceSource& dice, Events& events) {
         case Stage::NotStarted:
         case Stage::GameOver:
             throw std::logic_error("next_stage: the game is not running");
+        case Stage::Deploy:
+            // D-081: every unit is handled; battle round 1 starts as D-003's start (Deploy is appended after GameOver,
+            // so it has no "next stage in declaration order").
+            start_first_battle_round(state, dice, events);
+            return;
         case Stage::EndOfTurn:
             if (state.flow.turn_in_round == 0) {
                 state.flow.turn_in_round = 1;  // 07.02: the opponent takes their turn
@@ -123,6 +128,16 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
     for (int guard = 0; guard < 100000; ++guard) {
         if (state.flow.stage == Stage::GameOver || state.flow.stage == Stage::NotStarted) {
             return;
+        }
+        if (state.flow.stage == Stage::Deploy) {
+            // D-081 (amends D-007): no wipe-out check while the armies are set up (no side has all of its units on the
+            // battlefield yet); it applies again from battle round 1.
+            if (auto d = deploy_decision(state)) {
+                state.pending = std::move(d);
+                return;
+            }
+            next_stage(state, dice, events);
+            continue;
         }
         if (state.flow.attack) {
             if (auto d = attack_decision(state)) {

@@ -745,7 +745,7 @@ ArmyList random_army(const Faction& faction, const DatasheetResolver& resolve, s
 // ---- The battle ----
 
 Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_turn, const std::vector<Faction>& factions,
-                            const DatasheetResolver& resolve) {
+                            const DatasheetResolver& resolve, DeploymentMode mode) {
     if (const auto p = battle_problems(a, b); !p.empty()) throw DataError("custom battle: " + p.front());
     const Battlefield field = custom_field();
     Json sides = Json::object();
@@ -774,10 +774,11 @@ Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_tur
             const LayoutSlot& slot = layout.slots[i];
             Json formation{{"ranks", slot.ranks}, {"gap_in", 0}, {"centre_x_in", slot.centre_x_in}, {"anchor", "zone_front"}};
             if (slot.depth_in != 0.0f) formation["depth_in"] = slot.depth_in;
-            units.push_back(Json{{"unit_file", u.unit_file},
-                                 {"points", unit_points(sheets[i], u, copies[u.unit_file]++)},
-                                 {"models", u.models},
-                                 {"formation", formation}});
+            Json unit{{"unit_file", u.unit_file},
+                      {"points", unit_points(sheets[i], u, copies[u.unit_file]++)},
+                      {"models", u.models}};
+            if (mode == DeploymentMode::Auto) unit["formation"] = formation;  // D-081: none when set up by hand
+            units.push_back(std::move(unit));
         }
         const std::string name = list.name.empty() ? faction->name : list.name;
         names.push_back(name);
@@ -786,16 +787,27 @@ Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_tur
                              {{"edge", side == Side::A ? "south" : "north"}, {"depth_in", kCustomBattleZoneDepthIn}}},
                             {"units", units}};
     }
-    return Json{{"name", "Custom battle - " + names[0] + " vs " + names[1]},
-                {"battlefield", {{"width_in", kCustomBattleWidthIn}, {"depth_in", kCustomBattleDepthIn}}},
-                {"battle_rounds", kCustomBattleRounds},
-                {"first_turn", first_turn == Side::A ? "A" : "B"},
-                {"result", "points_destroyed"},
-                {"sides", sides},
-                {"notes",
-                 "D-079: a custom battle (Incursion, 1000 points; agreed with the user): 44\"x60\" portrait, 12\" zones "
-                 "on the south (A) and north (B) edges, 5 battle rounds, decided on points destroyed (D-076). Units "
-                 "are placed by the auto-layout (D-079 part 2) in list order."}};
+    Json out{{"name", "Custom battle - " + names[0] + " vs " + names[1]},
+             {"battlefield", {{"width_in", kCustomBattleWidthIn}, {"depth_in", kCustomBattleDepthIn}}},
+             {"battle_rounds", kCustomBattleRounds},
+             {"first_turn", first_turn == Side::A ? "A" : "B"},
+             {"result", "points_destroyed"},
+             {"sides", sides},
+             {"notes",
+              "D-079: a custom battle (Incursion, 1000 points; agreed with the user): 44\"x60\" portrait, 12\" zones "
+              "on the south (A) and north (B) edges, 5 battle rounds, decided on points destroyed (D-076). Units "
+              "are placed by the auto-layout (D-079 part 2) in list order."}};
+    if (mode == DeploymentMode::Hand) {
+        // D-081: set up by hand, the sides alternating (the side taking the second turn first); Auto-place's spots are
+        // the engine's proposals.
+        out["deployment"] = "alternating";
+        out["notes"] =
+            "D-079: a custom battle (Incursion, 1000 points; agreed with the user): 44\"x60\" portrait, 12\" zones on "
+            "the south (A) and north (B) edges, 5 battle rounds, decided on points destroyed (D-076). Units are set "
+            "up by hand, the sides alternating one unit at a time, starting with the side that takes the second turn "
+            "(D-081); the engine proposes the auto-layout's spots (D-079 part 2).";
+    }
+    return out;
 }
 
 }  // namespace wh40k::core

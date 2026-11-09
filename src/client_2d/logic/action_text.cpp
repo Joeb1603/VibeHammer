@@ -10,6 +10,7 @@
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
+#include "core/state/deployment.hpp"
 #include "move_plan.hpp"
 #include "unit_style.hpp"
 
@@ -18,8 +19,10 @@ namespace wh40k::client {
 namespace {
 
 std::string unit_name(const core::GameState& state, core::UnitId id) {
-    // D-065: "Termagants 2 (5)" when a side has several units; "Termagants (5)" otherwise, as before.
+    // D-065: "Termagants 2 (5)" when a side has several units; "Termagants (5)" otherwise, as before. D-081: a unit not
+    // yet set up is named the same way.
     const core::Unit* u = state.find_unit(id);
+    if (u == nullptr) u = core::find_undeployed(state, id);
     return (u != nullptr ? unit_display_name(state, id) : std::string("Unit")) + " (" + std::to_string(id.v) + ")";
 }
 
@@ -112,6 +115,12 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                     }
                 }
                 return "Re-roll " + std::to_string(x.indices.size()) + " wound roll" + (x.indices.size() == 1 ? "" : "s");
+            } else if constexpr (std::is_same_v<T, a::DeployUnit>) {
+                // D-081: a filled DeployUnit among the buttons is the engine's proposal (Auto-place's spot).
+                if (x.models.empty()) return "Set up " + unit_name(state, x.unit) + " by hand";
+                return "Set up " + unit_name(state, x.unit) + " (auto-place)";
+            } else if constexpr (std::is_same_v<T, a::CannotSetUp>) {
+                return "Can't be set up: " + unit_name(state, x.unit) + " (counts as destroyed)";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

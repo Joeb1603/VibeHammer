@@ -18,6 +18,9 @@ using DatasheetResolver = std::function<Datasheet(const std::string& unit_file)>
 // scenario's formation, D-008, with D-064's optional depth_in). Validates 02.06 composition and
 // wargear options, 03.02 set-up (coherency 03.03, unengaged, no model on another model: D-064) and
 // D-009 wholly within the deployment zone.
+// D-081 (M74): with "deployment": "alternating" the units are built into GameState::undeployed instead (no formation,
+// north and south zones only; each must have a legal spot in its zone with nothing else on the battlefield), to be
+// set up by hand during the deployment step.
 // Throws DataError on any violation.
 [[nodiscard]] GameState build_game_state(const nlohmann::json& scenario,
                                          const DatasheetResolver& resolve);

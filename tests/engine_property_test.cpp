@@ -13,7 +13,9 @@
 #include <string>
 #include <vector>
 
+#include "core/data/army_list.hpp"
 #include "core/data/datasheet.hpp"
+#include "core/data/scenario_loader.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
@@ -25,6 +27,7 @@
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/deployment.hpp"
 #include "core/state/queries.hpp"
 #include "support/army_fixtures.hpp"
 #include "support/engine_helpers.hpp"
@@ -800,4 +803,79 @@ TEST(D004_LegalActions, RandomPlayOnRandomLegalArmies) {
     EXPECT_GT(on_points, 0);
     std::printf("random legal armies: %zu weapon profiles used, %zu weapons in the random armies, %d games on points\n",
                 use.used.size(), loadouts.size(), on_points);
+}
+
+// M74 (D-081, D-004): random play through a deployment by hand. DeployUnit templates are filled (the engine's proposal
+// moved at random, ovals turned, or corrupted), proposals and CannotSetUp are listed only when legal, the other side can
+// never act, and `pending` always equals the recomputed decision; then the battle goes on. The fixtures cover the stock
+// and random armies, zones 1" apart (proposals pushed back by engagement) and zones too small for every unit (units not
+// set up, a side wiped out at the start of battle round 1).
+TEST(D004_LegalActions, RandomPlayWithHandDeployment) {
+    const auto by_hand = [](const nlohmann::json& s) {
+        return build_game_state(s, [](const std::string& unit_file) {
+            return load_datasheet(wh40k::test::repo_root() / unit_file);
+        });
+    };
+    const auto fixture = [](float width, float depth, float zone_a, float zone_b, int a_units, int b_units) {
+        nlohmann::json intercessors{{"unit_file", "data/units/intercessor_squad.json"},
+                                    {"models",
+                                     {{{"type", "Intercessor Sergeant"}, {"count", 1},
+                                       {"weapons", {"Bolt Rifle", "Bolt pistol", "Knives and Fists"}}},
+                                      {{"type", "Intercessor"}, {"count", 4},
+                                       {"weapons", {"Bolt Rifle", "Bolt pistol", "Knives and Fists"}}}}}};
+        nlohmann::json termagants{{"unit_file", "data/units/termagants.json"},
+                                  {"models", {{{"type", "Termagants"}, {"count", 10},
+                                               {"weapons", {"Fleshborer", "Chitinous claws and teeth"}}}}}};
+        nlohmann::json a = nlohmann::json::array();
+        nlohmann::json b = nlohmann::json::array();
+        for (int i = 0; i < a_units; ++i) a.push_back(i % 2 == 0 ? termagants : intercessors);
+        for (int i = 0; i < b_units; ++i) b.push_back(i % 2 == 0 ? intercessors : termagants);
+        return nlohmann::json{
+            {"name", "M74 random play"},
+            {"battlefield", {{"width_in", width}, {"depth_in", depth}}},
+            {"battle_rounds", 5},
+            {"first_turn", "A"},
+            {"deployment", "alternating"},
+            {"sides",
+             {{"A", {{"name", "South"}, {"deployment_zone", {{"edge", "south"}, {"depth_in", zone_a}}}, {"units", a}}},
+              {"B", {{"name", "North"}, {"deployment_zone", {{"edge", "north"}, {"depth_in", zone_b}}}, {"units", b}}}}}};
+    };
+    std::vector<GameState> battles;
+    battles.push_back(wh40k::test::custom_battle(wh40k::test::stock_army(wh40k::test::csm()),
+                                                 wh40k::test::stock_army(wh40k::test::tyranids()), Side::A,
+                                                 DeploymentMode::Hand));
+    battles.push_back(wh40k::test::custom_battle(wh40k::test::showcase_csm(), wh40k::test::showcase_tyranids(), Side::B,
+                                                 DeploymentMode::Hand));
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+        battles.push_back(wh40k::test::random_armies_battle(seed, DeploymentMode::Hand, seed % 2 == 0 ? Side::A : Side::B));
+    }
+    battles.push_back(by_hand(fixture(24.0f, 25.0f, 12.0f, 12.0f, 2, 2)));  // zones 1" apart
+    battles.push_back(by_hand(fixture(12.0f, 24.0f, 2.5f, 3.0f, 3, 1)));    // a zone too small for its third unit
+    battles.push_back(by_hand(fixture(12.0f, 6.0f, 2.0f, 4.0f, 1, 1)));     // touching zones: side A can't set up
+    int deploy_fills = 0;
+    int set_up_by_hand = 0;
+    int not_set_up = 0;
+    int deployments_done = 0;
+    for (std::size_t i = 0; i < battles.size(); ++i) {
+        GameState gs = battles[i];
+        gs.dice.seed = 100 + i;
+        start_game(gs);
+        ASSERT_EQ(gs.flow.stage, Stage::Deploy) << "battle " << i;
+        TestRng rng(7 + i);
+        const ActionHook count = [&](const GameState& state, const GameAction& a) {
+            if (const auto* d = std::get_if<action::DeployUnit>(&a)) {
+                const std::optional<action::DeployUnit> p = propose_set_up(state, d->unit);
+                if (!p || *p != *d) ++set_up_by_hand;
+            }
+            if (std::holds_alternative<action::CannotSetUp>(a)) ++not_set_up;
+        };
+        const PlayStats stats = play_and_check(gs, rng, 120, count);
+        deploy_fills += stats.template_fills;
+        EXPECT_NE(gs.flow.stage, Stage::Deploy) << "battle " << i << " is still deploying";
+        if (gs.flow.stage != Stage::Deploy) ++deployments_done;
+    }
+    EXPECT_EQ(deployments_done, static_cast<int>(battles.size()));
+    EXPECT_GT(deploy_fills, 100);
+    EXPECT_GT(set_up_by_hand, 10);  // random template fills applied
+    EXPECT_GT(not_set_up, 1);       // the small zones' units
 }

@@ -45,6 +45,23 @@ struct ZoneLayout {
 // The formation a slot stands for (gap 0, anchor zone_front, facing 0), as the scenario loader would parse it.
 [[nodiscard]] Formation slot_formation(const LayoutSlot& slot);
 
+// A unit's formation footprint at `ranks` ranks (gap 0, facing 0, models in list order: slot_formation), placed by
+// place_formation at centre 0 and depth 0: its x extent around the formation's centre, its depth behind the zone's
+// front line (mm), and whether it is in coherency (03.03). North and south zones only; `bases` not empty. The
+// auto-layout measures ranks with it, and so does the deployment scan (D-081, core/state/deployment.hpp).
+struct FormationBlock {
+    int ranks = 1;
+    float min_x_mm = 0.0f;
+    float max_x_mm = 0.0f;
+    float depth_mm = 0.0f;
+    bool coherent = false;
+    [[nodiscard]] float width_mm() const { return max_x_mm - min_x_mm; }
+};
+[[nodiscard]] FormationBlock formation_block(const std::vector<Base>& bases, int ranks, const Battlefield& field,
+                                             const DeploymentZone& zone);
+// No wider than the battlefield and no deeper than the zone.
+[[nodiscard]] bool block_fits_zone(const FormationBlock& block, const Battlefield& field, const DeploymentZone& zone);
+
 // 03.03 / D-079: the fewest ranks r = 1..n that make a unit of these bases (in list order) coherent and no wider than
 // the battlefield and no deeper than the zone; nullopt if none does (or the unit has no models).
 [[nodiscard]] std::optional<int> fewest_coherent_ranks(const std::vector<Base>& bases, const Battlefield& field,

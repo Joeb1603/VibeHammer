@@ -8,6 +8,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
 #include "core/model/keywords.hpp"
+#include "core/state/deployment.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core::detail {
@@ -69,6 +70,10 @@ void on_enter_stage(GameState& state, DiceSource& dice, Events& events) {
             break;
         case Stage::EndOfTurn:
             break;  // 03.03 Regaining Coherency is a decision (stage_decision)
+        case Stage::Deploy:
+            // D-081: the side that sets up first (the one taking the second turn, unless it has no units).
+            events.push_back(event::DeploymentStarted{side_to_deploy(state).value_or(opponent(state.first_turn))});
+            break;
         default:
             break;
     }
@@ -116,6 +121,8 @@ std::optional<PendingDecision> stage_decision(const GameState& state) {
             return fight_stage_decision(state);
         case Stage::EndOfTurn:
             return coherency_decision(state);  // 03.03 Regaining Coherency
+        case Stage::Deploy:
+            return deploy_decision(state);  // D-081: the next side sets up a unit
         default:
             return std::nullopt;
     }

@@ -2,6 +2,8 @@
 
 #include <array>
 
+#include "core/state/deployment.hpp"
+
 namespace wh40k::client {
 
 namespace {
@@ -49,10 +51,19 @@ Rgb side_shade(core::Side side, int index) {
 
 std::optional<UnitStyle> unit_style(const core::GameState& state, core::UnitId id) {
     const core::Unit* unit = state.find_unit(id);
+    if (unit == nullptr) unit = core::find_undeployed(state, id);  // D-081: a unit not yet set up has its style too
     if (unit == nullptr) return std::nullopt;
     UnitStyle style;
     style.side_units = 0;
-    for (const core::Unit& u : state.units) {
+    // D-065: the position among the side's units in GameState::units order. D-081: units not yet set up count at their
+    // id positions (both lists are in id order, so they are merged by id), so numbers don't shift as units are set up.
+    // With nothing undeployed this is the same loop over `units` as before.
+    std::size_t i = 0;
+    std::size_t j = 0;
+    while (i < state.units.size() || j < state.undeployed.size()) {
+        const bool take_set_up =
+            j == state.undeployed.size() || (i < state.units.size() && state.units[i].id < state.undeployed[j].id);
+        const core::Unit& u = take_set_up ? state.units[i++] : state.undeployed[j++];
         if (u.side != unit->side) continue;
         ++style.side_units;
         if (u.id == id) style.index = style.side_units;

@@ -941,8 +941,9 @@ TEST(D074_Json, OldFilesLoadTheSame) {
         const Json saved = Json::parse(text.str());
         EXPECT_EQ(Json(load_replay(entry.path())), saved) << entry.path().filename();
         // M72: m72_custom_battle_round2.json is a new file whose random play turns the Tyrannofexes (D-074).
+        // M74: m74_hand_deployment.json is a new file that sets its Tyrannofex up at an angle (D-081).
         const std::string name = entry.path().filename().string();
-        if (name.rfind("m65_", 0) != 0 && name.rfind("m72_", 0) != 0) {
+        if (name.rfind("m65_", 0) != 0 && name.rfind("m72_", 0) != 0 && name.rfind("m74_", 0) != 0) {
             EXPECT_EQ(text.str().find("facing"), std::string::npos) << entry.path().filename();
         }
     }

@@ -97,18 +97,23 @@ inline core::ArmyList showcase_tyranids() {
     return l;
 }
 
-// A custom battle's initial state (not started), side A first unless `first` says otherwise.
+// A custom battle's initial state (not started), side A first unless `first` says otherwise. M74 (D-081): with
+// DeploymentMode::Hand its units wait to be set up by hand.
 inline core::GameState custom_battle(const core::ArmyList& a, const core::ArmyList& b,
-                                     core::Side first = core::Side::A) {
-    return core::build_game_state(core::custom_battle_scenario(a, b, first, factions(), army_resolver()),
+                                     core::Side first = core::Side::A,
+                                     core::DeploymentMode mode = core::DeploymentMode::Auto) {
+    return core::build_game_state(core::custom_battle_scenario(a, b, first, factions(), army_resolver(), mode),
                                   army_resolver());
 }
 
 // The random armies of an arena game with `seed` (wh40k_bot_arena --random-armies 1): Chaos Space Marines for side A
 // and Tyranids for side B.
-inline core::GameState random_armies_battle(std::uint64_t seed) {
+inline core::GameState random_armies_battle(std::uint64_t seed,
+                                            core::DeploymentMode mode = core::DeploymentMode::Auto,
+                                            core::Side first = core::Side::A) {
     return custom_battle(core::random_army(csm(), army_resolver(), core::random_army_seed(core::Side::A, seed)),
-                         core::random_army(tyranids(), army_resolver(), core::random_army_seed(core::Side::B, seed)));
+                         core::random_army(tyranids(), army_resolver(), core::random_army_seed(core::Side::B, seed)),
+                         first, mode);
 }
 
 }  // namespace wh40k::test

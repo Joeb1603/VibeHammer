@@ -75,6 +75,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::DeclareAllocationOrder{UnitId{2}}},
         {Side::B, decision::OrderCasualties{UnitId{2}}},
         {Side::B, decision::RerollWoundRolls{UnitId{2}}},  // M61 (24.38)
+        {Side::B, decision::DeployUnits{}},                // M74 (D-081)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
@@ -223,6 +224,10 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::DeclareAllocationOrder{UnitId{2}, {1, 0}},
         action::OrderCasualties{UnitId{2}, {ModelId{9}, ModelId{6}}},
         action::RerollWoundRolls{{2, 0}},  // M61 (24.38)
+        action::DeployUnit{UnitId{3},
+                           {ModelPlacement{ModelId{7}, Position{10.5f, 20.25f, 0.0f}, 0.0f},
+                            ModelPlacement{ModelId{8}, Position{40.0f, 20.25f, 0.0f}, 30.0f}}},  // M74 (D-081)
+        action::CannotSetUp{UnitId{4}},                                                          // M74 (D-081)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {
@@ -316,6 +321,9 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::AttackDiceRolled{0,
                                 {AttackDiceRoll{1, ModelId{3}, DiceExpr{1, 6, 3}, CharacteristicRoll{{4}, 7}, 2}},
                                 9},  // M62 (D-069)
+        event::DeploymentStarted{Side::B},          // M74 (D-081)
+        event::UnitSetUp{UnitId{3}, Side::A},       // M74
+        event::UnitNotSetUp{UnitId{4}, Side::B},    // M74
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

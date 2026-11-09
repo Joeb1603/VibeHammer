@@ -37,7 +37,13 @@ int wounds_lost(const Unit& unit) {
 void check_points_data(const GameState& state, std::string_view where) {
     std::int64_t total = 0;
     std::int64_t denominator = 1;
-    for (const Unit& u : state.units) {
+    // D-081 (M74): the units not yet set up count too (a hand-deployment scenario as loaded has every unit there).
+    std::vector<const Unit*> all;
+    all.reserve(state.units.size() + state.undeployed.size());
+    for (const Unit& u : state.units) all.push_back(&u);
+    for (const Unit& u : state.undeployed) all.push_back(&u);
+    for (const Unit* unit : all) {
+        const Unit& u = *unit;
         if (u.points < 0 || u.points > kMaxUnitPoints) {
             fail(where, unit_label(u) + " has points " + std::to_string(u.points) + "; points must be a positive integer of at most " +
                             std::to_string(kMaxUnitPoints));

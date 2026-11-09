@@ -1737,7 +1737,11 @@ private:
         const PhaseTrack t = phase_track(s);
         const float gap = ImGui::GetFontSize() * 1.5f;
         ImGui::AlignTextToFramePadding();
-        ImGui::Text("Battle round %d of %d", t.round, t.rounds);
+        if (t.deploying) {
+            ImGui::Text("Deployment (before battle round 1 of %d)", t.rounds);  // D-081
+        } else {
+            ImGui::Text("Battle round %d of %d", t.round, t.rounds);
+        }
         if (t.result) {
             ImGui::SameLine(0.0f, gap);
             ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "Game over: %s", t.result->c_str());

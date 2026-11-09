@@ -1,0 +1,1324 @@
+{
+  "description": "M74: deployment by hand (D-081) on the stock armies' custom battle (tests/data/scenarios/hand_deployment_44x60.json: custom_battle_scenario of the two stock Incursion lists with \"deployment\": \"alternating\"; D-079, D-076). Side B (Tyranids) takes the first turn, so Side A (Chaos Space Marines) sets up first: A and B alternate one unit at a time until A's five units are down, then B sets up its other four. Each unit is set up at the engine's proposal (propose_set_up: its auto-layout spot) except the Tyrannofex (unit 11), which Side B sets up by hand turned 30 degrees on the spot the auto-layout gives the Screamer-killer after it (unit 12), stepped back until it is wholly within the zone; the Screamer-killer's proposal then comes from the scan. Battle round 1 then starts as an auto-placed game's would (D-003); Side B's turn passes (every unit remains stationary, every step ended). Stops at Side A's first Move Units decision of battle round 1.",
+  "expect": {
+    "battle_round": 1,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 145.5500030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 177.5500030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 209.5500030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 241.5500030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 273.54998779296875,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 6,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 145.5500030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 7,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 177.5500030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 8,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 209.5500030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 9,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 241.5500030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 10,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 273.54998779296875,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 11,
+        "unit": 2,
+        "wounds_remaining": 5,
+        "x_mm": 333.375,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 12,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 399.42498779296875,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 13,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 439.42498779296875,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 14,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 479.42498779296875,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 15,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 519.4249877929688,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 16,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 559.4249877929688,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 17,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 399.42498779296875,
+        "y_mm": 244.79998779296875
+      },
+      {
+        "model": 18,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 439.42498779296875,
+        "y_mm": 244.79998779296875
+      },
+      {
+        "model": 19,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 479.42498779296875,
+        "y_mm": 244.79998779296875
+      },
+      {
+        "model": 20,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 519.4249877929688,
+        "y_mm": 244.79998779296875
+      },
+      {
+        "model": 21,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 559.4249877929688,
+        "y_mm": 244.79998779296875
+      },
+      {
+        "model": 22,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 624.8499755859375,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 23,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 664.8499755859375,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 24,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 704.8499755859375,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 25,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 744.8499755859375,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 26,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 784.8499755859375,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 27,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 844.0499877929688,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 28,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 876.0499877929688,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 29,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 908.0499877929688,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 30,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 940.0499877929688,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 31,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 972.0499877929688,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 32,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 844.0499877929688,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 33,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 876.0499877929688,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 34,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 908.0499877929688,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 35,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 940.0499877929688,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 36,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 972.0499877929688,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 37,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 33.67500305175781,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 38,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 62.17500305175781,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 39,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 90.67500305175781,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 40,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 119.17500305175781,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 41,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 147.6750030517578,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 42,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 176.1750030517578,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 43,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 204.6750030517578,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 44,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 233.1750030517578,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 45,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 261.67498779296875,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 46,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 290.17498779296875,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 47,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 345.5749816894531,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 48,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 377.5749816894531,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 49,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 409.5749816894531,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 50,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 441.5749816894531,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 51,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 473.5749816894531,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 52,
+        "unit": 8,
+        "wounds_remaining": 10,
+        "x_mm": 558.7999877929688,
+        "y_mm": 1264.199951171875
+      },
+      {
+        "model": 53,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 654.8499755859375,
+        "y_mm": 1244.199951171875
+      },
+      {
+        "model": 54,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 704.8499755859375,
+        "y_mm": 1244.199951171875
+      },
+      {
+        "model": 55,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 754.8499755859375,
+        "y_mm": 1244.199951171875
+      },
+      {
+        "model": 56,
+        "unit": 10,
+        "wounds_remaining": 10,
+        "x_mm": 835.0249633789063,
+        "y_mm": 1249.199951171875
+      },
+      {
+        "facing_deg": 30.0,
+        "model": 57,
+        "unit": 11,
+        "wounds_remaining": 16,
+        "x_mm": 1054.0999755859375,
+        "y_mm": 1276.89990234375
+      },
+      {
+        "model": 58,
+        "unit": 12,
+        "wounds_remaining": 10,
+        "x_mm": 914.4000244140625,
+        "y_mm": 1264.199951171875
+      },
+      {
+        "model": 59,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 339.2250061035156,
+        "y_mm": 1381.25
+      },
+      {
+        "model": 60,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 371.2250061035156,
+        "y_mm": 1381.25
+      },
+      {
+        "model": 61,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 403.2250061035156,
+        "y_mm": 1381.25
+      },
+      {
+        "model": 62,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 435.2250061035156,
+        "y_mm": 1381.25
+      },
+      {
+        "model": 63,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 467.2250061035156,
+        "y_mm": 1381.25
+      },
+      {
+        "model": 64,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 522.625,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 65,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 551.125,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 66,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 579.625,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 67,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 608.125,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 68,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 636.625,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 69,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 665.125,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 70,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 693.625,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 71,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 722.125,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 72,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 750.625,
+        "y_mm": 1379.5
+      },
+      {
+        "model": 73,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 779.125,
+        "y_mm": 1379.5
+      }
+    ],
+    "result": null,
+    "stage": "MoveUnits"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "tests/data/scenarios/hand_deployment_44x60.json",
+    "seed": 1
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 1,
+            "position": {
+              "x": 145.5500030517578,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 2,
+            "position": {
+              "x": 177.5500030517578,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 3,
+            "position": {
+              "x": 209.5500030517578,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 4,
+            "position": {
+              "x": 241.5500030517578,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 5,
+            "position": {
+              "x": 273.54998779296875,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 6,
+            "position": {
+              "x": 145.5500030517578,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 7,
+            "position": {
+              "x": 177.5500030517578,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 8,
+            "position": {
+              "x": 209.5500030517578,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 9,
+            "position": {
+              "x": 241.5500030517578,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 10,
+            "position": {
+              "x": 273.54998779296875,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 37,
+            "position": {
+              "x": 33.67500305175781,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 38,
+            "position": {
+              "x": 62.17500305175781,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 39,
+            "position": {
+              "x": 90.67500305175781,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 40,
+            "position": {
+              "x": 119.17500305175781,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 41,
+            "position": {
+              "x": 147.6750030517578,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 42,
+            "position": {
+              "x": 176.1750030517578,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 43,
+            "position": {
+              "x": 204.6750030517578,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 44,
+            "position": {
+              "x": 233.1750030517578,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 45,
+            "position": {
+              "x": 261.67498779296875,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 46,
+            "position": {
+              "x": 290.17498779296875,
+              "y": 1233.449951171875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 11,
+            "position": {
+              "x": 333.375,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 47,
+            "position": {
+              "x": 345.5749816894531,
+              "y": 1235.199951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 48,
+            "position": {
+              "x": 377.5749816894531,
+              "y": 1235.199951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 49,
+            "position": {
+              "x": 409.5749816894531,
+              "y": 1235.199951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 50,
+            "position": {
+              "x": 441.5749816894531,
+              "y": 1235.199951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 51,
+            "position": {
+              "x": 473.5749816894531,
+              "y": 1235.199951171875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 12,
+            "position": {
+              "x": 399.42498779296875,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 13,
+            "position": {
+              "x": 439.42498779296875,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 14,
+            "position": {
+              "x": 479.42498779296875,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 15,
+            "position": {
+              "x": 519.4249877929688,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 16,
+            "position": {
+              "x": 559.4249877929688,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 17,
+            "position": {
+              "x": 399.42498779296875,
+              "y": 244.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 18,
+            "position": {
+              "x": 439.42498779296875,
+              "y": 244.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 19,
+            "position": {
+              "x": 479.42498779296875,
+              "y": 244.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 20,
+            "position": {
+              "x": 519.4249877929688,
+              "y": 244.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 21,
+            "position": {
+              "x": 559.4249877929688,
+              "y": 244.79998779296875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 52,
+            "position": {
+              "x": 558.7999877929688,
+              "y": 1264.199951171875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 22,
+            "position": {
+              "x": 624.8499755859375,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 23,
+            "position": {
+              "x": 664.8499755859375,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 24,
+            "position": {
+              "x": 704.8499755859375,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 25,
+            "position": {
+              "x": 744.8499755859375,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 26,
+            "position": {
+              "x": 784.8499755859375,
+              "y": 284.79998779296875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 53,
+            "position": {
+              "x": 654.8499755859375,
+              "y": 1244.199951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 54,
+            "position": {
+              "x": 704.8499755859375,
+              "y": 1244.199951171875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 55,
+            "position": {
+              "x": 754.8499755859375,
+              "y": 1244.199951171875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 27,
+            "position": {
+              "x": 844.0499877929688,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 28,
+            "position": {
+              "x": 876.0499877929688,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 29,
+            "position": {
+              "x": 908.0499877929688,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 30,
+            "position": {
+              "x": 940.0499877929688,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 31,
+            "position": {
+              "x": 972.0499877929688,
+              "y": 288.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 32,
+            "position": {
+              "x": 844.0499877929688,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 33,
+            "position": {
+              "x": 876.0499877929688,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 34,
+            "position": {
+              "x": 908.0499877929688,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 35,
+            "position": {
+              "x": 940.0499877929688,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 36,
+            "position": {
+              "x": 972.0499877929688,
+              "y": 256.79998779296875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 56,
+            "position": {
+              "x": 835.0249633789063,
+              "y": 1249.199951171875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "facing_deg": 30.0,
+            "model": 57,
+            "position": {
+              "x": 1054.0999755859375,
+              "y": 1276.89990234375,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 58,
+            "position": {
+              "x": 914.4000244140625,
+              "y": 1264.199951171875,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 59,
+            "position": {
+              "x": 339.2250061035156,
+              "y": 1381.25,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 60,
+            "position": {
+              "x": 371.2250061035156,
+              "y": 1381.25,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 61,
+            "position": {
+              "x": 403.2250061035156,
+              "y": 1381.25,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 62,
+            "position": {
+              "x": 435.2250061035156,
+              "y": 1381.25,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 63,
+            "position": {
+              "x": 467.2250061035156,
+              "y": 1381.25,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeployUnit",
+        "models": [
+          {
+            "model": 64,
+            "position": {
+              "x": 522.625,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 65,
+            "position": {
+              "x": 551.125,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 66,
+            "position": {
+              "x": 579.625,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 67,
+            "position": {
+              "x": 608.125,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 68,
+            "position": {
+              "x": 636.625,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 69,
+            "position": {
+              "x": 665.125,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 70,
+            "position": {
+              "x": 693.625,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 71,
+            "position": {
+              "x": 722.125,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 72,
+            "position": {
+              "x": 750.625,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          },
+          {
+            "model": 73,
+            "position": {
+              "x": 779.125,
+              "y": 1379.5,
+              "z": 0.0
+            }
+          }
+        ],
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    }
+  ]
+}

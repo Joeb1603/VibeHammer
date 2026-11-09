@@ -16,6 +16,7 @@ enum class EditorKind {
     Shot,        // Shoot: weapons, profiles and targets per model (D-001, D-016)
     Melee,       // Fight: melee weapons and targets per model (D-021)
     Casualties,  // OrderCasualties: casualty priority (D-013)
+    Deploy,      // DeployUnit: every model's place when the unit is set up by hand (D-081; the board editor is M76's)
 };
 
 struct DecisionView {

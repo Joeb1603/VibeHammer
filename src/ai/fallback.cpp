@@ -6,6 +6,7 @@
 #include "casualty_plan.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "deploy_policy.hpp"
 #include "melee_plan.hpp"
 
 namespace wh40k::ai {
@@ -67,6 +68,11 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
     }
     // 24.38 (D-072): re-roll every failed wound roll (listed first).
     if (std::holds_alternative<decision::RerollWoundRolls>(kind)) return first_of<action::RerollWoundRolls>(legal);
+    // D-081 (M74): the lowest-id unit at the engine's proposal, or CannotSetUp when it has no legal spot.
+    if (std::holds_alternative<decision::DeployUnits>(kind)) {
+        if (auto d = deploy_policy(state, state.pending->side, legal)) return d->action;
+        return std::nullopt;
+    }
     return std::nullopt;
 }
 

@@ -14,7 +14,9 @@
 
 namespace wh40k::core {
 
-// Starts the first battle round (D-003: no deployment step) and advances to the first decision.
+// Starts the first battle round (D-003) and advances to the first decision. D-081 (M74): when units wait to be set up
+// (GameState::undeployed, a deployment by hand), the deployment step comes first (Stage::Deploy) and battle round 1
+// starts after the last unit is handled.
 // Precondition: state.flow.stage == Stage::NotStarted (std::logic_error otherwise).
 std::vector<GameEvent> start_game(GameState& state);
 std::vector<GameEvent> start_game(GameState& state, DiceSource& dice);
@@ -38,9 +40,9 @@ std::vector<GameEvent> apply_action(GameState& state, Side side, const GameActio
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice,
                                     GameState& backup);
 
-// 01.03: the active player. Between turns, the player who takes the first turn; while a unit is
-// selected to move, shoot or fight, that unit's controlling player; otherwise the player whose turn
-// it is. Not the same as state.pending->side (e.g. 05.03/05.04 belong to the opposing player).
+// 01.03: the active player. Between turns (and during the deployment step, D-081), the player who takes the first
+// turn; while a unit is selected to move, shoot or fight, that unit's controlling player; otherwise the player whose
+// turn it is. Not the same as state.pending->side (e.g. 05.03/05.04 belong to the opposing player).
 [[nodiscard]] Side active_side(const GameState& state);
 
 // The player whose turn it is (07.02). Meaningful once the game has started.
