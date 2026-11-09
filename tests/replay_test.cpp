@@ -7,11 +7,15 @@
 #include <cstdio>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
+#include "core/data/army_list.hpp"
 #include "core/data/datasheet.hpp"
+#include "core/data/scenario_loader.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
@@ -22,6 +26,7 @@
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/deployment.hpp"
 #include "core/state/queries.hpp"
 #include "support/army_fixtures.hpp"
 #include "support/engine_helpers.hpp"
@@ -30,6 +35,7 @@
 
 using namespace wh40k::core;
 using wh40k::test::decider;
+using wh40k::test::events_of;
 using wh40k::test::repo_root;
 using wh40k::test::select;
 using wh40k::test::shoot_step_state;
@@ -820,6 +826,103 @@ Replay m72_replay(std::uint64_t seed, std::set<std::string>& shots) {
         "initial state is embedded.");
 }
 
+// M74 (D-081): the stock armies' custom battle set up by hand, B (Tyranids) taking the first turn, so A (Chaos Space
+// Marines) sets up first. The scenario file is custom_battle_scenario of the two stock army lists in Hand mode (written
+// by the regenerate test, checked by D081_Replay.TheFixtureIsTheStockArmiesSetUpByHand).
+constexpr const char* kM74Fixture = "tests/data/scenarios/hand_deployment_44x60.json";
+constexpr std::uint64_t kM74Seed = 1;
+
+nlohmann::json m74_fixture() {
+    return custom_battle_scenario(wh40k::test::stock_army(wh40k::test::csm()),
+                                  wh40k::test::stock_army(wh40k::test::tyranids()), Side::B, wh40k::test::factions(),
+                                  wh40k::test::army_resolver(), DeploymentMode::Hand);
+}
+
+// Each side sets up its lowest-id unit waiting, at the engine's proposal, except the Tyrannofex (unit 11): Side B sets
+// it up by hand, turned 30 degrees, on the spot the auto-layout gives the Screamer-killer after it (unit 12; stepped
+// back 1/4" at a time until it is wholly within the zone), so that unit's proposal comes from the scan. Then Side B's
+// first turn with neutral answers (every unit remains stationary, every step ended), to Side A's first Move Units
+// decision of battle round 1. `ok`: the Tyrannofex stands turned and the Screamer-killer's proposal came from the scan;
+// `problem`: the first refused step (none expected).
+Replay m74_replay(bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M74: deployment by hand (D-081) on the stock armies' custom battle (tests/data/scenarios/hand_deployment_44x60.json: "
+        "custom_battle_scenario of the two stock Incursion lists with \"deployment\": \"alternating\"; D-079, D-076). "
+        "Side B (Tyranids) takes the first turn, so Side A (Chaos Space Marines) sets up first: A and B alternate one "
+        "unit at a time until A's five units are down, then B sets up its other four. Each unit is set up at the "
+        "engine's proposal (propose_set_up: its auto-layout spot) except the Tyrannofex (unit 11), which Side B sets up "
+        "by hand turned 30 degrees on the spot the auto-layout gives the Screamer-killer after it (unit 12), stepped "
+        "back until it is wholly within the zone; the Screamer-killer's proposal then comes from the scan. Battle "
+        "round 1 then starts as an auto-placed game's would (D-003); Side B's turn passes (every unit remains "
+        "stationary, every step ended). Stops at Side A's first Move Units decision of battle round 1.";
+    r.initial.scenario = kM74Fixture;
+    r.initial.seed = kM74Seed;
+    GameState g = replay_initial_state(r, repo_root());
+    start_game(g);
+    GameState placed = build_game_state(custom_battle_scenario(wh40k::test::stock_army(wh40k::test::csm()),
+                                                               wh40k::test::stock_army(wh40k::test::tyranids()), Side::B,
+                                                               wh40k::test::factions(), wh40k::test::army_resolver()),
+                                        wh40k::test::army_resolver());
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        (void)apply_action(g, side, a);
+    };
+    bool turned = false;
+    bool scanned = false;
+    const Position screamer_slot = placed.find_unit(UnitId{12})->models.front().position;
+    while (!failed && g.flow.stage == Stage::Deploy) {
+        const Side side = decider(g);
+        UnitId next{0};
+        for (const Unit& u : g.undeployed) {
+            if (u.side == side) {
+                next = u.id;
+                break;
+            }
+        }
+        if (next == UnitId{11}) {
+            const ModelId tyrannofex = find_undeployed(g, next)->models.front().id;
+            for (int step = 0; step <= 24 && !turned; ++step) {
+                // B's zone is the north one: back is north.
+                const action::DeployUnit a{
+                    next, {ModelPlacement{tyrannofex,
+                                          Position{screamer_slot.x, screamer_slot.y + wh40k::test::in(0.25f * static_cast<float>(step)), 0.0f},
+                                          30.0f}}};
+                if (validate_action(g, side, a).ok()) {
+                    act(a);
+                    turned = true;
+                }
+            }
+            if (!turned) failed = true;
+            continue;
+        }
+        const std::optional<action::DeployUnit> p = propose_set_up(g, next);
+        if (next == UnitId{12} && p && p->models.front().position != screamer_slot) scanned = true;
+        act(p ? GameAction{*p} : GameAction{action::CannotSetUp{next}});
+    }
+    while (!failed && g.pending &&
+           !(g.flow.battle_round == 1 && *g.pending == PendingDecision{Side::A, decision::MoveUnits{}})) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !g.pending) return r;
+    r.expect = replay_expectation(g);
+    ok = turned && scanned;
+    return r;
+}
+
 }  // namespace
 
 TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
@@ -1486,6 +1589,57 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     EXPECT_GT(m72_shots.size(), 3u) << "seed " << kM72Seed << " no longer shows the new loadouts shooting";
     for (const std::string& p : m72_shots) std::printf("m72 shot: %s\n", p.c_str());
     save_if_clean(m72, kReplayDir / "m72_custom_battle_round2.json");
+
+    // M74: deployment by hand (D-081): the stock armies' custom battle, A setting up first, the Tyrannofex turned by
+    // hand, to Side A's first Move Units decision of battle round 1 (before M77's bot deployment, which only changes
+    // what bots choose). The scenario file is written first: the replay names it.
+    {
+        std::ofstream out(repo_root() / kM74Fixture, std::ios::binary);
+        out << m74_fixture().dump(2) << "\n";
+    }
+    bool m74_shows_it = false;
+    std::string m74_problem;
+    const Replay m74 = m74_replay(m74_shows_it, m74_problem);
+    ASSERT_TRUE(m74_problem.empty()) << m74_problem;
+    EXPECT_TRUE(m74_shows_it) << "the M74 replay no longer turns the Tyrannofex or scans for the Screamer-killer";
+    save_if_clean(m74, kReplayDir / "m74_hand_deployment.json");
+}
+
+// M74 (D-081): the replay's scenario file is the stock armies' custom battle set up by hand.
+TEST(D081_Replay, TheFixtureIsTheStockArmiesSetUpByHand) {
+    EXPECT_EQ(read_json_file(repo_root() / kM74Fixture), m74_fixture());
+    const GameState gs = load_scenario(repo_root() / kM74Fixture, repo_root());
+    EXPECT_EQ(gs.first_turn, Side::B);
+    EXPECT_TRUE(gs.units.empty());
+    EXPECT_EQ(gs.undeployed.size(), 14u);
+}
+
+// M74 (D-081): the saved replay sets every unit up, A first and alternating, the Tyrannofex turned, and battle round 1
+// then runs to Side A's first Move Units decision.
+TEST(D081_Replay, TheHandDeploymentReplaySetsUpAndStartsBattleRoundOne) {
+    const Replay saved = load_replay(kReplayDir / "m74_hand_deployment.json");
+    ASSERT_TRUE(saved.initial.scenario.has_value());
+    EXPECT_EQ(*saved.initial.scenario, kM74Fixture);
+    const ReplayResult run = run_replay(saved, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    std::string order;
+    for (std::size_t i = 0; i < 14; ++i) {
+        ASSERT_TRUE(std::holds_alternative<action::DeployUnit>(saved.steps.at(i).action)) << "step " << i;
+        order += saved.steps[i].side == Side::A ? 'A' : 'B';
+    }
+    EXPECT_EQ(order, "ABABABABABBBBB");
+    const Model& tyrannofex = run.final_state.find_unit(UnitId{11})->models.front();
+    EXPECT_EQ(tyrannofex.facing_deg, 30.0f);
+    EXPECT_EQ(run.final_state.flow.battle_round, 1);
+    EXPECT_EQ(run.final_state.pending, (PendingDecision{Side::A, decision::MoveUnits{}}));
+    EXPECT_TRUE(run.final_state.undeployed.empty());
+    EXPECT_EQ(events_of<event::UnitSetUp>(run.events).size(), 14u);
+    bool ok = false;
+    std::string problem;
+    const Replay again = m74_replay(ok, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
 }
 
 TEST(Replay, DISABLED_SearchM72Seed) {

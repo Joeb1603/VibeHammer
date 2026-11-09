@@ -2,7 +2,7 @@
 
 // D-054: an FNV-1a hash of everything in a GameState that a decision can depend on: units, models (ids,
 // positions, facings (M65: only when not 0), wounds), flags, the flow (stage, round, the move / charge / fight /
-// attack in progress) and the pending decision. It never includes `state.dice`, so the bot's own RNG (seeded from it)
+// attack in progress), the pending decision and (M74, D-081) the units not yet set up, when there are some. It never includes `state.dice`, so the bot's own RNG (seeded from it)
 // and its plan memo cannot see the rolls still to come. Static data (names, weapons, characteristics) is left out.
 
 #include <cstdint>

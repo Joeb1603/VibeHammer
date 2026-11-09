@@ -18,6 +18,7 @@ std::optional<EditorKind> editor_kind(const core::GameAction& action) {
     if (std::holds_alternative<core::action::Shoot>(action)) return EditorKind::Shot;
     if (std::holds_alternative<core::action::Fight>(action)) return EditorKind::Melee;
     if (std::holds_alternative<core::action::OrderCasualties>(action)) return EditorKind::Casualties;
+    if (std::holds_alternative<core::action::DeployUnit>(action)) return EditorKind::Deploy;  // D-081
     return std::nullopt;
 }
 

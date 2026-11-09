@@ -24,6 +24,7 @@ struct PhaseTrack {
     std::string step;                         // e.g. "Move Units (09.02)"
     std::optional<core::Side> waiting_for;    // the deciding side, when it is not the turn side
     std::optional<std::string> result;        // the game is over
+    bool deploying = false;                   // D-081: the armies are being set up, before battle round 1
 };
 
 [[nodiscard]] PhaseTrack phase_track(const core::GameState& state);

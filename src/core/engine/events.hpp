@@ -280,7 +280,8 @@ using GameEvent =
                  event::BattleShockEnded, event::ModelRemovedForCoherency, event::AttackBatchesGathered, event::AttackBatchSelected, event::HitRollsMade,
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
-                 event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled>;
+                 event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled, event::DeploymentStarted,
+                 event::UnitSetUp, event::UnitNotSetUp>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

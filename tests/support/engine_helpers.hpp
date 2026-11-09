@@ -22,6 +22,7 @@
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
+#include "core/state/deployment.hpp"
 #include "core/state/queries.hpp"
 #include "test_helpers.hpp"
 
@@ -245,6 +246,51 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
                 case 1: filled.declarations.front().model = core::ModelId{9999}; break;     // not in the unit
                 case 2: filled.declarations.front().targets.front().attacks += 1; break;    // too many attacks
                 default: filled.declarations.clear(); break;                                // the template
+            }
+        }
+        return filled;
+    }
+    if (const auto* du = std::get_if<core::action::DeployUnit>(&tmpl)) {
+        // D-081 (M74): the engine's proposal (without one, the unit's models in a line across the middle of its zone),
+        // moved by up to 6" each way, an oval turned to a random facing half the time. It can still be refused (out of
+        // the zone, on a model, engaged): that's the point. Only these fills draw the extra numbers, so every game
+        // without a deployment by hand plays exactly as before.
+        core::action::DeployUnit filled = *du;
+        const core::Unit* unit = core::find_undeployed(gs, du->unit);
+        if (unit == nullptr) {
+            ADD_FAILURE() << "DeployUnit template for unit " << du->unit.v << ", which is not waiting to be set up";
+            return tmpl;
+        }
+        if (const std::optional<core::action::DeployUnit> p = core::propose_set_up(gs, du->unit)) {
+            filled.models = p->models;
+        } else {
+            const core::Rect zone = core::zone_rect(gs.battlefield, gs.side(unit->side).deployment_zone);
+            float x = zone.min_x + core::circumscribed_radius(unit->models.front().base);
+            const float y = (zone.min_y + zone.max_y) * 0.5f;
+            for (const core::Model& m : unit->models) {
+                const float r = core::circumscribed_radius(m.base);
+                filled.models.push_back(core::ModelPlacement{m.id, core::Position{x, y, 0.0f}, 0.0f});
+                x += 2.0f * r;
+            }
+        }
+        const float dx = in(static_cast<float>(rng.below(1201)) * 0.01f - 6.0f);
+        const float dy = in(static_cast<float>(rng.below(1201)) * 0.01f - 6.0f);
+        for (core::ModelPlacement& p : filled.models) {
+            p.position.x += dx;
+            p.position.y += dy;
+            const core::Model* m = core::find_model(*unit, p.model);
+            if (m != nullptr && m->base.shape != core::BaseShape::Round && rng.below(2) == 0) {
+                p.facing_deg = static_cast<float>(rng.below(3600)) * 0.1f - 180.0f;
+            }
+        }
+        if (corrupt) {
+            switch (rng.below(6)) {
+                case 0: filled.models.pop_back(); break;                                       // a model not placed
+                case 1: filled.models.push_back(filled.models.front()); break;                 // placed twice
+                case 2: filled.models.back().model = core::ModelId{9999}; break;               // not in the unit
+                case 3: filled.models.front().position.x = std::numeric_limits<float>::quiet_NaN(); break;
+                case 4: filled.models.front().position = core::Position{-in(2), in(1), 0.0f}; break;  // off the field
+                default: filled.models.clear(); break;                                         // the template itself
             }
         }
         return filled;

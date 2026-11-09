@@ -4477,6 +4477,22 @@ deployment heuristic.
     skips the pairs that can't touch, so far units cost O(1). The scan runs only when the slot is taken (a unit placed
     by hand elsewhere), would be engaged with an enemy unit (zones close together), or the army doesn't fit the
     auto-layout; in a custom battle (zones 36" apart) bots placing at proposals never scan.
+  - *Speed-ups, as implemented (none changes a result; the grid stays the 1/4" one):* one auto-layout and one view of
+    the battlefield (each deployed model's pose and bounding box) per call, shared by every unit's proposal
+    (`deployment_proposals`); rank counts that put as many models in a rank as the last one tried (place_formation
+    fills ceil(n / ranks) a rank) give the same formation, so the same candidates, and are skipped; bounding boxes are
+    tested per deployed unit, then per deployed model against the whole placed unit, then against each placed model
+    (grown by 0.1 mm, so float rounding can't skip a pair that touches); the scan moves the formation's precomputed
+    boxes with it; and in the scan the first problem decides, the deployed models tried first (in validation every
+    problem is listed in the documented order, by the same function).
+  - *Measured* (`D081_Deploy.DISABLED_LegalActionsTiming`, this machine, the stock custom battle): `legal_actions` on a
+    Deploy state takes, in Release, 0.03 ms at the first decision (9 Tyranid proposals, every slot legal), 0.02 ms half
+    deployed and 0.03 ms with two of eight slots taken (their proposals from the scan); in Debug 0.21, 0.18 and 0.24 ms.
+    The worst case, B's zone covered by a test-only grid of 100 mm bases so that nothing fits anywhere (9 full scans,
+    all `CannotSetUp`), takes 15 ms in Release and 53 ms in Debug (181 ms before the speed-ups); validating one unit's
+    `CannotSetUp` there 3.1 ms and 15.7 ms. The Debug random-play test over hand deployments
+    (`D004_LegalActions.RandomPlayWithHandDeployment`, 9 battles, every template filled four times at every decision)
+    takes 2.1 s.
 - **`CannotSetUp`'s effect.** The unit leaves `undeployed` and goes into `units` at its id position with no models, so
   it is destroyed (`is_destroyed`, Rules Appendix: Destroyed) and never selectable or targetable. Its points,
   `starting_wounds` and `starting_strength` stay as built (*conservative*: no field changes meaning; a destroyed unit
@@ -4581,25 +4597,31 @@ deployment heuristic.
   - The replay's stop: PLAN.md says "A's first Move Units decision" and the M74 brief "the first Move Units decision of
     battle round 1". With B taking the first turn these differ; the replay follows PLAN.md's acceptance (battle round
     1, after B's turn of Remain Stationary and step ends), which is also a Move Units decision of battle round 1.
-- **Tests (planned).** `D081_Deploy.*` (the second-turn side first; alternation; the rest once one side is done; battle
+- **Tests.** `D081_Deploy.*` (the second-turn side first; alternation; the rest once one side is done; battle
   round 1 after the last unit, the same state and events as D-003's start; undeployed units invisible to the queries;
   no wipe-out during deployment, D-007 after it; a button and a template per undeployed unit, nothing for the other
   side; every proposal validates (random hand placements included); proposals in id order reproduce the auto-layout
   positions (the stock and random armies); `CannotSetUp` only when nothing fits, scoring its full points; the active
   side), `R03_02_SetUp.*` (every model exactly once; on the battlefield; finite positions with z 0; a round base's
   facing 0), `R03_03_Coherency.DeployedUnitMustBeCoherent`, `R03_04_Engagement.DeployedUnitMustBeUnengaged` (zones 1"
-  apart: the front-touching spot refused, the proposal 1.25" back), `D009_WhollyWithin.DeployedOvalAtAnAngle`,
-  `D064_SetUp.NoOverlap`, `D081_Json.*` (round trips mid-deployment; old files byte-identical; the refusals above),
+  apart: the front-touching spot refused; the proposal stands 1" back, where the closest Intercessor and Termagant
+  are 2.01" apart because no Termagant is straight in front of an Intercessor, and 3/4" back is refused),
+  `D009_WhollyWithin.DeployedOvalAtAnAngle`,
+  `D064_SetUp.NoModelOnAnother`, `D081_Json.*` (round trips mid-deployment; old files byte-identical; the refusals above),
   `D081_Loader.*` (units into `undeployed`; formation, unknown mode, east/west zones and a unit that can't be set up
   alone refused; points checked; the hand custom battle), `D004_LegalActions.RandomPlayWithHandDeployment`,
   `M74_StateHash.*` (states without `undeployed` hash as M73's copy; `undeployed` changes the hash), `M74_Bots.*`
   (every level deploys the lowest-id unit at its proposal; Hard builds no table during deployment; the fallback; hand
-  and auto bot games reach the same state after deployment and the same final state), `M74_UnitStyle.*`,
-  `M74_Log.*` and `M74_Undo.*` (client).
+  and auto bot games reach the same state after deployment and the same final state), `M74_Arena.*` (the arena's
+  custom battles take the mode), `M74_UnitStyle.*`, `M74_Log.*` and `M74_Undo.*` (client), and `D081_Replay.*` (the
+  fixture is the stock armies set up by hand; the saved replay is what its builder plays).
 - **Replay** `tests/replays/m74_hand_deployment.json` (scenario form, so no state is embedded) on the fixture
   `tests/data/scenarios/hand_deployment_44x60.json`: the stock armies' custom battle in Hand mode, B (Tyranids) taking
   the first turn, so A (Chaos Space Marines) sets up first: A, B alternately until A's five units are down, then B's
   rest. Each unit at its proposal except the Tyrannofex, set up by hand at an angle, so a later Tyranid unit's slot is
   taken and its proposal comes from the scan. Then B's first turn (Remain Stationary, the steps ended) to A's first Move
   Units decision of battle round 1. Written by `Replay.DISABLED_RegenerateReplays` with the fixture checked equal to
-  `custom_battle_scenario` of the stock lists.
+  `custom_battle_scenario` of the stock lists. As generated (seed 1, 25 steps): the Tyrannofex stands turned 30
+  degrees on the Screamer-killer's slot (x 41.5", 1/2" back from the zone front so that its turned base is wholly
+  within the zone), and the Screamer-killer's proposal comes from the scan (x 36", at the zone front, the Tyrannofex's
+  own slot left free).

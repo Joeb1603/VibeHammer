@@ -5,6 +5,7 @@
 
 #include "baseline_bot.hpp"
 #include "core/engine/engine.hpp"
+#include "deploy_policy.hpp"
 #include "core/engine/movement.hpp"
 #include "hard/hard_bot.hpp"
 #include "normal/normal_bot.hpp"
@@ -115,7 +116,11 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
             ++memo_hits_;
         } else {
             memo_.clear();
-            switch (effective_level(config_.level)) {
+            // D-081 (M74): every level sets its units up the same way, before any level's policy (so Hard never builds
+            // chain tables from a half-deployed army).
+            if (std::optional<PolicyResult> deploy = deploy_policy(state, side, legal)) {
+                chosen = std::move(deploy);
+            } else switch (effective_level(config_.level)) {
                 case BotLevel::Easy:
                     chosen = easy_policy(state, side, legal, decision_seed(state), config_.generation);
                     break;

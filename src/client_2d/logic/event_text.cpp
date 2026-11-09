@@ -233,6 +233,13 @@ std::string body(const core::GameEvent& e) {
                 }
                 return "Attack dice (batch " + std::to_string(x.batch) + ", random A): " + rolls + " -> " +
                        std::to_string(x.attack_dice) + " attack dice";
+            } else if constexpr (std::is_same_v<T, ev::DeploymentStarted>) {
+                return "Deployment starts: " + side(x.first) + " sets up first, then the sides alternate";
+            } else if constexpr (std::is_same_v<T, ev::UnitSetUp>) {
+                return side(x.side) + " sets up " + unit(x.unit);
+            } else if constexpr (std::is_same_v<T, ev::UnitNotSetUp>) {
+                return side(x.side) + " can't set up " + unit(x.unit) +
+                       ": no legal spot is left, so it counts as destroyed";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }

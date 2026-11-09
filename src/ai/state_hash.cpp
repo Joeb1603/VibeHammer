@@ -219,6 +219,13 @@ std::uint64_t state_hash(const core::GameState& state) {
         h.u64(0x72756c65ull);  // "rule"
         h.u64(static_cast<std::uint64_t>(state.result_rule));
     }
+    // M74 (D-081): the units not yet set up only when there are some, behind a tag, so every other state hashes as
+    // before.
+    if (!state.undeployed.empty()) {
+        h.u64(0x756e6470ull);  // "undp"
+        h.u64(state.undeployed.size());
+        for (const core::Unit& u : state.undeployed) add(h, u);
+    }
     // state.dice is deliberately not hashed (D-054: the bot never peeks at the rolls to come).
     return h.value();
 }

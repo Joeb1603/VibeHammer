@@ -16,6 +16,7 @@
 #include "core/geometry/oval.hpp"
 #include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
+#include "core/state/deployment.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 
@@ -218,6 +219,17 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
         gs.result_rule = ResultRule::PointsDestroyed;
     }
 
+    // D-081 (M74): optional; absent means the formations below (D-003). "alternating": every unit is set up by hand,
+    // the sides alternating, before battle round 1 (GameState::undeployed).
+    bool by_hand = false;
+    if (scenario.contains("deployment")) {
+        const Json& d = scenario.at("deployment");
+        if (!d.is_string() || d.get<std::string>() != "alternating") {
+            fail("root: D-081: unknown deployment " + d.dump() + " (the only value is \"alternating\")");
+        }
+        by_hand = true;
+    }
+
     const Json& sides = require(scenario, "sides", "root");
     std::uint32_t next_unit = 1;
     std::uint32_t next_model = 1;
@@ -232,6 +244,11 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
         info.deployment_zone.edge = parse_edge(require(dz, "edge", where).get<std::string>());
         info.deployment_zone.depth_mm = inches_to_mm(require_inches(dz, "depth_in", where));
         const Rect zone = zone_rect(gs.battlefield, info.deployment_zone);
+        if (by_hand && info.deployment_zone.edge != BattlefieldEdge::South &&
+            info.deployment_zone.edge != BattlefieldEdge::North) {
+            // D-081: units are set up by hand in north and south zones only (as formations and the auto-layout).
+            fail(where + ": D-081: deployment \"alternating\" needs a north or south deployment zone");
+        }
 
         for (const Json& uj : require(sj, "units", where)) {
             const std::string unit_file = require(uj, "unit_file", where).get<std::string>();
@@ -267,6 +284,14 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
                 fail(uwhere + ": D-076: missing field 'points' (result \"points_destroyed\" needs every unit's points)");
             }
 
+            if (by_hand) {
+                // D-081: set up by hand during the deployment step, so no formation (its place is chosen then).
+                if (uj.contains("formation")) {
+                    fail(uwhere + ": D-081: a unit set up by hand (deployment \"alternating\") takes no formation");
+                }
+                gs.undeployed.push_back(std::move(unit));
+                continue;
+            }
             place_formation(unit.models, parse_formation(require(uj, "formation", uwhere), uwhere),
                             gs.battlefield, info.deployment_zone, uwhere);
             check_set_up(unit, zone, uwhere);
@@ -275,7 +300,19 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     }
     check_no_overlap(gs);
     check_unengaged(gs);
-    check_points_data(gs, "scenario");  // D-076: the bound on the exact count
+    check_points_data(gs, "scenario");  // D-076: the bound on the exact count (D-081: units to set up included)
+    // D-081: every unit to set up by hand has a legal spot with nothing else on the battlefield (as a formation must be
+    // a legal set-up, D-008, D-064). So the side that sets up first always sets up its first unit.
+    for (const Side side : {Side::A, Side::B}) {
+        if (!by_hand) break;
+        for (const SetUpProposal& p : deployment_proposals(gs, side)) {
+            if (!p.action) {
+                const Unit& u = *find_undeployed(gs, p.unit);
+                fail("side " + side_name(side) + " unit '" + u.name + "': D-081: unit " + std::to_string(u.id.v) +
+                     " cannot be set up in its deployment zone even alone");
+            }
+        }
+    }
     return gs;
 }
 

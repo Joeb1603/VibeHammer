@@ -124,13 +124,16 @@ struct ArmySource {
 [[nodiscard]] ArmySource load_army_source(const std::filesystem::path& repo_root);
 
 // The custom battle of two army lists (custom_battle_scenario through build_game_state). Throws DataError for lists
-// that can't be taken (army_problems, battle_problems).
+// that can't be taken (army_problems, battle_problems). M74 (D-081): `mode` Hand (--deploy hand) has the units set up
+// by hand in a deployment step; Auto (the default) places them by the auto-layout as before.
 [[nodiscard]] core::GameState custom_battle_state(const ArmySource& source, const core::ArmyList& a,
-                                                  const core::ArmyList& b, core::Side first_turn);
+                                                  const core::ArmyList& b, core::Side first_turn,
+                                                  core::DeploymentMode mode = core::DeploymentMode::Auto);
 
 // --random-armies 1: the game with `seed` is a custom battle of a random legal Chaos Space Marines army (side A) and
 // a random legal Tyranid army (side B), drawn with core::random_army_seed(side, seed).
-[[nodiscard]] core::GameState random_armies_battle(const ArmySource& source, std::uint64_t seed, core::Side first_turn);
+[[nodiscard]] core::GameState random_armies_battle(const ArmySource& source, std::uint64_t seed, core::Side first_turn,
+                                                   core::DeploymentMode mode = core::DeploymentMode::Auto);
 
 // The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
 // side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time, (M43) the seeds that

@@ -403,6 +403,7 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
                 return single(gs, client::CasualtyPlan(gs, std::get<action::OrderCasualties>(t).target).action(),
                               "default order");
             case client::EditorKind::Path: break;
+            case client::EditorKind::Deploy: break;  // D-081: Bot::decide answers DeployUnits (deploy_policy)
         }
     }
     // Prefer charging and fighting over passing when offered.

@@ -24,11 +24,15 @@ std::size_t reverts_in(const client::LogEntry& entry) {
     }));
 }
 
-// Every model's wounds left, by side (a destroyed model is gone, so it counts 0).
+// Every model's wounds left, by side (a destroyed model is gone, so it counts 0). D-081 (M74): units not yet set up
+// count too, so a game that starts with a deployment by hand has its full wounds at the start (nothing changes for any
+// other game: they have none).
 std::array<int, 2> wounds_left(const core::GameState& state) {
     std::array<int, 2> out{};
-    for (const core::Unit& u : state.units) {
-        for (const core::Model& m : u.models) out[core::side_index(u.side)] += m.wounds_remaining;
+    for (const std::vector<core::Unit>* units : {&state.units, &state.undeployed}) {
+        for (const core::Unit& u : *units) {
+            for (const core::Model& m : u.models) out[core::side_index(u.side)] += m.wounds_remaining;
+        }
     }
     return out;
 }
@@ -248,12 +252,13 @@ ArmySource load_army_source(const std::filesystem::path& repo_root) {
 }
 
 core::GameState custom_battle_state(const ArmySource& source, const core::ArmyList& a, const core::ArmyList& b,
-                                    core::Side first_turn) {
-    return core::build_game_state(core::custom_battle_scenario(a, b, first_turn, source.factions, source.resolve),
+                                    core::Side first_turn, core::DeploymentMode mode) {
+    return core::build_game_state(core::custom_battle_scenario(a, b, first_turn, source.factions, source.resolve, mode),
                                   source.resolve);
 }
 
-core::GameState random_armies_battle(const ArmySource& source, std::uint64_t seed, core::Side first_turn) {
+core::GameState random_armies_battle(const ArmySource& source, std::uint64_t seed, core::Side first_turn,
+                                     core::DeploymentMode mode) {
     const core::Faction* csm = core::find_faction(source.factions, "chaos_space_marines");
     const core::Faction* tyranids = core::find_faction(source.factions, "tyranids");
     if (csm == nullptr || tyranids == nullptr) {
@@ -262,7 +267,7 @@ core::GameState random_armies_battle(const ArmySource& source, std::uint64_t see
     return custom_battle_state(source,
                                core::random_army(*csm, source.resolve, core::random_army_seed(core::Side::A, seed)),
                                core::random_army(*tyranids, source.resolve, core::random_army_seed(core::Side::B, seed)),
-                               first_turn);
+                               first_turn, mode);
 }
 
 std::string format_arena(const ArenaResult& r, const core::GameState& scenario) {

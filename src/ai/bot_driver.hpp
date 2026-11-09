@@ -27,8 +27,8 @@ using BotSpeed = client::BotSpeed;
 [[nodiscard]] double speed_factor(BotSpeed speed);
 
 // The pause before the bot's `action`, at Normal speed: 0.8 s before a unit's activation (selecting it to move,
-// shoot, charge or fight), 0.12 s between model placements, 0.4 s before a commit (and other step buttons),
-// 0.6 s for reactive allocation and casualty answers.
+// shoot, charge or fight; D-081: setting it up), 0.12 s between model placements, 0.4 s before a commit (and other
+// step buttons), 0.6 s for reactive allocation and casualty answers.
 [[nodiscard]] double base_pause_seconds(const core::GameAction& action);
 [[nodiscard]] double pause_seconds(const core::GameAction& action, BotSpeed speed);
 

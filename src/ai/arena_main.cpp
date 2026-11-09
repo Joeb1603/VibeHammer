@@ -20,6 +20,9 @@
 //   random legal Chaos Space Marines army for side A and Tyranid army for side B, drawn from the game's seed) and
 //   --first A|B (the side with the first turn: the custom battle's, default A; with a scenario, it overrides the
 //   scenario's). Without these flags the arena runs exactly as before.
+// M74 (D-081): --deploy hand|auto (default auto), for --army-a / --army-b / --random-armies only: hand has the bots
+//   set the units up in the deployment step (alternating, the side taking the second turn first); auto places them
+//   by the auto-layout as before. With a scenario (which fixes its own deployment) it exits 2.
 
 #include <cstdio>
 #include <exception>
@@ -150,6 +153,7 @@ int main(int argc, char** argv) {
     std::optional<std::string> army_b;
     std::optional<wh40k::core::Side> first;
     bool random_armies = false;
+    std::optional<wh40k::core::DeploymentMode> deploy;  // M74 (D-081)
     for (int i = 1; i < argc; i += 2) {
         const std::string key = argv[i];
         if (i + 1 >= argc) {
@@ -175,6 +179,9 @@ int main(int argc, char** argv) {
             } else if (key == "--first") {
                 if (value != "A" && value != "B") throw std::invalid_argument("not A or B");
                 first = value == "A" ? wh40k::core::Side::A : wh40k::core::Side::B;
+            } else if (key == "--deploy") {
+                if (value != "hand" && value != "auto") throw std::invalid_argument("not hand or auto");
+                deploy = value == "hand" ? wh40k::core::DeploymentMode::Hand : wh40k::core::DeploymentMode::Auto;
             } else if (key == "--random-armies") {
                 const int v = std::stoi(value);
                 if (v != 0 && v != 1) throw std::invalid_argument("not 0 or 1");
@@ -208,6 +215,12 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "wh40k_bot_arena: --random-armies can't be combined with --army-a or --army-b\n");
         return 2;
     }
+    if (deploy && !armies && !random_armies) {
+        std::fprintf(stderr, "wh40k_bot_arena: --deploy needs --army-a, --army-b or --random-armies (a scenario fixes "
+                             "its own deployment)\n");
+        return 2;
+    }
+    const wh40k::core::DeploymentMode deploy_mode = deploy.value_or(wh40k::core::DeploymentMode::Auto);
     try {
         const fs::path root(WH40K_REPO_ROOT);
         const auto in_repo = [&root](const std::string& name) {
@@ -222,8 +235,8 @@ int main(int argc, char** argv) {
             const core::Side first_turn = first.value_or(core::Side::A);
             if (random_armies) {
                 scenario = "random armies (D-079)";
-                scenario_for = [source, first_turn](std::uint64_t s) {
-                    return wh40k::ai::random_armies_battle(*source, s, first_turn);
+                scenario_for = [source, first_turn, deploy_mode](std::uint64_t s) {
+                    return wh40k::ai::random_armies_battle(*source, s, first_turn, deploy_mode);
                 };
             } else {
                 std::optional<core::ArmyList> lists[2];
@@ -238,9 +251,11 @@ int main(int argc, char** argv) {
                     if (!lists[side]) throw core::DataError("D-079: no faction other than '" + given + "'");
                 }
                 scenario = "army " + lists[0]->name + " vs " + lists[1]->name;
-                const core::GameState state = wh40k::ai::custom_battle_state(*source, *lists[0], *lists[1], first_turn);
+                const core::GameState state =
+                    wh40k::ai::custom_battle_state(*source, *lists[0], *lists[1], first_turn, deploy_mode);
                 scenario_for = [state](std::uint64_t) { return state; };
             }
+            if (deploy_mode == core::DeploymentMode::Hand) scenario += ", deployment by hand (D-081)";
         } else {
             wh40k::core::GameState state = wh40k::core::load_scenario(in_repo(scenario), root);
             if (first) state.first_turn = *first;

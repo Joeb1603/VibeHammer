@@ -183,6 +183,17 @@ void from_json(const Json& j, InflictDamageResult& v) {
     j.at("attacks_lost").get_to(v.attacks_lost);
 }
 
+// ---- D-081: a model's place when its unit is set up ----
+void to_json(Json& j, const ModelPlacement& v) {
+    j = Json{{"model", v.model}, {"position", v.position}};
+    if (v.facing_deg != 0.0f) j["facing_deg"] = v.facing_deg;  // D-074: omitted when 0
+}
+void from_json(const Json& j, ModelPlacement& v) {
+    j.at("model").get_to(v.model);
+    j.at("position").get_to(v.position);
+    v.facing_deg = j.contains("facing_deg") ? j.at("facing_deg").get<float>() : 0.0f;  // validation checks it
+}
+
 // ---- actions ----
 namespace action {
 
@@ -232,6 +243,11 @@ void to_json(Json& j, const GameAction& v) {
                 j["priority"] = a.priority;
             } else if constexpr (std::is_same_v<T, RerollWoundRolls>) {
                 j["indices"] = a.indices;  // 24.38 (D-072)
+            } else if constexpr (std::is_same_v<T, DeployUnit>) {
+                j["unit"] = a.unit;  // 03.02 (D-081)
+                j["models"] = a.models;
+            } else if constexpr (std::is_same_v<T, CannotSetUp>) {
+                j["unit"] = a.unit;  // D-081
             }
         },
         v);
@@ -290,6 +306,10 @@ void from_json(const Json& j, GameAction& v) {
         v = OrderCasualties{j.at("target").get<UnitId>(), j.at("priority").get<std::vector<ModelId>>()};
     } else if (kind == "RerollWoundRolls") {
         v = RerollWoundRolls{j.at("indices").get<std::vector<std::size_t>>()};
+    } else if (kind == "DeployUnit") {
+        v = DeployUnit{j.at("unit").get<UnitId>(), j.at("models").get<std::vector<ModelPlacement>>()};
+    } else if (kind == "CannotSetUp") {
+        v = CannotSetUp{j.at("unit").get<UnitId>()};
     } else {
         bad_enum("GameAction", j);
     }
@@ -429,6 +449,11 @@ void to_json(Json& j, const GameEvent& v) {
                 j["batch"] = e.batch;  // 04.03 (D-069)
                 j["rolls"] = e.rolls;
                 j["attack_dice"] = e.attack_dice;
+            } else if constexpr (std::is_same_v<T, DeploymentStarted>) {
+                j["first"] = e.first;  // D-081
+            } else if constexpr (std::is_same_v<T, UnitSetUp> || std::is_same_v<T, UnitNotSetUp>) {
+                j["unit"] = e.unit;  // 03.02 / D-081
+                j["side"] = e.side;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -542,6 +567,12 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "AttackDiceRolled") {
         v = AttackDiceRolled{j.at("batch").get<std::size_t>(), j.at("rolls").get<std::vector<AttackDiceRoll>>(),
                              j.at("attack_dice").get<int>()};
+    } else if (kind == "DeploymentStarted") {
+        v = DeploymentStarted{j.at("first").get<Side>()};
+    } else if (kind == "UnitSetUp") {
+        v = UnitSetUp{j.at("unit").get<UnitId>(), j.at("side").get<Side>()};
+    } else if (kind == "UnitNotSetUp") {
+        v = UnitNotSetUp{j.at("unit").get<UnitId>(), j.at("side").get<Side>()};
     } else {
         bad_enum("GameEvent", j);
     }

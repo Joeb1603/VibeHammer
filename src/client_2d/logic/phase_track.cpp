@@ -26,8 +26,11 @@ PhaseTrack phase_track(const core::GameState& state) {
         t.result = state.result->reason;
         return t;
     }
+    // D-081: the deployment step is nobody's turn either (01.03); it comes before battle round 1.
+    t.deploying = stage == core::Stage::Deploy;
     const bool between_turns = stage == core::Stage::NotStarted || stage == core::Stage::StartOfBattleRound ||
-                               stage == core::Stage::EndOfBattleRound || stage == core::Stage::GameOver;
+                               stage == core::Stage::EndOfBattleRound || stage == core::Stage::GameOver ||
+                               t.deploying;
     if (!between_turns) t.turn = core::turn_side(state);
     const core::Phase phase = core::phase_of(stage);
     for (std::size_t i = 0; i < kTurnPhases.size(); ++i) {

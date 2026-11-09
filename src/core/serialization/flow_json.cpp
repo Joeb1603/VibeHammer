@@ -518,6 +518,7 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "DeclareAllocationOrder") v.kind = decision::DeclareAllocationOrder{j.at("target").get<UnitId>()};
     else if (kind == "OrderCasualties") v.kind = decision::OrderCasualties{j.at("target").get<UnitId>()};
     else if (kind == "RerollWoundRolls") v.kind = decision::RerollWoundRolls{j.at("attacker").get<UnitId>()};
+    else if (kind == "DeployUnits") v.kind = decision::DeployUnits{};  // D-081
     else bad_enum("PendingDecision", j);
 }
 

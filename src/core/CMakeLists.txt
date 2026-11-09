@@ -13,6 +13,7 @@ add_library(wh40k_core STATIC
     engine/casualties.cpp
     engine/charge.cpp
     engine/command.cpp
+    engine/deployment.cpp
     engine/engine.cpp
     engine/events.cpp
     engine/fight.cpp
@@ -45,6 +46,7 @@ add_library(wh40k_core STATIC
     serialization/flow_json.cpp
     serialization/json.cpp
     state/decision.cpp
+    state/deployment.cpp
     state/flow.cpp
     state/game_state.cpp
     state/points_destroyed.cpp

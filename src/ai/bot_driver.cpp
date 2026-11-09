@@ -29,10 +29,12 @@ double base_pause_seconds(const core::GameAction& action) {
         std::holds_alternative<RemoveModelForCoherency>(action)) {
         return kReactive;
     }
+    // D-081 (M74): setting a unit up (or declaring it can't be) is paced like a unit's activation, as before a move.
     if (std::holds_alternative<StartMove>(action) || std::holds_alternative<Shoot>(action) ||
         std::holds_alternative<DeclareCharge>(action) || std::holds_alternative<StartChargeMove>(action) ||
         std::holds_alternative<StartPileIn>(action) || std::holds_alternative<SelectToFight>(action) ||
-        std::holds_alternative<Fight>(action) || std::holds_alternative<StartConsolidation>(action)) {
+        std::holds_alternative<Fight>(action) || std::holds_alternative<StartConsolidation>(action) ||
+        std::holds_alternative<DeployUnit>(action) || std::holds_alternative<CannotSetUp>(action)) {
         return kActivation;
     }
     // CommitUnitMove, the step buttons (End..., Pass, Skip...), and the attacker's choices in its own attacks: the

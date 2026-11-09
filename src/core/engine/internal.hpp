@@ -177,6 +177,20 @@ void apply_details(GameState& state, Side side, const action::DeclareAllocationO
 void apply_details(GameState& state, Side side, const action::OrderCasualties& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::RerollWoundRolls& a, DiceSource& dice, Events& events);
 
+// ---- deployment.cpp: D-081 deployment by hand (03.02) ----
+
+// Starts battle round 1: battle round 1, its first turn, StartOfBattleRound (D-003's start; also the end of the
+// deployment step, D-081). The caller then advances.
+void start_first_battle_round(GameState& state, DiceSource& dice, Events& events);
+// The decision the Deploy stage needs (pure): the next side's DeployUnits, or nullopt once every unit is handled.
+[[nodiscard]] std::optional<PendingDecision> deploy_decision(const GameState& state);
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::DeployUnits& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::DeployUnit& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::CannotSetUp& a);
+void apply_details(GameState& state, Side side, const action::DeployUnit& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::CannotSetUp& a, DiceSource& dice, Events& events);
+
 // ---- helpers ----
 // Every non-empty subset of `ids` (at most 2^10 - 1), in bit order: the target sets legal_actions lists
 // for charges (11.04), pile-ins (12.03) and consolidations (12.08). Defined in fight.cpp.

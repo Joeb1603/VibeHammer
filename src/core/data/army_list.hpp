@@ -29,6 +29,10 @@ inline constexpr float kCustomBattleDepthIn = 60.0f;
 inline constexpr float kCustomBattleZoneDepthIn = 12.0f;
 inline constexpr int kCustomBattleRounds = 5;
 
+// D-079 / D-081 (M74): how a custom battle's units are set up. Auto: the auto-layout's formations (D-079 part 2), as a
+// scenario places its units (D-003). Hand: set up by hand, the sides alternating, during the deployment step (D-081).
+enum class DeploymentMode : std::uint8_t { Auto, Hand };
+
 // ---- Lists ----
 
 // Models of one type with one loadout (as a scenario's model group).
@@ -159,9 +163,11 @@ struct RandomArmyStats {
 // D-079: a custom battle as a rosters-style scenario for build_game_state: 44"x60" portrait, 12" zones south (A) and
 // north (B), 5 battle rounds, `first_turn`, result "points_destroyed" (D-076), every unit with its points and an
 // auto-layout formation. Side names are the army names, else the faction names. Throws DataError if the factions are
-// the same or unknown, or either list has army_problems. (M74 adds the deployment mode here.)
+// the same or unknown, or either list has army_problems. D-081 (M74): with DeploymentMode::Hand the scenario has
+// "deployment": "alternating" and no formations (the units are set up by hand); everything else is the same.
 [[nodiscard]] nlohmann::json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_turn,
                                                     const std::vector<Faction>& factions,
-                                                    const DatasheetResolver& resolve);
+                                                    const DatasheetResolver& resolve,
+                                                    DeploymentMode mode = DeploymentMode::Auto);
 
 }  // namespace wh40k::core

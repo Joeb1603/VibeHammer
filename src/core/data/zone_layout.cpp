@@ -34,46 +34,7 @@ float front_line_mm(const Battlefield& field, const DeploymentZone& zone) {
     return zone.edge == BattlefieldEdge::South ? zone.depth_mm : field.depth_mm - zone.depth_mm;
 }
 
-// A unit's footprint at a number of ranks, placed at centre 0 and depth 0: its x extent around the centre and its
-// depth behind the zone's front line (mm).
-struct Block {
-    int ranks = 1;
-    float min_x_mm = 0.0f;
-    float max_x_mm = 0.0f;
-    float depth_mm = 0.0f;
-    [[nodiscard]] float width_mm() const { return max_x_mm - min_x_mm; }
-};
-
-struct Measured {
-    Block block;
-    bool coherent = false;
-};
-
-Measured measure(const std::vector<Base>& bases, int ranks, const Battlefield& field, const DeploymentZone& zone) {
-    Measured out;
-    out.block.ranks = ranks;
-    std::vector<Model> models = models_of(bases);
-    place_formation(models, slot_formation(LayoutSlot{ranks, 0.0f, 0.0f}), field, zone, kWhere);
-    const float front = front_line_mm(field, zone);
-    out.block.min_x_mm = models.front().position.x;
-    out.block.max_x_mm = models.front().position.x;
-    for (const Model& m : models) {
-        const BaseExtents e = base_extents(m.base, m.facing_deg);
-        out.block.min_x_mm = std::min(out.block.min_x_mm, m.position.x - e.half_x_mm);
-        out.block.max_x_mm = std::max(out.block.max_x_mm, m.position.x + e.half_x_mm);
-        const float behind = zone.edge == BattlefieldEdge::South ? front - (m.position.y - e.half_y_mm)
-                                                                 : (m.position.y + e.half_y_mm) - front;
-        out.block.depth_mm = std::max(out.block.depth_mm, behind);
-    }
-    Unit unit;
-    unit.models = std::move(models);
-    out.coherent = unit_coherency(unit).ok();
-    return out;
-}
-
-bool fits_zone(const Block& b, const Battlefield& field, const DeploymentZone& zone) {
-    return b.width_mm() <= field.width_mm && b.depth_mm <= zone.depth_mm;
-}
+using Block = FormationBlock;
 
 // The loader's set-up checks within one side (scenario_loader.cpp: check_set_up, check_no_overlap): every unit
 // coherent (03.03) and wholly within the zone (D-009), no model on another (03.02, D-064).
@@ -152,13 +113,40 @@ Formation slot_formation(const LayoutSlot& slot) {
     return f;
 }
 
+FormationBlock formation_block(const std::vector<Base>& bases, int ranks, const Battlefield& field,
+                               const DeploymentZone& zone) {
+    FormationBlock out;
+    out.ranks = ranks;
+    std::vector<Model> models = models_of(bases);
+    place_formation(models, slot_formation(LayoutSlot{ranks, 0.0f, 0.0f}), field, zone, kWhere);
+    const float front = front_line_mm(field, zone);
+    out.min_x_mm = models.front().position.x;
+    out.max_x_mm = models.front().position.x;
+    for (const Model& m : models) {
+        const BaseExtents e = base_extents(m.base, m.facing_deg);
+        out.min_x_mm = std::min(out.min_x_mm, m.position.x - e.half_x_mm);
+        out.max_x_mm = std::max(out.max_x_mm, m.position.x + e.half_x_mm);
+        const float behind = zone.edge == BattlefieldEdge::South ? front - (m.position.y - e.half_y_mm)
+                                                                 : (m.position.y + e.half_y_mm) - front;
+        out.depth_mm = std::max(out.depth_mm, behind);
+    }
+    Unit unit;
+    unit.models = std::move(models);
+    out.coherent = unit_coherency(unit).ok();
+    return out;
+}
+
+bool block_fits_zone(const FormationBlock& b, const Battlefield& field, const DeploymentZone& zone) {
+    return b.width_mm() <= field.width_mm && b.depth_mm <= zone.depth_mm;
+}
+
 std::optional<int> fewest_coherent_ranks(const std::vector<Base>& bases, const Battlefield& field,
                                          const DeploymentZone& zone) {
     if (bases.empty()) return std::nullopt;
     if (zone.edge != BattlefieldEdge::South && zone.edge != BattlefieldEdge::North) return std::nullopt;
     for (int r = 1; r <= static_cast<int>(bases.size()); ++r) {
-        const Measured m = measure(bases, r, field, zone);
-        if (m.coherent && fits_zone(m.block, field, zone)) return r;
+        const FormationBlock m = formation_block(bases, r, field, zone);
+        if (m.coherent && block_fits_zone(m, field, zone)) return r;
     }
     return std::nullopt;
 }
@@ -179,7 +167,7 @@ ZoneLayout layout_zone(const std::vector<std::vector<Base>>& units, const Battle
             out.problem = no_fit;
             return out;
         }
-        blocks.push_back(measure(bases, *ranks, field, zone).block);
+        blocks.push_back(formation_block(bases, *ranks, field, zone));
     }
     const float gap_mm = inches_to_mm(kLayoutGapIn);
 

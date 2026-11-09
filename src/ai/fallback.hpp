@@ -1,9 +1,9 @@
 #pragma once
 
-// D-054: the bot's safety net. An always-legal answer for every one of the 15 decision kinds (a lone skip or
+// D-054: the bot's safety net. An always-legal answer for every decision kind (a lone skip or
 // End step, Remain Stationary, SkipChargeMove, PassFight, the MeleePlan default, the CasualtyPlan default (the
-// D-058 order), the default order's coherency model (D-058, M47), the first allocation order / batch, ...), and
-// the loop guard that switches to it.
+// D-058 order), the default order's coherency model (D-058, M47), the first allocation order / batch, the D-081 set-up
+// (M74), ...), and the loop guard that switches to it.
 
 #include <cstddef>
 #include <cstdint>

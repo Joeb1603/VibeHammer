@@ -60,6 +60,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::OrderCasualties>(d);
             else if constexpr (std::is_same_v<T, action::RerollWoundRolls>)
                 return std::holds_alternative<decision::RerollWoundRolls>(d);
+            else if constexpr (std::is_same_v<T, action::DeployUnit> || std::is_same_v<T, action::CannotSetUp>)
+                return std::holds_alternative<decision::DeployUnits>(d);
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -70,9 +72,12 @@ std::vector<GameEvent> start_game_impl(GameState& state, DiceSource& dice) {
         throw std::logic_error("start_game: the game has already started");
     }
     Events events;
-    state.flow.battle_round = 1;
-    state.flow.turn_in_round = 0;
-    detail::enter_stage(state, Stage::StartOfBattleRound, dice, events);  // D-003: straight into round 1
+    if (!state.undeployed.empty()) {
+        // D-081 (amends D-003): units to set up by hand first; battle round 1 starts after the last one.
+        detail::enter_stage(state, Stage::Deploy, dice, events);
+    } else {
+        detail::start_first_battle_round(state, dice, events);  // D-003: straight into round 1
+    }
     detail::advance(state, dice, events);
     return events;
 }
@@ -137,6 +142,7 @@ Side turn_side(const GameState& state) {
 Side active_side(const GameState& state) {
     switch (state.flow.stage) {
         case Stage::NotStarted:
+        case Stage::Deploy:  // D-081: setting the armies up is nobody's turn
         case Stage::StartOfBattleRound:
         case Stage::EndOfBattleRound:
         case Stage::GameOver:

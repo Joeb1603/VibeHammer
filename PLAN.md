@@ -3994,7 +3994,7 @@ approved as written, including the 80-table limit: the bytes drive memory and ti
   - CLAUDE.md's regenerate commands, which should gain `M73_Replay.DISABLED_RegenerateCustomBotGameReplay`, and the new
     `tests/data/armies/` (M77's docs).
 
-## M74: Deployment step in the engine
+## M74: Deployment step in the engine ✅ (done)
 **Effort:** `max` · **Plan mode:** pre-approved (2026-11-09), design first · **Rules:** 03.02, 03.03, 03.04, 01.03 · **Decision:** D-081 (amends D-003)
 
 > **State.** `GameState::undeployed`: the units not yet set up, in id order, omitted from JSON when empty. They are
@@ -4043,6 +4043,109 @@ approved as written, including the 80-table limit: the bytes drive memory and ti
 - Arena `--deploy hand|auto`: Easy and Normal on random armies, clean. Bots deploying by hand end up exactly where
   auto-placement puts them.
 - Old replays and saves byte-identical; identity set unchanged.
+
+**Results (2026-11-09):** D-081 (amends D-003, D-007 and D-065; extends D-054 and D-079) was written first and stopped
+for review; it was approved as written. The implementation follows it, and D-081 now also records the speed-ups and the
+measured cost.
+- **Core:**
+  - *State and flow:* `GameState::undeployed` holds the units not yet set up, in id order. It is written to JSON only
+    when non-empty.
+    - `Stage::Deploy` is appended after `GameOver` (rule 03.02). It has its own `next_stage` case, which starts battle
+      round 1 with the same code `start_game` uses for D-003 (`start_first_battle_round`).
+    - `start_game` enters Deploy when units wait to be set up.
+    - `advance` answers the Deploy stage before D-007's wipe-out checks, so there is no wipe-out during deployment.
+    - `active_side` is the first-turn side (01.03).
+  - *Decision, actions and events (appended):* decision `DeployUnits`; actions `DeployUnit{unit, models[{model,
+    position, facing_deg}]}` (facing omitted at 0) and `CannotSetUp{unit}`; events `DeploymentStarted{first}`,
+    `UnitSetUp` and `UnitNotSetUp` (`{unit, side}`), each with its rule and JSON.
+  - *Queries* (`core/state/deployment.{hpp,cpp}`): `find_undeployed`, `side_to_deploy`, `set_up_problems`,
+    `cannot_set_up_problems`, `propose_set_up` and `deployment_proposals`.
+    - `zone_layout`'s block measurement is now public (`formation_block`, `block_fits_zone`), so the scan measures
+      ranks exactly as the auto-layout does. The layout itself is unchanged.
+  - *Engine* (`engine/deployment.cpp`):
+    - `legal_for(DeployUnits)` lists each unit's proposal, or `CannotSetUp` when it has none, then the templates;
+    - validation of both actions;
+    - setting a unit up moves it into `units` at its id position, an oval's facing stored modulo 180;
+    - a unit not set up goes into `units` with no models (`UnitNotSetUp`, then `UnitDestroyed`).
+  - *Loader:* `"deployment": "alternating"`. Refused with it: a formation, any other value, an east or west zone, and a
+    unit that has no legal spot even alone.
+    - `check_points_data` and the state JSON cover `undeployed`.
+    - The state JSON also refuses units waiting outside NotStarted or Deploy, repeated unit or model ids, a wrong order
+      and a waiting unit without models.
+  - *Custom battles:* `custom_battle_scenario(..., DeploymentMode)`. `Auto` writes exactly the old JSON.
+- **Bots** (`src/ai`):
+  - `deploy_policy` (`deploy_policy.*`) answers `DeployUnits` in `Bot::decide` before any level: the lowest-id unit at
+    its proposal, or `CannotSetUp`.
+  - The fallback prefers the same answer, and the driver paces a set-up like a unit's activation (0.8 s).
+  - `state_hash` covers `undeployed` behind a tag, only when there are some.
+  - Easy's template switch knows the new editor kind.
+  - Arena: `--deploy hand|auto`, for `--army-a`, `--army-b` and `--random-armies` (exit 2 otherwise). The game record's
+    starting wounds count units not yet set up, so "wounds lost" is right with `hand`.
+- **Client:** `unit_style` (D-065 amended: units waiting count at their id positions); `action_text` ("Set up
+  Legionaries 1 (1) (auto-place)", "Can't be set up: ..."); `event_text`; `decision_view` (`EditorKind::Deploy`);
+  `phase_track` (`deploying`); the decision panel's hint and buttons; the phase bar's "Deployment (before battle round
+  1 of 5)". Screenshots under `xvfb-run` (start, mid-deployment, after the last unit, both bots deploying) show the
+  flow, stable unit numbers and nothing drawn for units waiting.
+- **Cost (asked for at the go-ahead):** measured on the stock custom battle (`D081_Deploy.DISABLED_LegalActionsTiming`).
+  The speed-ups are exact; the 1/4" grid is unchanged.
+  - Typical cases, Release (Debug): `legal_actions` on a Deploy state takes 0.03 ms (0.21 ms) at the first decision,
+    0.02 ms (0.18 ms) half deployed, and 0.03 ms (0.24 ms) with two slots taken, whose proposals come from the scan.
+  - Worst case: the deploying side's zone covered by a test-only grid of 100 mm bases, so 9 full scans all end in
+    `CannotSetUp`. It takes 15 ms in Release and 53 ms in Debug (181 ms before the speed-ups); one `CannotSetUp`
+    validation there takes 3.1 ms (15.7 ms).
+  - The bots' set-up decisions are under 0.05 ms in Release, even at Hard. The Debug random-play test takes 2.1 s.
+  - Speed-ups, none of which changes a result: one layout and one view of the battlefield per call; rank counts that
+    give the same formation are skipped; bounding boxes are tested per deployed unit, then per deployed model against
+    the whole placed unit, then per placed model; the scan moves the formation's boxes with it.
+- **Tests** (43 new):
+  - `tests/m74_deployment_test.cpp` (28, plus the disabled timing test):
+    - `D081_Deploy.*` (12): the second-turn side first; alternation, then the rest; battle round 1 with the same state
+      and events as D-003's start; proposals in id order equal to Auto-place's state on the stock armies and 12
+      random-army seeds in both turn orders; undeployed units invisible to the queries; buttons then templates; the
+      scan when a slot is taken; `CannotSetUp` only when nothing fits, scoring its full points; no wipe-out during
+      deployment and D-007 at battle round 1 (touching zones); every proposal valid after random hand placements.
+    - `D081_Loader.*` (6), `D081_Json.*` (3), `R03_02_SetUp.*` (4).
+    - `R03_03_Coherency.DeployedUnitMustBeCoherent` and `R03_04_Engagement.DeployedUnitMustBeUnengaged` (zones 1"
+      apart: the proposal stands 1" back, because no Termagant is straight in front of an Intercessor; 3/4" back is
+      refused).
+    - `D009_WhollyWithin.DeployedOvalAtAnAngle` (a Tyrannofex at 0 and 45 degrees refused, at 90 and 270 degrees
+      accepted, stored as 90) and `D064_SetUp.NoModelOnAnother`.
+  - `D004_LegalActions.RandomPlayWithHandDeployment` (`fill_template` learns `DeployUnit`): 9 battles, including zones
+    too small and touching zones.
+  - `D081_Replay.*` (2).
+  - `tests/ai/m74_test.cpp`: `M74_StateHash.*` (2; against a copy of M73's hash), `M74_Bots.*` (5) and `M74_Arena.*`
+    (1).
+  - `tests/client/m74_test.cpp`: `M74_UnitStyle.*`, `M74_Log.*` (2) and `M74_Undo.*`.
+- **Existing tests changed (extended as M61 and M62 did, none weakened):**
+  - `Serialization.EveryDecisionKindRoundTrips`, `...EveryActionKindRoundTrips` and `...EveryEventKindRoundTrips`
+    assert the variant sizes, so they gain the new kinds.
+  - `D074_Json.OldFilesLoadTheSame` exempts the new `m74_` file from "no facing in the file", as it does `m65_` and
+    `m72_`: its Tyrannofex is set up at an angle.
+  - The test support gains `fill_template` for `DeployUnit`, and defaulted mode arguments for `custom_battle` and
+    `random_armies_battle`.
+- **Replay** `tests/replays/m74_hand_deployment.json`, on the fixture `tests/data/scenarios/hand_deployment_44x60.json`:
+  - The fixture is the stock lists' custom battle in Hand mode, with B taking the first turn. It is written by
+    `Replay.DISABLED_RegenerateReplays` and checked equal to `custom_battle_scenario`.
+  - The 25 steps: A sets up first, the sides alternate, then B sets up the rest. The Tyrannofex is set up by hand,
+    turned 30 degrees, on the next Screamer-killer's slot; that unit's proposal then comes from the scan (x 36" instead
+    of 41.5"). B's turn passes, and the replay stops at A's first Move Units decision of battle round 1 (PLAN.md's stop
+    point; the brief's "first Move Units decision" would have been B's).
+- **Acceptance:**
+  - *The tests listed:* **met.**
+  - *The replay:* **met.**
+  - *Arena `--deploy hand`, Easy and Normal on `--random-armies 1`, seeds 1–200, clean:* **met** (Release).
+    - Easy: "games 200: side A (Chaos Space Marines) wins 66, side B (Tyranids) wins 134, draws 0, unfinished 0 ...
+      rejected actions 0, UnitMoveReverted 0, fallbacks 0".
+    - Normal: "... wins 37, ... wins 163, draws 0, unfinished 0 ... rejected actions 0, UnitMoveReverted 0, fallbacks 0".
+  - *Bots deploying by hand end up exactly where auto-placement puts them:* **met.** `--per-game` of `--deploy hand`
+    against `--deploy auto`, Easy and Normal, seeds 1–200: all 400 games end in the same final-state hash and winner.
+    The hand games have 4–14 more steps, one per unit set up. Also tested (`M74_Bots`, `D081_Deploy`).
+  - *Old replays and saves byte-identical:* **met.** `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58,
+    M68 and M70 regenerations leave `tests/replays` byte-identical apart from the new file. No state field is written
+    at its default; `D081_Json` re-saves the old JSON.
+  - *Identity set unchanged:* **met.** The Release arena's `--per-game` output on V1, both bot scenarios, Strike and the
+    rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line.
+  - ctest (Debug and Release): 1217 -> 1260 tests, all pass.
 
 ## M75: Army builder screen
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Decision:** D-082 part 1

@@ -241,10 +241,14 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
 
     headline(gs, session.pending()->side, core::describe(gs, *session.pending()));
     bool path_hint = false;
+    bool deploy_hint = false;
     for (const core::GameAction& t : view.templates) {
         switch (*editor_kind(t)) {
             case EditorKind::Path:
                 path_hint = true;
+                break;
+            case EditorKind::Deploy:
+                deploy_hint = true;  // D-081: placing by hand on the board is M76's editor; the buttons auto-place
                 break;
             case EditorKind::Shot:
                 if (auto a = draw_shot_editor(session, std::get<core::action::Shoot>(t), selected_model)) chosen = a;
@@ -255,6 +259,11 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
             case EditorKind::Casualties:
                 break;  // handled above (D-051)
         }
+    }
+    if (deploy_hint) {
+        ImGui::TextWrapped("The sides take turns setting up one unit at a time, starting with the side that takes the "
+                           "second turn (D-081). Auto-place sets a unit up where the auto-layout puts it (D-079); a unit "
+                           "with no legal spot left can't be set up and counts as destroyed.");
     }
     if (path_hint) {
         ImGui::TextWrapped("Drag a model to add a straight line to its path, or drag the diamond to move the "
