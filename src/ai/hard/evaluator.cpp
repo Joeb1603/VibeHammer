@@ -1048,15 +1048,25 @@ void ChainTable::build_half_turn(int h) {
     }
 }
 
-std::size_t ChainTable::estimate_bytes(const Spec& s) noexcept {
-    const int line = s.line;
+namespace {
+
+// D-078: a table's stored values: three a node, for every wounds cell (both sides' grid levels above 0) at every line
+// position (engaged and unengaged, plus the fight and the reply), in every half-turn from h0 on. D-080 (M73): also what
+// chain_plan_size counts, from the levels alone.
+std::size_t table_bytes(int line, int levels_a, int levels_b, int half_turns, int h0, bool compact) noexcept {
     const std::size_t positions =
         static_cast<std::size_t>(line + 1) + static_cast<std::size_t>(line) * static_cast<std::size_t>(line + 1) / 2;
-    const std::size_t cells = static_cast<std::size_t>(std::max(0, level_count(s.sides[0]) - 1)) *
-                              static_cast<std::size_t>(std::max(0, level_count(s.sides[1]) - 1));
+    const std::size_t cells =
+        static_cast<std::size_t>(std::max(0, levels_a - 1)) * static_cast<std::size_t>(std::max(0, levels_b - 1));
     const std::size_t per_half_turn = 3 * cells * (positions + 2 * static_cast<std::size_t>(line + 1));
-    const std::size_t half_turns = static_cast<std::size_t>(std::max(0, s.half_turns - std::max(0, s.h0)));
-    return per_half_turn * half_turns * (s.compact ? sizeof(float) : sizeof(double));
+    const std::size_t count = static_cast<std::size_t>(std::max(0, half_turns - std::max(0, h0)));
+    return per_half_turn * count * (compact ? sizeof(float) : sizeof(double));
+}
+
+}  // namespace
+
+std::size_t ChainTable::estimate_bytes(const Spec& s) noexcept {
+    return table_bytes(s.line, level_count(s.sides[0]), level_count(s.sides[1]), s.half_turns, s.h0, s.compact);
 }
 
 std::size_t ChainTable::bytes() const noexcept {
@@ -1510,15 +1520,20 @@ namespace {
 // D-067: the army's unit types (each side's, in unit order: units with models) and D-078 the specs of every pair, side
 // A's types outermost; compact storage when the game's tables would be too big at full precision (the whole game, from
 // the pairs present: Strike's one table is far below, the rosters' 30 far above).
-struct ArmyPlan {
+struct ArmyTypes {
     std::vector<std::pair<std::uint64_t, const core::Unit*>> a_types;
     std::vector<std::pair<std::uint64_t, const core::Unit*>> b_types;
     std::vector<std::pair<core::UnitId, std::uint64_t>> unit_keys;
     std::array<double, 2> start_wounds{};
+};
+
+struct ArmyPlan : ArmyTypes {
     std::vector<Spec> specs;
 };
 
-std::optional<ArmyPlan> army_plan(const core::GameState& root, const ChainWeights& weights, float bucket) {
+// The army's unit types (units with models, each side's in unit order; the first unit of a type stands for it). D-080
+// (M73): shared by army_plan and chain_plan_size, so both count the same types.
+std::optional<ArmyTypes> army_types(const core::GameState& root) {
     if (root.battle_rounds <= 0) return std::nullopt;
     std::vector<const core::Unit*> a_units;
     std::vector<const core::Unit*> b_units;
@@ -1527,20 +1542,28 @@ std::optional<ArmyPlan> army_plan(const core::GameState& root, const ChainWeight
         (u.side == core::Side::A ? a_units : b_units).push_back(&u);
     }
     if (a_units.empty() || b_units.empty()) return std::nullopt;
-    ArmyPlan plan;
-    const int line = army_line(root, bucket);
-    for (const auto& [units, types] : {std::pair{&a_units, &plan.a_types}, std::pair{&b_units, &plan.b_types}}) {
+    ArmyTypes out;
+    for (const auto& [units, types] : {std::pair{&a_units, &out.a_types}, std::pair{&b_units, &out.b_types}}) {
         for (const core::Unit* u : *units) {
             const int wpm = std::max(1, representative(*u).characteristics.wounds);
-            plan.start_wounds[si(u->side)] +=
+            out.start_wounds[si(u->side)] +=
                 std::max(1, std::max(u->starting_strength, static_cast<int>(u->models.size())) * wpm);
             const std::uint64_t k = side_key(*u);
-            plan.unit_keys.emplace_back(u->id, k);
+            out.unit_keys.emplace_back(u->id, k);
             if (std::none_of(types->begin(), types->end(), [&](const auto& t) { return t.first == k; })) {
                 types->emplace_back(k, u);
             }
         }
     }
+    return out;
+}
+
+std::optional<ArmyPlan> army_plan(const core::GameState& root, const ChainWeights& weights, float bucket) {
+    std::optional<ArmyTypes> types = army_types(root);
+    if (!types) return std::nullopt;
+    ArmyPlan plan;
+    static_cast<ArmyTypes&>(plan) = std::move(*types);
+    const int line = army_line(root, bucket);
     for (const auto& [ka, ua] : plan.a_types) {
         for (const auto& [kb, ub] : plan.b_types) plan.specs.push_back(army_spec(root, *ua, *ub, weights, line));
     }
@@ -1554,6 +1577,13 @@ std::optional<ArmyPlan> army_plan(const core::GameState& root, const ChainWeight
         for (Spec& s : plan.specs) s.compact = true;
     }
     return plan;
+}
+
+// D-080 (M73): a unit type's wounds grid levels in the army's tables (side_spec's, with the region's top at the type's
+// starting wounds, as army_spec sets it).
+int army_levels(const core::Unit& u) {
+    const int wounds_start = std::max(1, strength_of(u) * std::max(1, representative(u).characteristics.wounds));
+    return static_cast<int>(grid_levels(wounds_start, wounds_start).size());
 }
 
 // The duel's table spec (M44): the two units' wounds now, from the root's half-turn on, on a line as long as the gap
@@ -1591,6 +1621,43 @@ std::vector<ChainTableInfo> plan_chain_tables(const core::GameState& root, Chain
     }
     if (const std::optional<ArmyPlan> plan = army_plan(root, weights, Evaluator::bucket_mm())) {
         for (const Spec& s : plan->specs) out.push_back(ChainTable::info_of(s));
+    }
+    return out;
+}
+
+ChainPlanSize chain_plan_size(const core::GameState& root) {
+    ChainPlanSize out;
+    if (const std::optional<Duel> d = duel_play(root)) {
+        // The duel's one table (its spec is cheap: one pair, no army).
+        const core::Unit* ua = root.find_unit(d->units[0]);
+        const core::Unit* ub = root.find_unit(d->units[1]);
+        if (ua != nullptr && ub != nullptr && root.battle_rounds > 0) {
+            out.tables = 1;
+            out.bytes = ChainTable::estimate_bytes(duel_spec(root, *ua, *ub, ChainWeights{}, Evaluator::bucket_mm()));
+        }
+        return out;
+    }
+    const std::optional<ArmyTypes> types = army_types(root);
+    if (!types) return out;
+    // As army_plan and army_spec: the army's line, the game's half-turns from the root's on, compact when the whole
+    // game's tables at full precision would take more than kCompactAboveBytes.
+    const int line = army_line(root, Evaluator::bucket_mm());
+    const int half_turns = 2 * root.battle_rounds;
+    const int h0 = std::min(half_turn_of(root), half_turns - 1);
+    std::vector<int> a_levels;
+    std::vector<int> b_levels;
+    for (const auto& [k, u] : types->a_types) a_levels.push_back(army_levels(*u));
+    for (const auto& [k, u] : types->b_types) b_levels.push_back(army_levels(*u));
+    std::size_t full = 0;
+    for (const int la : a_levels) {
+        for (const int lb : b_levels) full += table_bytes(line, la, lb, half_turns, 0, false);
+    }
+    const bool compact = full > kCompactAboveBytes;
+    for (const int la : a_levels) {
+        for (const int lb : b_levels) {
+            ++out.tables;
+            out.bytes += table_bytes(line, la, lb, half_turns, h0, compact);
+        }
     }
     return out;
 }

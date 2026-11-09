@@ -1,0 +1,112 @@
+{
+  "format": 1,
+  "kind": "vibehammer-army",
+  "name": "M73 Chaos Space Marines",
+  "faction": "chaos_space_marines",
+  "units": [
+    {
+      "unit_file": "data/units/chaos_lord.json",
+      "models": [
+        {
+          "type": "Chaos Lord",
+          "count": 1,
+          "weapons": [
+            "Astartes chainblade",
+            "Power fist"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/legionaries.json",
+      "models": [
+        {
+          "type": "Aspiring Champion",
+          "count": 1,
+          "weapons": [
+            "Close combat weapon",
+            "Heavy melee weapon",
+            "Plasma pistol"
+          ]
+        },
+        {
+          "type": "Legionary w/ boltgun",
+          "count": 7,
+          "weapons": [
+            "Boltgun",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        },
+        {
+          "type": "Legionary w/ heavy melee weapon",
+          "count": 1,
+          "weapons": [
+            "Heavy melee weapon",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        },
+        {
+          "type": "Legionary w/ other weapon",
+          "count": 1,
+          "weapons": [
+            "Plasma gun",
+            "Bolt pistol",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/havocs.json",
+      "models": [
+        {
+          "type": "Havoc Champion",
+          "count": 1,
+          "weapons": [
+            "Astartes chainsword",
+            "Boltgun"
+          ]
+        },
+        {
+          "type": "Havoc w/ missile launcher",
+          "count": 4,
+          "weapons": [
+            "Havoc missile launcher",
+            "Close combat weapon"
+          ]
+        }
+      ]
+    },
+    {
+      "unit_file": "data/units/chaos_terminator_squad.json",
+      "models": [
+        {
+          "type": "Terminator Champion",
+          "count": 1,
+          "weapons": [
+            "Accursed weapon",
+            "Combi-bolter"
+          ]
+        },
+        {
+          "type": "Power fist and combi-bolter",
+          "count": 2,
+          "weapons": [
+            "Combi-bolter",
+            "Power fist"
+          ]
+        },
+        {
+          "type": "Accursed weapon and combi-bolter",
+          "count": 2,
+          "weapons": [
+            "Combi-bolter",
+            "Accursed weapon"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -568,7 +568,8 @@ TEST(M68_Movement, ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatSt
 
 TEST(M68_Points, SharesAreWeightedByPointsOnlyForSidesOfSeveralUnitTypes) {
     // D-077: a unit's weight is its points over the mean points of every unit (1915 / 14 on the rosters), when every unit
-    // has points and its side has more than one unit type; otherwise 1 (V1, the bot scenarios and Strike have no points).
+    // has points and (D-080, M73) either side has more than one unit type; otherwise 1 (V1, the bot scenarios and
+    // Strike have no points).
     const GameState rosters = wh40k::test::load_rosters_scenario();
     double total = 0.0;
     for (const Unit& u : rosters.units) {
@@ -591,11 +592,14 @@ TEST(M68_Points, SharesAreWeightedByPointsOnlyForSidesOfSeveralUnitTypes) {
             EXPECT_EQ(normal::unit_share(gs, u, 1.0), 1.0 / std::max<int>(u.starting_strength, static_cast<int>(u.models.size())));
         }
     }
-    // A side of one unit type keeps weight 1 even with points: the rosters with the Tyranids reduced to their Termagants.
+    // A side of one unit type against a side of several: the rosters with the Tyranids reduced to their two Termagant
+    // units. D-080 (M73, amends D-077; agreed with the user): this side was weighted 1 while the other was weighted by
+    // points, two scales; now both are by points, 55 x 7 / 1070 (seven units, 960 + 110 points).
     GameState one_type = rosters;
     std::erase_if(one_type.units, [](const Unit& u) { return u.side == Side::B && u.name != "Termagants"; });
+    ASSERT_EQ(one_type.units.size(), 7u);
     for (const Unit& u : one_type.units) {
-        if (u.side == Side::B) EXPECT_EQ(normal::share_weight(one_type, u), 1.0);
+        if (u.side == Side::B) EXPECT_DOUBLE_EQ(normal::share_weight(one_type, u), 55.0 * 7.0 / 1070.0);
         if (u.side == Side::A) EXPECT_GT(std::fabs(normal::share_weight(one_type, u) - 1.0), 0.05) << u.name;
     }
     // Strike with points but one unit type a side: every weight 1.

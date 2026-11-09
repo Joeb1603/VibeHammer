@@ -20,9 +20,10 @@
 namespace wh40k::ai::normal {
 
 // D-077 (M68): what a share of `unit` is worth, material weighted by points. 1 (as before M68) unless every unit in
-// `state` has points (the scenario gives them, D-076) and `unit`'s side has more than one unit type (datasheet name);
-// then the unit's points over the mean points of every unit (both sides, destroyed ones too: fixed for the game). V1,
-// the bot scenarios and Strike have no points, so every weight there is 1.
+// `state` has points (the scenario gives them, D-076) and either side has more than one unit type (datasheet name;
+// D-080, M73: before, `unit`'s own side); then the unit's points over the mean points of every unit (both sides,
+// destroyed ones too: fixed for the game). V1, the bot scenarios and Strike have no points, so every weight there is 1;
+// a battle of one datasheet a side keeps 1 too.
 [[nodiscard]] double share_weight(const core::GameState& state, const core::Unit& unit);
 
 // `model_equivalents` of `unit` as a share of its starting strength, times its share_weight (D-077).

@@ -3870,7 +3870,7 @@ custom battle, the points bound, the arena flags).
     bot scenarios, Strike and the rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line.
   - ctest (Debug and Release): 1176 -> 1206 tests, all pass.
 
-## M73: Bots on custom armies
+## M73: Bots on custom armies ✅ (done, with an open item)
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09), design first · **Decision:** D-080 (amends D-077, D-078)
 
 > Bot work comes before the builder, so nobody can pick Hard against an oversized army.
@@ -3896,6 +3896,103 @@ custom battle, the points bound, the arena flags).
   - 0 rejected, reverted, fallback or unfinished;
   - Hard peak RSS ≤ 1.5 GB and decision max ≤ 3 s.
 - Identity set unchanged (no shipped scenario is affected by the D-077 change).
+
+**Results (2026-11-09):** D-080 (amends D-077 and D-078) was measured and written first and stopped for review. It was
+approved as written, including the 80-table limit: the bytes drive memory and time, the count doesn't. Bot only
+(`src/ai`): no rule, core, state, action, event or JSON change, no new decision, so no client or fallback change.
+- **Measured first** (the M72 binary; D-080 has the numbers):
+  - random armies (seeds 1–10,000) plan 1–64 chain tables (mean 22) and at most 1,066 MB at the first decision;
+  - the shipped scenarios plan at most the rosters' 30 tables and 525 MB;
+  - legal hand-built lists reach 1,449 MB (56 tables) and 80 tables (857 MB);
+  - peak RSS is the tables plus 20–130 MB, and build time follows the bytes (about 1.7 ms per MB on 4 workers), not
+    the count;
+  - none of the budgets binds on random armies;
+  - Hard's slowest decisions are searches with 10–14 units on the table.
+- **Hard's guard** (`src/ai/hard/`):
+  - `hard::chain_plan_size(state)` (`evaluator.*`) gives the count and estimated bytes of the tables an Evaluator at the
+    state would hold. These are `plan_chain_tables`' figures, computed from the unit types and wounds alone:
+    `army_plan`'s type collection is split out (`army_types`) and the byte formula is shared (`table_bytes`), so both
+    count alike. The estimate itself is unchanged. It costs 0.64 ms on average on random armies (the full plan 3.8 ms),
+    0.5 ms on the rosters and 0.07 ms on V1.
+  - `BotWeights::chain_budget_mib = 1024` and `chain_budget_tables = 80` (`weights.hpp`). The arena's `--weights` takes
+    the same names (0: no limit).
+  - `hard::chain_budget_problem(state, weights)` (`hard_bot.*`) returns nullopt within the budget, else the reason's
+    prefix. `hard_answer` checks it after `hard_applies` and `moves_as_normal`, only for the decisions Hard answers
+    itself, and before any Evaluator is built. Over the budget, `normal_policy` answers with the same seed, and every
+    reason of its plan reads "D-080: Hard's chain tables here would be 56 tables of 1381.5 MiB, over its budget of
+    1024 MiB and 80 tables; Normal decides: ...". The chain cache is unchanged.
+  - Examples on the most-bytes armies: as side A, Hard answers as Normal until battle round 2's second turn (1,014 MB
+    then). Its first decision of its own (battle round 3, the tables built then) took 3.23 s. Peak RSS was 836 MiB,
+    against 1,446–1,458 MiB unguarded.
+- **Normal's weighting** (`src/ai/normal/value.cpp`): `share_weight` weights by points whenever every unit has points
+  and either side has several datasheets. When both sides have one datasheet each, every weight stays 1. This affects
+  13 of the random battles of seeds 1–200 (a side of only Chaos Lords or only Hive Tyrants). Normal vs Normal over
+  seeds 1–200: 37 / 163 (M72: 39 / 161).
+- **Budgets:** no change (D-080 part 3). Over 840 instrumented games:
+  - `kMaxLoadouts`: never capped (at most 49 of 64 combinations);
+  - `kMaxAdvanceSteps`: never exhausted (8 of 64 steps);
+  - `move_search_units`: 1.1% of Hard's unit moves were made as Normal;
+  - the rollout budget: scaled in 91% of Monte Carlos, never cut (the longest rollout 167 of 400 actions).
+- **Tests** (`tests/ai/m73_test.cpp`, 11 plus 2 disabled):
+  - `M73_HardGuard.*`:
+    - `ShippedScenariosAreUnderTheBudget` prints the five scenarios' figures and pins them: V1 and
+      `bot_termagants_first` 1 table of 2.1 MB, `bot_20_termagants` 4.2 MB, Strike 20.6 MB, the rosters 30 of 525.1 MB.
+    - `ChainPlanSizeIsTheFullPlanWithoutBuildingIt` holds it equal to `plan_chain_tables` on 64 states (random armies,
+      the worst cases, V1 and the rosters, each also at a later half-turn, with units destroyed and with models lost).
+    - `AnOversizedArmyAnswersAsNormalWithTheReason`: in side A's whole first turn, every action is Normal's, the prefix
+      appears where Hard would decide, and no table is built.
+    - `PureFunctionOfTheState`: fresh and used bots alike, the half-turns, unit types destroyed, each limit and 0, a
+      lower budget that hands the rosters to Normal.
+  - `M73_Weights.*`: a one-datasheet side weighted by points, both sides single at 1, the shipped scenarios unchanged.
+  - `M73_Arena.RandomArmiesFinishCleanAtEveryLevel`: Easy, Normal, Hard–Normal, Normal–Hard and Hard–Hard on short
+    random armies, 25 s in Debug.
+  - `M73_Replay.*`: see the replay below.
+  - Fixtures in `tests/data/armies/`: the most-bytes and most-tables lists and the replay's two.
+  - ctest (Debug and Release): 1206 -> 1217 tests, all pass.
+- **Existing test changed (one, as agreed):** `M68_Points.SharesAreWeightedByPointsOnlyForSidesOfSeveralUnitTypes`.
+  Its one-type expectation (the rosters with the Tyranids cut to their two Termagant units) was weight 1 and is now
+  55 x 7 / 1070. The comment cites D-080 and the user's agreement, and the test gains an assertion of the seven units.
+  `M68_Tiebreak` (a Chaos Lord alone against two Tyranid datasheets) passes unchanged.
+- **Replay** `tests/replays/m73_custom_bot_game.json`: Normal vs Normal, dice seed 1, 240 steps, decided on points
+  after battle round 5 (a Tyranid win). Both sides shoot and fight.
+  - *The armies* (non-stock, `tests/data/armies/m73_*.json`): side A, Chaos Space Marines, 595 points: a Chaos Lord
+    with a power fist; 10 Legionaries with a plasma gun and a heavy melee weapon; missile-launcher Havocs; 5 Chaos
+    Terminators. Side B, Tyranids, 390 points: two Hive Tyrants, a one-datasheet side under D-080's weighting.
+  - *How the battle is named:* as a scenario file, `tests/data/scenarios/m73_custom_battle_44x60.json`, which is
+    `custom_battle_scenario` of the two army files. M68's replay names the rosters the same way. No state is embedded,
+    so the tests over every saved replay stay unchanged.
+  - *Tests:* `TheScenarioIsTheTwoArmyFiles`, `TheCustomBotGameReplaysToItsResultWithCoreOnly`,
+    `TheSavedFileMatchesTheGame`, `DISABLED_RegenerateCustomBotGameReplay` (it writes both files) and
+    `DISABLED_SearchCustomBotGameSeed` (seed 1 is the first seed of 30 with a Shoot and a Fight from each side).
+- **Acceptance:**
+  - *Tests `M73_HardGuard`, `M73_Weights`, `M73_Arena`, the replay and its two tests:* **met.**
+  - *Release arena, `--random-armies 1`, seeds 1–200, one run at a time, peak RSS by `/usr/bin/time -v`:* every run
+    had 0 rejected, reverted, fallback or unfinished. The guard never triggers on these seeds (at most 894 MB and 49
+    tables), so every run measures Hard itself.
+    - Easy–Easy: 66 / 134, 16 s.
+    - Normal–Normal: 37 / 163, decision p95 7.0 ms, max 174 ms.
+    - Hard–Normal: 47 / 153. Hard's decisions p50 0.009 ms, p95 253 ms, max 3,164 ms. Peak RSS 946 MiB.
+    - Normal–Hard: 51 / 149. Hard's p50 0.009 ms, p95 225 ms, max 2,239 ms. Peak RSS 970 MiB.
+    - Hard–Hard, 20 games: 9 / 11. p95 260 ms, max 1,571 ms. Peak RSS 701 MiB.
+  - *Hard peak RSS ≤ 1.5 GB:* **met** (970 MiB at most).
+  - *Hard's decision max ≤ 3 s:* **open** (3.16 s in Hard–Normal, 5% over). The slowest decisions are two searches,
+    not table builds:
+    - seed 83's first decision (890 MB of tables, then the search): 2.66, 2.68 and 3.09 s in three runs alone;
+    - seed 188's battle round 3 Move Units decisions (13 units, no table built): 2.67, 2.94 and 3.22 s.
+    - Runs vary by about 15%. No budget binds there (D-080 part 3), and no gate was found that the rosters, which must
+      play as before, don't share.
+  - *Identity set unchanged:* **met.** The Release arena's `--per-game` output on V1, both bot scenarios, Strike and the
+    rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line. The arena binary rebuilt
+    after the last (comment-only) edits is byte-identical to the one measured.
+  - *Replays:* **met.** `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58, M68 and M70 regenerations leave
+    `tests/replays` byte-identical apart from the new file.
+- **Open items:**
+  - The 3 s decision maximum (above).
+  - Hard's strength on random armies. As the Chaos Space Marines, Hard wins 47 of 200 against Normal (Normal from that
+    seat: 37). As the Tyranids it wins 149 (Normal: 163), the rosters' M69 pattern again.
+  - The budget rates are to be watched in M77's sweeps.
+  - CLAUDE.md's regenerate commands, which should gain `M73_Replay.DISABLED_RegenerateCustomBotGameReplay`, and the new
+    `tests/data/armies/` (M77's docs).
 
 ## M74: Deployment step in the engine
 **Effort:** `max` · **Plan mode:** pre-approved (2026-11-09), design first · **Rules:** 03.02, 03.03, 03.04, 01.03 · **Decision:** D-081 (amends D-003)
