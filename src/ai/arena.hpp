@@ -8,11 +8,14 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "bot.hpp"
+#include "core/data/army_list.hpp"
 #include "core/state/game_state.hpp"
 #include "session.hpp"
 
@@ -88,9 +91,16 @@ struct ArenaResult {
     }
 };
 
+// M72: the initial state (not started) of the game with a seed. A fixed scenario gives the same state for every seed;
+// --random-armies a custom battle of random armies per seed (random_armies_battle).
+using ScenarioForSeed = std::function<core::GameState(std::uint64_t seed)>;
+
 // `games` games with seeds first_seed, first_seed + 1, ...
 [[nodiscard]] ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a,
                                     BotConfig b, std::size_t step_cap = 5000);
+// M72: the same, each game from scenario_for(its seed).
+[[nodiscard]] ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint64_t first_seed,
+                                    BotConfig a, BotConfig b, std::size_t step_cap = 5000);
 
 // M54: `games` games as run_arena plays them, reported one line per game (its result and counts, and FNV-1a hashes
 // of its accepted actions, its final state as JSON and its bot decisions' trace lines, reasons without times), then
@@ -101,6 +111,26 @@ struct PerGameReport {
 };
 [[nodiscard]] PerGameReport run_per_game(const core::GameState& scenario, int games, std::uint64_t first_seed,
                                          BotConfig a, BotConfig b, std::size_t step_cap = 5000);
+// M72: the same, each game from scenario_for(its seed).
+[[nodiscard]] PerGameReport run_per_game(const ScenarioForSeed& scenario_for, int games, std::uint64_t first_seed,
+                                         BotConfig a, BotConfig b, std::size_t step_cap = 5000);
+
+// ---- M72 (D-079 part 2): custom battles in the arena (--army-a, --army-b, --first, --random-armies) ----
+
+struct ArmySource {
+    std::vector<core::Faction> factions;  // data/factions.json
+    core::DatasheetResolver resolve;      // caching, from the repo root
+};
+[[nodiscard]] ArmySource load_army_source(const std::filesystem::path& repo_root);
+
+// The custom battle of two army lists (custom_battle_scenario through build_game_state). Throws DataError for lists
+// that can't be taken (army_problems, battle_problems).
+[[nodiscard]] core::GameState custom_battle_state(const ArmySource& source, const core::ArmyList& a,
+                                                  const core::ArmyList& b, core::Side first_turn);
+
+// --random-armies 1: the game with `seed` is a custom battle of a random legal Chaos Space Marines army (side A) and
+// a random legal Tyranid army (side B), drawn with core::random_army_seed(side, seed).
+[[nodiscard]] core::GameState random_armies_battle(const ArmySource& source, std::uint64_t seed, core::Side first_turn);
 
 // The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
 // side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time, (M43) the seeds that

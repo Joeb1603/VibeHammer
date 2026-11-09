@@ -494,7 +494,8 @@ TEST(D076_Json, AnOldFileLoadsAndSavesTheSame) {
         const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         const Replay replay = load_replay(entry.path());
         EXPECT_EQ(nlohmann::json(replay).dump(2) + "\n", text) << entry.path().filename();
-        if (replay.initial.state) {
+        // M72: m72_custom_battle_round2.json is a new file: its embedded custom battle is decided on points (D-076).
+        if (replay.initial.state && entry.path().filename().string().rfind("m72_", 0) != 0) {
             ++embedded;
             EXPECT_EQ(replay.initial.state->result_rule, ResultRule::D007Draw);
         }

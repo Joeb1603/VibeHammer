@@ -3739,7 +3739,7 @@ and the batch's agreed list gains it there.
     the rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line (actions, state and trace
     hashes).
 
-## M72: Army lists, auto-layout, arena flags
+## M72: Army lists, auto-layout, arena flags ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Rules:** 02.06, 02.07, 03.02, 03.03 · **Decision:** D-079 part 2
 
 > **Core.**
@@ -3788,6 +3788,87 @@ and the batch's agreed list gains it there.
 - Replay `m72_custom_battle_round2.json`.
 - Easy vs Easy on random armies, seeds 1–200, clean. Every shipped scenario's state, every replay and the identity
   set unchanged.
+
+**Results (2026-11-09):** D-079 part 2 written (army lists, problems, new units, random armies, the auto-layout, the
+custom battle, the points bound, the arena flags).
+- **Core** (loader-side only; `GameState`, the engine and the scenario loader's checks unchanged):
+  - `core/data/formation.{hpp,cpp}`: `Formation`, `parse_formation` and `place_formation` lifted out of the scenario
+    loader verbatim, with their messages; the loader calls them. One expression rewritten to the same test (the anchor
+    compared as a string) because GCC 13 at -O3 flagged a false -Warray-bounds in the new translation unit.
+  - `core/data/zone_layout.{hpp,cpp}`: `fewest_coherent_ranks` (placed by `place_formation` itself, checked with
+    `unit_coherency`) and `layout_zone` (shelves in list order, first-fit decreasing as the fallback, centres and depths on
+    a 1/8" grid, every layout verified against the loader's set-up checks within the side), `slot_formation`.
+  - `core/data/army_list.{hpp,cpp}`: `ArmyModelGroup`, `ArmyUnit`, `ArmyList`, `Faction` (JSON, `army_file_text`,
+    `load_army` / `save_army`, `load_factions`, `find_faction`, `caching_datasheet_resolver`); `unit_points`,
+    `army_points`; `weapon_refusal`, `option_refusal`, `unavailable_model_types`, `unit_problems`, `army_problems`,
+    `battle_problems` (opposing factions only); `default_unit`; `random_army` (SplitMix64, capped retries,
+    `RandomArmyStats`) and `random_army_seed`; `custom_battle_scenario`.
+- **Data:** `data/factions.json` (Chaos Space Marines: Chaos Lord, Legionaries, Chaos Terminator Squad, Havocs;
+  Tyranids: Hive Tyrant, Termagants, Genestealers, Tyrant Guard, Screamer-killer, Tyrannofex; no Space Marines);
+  `data/armies/chaos_space_marines_incursion.json` and `tyranids_incursion.json` (the rosters scenario's units, counts
+  and loadouts in its order, written exactly as `save_army` writes them; no GW text).
+- **Arena:** `--army-a`, `--army-b` (a side not given plays the other faction's default army), `--first A|B` and
+  `--random-armies 1`; games now come from a scenario per seed (`ScenarioForSeed`, `run_arena` / `run_per_game`
+  overloads; the fixed-scenario ones delegate), `load_army_source`, `custom_battle_state`, `random_armies_battle`. The
+  `--per-game` format is unchanged; `--scenario` with the new army flags exits 2.
+- **Package / ignore:** `tools/package.ps1` stages `data/armies/*.json` and `data/factions.json` (README text updated);
+  `.gitignore` gets `/armies/`.
+- **Tests** (`tests/army_list_test.cpp`, 24; `tests/support/army_fixtures.hpp` with the factions, a caching resolver,
+  the stock lists and two legal showcase armies of never-played loadouts, 875 and 900 points):
+  - `D079_ArmyList.*`: `JsonRoundTrip` (file text, save/load, wrong kind or format), `FactionsHoldTheTenRosterDatasheets`,
+    `StockArmiesAreLegalAt960And955`, `StockArmiesMatchTheRostersScenarioUnitForUnit` (the custom battle of the stock
+    lists equals the rosters scenario's `GameState` once positions, facings and the name are copied over);
+  - `R02_06_UnitComposition.ArmyCountsOutsideTheDatasheetAreRefused`; `R02_07_WargearOptions.ArmyWeaponsMustDecompose`,
+    `...LimitsAreEnforced` (Terminator power fists 3 / 6 and chainfists 1 / 2 by size, paired accursed weapons, a
+    Legionary special 1 below 10 models and each special once, the plasma pistol special once, the champion's one plasma
+    pistol, Termagant specials 1 per 10, the Hive Tyrant's one cannon and two talons, the Havoc Champion's two power
+    fists but one accursed weapon);
+  - `D079_Points.BracketWargearAndSurcharge`, `...OverTheLimitIsRefused`; `D079_Copies.ThirdCopyRefused`,
+    `...BattlelineFour`; `D079_Faction.OtherFactionsUnitsRefused`, `...OpposingFactionsOnly`;
+    `D079_Character.AnArmyNeedsACharacter`; `D079_Refused.UnplayableWeaponsCantBePickedWithTheReason` (the nine refused
+    weapons carry the engine's own reason; every other weapon of the ten is pickable);
+    `D079_Defaults.NewUnitsSkipRefusedWeapons` (all ten), `...UnavailableModelTypes`;
+  - `D079_Layout.FewestCoherentRanks` (20 Termagants 3, 2 ranks of 10 are 9.04" corner to corner; 10 Termagants 1; 10
+    Legionaries 2; 10 Terminators 2; 6 Tyrant Guard 1), `...ShelvesStayInTheZone` (one centred shelf, a second 4.375"
+    back, the first-fit-decreasing fallback, does not fit), `...LayoutIsALegalSetUp` (22 battles through
+    `build_game_state`; every model exactly where its slot's formation puts it), `...EveryRandomLegalArmyFits` (2,000
+    random armies per faction, the full count in Debug, about 14 s: no attempt refused, every battle builds);
+  - `D079_RandomArmy.LegalAndDeterministic` (200 seeds per faction; the never-played loadouts appear, refused weapons
+    never), `D079_CustomBattle.ScenarioBuildsAPointsGame`;
+  - `R24_11_ExtraAttacks.ATyrantWithTwoScythingTalonsSelectsBoth` (24.11: all [EXTRA ATTACKS] weapons, and no other melee
+    weapon to add: one talon alone is refused, both are valid);
+  - `D004_LegalActions.RandomPlayOnRandomLegalArmies` (the showcase armies with the full D-004 check at three distances,
+    12 random-army battles of plain random play; every never-played loadout fires or fights; every game ends and
+    round-trips), `Replay.RandomGamesOnRandomLegalArmiesReplayIdentically`;
+  - `M72_Arena.*` (ai, 4): a scenario per seed plays as the fixed scenario line for line; the arena's random armies are
+    the tests'; random-army games finish clean at Easy; army lists make a custom battle.
+  - No engine bug turned up: random play and the arena on random legal armies were clean, so no engine change.
+- **Existing tests changed** (two, not weakened): `D074_Json.OldFilesLoadTheSame` and `D076_Json.AnOldFileLoadsAndSaves
+  TheSame` iterate every saved replay with expectations for files older than M65 / M67 (no facing; an embedded state
+  without points). The new `m72_custom_battle_round2.json` legitimately has both, so it is exempted from those two
+  expectations by name (as `m65_` / `m67_` files already are); it still goes through both byte-for-byte round trips.
+- **Replay:** `tests/replays/m72_custom_battle_round2.json` (the two showcase armies, auto-placed, embedded initial
+  state; random legal play with seed 10, picked by `Replay.DISABLED_SearchM72Seed`, through battle round 2: the Havoc
+  autocannon and missile launcher, the Legionaries' missile launcher and the rupture cannon fire), written by
+  `Replay.DISABLED_RegenerateReplays` and checked by `Replay.SavedReplayFilesPass`. It opens in the client's replay
+  viewer (screenshot under `xvfb-run`).
+- **Acceptance:**
+  - *`D079_*` tests (stock armies at 960 / 955 and equal to the rosters scenario; the limits; 2000 random armies per
+    faction fit):* **met.**
+  - *`R02_06_*`, `R02_07_*`, `R24_11_ExtraAttacks.ATyrantWithTwoScythingTalonsSelectsBoth`,
+    `D004_LegalActions.RandomPlayOnRandomLegalArmies`, the replay:* **met.**
+  - *Easy vs Easy on random armies, seeds 1–200, clean:* **met.** Release: "games 200: side A (Chaos Space Marines) wins
+    66, side B (Tyranids) wins 134, draws 0, unfinished 0 ... rejected actions 0, UnitMoveReverted 0, fallbacks 0"
+    (16.8 s).
+  - Normal vs Normal on random armies, seeds 1–200 (Release, extra): clean too ("games 200: ... wins 39, ... wins 161,
+    draws 0, unfinished 0 ... rejected actions 0, UnitMoveReverted 0, fallbacks 0"; decision max 184 ms). Hard was not
+    run on random armies (its memory guard is M73's).
+  - *Every shipped scenario's state, every replay and the identity set unchanged:* **met.** The formation code is the
+    loader's own, moved; its effect is shown by the replays and the identity set rather than by a separate state test.
+    `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58, M68 and M70 regenerations leave `tests/replays`
+    byte-identical apart from the new `m72_custom_battle_round2.json`. The Release arena's `--per-game` output on V1, both
+    bot scenarios, Strike and the rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line.
+  - ctest (Debug and Release): 1176 -> 1206 tests, all pass.
 
 ## M73: Bots on custom armies
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09), design first · **Decision:** D-080 (amends D-077, D-078)

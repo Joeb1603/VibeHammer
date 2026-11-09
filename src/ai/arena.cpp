@@ -6,6 +6,8 @@
 #include <variant>
 
 #include "auto_actions.hpp"
+#include "core/data/load_error.hpp"
+#include "core/data/scenario_loader.hpp"
 #include "core/engine/actions.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/points_destroyed.hpp"
@@ -133,12 +135,17 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
 
 ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a, BotConfig b,
                       std::size_t step_cap) {
+    return run_arena([&scenario](std::uint64_t) { return scenario; }, games, first_seed, a, b, step_cap);
+}
+
+ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint64_t first_seed, BotConfig a,
+                      BotConfig b, std::size_t step_cap) {
     ArenaResult r;
     std::vector<double> ms;
     std::vector<core::Side> sides;
     for (int i = 0; i < games; ++i) {
-        r.games.push_back(
-            play_bot_game(scenario, first_seed + static_cast<std::uint64_t>(i), a, b, step_cap, &ms, nullptr, &sides));
+        const std::uint64_t seed = first_seed + static_cast<std::uint64_t>(i);
+        r.games.push_back(play_bot_game(scenario_for(seed), seed, a, b, step_cap, &ms, nullptr, &sides));
     }
     for (const GameRecord& g : r.games) {
         if (!g.finished) {
@@ -193,6 +200,11 @@ ArenaResult run_arena(const core::GameState& scenario, int games, std::uint64_t 
 
 PerGameReport run_per_game(const core::GameState& scenario, int games, std::uint64_t first_seed, BotConfig a,
                            BotConfig b, std::size_t step_cap) {
+    return run_per_game([&scenario](std::uint64_t) { return scenario; }, games, first_seed, a, b, step_cap);
+}
+
+PerGameReport run_per_game(const ScenarioForSeed& scenario_for, int games, std::uint64_t first_seed, BotConfig a,
+                           BotConfig b, std::size_t step_cap) {
     const auto hash_text = [](const std::string& text) {
         Fnv1a h;
         h.bytes(text.data(), text.size());
@@ -204,7 +216,7 @@ PerGameReport run_per_game(const core::GameState& scenario, int games, std::uint
     const auto t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < games; ++i) {
         const std::uint64_t s = first_seed + static_cast<std::uint64_t>(i);
-        client::GameSession session = client::GameSession::new_game(scenario, s);
+        client::GameSession session = client::GameSession::new_game(scenario_for(s), s);
         std::vector<std::string> lines;
         const GameRecord g = play_bot_session(session, a, b, step_cap, &ms, &lines);
         std::string trace;
@@ -229,6 +241,28 @@ PerGameReport run_per_game(const core::GameState& scenario, int games, std::uint
                   percentile(ms, 0.50), percentile(ms, 0.95), max_ms, wall);
     out.text += buf;
     return out;
+}
+
+ArmySource load_army_source(const std::filesystem::path& repo_root) {
+    return ArmySource{core::load_factions(repo_root), core::caching_datasheet_resolver(repo_root)};
+}
+
+core::GameState custom_battle_state(const ArmySource& source, const core::ArmyList& a, const core::ArmyList& b,
+                                    core::Side first_turn) {
+    return core::build_game_state(core::custom_battle_scenario(a, b, first_turn, source.factions, source.resolve),
+                                  source.resolve);
+}
+
+core::GameState random_armies_battle(const ArmySource& source, std::uint64_t seed, core::Side first_turn) {
+    const core::Faction* csm = core::find_faction(source.factions, "chaos_space_marines");
+    const core::Faction* tyranids = core::find_faction(source.factions, "tyranids");
+    if (csm == nullptr || tyranids == nullptr) {
+        throw core::DataError("D-079: --random-armies needs the factions 'chaos_space_marines' and 'tyranids'");
+    }
+    return custom_battle_state(source,
+                               core::random_army(*csm, source.resolve, core::random_army_seed(core::Side::A, seed)),
+                               core::random_army(*tyranids, source.resolve, core::random_army_seed(core::Side::B, seed)),
+                               first_turn);
 }
 
 std::string format_arena(const ArenaResult& r, const core::GameState& scenario) {

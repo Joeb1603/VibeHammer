@@ -4067,3 +4067,100 @@ Loader-side only: `GameState`, the scenario loader's flat 02.07 check and every 
     Incursion rosters cost **960** (Legionaries 180 x 2, Chaos Lord 95, Chaos Terminator Squad 370, Havocs 135) and
     **955** (Termagants 55 x 2, Genestealers 75 x 2, Screamer-killer 125 x 2, Tyrant Guard 80, Hive Tyrant 195,
     Tyrannofex 170). No second copy pays the surcharge (it starts at the third).
+
+### Part 2 (M72): army lists, their problems, new units, random armies and the auto-layout
+**Decided:** 2026-11-09 (M72 of the pre-approved batch; not design-first; the conservative choices are marked
+*conservative*). Loader-side only: `GameState`, the engine, the scenario loader's checks and every replay and bot game of
+the shipped scenarios are unchanged.
+- **Army lists** (`src/core/data/army_list.{hpp,cpp}`): `ArmyModelGroup {type, count, weapons}` (a scenario's model
+  group), `ArmyUnit {unit_file, models}`, `ArmyList {name, faction, units}` and `Faction {id, name, faction_keyword,
+  unit_files, default_army}`. An army file is `{"format": 1, "kind": "vibehammer-army", "name", "faction", "units":
+  [{"unit_file", "models": [{"type", "count", "weapons"}]}]}`, written by `save_army` in that key order (2-space indent,
+  final newline); a wrong kind or format is a `DataError`. **Points are computed, never stored.** `data/factions.json`
+  (`"kind": "vibehammer-factions"`) holds the two factions agreed with the user: Chaos Space Marines (faction keyword
+  Heretic Astartes: Chaos Lord, Legionaries, Chaos Terminator Squad, Havocs) and Tyranids (Hive Tyrant, Termagants,
+  Genestealers, Tyrant Guard, Screamer-killer, Tyrannofex), each with its default army. `data/armies/
+  chaos_space_marines_incursion.json` and `tyranids_incursion.json` are the stock rosters of `rosters_44x60.json` as
+  army lists (units, counts and loadouts only, in the scenario's unit and weapon order; named after the scenario's sides,
+  so a custom battle of the stock lists is the rosters scenario apart from positions). No Space Marines: the
+  Intercessors stay for the old scenarios only.
+- **Points** (`unit_points(sheet, unit, earlier_copies)`): the size bracket (D-079 part 1), plus each model's option
+  points from its slot decomposition, plus the surcharge when `earlier_copies` copies of the datasheet come earlier in
+  the list (`army_points` counts them in list order). A group that doesn't decompose adds no option points (its problem
+  is reported). The stock lists cost 960 and 955.
+- **Problems** (`army_problems(list, faction, resolver, limit = 1000)`, each `{unit index or none, reason}`, every reason
+  cited: `02.06: `, `02.07 (D-079): `, `02.05 (D-079): ` or `D-079: `):
+  - *per unit* (`unit_problems(sheet, unit)`): the datasheet is the faction's (in its `unit_files`; *conservative*: also
+    carries the faction keyword, 02.05); it has list data; 02.06 model types, group counts of at least 1, each type's
+    count and the unit's size (the scenario loader's wording); a refused weapon ("D-079: '<type>' carries '<weapon>',
+    which can't be picked: <the engine's D-026 / D-071 / D-069 reason>"); 02.07 slot decomposition (M71's
+    `loadout_fits_slots`); each model's limits; the unit's limits at its size (`limit_max`: by unit size, per N models);
+  - *copies*: more than `max_copies.incursion` copies of a datasheet (2; 4 for the BATTLELINE Legionaries and
+    Termagants) refuses each copy past the limit ("this is the 3rd");
+  - *the army*: the list's `faction` is the faction's id; at least one unit; **at least one CHARACTER unit** (agreed
+    with the user, BSData's Army Roster rule: a Chaos Lord or a Hive Tyrant; the reason names the faction's CHARACTER
+    datasheets); the points limit (1000, Incursion); and, when every unit is clean, that the auto-layout fits it in its
+    44"x12" zone ("D-079: the army does not fit in its 44\"x12\" deployment zone").
+  - **Opposing factions only** (agreed): `battle_problems(a, b)` refuses two lists of one faction; `custom_battle_scenario`
+    (where a battle is assembled) throws a `DataError` for it, for an unknown faction and for any `army_problems` of
+    either side (*conservative*: only legal lists become battles).
+- **Refused weapons** (agreed: greyed out with the reason). `weapon_refusal(sheet, weapon)` is the engine's own reason
+  (`unimplemented_ability_problem`) for the first refused profile, so a weapon is pickable only if **every** profile is
+  playable; `option_refusal` is the first refused weapon of an option. Today: Daemon hammer, Combi-weapon, Chainfist,
+  Heavy flamer, Reaper autocannon, Meltagun, Flamer, Balefire tome and Strangleweb (D-079 part 1's list); every other
+  weapon of the ten is pickable (tested). A model type is **unavailable** when no combination of its slot options is
+  pickable within its per-model limits: Terminators' Accursed weapon and combi-weapon, Power fist and combi-weapon,
+  Chainfist and combi-bolter, Heavy weapon and Chainfist and combi-weapon; Legionary w/ balefire tome; Termagant w/
+  Strangleweb (`unavailable_model_types`).
+- **New units** (`default_unit(sheet, file)`): the datasheet's minimum size; each type at its own minimum, then one
+  model at a time on the first available type (model_types order) that keeps the unit limits at that size; each type's
+  loadout per slot the BSData default if pickable, else the first pickable option (and if that combination breaks a
+  per-model limit, the first playable combination). Groups in model_types order; a loadout's weapons are its fixed
+  weapons, then its options' weapons in slot order. Results: Chaos Lord accursed weapon + plasma pistol (the Daemon
+  hammer refused); Havocs a champion with chainsword + plasma pistol (the Flamer refused) and 4 autocannons; 5
+  Terminators (4 accursed weapon and combi-bolter, the champion's default); 5 Legionaries (champion + 4 boltguns); 10
+  Termagants with fleshborers; and the minimum of the others with their defaults. Each is legal (tested).
+- **Random armies** (`random_army(faction, resolver, seed, limit = 1000)`; deterministic, SplitMix64 as the tests' RNG):
+  a random CHARACTER unit first, then random datasheets while the copy and points limits allow (each unit a random size,
+  random available types within their counts and the unit limits, a random playable loadout per model; up to 20 tries,
+  else `default_unit`), stopping after 10 failures in a row or, from the second unit on, with chance 1/10 per step (so
+  every army size appears); the units are then shuffled (Fisher-Yates) so the CHARACTER isn't always first. The army is
+  kept only if `army_problems` is empty; up to 32 attempts, else the first CHARACTER datasheet's default unit alone. Over
+  2,000 seeds per faction no attempt was refused (Chaos Space Marines mean 756 points, 4.7 units; Tyranids 804 points,
+  5.3 units; at most 8 units and 84 models a side). `random_army_seed(side, seed)` gives each side's seed in a
+  random-armies battle (`seed` for A, `seed ^ 0x5DEECE66D` for B), so the arena and the tests draw the same armies.
+- **The auto-layout** (`src/core/data/zone_layout.{hpp,cpp}`; 03.02, 03.03, D-008, D-009, D-064):
+  - *Formations lifted out:* `Formation`, `parse_formation` and `place_formation` moved verbatim from the scenario loader
+    into `src/core/data/formation.{hpp,cpp}` (the loader calls them; every shipped scenario places its models bit for
+    bit as before: replays and the identity set). One expression was rewritten: the anchor test compares the JSON
+    value as a string (`anchor.get<std::string>() != "zone_front"`, the same test) instead of `anchor !=
+    "zone_front"`, which GCC 13 at -O3 flags with a false -Warray-bounds in the new translation unit.
+  - *Ranks:* each unit's formation is gap 0, depth by shelf, ovals at facing 0, models in list order; it takes the
+    **fewest ranks** r = 1..n whose placement (by `place_formation` itself) is coherent (03.03, `unit_coherency`), at
+    most the zone's depth deep and at most the battlefield's width wide. 20 Termagants take 3 ranks (2 ranks of 10 are
+    9.04" corner to corner), 10 Termagants 1 (8.98" end to end), 10 Legionaries 2, 10 Terminators 2, 6 Tyrant Guard 1.
+  - *Shelves:* units in list order, west to east, 1" between their footprints; a unit that doesn't fit the shelf's width
+    starts the next. The first shelf's front touches the zone's front line (D-008 `zone_front`); each further shelf
+    stands 1" behind the deepest unit of the one before (D-064 `depth_in`); each shelf is centred on the battlefield.
+  - *Fallback:* first-fit decreasing by width (ties in list order); failing that, the army does not fit.
+  - *Grid:* `centre_x_in` is rounded to 1/8" (then kept inside the battlefield, moving inwards) and `depth_in` rounded
+    up to 1/8", so they are exact in float and inches -> JSON -> mm reproduce the positions (tested); units on a shelf
+    are 1" apart give or take 1/8".
+  - *Verified:* a layout is kept only if placing every model as the loader does passes the loader's set-up checks
+    within the side (coherency, wholly within the zone, no overlap); the zones are 36" apart, so the sides are
+    unengaged. North and south zones only (the custom battle's).
+- **The custom battle** (`custom_battle_scenario(a, b, first_turn, factions, resolver)`): rosters-style scenario JSON
+  for `build_game_state`: "Custom battle - <A> vs <B>", 44"x60", 12" zones south (A) and north (B), 5 battle rounds,
+  `first_turn`, `"result": "points_destroyed"` (D-076), each unit with its `points` (copies counted in list order) and
+  its layout formation (`gap_in` 0, `depth_in` only when not 0, `anchor` `zone_front`). Side names are the army names,
+  else the faction names. M74 adds the deployment mode as a further argument.
+- **The points bound** (D-076's `check_points_data`): a unit of these datasheets starts with at most 30 wounds (10
+  Terminators x 3), so the denominator is at most lcm(1..30) = 2,329,089,562,800 and, with at most 2,000 points on the
+  table, D x points <= 4.7 x 10^15, far below 2^59. No legal custom battle can be refused by that check.
+- **Arena** (`wh40k_bot_arena`): `--army-a <file>` / `--army-b <file>` (a side not given plays the other faction's
+  default army), `--random-armies 1` (each game's armies drawn from its seed), `--first A|B` (the custom battle's first
+  turn, default A; with a scenario it overrides the scenario's). They can't be combined with `--scenario` (or the army
+  flags with `--random-armies`): exit 2. The games come from a scenario per seed (`ScenarioForSeed`); a fixed scenario
+  plays exactly as before and the `--per-game` format is unchanged.
+- **Package:** `tools/package.ps1` ships `data/armies/*.json` and `data/factions.json`; `.gitignore` ignores `/armies/`
+  (the user's own lists, next to the exe, as `/saves/`).

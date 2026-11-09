@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/queries.hpp"
+#include "support/army_fixtures.hpp"
 #include "support/engine_helpers.hpp"
 #include "support/monster_fixtures.hpp"
 #include "test_helpers.hpp"
@@ -42,6 +44,7 @@ constexpr std::uint64_t kM62Seed = 10;  // M62: picked by Replay.DISABLED_Search
 constexpr std::uint64_t kM63Seed = 1;   // M63: picked by Replay.DISABLED_SearchM63Seed
 constexpr std::uint64_t kM65Seed = 1;   // M65: picked by Replay.DISABLED_SearchM65Seed
 constexpr std::uint64_t kM67Seed = 1;   // M67: picked by Replay.DISABLED_SearchM67Seed
+constexpr std::uint64_t kM72Seed = 10;  // M72: picked by Replay.DISABLED_SearchM72Seed (5 profiles fired)
 
 // Plays random actions through a Match until GameOver or `max_actions`.
 void random_play(Match& match, TestRng& rng, int max_actions) {
@@ -783,6 +786,40 @@ Replay m67_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     return r;
 }
 
+// M72 (D-079 part 2): a custom battle of the two showcase armies (tests/support/army_fixtures.hpp), auto-placed, played
+// at random (TestRng(seed)) through the end of battle round 2. Initial-state form, so the file needs no army or
+// scenario file. `shots` gets the weapon profiles fired.
+Replay m72_replay(std::uint64_t seed, std::set<std::string>& shots) {
+    GameState init = wh40k::test::custom_battle(wh40k::test::showcase_csm(), wh40k::test::showcase_tyranids());
+    init.dice.seed = seed;
+    Match match(init);
+    TestRng rng(seed);
+    while (match.state().pending && match.state().flow.battle_round < 3) {
+        const GameAction a = wh40k::test::random_action(match.state(), rng);
+        if (const auto* sh = std::get_if<action::Shoot>(&a)) {
+            for (const ShotDeclaration& d : sh->shots) {
+                const Model* m = find_model(match.state(), d.model);
+                if (m != nullptr) shots.insert(m->weapons.at(d.weapon_index).profiles.at(d.profile_index).name);
+            }
+        }
+        const auto r = match.submit(decider(match.state()), a);
+        EXPECT_TRUE(r.ok()) << r.reasons.at(0);
+        if (!r.ok()) break;
+    }
+    return match.to_replay(
+        "M72: a custom battle (D-079 part 2) of two non-stock legal armies, auto-placed by the D-079 layout on the 44\" "
+        "x 60\" portrait battlefield (Incursion, decided on points destroyed, D-076). Side A, Chaos Space Marines (875 "
+        "points): a Chaos Lord with an accursed weapon and a power fist; Havocs with a champion's two power fists and an "
+        "autocannon, a reaper chaincannon, a missile launcher and a heavy bolter; 10 Terminators with 5 power fists and "
+        "two paired accursed weapons; 10 Legionaries with a reaper chaincannon, a missile launcher and a heavy melee "
+        "weapon; 5 Legionaries with the plasma pistol and chainsword special. Side B, Tyranids (900 points): a Hive "
+        "Tyrant with two scything talons; 20 Termagants with spinefists, devourers, two Shardlaunchers and two Spike "
+        "rifles; 6 Tyrant Guard, two of each loadout; a Tyrannofex with a rupture cannon and one with acid spray; 10 "
+        "Termagants. Random legal play (the tests' TestRng, seed " +
+        std::to_string(seed) + ") through the end of battle round 2; stops at the first decision of battle round 3. The "
+        "initial state is embedded.");
+}
+
 }  // namespace
 
 TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
@@ -818,6 +855,20 @@ TEST(Replay, RandomGamesFromTheRostersFixtureReplayIdentically) {
         Match match(initial);
         TestRng rng(seed);
         random_play(match, rng, 6000);
+        EXPECT_EQ(match.state().flow.stage, Stage::GameOver) << "seed " << seed;
+        expect_replays_identically(match);
+    }
+}
+
+TEST(Replay, RandomGamesOnRandomLegalArmiesReplayIdentically) {
+    // M72 (D-079 part 2): custom battles on random legal armies (as the arena's --random-armies), auto-placed, played
+    // to the end from an embedded initial state.
+    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        GameState initial = wh40k::test::random_armies_battle(seed);
+        initial.dice.seed = seed;
+        Match match(initial);
+        TestRng rng(seed);
+        random_play(match, rng, 10000);
         EXPECT_EQ(match.state().flow.stage, Stage::GameOver) << "seed " << seed;
         expect_replays_identically(match);
     }
@@ -1425,6 +1476,24 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m67_problem.empty()) << m67_problem;
     EXPECT_TRUE(m67_shows_it) << "seed " << kM67Seed << " no longer shows the lascannon damage, the charge and the fight";
     save_if_clean(m67, kReplayDir / "m67_rosters_round1.json");
+
+    // M72: a custom battle of two non-stock legal armies (D-079 part 2), auto-placed, random play through battle round 2.
+    // Embedded initial state. Stops at the first decision of battle round 3, before M74's deployment step (an
+    // auto-placed battle has none) and the bot changes of M73 and M77.
+    std::set<std::string> m72_shots;
+    const Replay m72 = m72_replay(kM72Seed, m72_shots);
+    EXPECT_EQ(replay_expectation(run_replay(m72, repo_root()).final_state).at("battle_round"), 3);
+    EXPECT_GT(m72_shots.size(), 3u) << "seed " << kM72Seed << " no longer shows the new loadouts shooting";
+    for (const std::string& p : m72_shots) std::printf("m72 shot: %s\n", p.c_str());
+    save_if_clean(m72, kReplayDir / "m72_custom_battle_round2.json");
+}
+
+TEST(Replay, DISABLED_SearchM72Seed) {
+    for (std::uint64_t seed = 1; seed <= 60; ++seed) {
+        std::set<std::string> shots;
+        (void)m72_replay(seed, shots);
+        std::printf("seed %llu: %zu profiles fired\n", static_cast<unsigned long long>(seed), shots.size());
+    }
 }
 
 TEST(Replay, DISABLED_SearchM67Seed) {

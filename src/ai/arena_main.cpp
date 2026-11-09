@@ -14,17 +14,25 @@
 //   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
 //   then the decision times and the run's wall time.
+// M72 (D-079 part 2), custom battles instead of --scenario: --army-a <file> / --army-b <file> (army lists, relative to
+//   the repo root; a side not given plays the default army of the other faction), --random-armies 1 (each game a
+//   random legal Chaos Space Marines army for side A and Tyranid army for side B, drawn from the game's seed) and
+//   --first A|B (the side with the first turn: the custom battle's, default A; with a scenario, it overrides the
+//   scenario's). Without these flags the arena runs exactly as before.
 
 #include <cstdio>
 #include <exception>
 #include <sstream>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "arena.hpp"
+#include "core/data/army_list.hpp"
+#include "core/data/load_error.hpp"
 #include "core/data/scenario_loader.hpp"
 
 namespace {
@@ -132,6 +140,11 @@ int main(int argc, char** argv) {
     std::optional<std::uint64_t> trace;
     std::string weights_text;
     bool per_game = false;
+    bool scenario_given = false;
+    std::optional<std::string> army_a;  // M72
+    std::optional<std::string> army_b;
+    std::optional<wh40k::core::Side> first;
+    bool random_armies = false;
     for (int i = 1; i < argc; i += 2) {
         const std::string key = argv[i];
         if (i + 1 >= argc) {
@@ -149,6 +162,18 @@ int main(int argc, char** argv) {
                 parse_level(value, b);
             } else if (key == "--scenario") {
                 scenario = value;
+                scenario_given = true;
+            } else if (key == "--army-a") {
+                army_a = value;
+            } else if (key == "--army-b") {
+                army_b = value;
+            } else if (key == "--first") {
+                if (value != "A" && value != "B") throw std::invalid_argument("not A or B");
+                first = value == "A" ? wh40k::core::Side::A : wh40k::core::Side::B;
+            } else if (key == "--random-armies") {
+                const int v = std::stoi(value);
+                if (v != 0 && v != 1) throw std::invalid_argument("not 0 or 1");
+                random_armies = v == 1;
             } else if (key == "--seed") {
                 seed = std::stoull(value);
             } else if (key == "--trace") {
@@ -169,11 +194,54 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
+    const bool armies = army_a.has_value() || army_b.has_value();
+    if ((armies || random_armies) && scenario_given) {
+        std::fprintf(stderr, "wh40k_bot_arena: --scenario can't be combined with --army-a, --army-b or --random-armies\n");
+        return 2;
+    }
+    if (armies && random_armies) {
+        std::fprintf(stderr, "wh40k_bot_arena: --random-armies can't be combined with --army-a or --army-b\n");
+        return 2;
+    }
     try {
         const fs::path root(WH40K_REPO_ROOT);
-        fs::path file(scenario);
-        if (!fs::exists(file)) file = root / scenario;
-        const wh40k::core::GameState initial = wh40k::core::load_scenario(file, root);
+        const auto in_repo = [&root](const std::string& name) {
+            fs::path file(name);
+            if (!fs::exists(file)) file = root / name;
+            return file;
+        };
+        wh40k::ai::ScenarioForSeed scenario_for;
+        if (armies || random_armies) {
+            namespace core = wh40k::core;
+            const auto source = std::make_shared<wh40k::ai::ArmySource>(wh40k::ai::load_army_source(root));
+            const core::Side first_turn = first.value_or(core::Side::A);
+            if (random_armies) {
+                scenario = "random armies (D-079)";
+                scenario_for = [source, first_turn](std::uint64_t s) {
+                    return wh40k::ai::random_armies_battle(*source, s, first_turn);
+                };
+            } else {
+                std::optional<core::ArmyList> lists[2];
+                if (army_a) lists[0] = core::load_army(in_repo(*army_a));
+                if (army_b) lists[1] = core::load_army(in_repo(*army_b));
+                for (std::size_t side = 0; side < 2; ++side) {  // a side not given: the other faction's default army
+                    if (lists[side]) continue;
+                    const std::string& given = lists[1 - side]->faction;
+                    for (const core::Faction& f : source->factions) {
+                        if (f.id != given && !lists[side]) lists[side] = core::load_army(root / f.default_army);
+                    }
+                    if (!lists[side]) throw core::DataError("D-079: no faction other than '" + given + "'");
+                }
+                scenario = "army " + lists[0]->name + " vs " + lists[1]->name;
+                const core::GameState state = wh40k::ai::custom_battle_state(*source, *lists[0], *lists[1], first_turn);
+                scenario_for = [state](std::uint64_t) { return state; };
+            }
+        } else {
+            wh40k::core::GameState state = wh40k::core::load_scenario(in_repo(scenario), root);
+            if (first) state.first_turn = *first;
+            scenario_for = [state](std::uint64_t) { return state; };
+        }
+        const wh40k::core::GameState initial = scenario_for(trace ? *trace : seed);
         if (trace) {
             std::vector<std::string> lines;
             std::vector<double> ms;
@@ -192,11 +260,11 @@ int main(int argc, char** argv) {
                     level_name(b).c_str(), scenario.c_str(), static_cast<unsigned long long>(seed),
                     static_cast<unsigned long long>(seed + static_cast<std::uint64_t>(games > 0 ? games - 1 : 0)));
         if (per_game) {
-            const wh40k::ai::PerGameReport r = wh40k::ai::run_per_game(initial, games, seed, a, b, step_cap);
+            const wh40k::ai::PerGameReport r = wh40k::ai::run_per_game(scenario_for, games, seed, a, b, step_cap);
             std::printf("%s", r.text.c_str());
             return r.clean ? 0 : 1;
         }
-        const wh40k::ai::ArenaResult r = wh40k::ai::run_arena(initial, games, seed, a, b, step_cap);
+        const wh40k::ai::ArenaResult r = wh40k::ai::run_arena(scenario_for, games, seed, a, b, step_cap);
         std::printf("%s", wh40k::ai::format_arena(r, initial).c_str());
         return r.clean() ? 0 : 1;
     } catch (const std::exception& e) {
