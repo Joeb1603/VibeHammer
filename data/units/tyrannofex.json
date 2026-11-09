@@ -156,5 +156,60 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 1,
+        "points": 170
+      }
+    ],
+    "copy_surcharge": {
+      "earlier_copies": 2,
+      "points": 10
+    },
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Tyrannofex",
+        "fixed": [
+          "Powerful limbs",
+          "Stinger salvoes"
+        ],
+        "slots": [
+          {
+            "name": "Fleshborer Hive",
+            "default": "Fleshborer hive",
+            "options": [
+              {
+                "name": "Rupture cannon",
+                "weapons": [
+                  "Rupture cannon"
+                ],
+                "points": 20
+              },
+              {
+                "name": "Fleshborer hive",
+                "weapons": [
+                  "Fleshborer hive"
+                ]
+              },
+              {
+                "name": "Acid spray",
+                "weapons": [
+                  "Acid spray"
+                ],
+                "points": 10
+              }
+            ]
+          }
+        ],
+        "limits": []
+      }
+    ],
+    "unit_limits": []
   }
 }

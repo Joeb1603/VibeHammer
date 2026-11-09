@@ -453,5 +453,155 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 5,
+        "points": 135
+      }
+    ],
+    "copy_surcharge": {
+      "earlier_copies": 2,
+      "points": 10
+    },
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Havoc Champion",
+        "fixed": [],
+        "slots": [
+          {
+            "name": "Melee weapon",
+            "default": "Astartes chainsword",
+            "options": [
+              {
+                "name": "Accursed weapon",
+                "weapons": [
+                  "Accursed weapon"
+                ]
+              },
+              {
+                "name": "Power fist",
+                "weapons": [
+                  "Power fist"
+                ]
+              },
+              {
+                "name": "Astartes chainsword",
+                "weapons": [
+                  "Astartes chainsword"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Ranged weapon",
+            "default": "Flamer",
+            "options": [
+              {
+                "name": "Plasma pistol",
+                "weapons": [
+                  "Plasma pistol"
+                ]
+              },
+              {
+                "name": "Accursed weapon",
+                "weapons": [
+                  "Accursed weapon"
+                ]
+              },
+              {
+                "name": "Power fist",
+                "weapons": [
+                  "Power fist"
+                ]
+              },
+              {
+                "name": "Boltgun",
+                "weapons": [
+                  "Boltgun"
+                ]
+              },
+              {
+                "name": "Meltagun",
+                "weapons": [
+                  "Meltagun"
+                ]
+              },
+              {
+                "name": "Flamer",
+                "weapons": [
+                  "Flamer"
+                ]
+              },
+              {
+                "name": "Plasma gun",
+                "weapons": [
+                  "Plasma gun"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": [
+          {
+            "weapons": [
+              "Accursed weapon"
+            ],
+            "max": 1
+          }
+        ]
+      },
+      {
+        "model_type": "Havoc w/ autocannon",
+        "fixed": [
+          "Havoc autocannon",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Havoc w/ lascannon",
+        "fixed": [
+          "Havoc lascannon",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Havoc w/ missile launcher",
+        "fixed": [
+          "Havoc missile launcher",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Havoc w/ reaper chaincannon",
+        "fixed": [
+          "Havoc reaper chaincannon",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Havoc w/ heavy bolter",
+        "fixed": [
+          "Havoc heavy bolter",
+          "Close combat weapon"
+        ],
+        "slots": [],
+        "limits": []
+      }
+    ],
+    "unit_limits": []
   }
 }

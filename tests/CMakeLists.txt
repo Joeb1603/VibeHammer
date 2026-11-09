@@ -14,6 +14,7 @@ add_executable(wh40k_tests
     weapon_ability_test.cpp
     datasheet_test.cpp
     roster_datasheet_test.cpp
+    list_data_test.cpp
     scenario_test.cpp
     serialization_test.cpp
     engine_flow_test.cpp

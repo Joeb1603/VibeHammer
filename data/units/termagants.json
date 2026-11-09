@@ -260,5 +260,115 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 10,
+        "points": 55
+      },
+      {
+        "min_models": 11,
+        "points": 110
+      }
+    ],
+    "max_copies": {
+      "default": 6,
+      "incursion": 4
+    },
+    "wargear": [
+      {
+        "model_type": "Termagants",
+        "fixed": [
+          "Chitinous claws and teeth"
+        ],
+        "slots": [
+          {
+            "name": "Weapons",
+            "default": "Fleshborer",
+            "options": [
+              {
+                "name": "Fleshborer",
+                "weapons": [
+                  "Fleshborer"
+                ]
+              },
+              {
+                "name": "Termagant spinefist",
+                "weapons": [
+                  "Termagant spinefist"
+                ]
+              },
+              {
+                "name": "Termagant devourer",
+                "weapons": [
+                  "Termagant devourer"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": []
+      },
+      {
+        "model_type": "Termagant w/ Shardlauncher",
+        "fixed": [
+          "Shardlauncher",
+          "Chitinous claws and teeth"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Termagant w/ Spike rifle",
+        "fixed": [
+          "Spike rifle",
+          "Chitinous claws and teeth"
+        ],
+        "slots": [],
+        "limits": []
+      },
+      {
+        "model_type": "Termagant w/ Strangleweb",
+        "fixed": [
+          "Strangleweb",
+          "Chitinous claws and teeth"
+        ],
+        "slots": [],
+        "limits": []
+      }
+    ],
+    "unit_limits": [
+      {
+        "weapons": [
+          "Shardlauncher"
+        ],
+        "max": 0,
+        "per_models": {
+          "models": 10,
+          "add": 1
+        }
+      },
+      {
+        "weapons": [
+          "Spike rifle"
+        ],
+        "max": 0,
+        "per_models": {
+          "models": 10,
+          "add": 1
+        }
+      },
+      {
+        "weapons": [
+          "Strangleweb"
+        ],
+        "max": 0,
+        "per_models": {
+          "models": 10,
+          "add": 1
+        }
+      }
+    ]
   }
 }

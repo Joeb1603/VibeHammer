@@ -1,11 +1,14 @@
+#include <algorithm>
 #include <fstream>
 #include <optional>
+#include <set>
 #include <string>
 
 #include "core/data/datasheet.hpp"
 #include "core/data/load_error.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/dice_expr.hpp"
+#include "core/state/points_destroyed.hpp"
 
 namespace wh40k::core {
 
@@ -163,6 +166,24 @@ Base parse_base(const Json& j, const std::string& where) {
 
 }  // namespace
 
+const WargearOption* WargearSlot::find_option(std::string_view option_name) const {
+    for (const auto& o : options) {
+        if (o.name == option_name) {
+            return &o;
+        }
+    }
+    return nullptr;
+}
+
+const ModelWargear* ListBuilding::find_wargear(std::string_view model_type) const {
+    for (const auto& w : wargear) {
+        if (w.model_type == model_type) {
+            return &w;
+        }
+    }
+    return nullptr;
+}
+
 const ModelTypeSheet* Datasheet::find_model_type(std::string_view type_name) const {
     for (const auto& t : model_types) {
         if (t.name == type_name) {
@@ -182,6 +203,218 @@ const Weapon* Datasheet::find_weapon(std::string_view weapon_name) const {
 }
 
 namespace {
+
+// ---- D-079: list-building data (tools/fetch_bsdata.py writes it from BSData) ----
+
+[[noreturn]] void list_fail(const std::string& where, const std::string& what) {
+    fail(where, "D-079: " + what);
+}
+
+int int_at_least(const Json& j, const char* key, int lowest, const std::string& where) {
+    const int v = require_int(j, key, where);
+    if (v < lowest) {
+        list_fail(where, std::string("'") + key + "' must be at least " + std::to_string(lowest) + ", got " +
+                             std::to_string(v));
+    }
+    return v;
+}
+
+bool has(const std::vector<std::string>& names, const std::string& name) {
+    return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+// A limit per model (no size terms, never a model type) or per unit.
+WargearLimit parse_limit(const Json& j, bool per_model, const std::string& where) {
+    WargearLimit l;
+    const int kinds = static_cast<int>(j.contains("weapons")) + static_cast<int>(j.contains("option")) +
+                      static_cast<int>(j.contains("model_type"));
+    if (kinds != 1) {
+        list_fail(where, "a limit counts exactly one of 'weapons', 'option' and 'model_type'");
+    }
+    if (j.contains("weapons")) {
+        l.counts = LimitCounts::Weapons;
+        l.names = string_list(j, "weapons", where);
+        if (l.names.empty()) {
+            list_fail(where, "a limit's 'weapons' list is empty");
+        }
+    } else if (j.contains("option")) {
+        l.counts = LimitCounts::Option;
+        l.names = {require_string(j, "option", where)};
+    } else {
+        if (per_model) {
+            list_fail(where, "a per-model limit can't count a model type");
+        }
+        l.counts = LimitCounts::ModelType;
+        l.names = {require_string(j, "model_type", where)};
+    }
+    l.max = int_at_least(j, "max", 0, where);
+    if (j.contains("below_models")) {
+        const Json& b = j.at("below_models");
+        l.below_models = BelowModels{int_at_least(b, "models", 1, where), int_at_least(b, "max", 0, where)};
+    }
+    if (j.contains("per_models")) {
+        const Json& p = j.at("per_models");
+        l.per_models = PerModels{int_at_least(p, "models", 1, where), int_at_least(p, "add", 1, where)};
+    }
+    if (per_model && (l.below_models || l.per_models)) {
+        list_fail(where, "a per-model limit can't depend on the unit's size");
+    }
+    if (l.below_models && l.per_models) {
+        list_fail(where, "a limit has both 'below_models' and 'per_models'");
+    }
+    return l;
+}
+
+bool any_slot_has_option(const ModelWargear& w, const std::string& option) {
+    return std::any_of(w.slots.begin(), w.slots.end(),
+                       [&](const WargearSlot& s) { return s.find_option(option) != nullptr; });
+}
+
+ListBuilding parse_list_building(const Json& j, const Datasheet& ds, const std::set<std::string>& weapon_names,
+                                 const std::string& sheet_where) {
+    const std::string where = sheet_where + " list_building";
+    if (!j.is_object()) {
+        list_fail(where, "must be an object");
+    }
+    ListBuilding lb;
+
+    const Json& points = require(j, "points", where);
+    if (!points.is_array() || points.empty()) {
+        list_fail(where, "'points' must be a non-empty list of size brackets");
+    }
+    for (const Json& b : points) {
+        const PointsBracket pb{require_int(b, "min_models", where), require_int(b, "points", where)};
+        if (pb.points < 1 || pb.points > kMaxUnitPoints) {
+            list_fail(where, "a size bracket's points must be 1.." + std::to_string(kMaxUnitPoints) + ", got " +
+                                 std::to_string(pb.points));
+        }
+        if (!lb.points.empty() && pb.min_models <= lb.points.back().min_models) {
+            list_fail(where, "size brackets must have strictly increasing min_models");
+        }
+        lb.points.push_back(pb);
+    }
+    if (lb.points.front().min_models != ds.min_models || lb.points.back().min_models > ds.max_models) {
+        list_fail(where, "size brackets must start at the composition's minimum (" + std::to_string(ds.min_models) +
+                             " models) and stay within its maximum (" + std::to_string(ds.max_models) + ")");
+    }
+
+    if (j.contains("copy_surcharge")) {
+        const Json& sc = j.at("copy_surcharge");
+        lb.surcharge = CopySurcharge{int_at_least(sc, "earlier_copies", 1, where), int_at_least(sc, "points", 1, where)};
+    }
+    const Json& copies = require(j, "max_copies", where);
+    lb.max_copies_default = int_at_least(copies, "default", 1, where);
+    lb.max_copies_incursion = int_at_least(copies, "incursion", 1, where);
+
+    const Json& wargear = require(j, "wargear", where);
+    if (!wargear.is_array() || wargear.size() != ds.model_types.size()) {
+        list_fail(where, "'wargear' must list every model type once, in model_types order");
+    }
+    for (std::size_t i = 0; i < ds.model_types.size(); ++i) {
+        const ModelTypeSheet& mt = ds.model_types[i];
+        const Json& wj = wargear[i];
+        ModelWargear mw;
+        mw.model_type = require_string(wj, "model_type", where);
+        if (mw.model_type != mt.name) {
+            list_fail(where, "'wargear' entry " + std::to_string(i) + " is for '" + mw.model_type +
+                                 "', expected the model type '" + mt.name + "' (every model type once, in order)");
+        }
+        const std::string mw_where = where + " model type '" + mt.name + "'";
+        const auto check_weapon = [&](const std::string& weapon, const std::string& at) {
+            if (weapon_names.count(weapon) == 0) {
+                list_fail(at, "unknown weapon '" + weapon + "'");
+            }
+            if (!has(mt.weapon_options, weapon)) {
+                list_fail(at, "'" + weapon + "' is not one of the model type's weapon_options");
+            }
+        };
+        mw.fixed = string_list(wj, "fixed", mw_where);
+        for (const std::string& w : mw.fixed) {
+            check_weapon(w, mw_where);
+        }
+        if (wj.contains("slots")) {
+            for (const Json& sj : wj.at("slots")) {
+                WargearSlot slot;
+                slot.name = require_string(sj, "name", mw_where);
+                const std::string slot_where = mw_where + " slot '" + slot.name + "'";
+                const Json& options = require(sj, "options", slot_where);
+                if (!options.is_array() || options.empty()) {
+                    list_fail(slot_where, "a slot needs at least one option");
+                }
+                for (const Json& oj : options) {
+                    WargearOption o;
+                    o.name = require_string(oj, "name", slot_where);
+                    if (slot.find_option(o.name) != nullptr) {
+                        list_fail(slot_where, "two options are named '" + o.name + "'");
+                    }
+                    o.weapons = string_list(oj, "weapons", slot_where);
+                    if (o.weapons.empty()) {
+                        list_fail(slot_where, "option '" + o.name + "' gives no weapon");
+                    }
+                    for (const std::string& w : o.weapons) {
+                        check_weapon(w, slot_where + " option '" + o.name + "'");
+                    }
+                    if (oj.contains("points")) {
+                        o.points = int_at_least(oj, "points", 0, slot_where);
+                        if (o.points > kMaxUnitPoints) {
+                            list_fail(slot_where, "option '" + o.name + "' costs more than " +
+                                                      std::to_string(kMaxUnitPoints) + " points");
+                        }
+                    }
+                    slot.options.push_back(std::move(o));
+                }
+                if (sj.contains("default")) {
+                    const std::string d = require_string(sj, "default", slot_where);
+                    if (slot.find_option(d) == nullptr) {
+                        list_fail(slot_where, "its default '" + d + "' is not one of its options");
+                    }
+                    slot.default_option = d;
+                }
+                mw.slots.push_back(std::move(slot));
+            }
+        }
+        if (wj.contains("limits")) {
+            for (const Json& lj : wj.at("limits")) {
+                WargearLimit l = parse_limit(lj, true, mw_where);
+                for (const std::string& n : l.names) {
+                    if (l.counts == LimitCounts::Weapons && weapon_names.count(n) == 0) {
+                        list_fail(mw_where, "a limit counts the unknown weapon '" + n + "'");
+                    }
+                    if (l.counts == LimitCounts::Option && !any_slot_has_option(mw, n)) {
+                        list_fail(mw_where, "a limit counts the unknown option '" + n + "'");
+                    }
+                }
+                mw.limits.push_back(std::move(l));
+            }
+        }
+        lb.wargear.push_back(std::move(mw));
+    }
+
+    if (j.contains("unit_limits")) {
+        for (const Json& lj : j.at("unit_limits")) {
+            WargearLimit l = parse_limit(lj, false, where);
+            for (const std::string& n : l.names) {
+                const bool known =
+                    l.counts == LimitCounts::Weapons
+                        ? weapon_names.count(n) > 0
+                        : l.counts == LimitCounts::Option
+                              ? std::any_of(lb.wargear.begin(), lb.wargear.end(),
+                                            [&](const ModelWargear& w) { return any_slot_has_option(w, n); })
+                              : ds.find_model_type(n) != nullptr;
+                if (!known) {
+                    list_fail(where, "a unit limit counts the unknown " +
+                                         std::string(l.counts == LimitCounts::Weapons  ? "weapon"
+                                                     : l.counts == LimitCounts::Option ? "option"
+                                                                                       : "model type") +
+                                         " '" + n + "'");
+                }
+            }
+            lb.unit_limits.push_back(std::move(l));
+        }
+    }
+    return lb;
+}
+
 Datasheet parse_datasheet_impl(const Json& j);
 }  // namespace
 
@@ -255,6 +488,15 @@ Datasheet parse_datasheet_impl(const Json& j) {
             continue;  // D-070: only conditional profiles; the weapon can't be equipped (02.04 at load)
         }
         ds.weapons.push_back(std::move(w));
+    }
+
+    if (j.contains("list_building")) {
+        // D-079: weapon names are the file's, including a weapon whose profiles are all conditional (D-070).
+        std::set<std::string> weapon_names;
+        for (const auto& item : j.at("weapons").items()) {
+            weapon_names.insert(item.key());
+        }
+        ds.list_building = parse_list_building(j.at("list_building"), ds, weapon_names, where);
     }
     return ds;
 }

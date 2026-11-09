@@ -170,5 +170,69 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 1,
+        "points": 95
+      }
+    ],
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Chaos Lord",
+        "fixed": [],
+        "slots": [
+          {
+            "name": "Daemon hammer",
+            "default": "Daemon hammer",
+            "options": [
+              {
+                "name": "Daemon hammer",
+                "weapons": [
+                  "Daemon hammer"
+                ]
+              },
+              {
+                "name": "Accursed weapon",
+                "weapons": [
+                  "Accursed weapon"
+                ]
+              },
+              {
+                "name": "Astartes chainblade",
+                "weapons": [
+                  "Astartes chainblade"
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Plasma pistol",
+            "default": "Plasma pistol",
+            "options": [
+              {
+                "name": "Power fist",
+                "weapons": [
+                  "Power fist"
+                ]
+              },
+              {
+                "name": "Plasma pistol",
+                "weapons": [
+                  "Plasma pistol"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": []
+      }
+    ],
+    "unit_limits": []
   }
 }

@@ -105,5 +105,55 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 3,
+        "points": 80
+      },
+      {
+        "min_models": 4,
+        "points": 170
+      }
+    ],
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Tyrant Guard",
+        "fixed": [],
+        "slots": [
+          {
+            "name": "Wargear",
+            "default": "Scything talons and rending claws",
+            "options": [
+              {
+                "name": "Scything talons and rending claws",
+                "weapons": [
+                  "Scything talons and rending claws"
+                ]
+              },
+              {
+                "name": "Bone cleaver, lash whip and rending claws",
+                "weapons": [
+                  "Bone cleaver, lash whip and rending claws"
+                ]
+              },
+              {
+                "name": "Crushing claws and rending claws",
+                "weapons": [
+                  "Crushing claws and rending claws"
+                ]
+              }
+            ]
+          }
+        ],
+        "limits": []
+      }
+    ],
+    "unit_limits": []
   }
 }

@@ -96,5 +96,33 @@
         }
       ]
     }
+  },
+  "list_building": {
+    "points": [
+      {
+        "min_models": 1,
+        "points": 125
+      }
+    ],
+    "copy_surcharge": {
+      "earlier_copies": 2,
+      "points": 10
+    },
+    "max_copies": {
+      "default": 3,
+      "incursion": 2
+    },
+    "wargear": [
+      {
+        "model_type": "Screamer-killer",
+        "fixed": [
+          "Bio-plasmic scream",
+          "Screamer-killer talons"
+        ],
+        "slots": [],
+        "limits": []
+      }
+    ],
+    "unit_limits": []
   }
 }
