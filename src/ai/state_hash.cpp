@@ -155,7 +155,7 @@ void add(Fnv1a& h, const core::FlowState& f) {
             for (const core::Position& pt : p.points) add(h, pt);
             if (!p.facings.empty()) {  // M65: only a path that turns its model
                 h.u64(0x7475726eull);  // "turn"
-                for (const float f : p.facings) h.f32(f);
+                for (const float facing : p.facings) h.f32(facing);
             }
         }
         h.i32(m.pending_mortal_wounds);

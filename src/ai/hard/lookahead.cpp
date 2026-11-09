@@ -141,9 +141,9 @@ std::optional<MoveSetup> setup_of(const Evaluator& eval, const GameState& s) {
     }
     m.enemies = core::posed_enemy_models(s, u->side);
     if (m.any_passes) {  // in posed_enemy_models' order: units in order, then their models
-        for (const core::Unit& e : s.units) {
-            if (e.side == u->side) continue;
-            for (const core::Model& em : e.models) m.enemy_mv.push_back(core::is_monster_or_vehicle(e, em));
+        for (const core::Unit& eu : s.units) {
+            if (eu.side == u->side) continue;
+            for (const core::Model& em : eu.models) m.enemy_mv.push_back(core::is_monster_or_vehicle(eu, em));
         }
     }
     for (const core::Unit& o : s.units) {
@@ -155,7 +155,7 @@ std::optional<MoveSetup> setup_of(const Evaluator& eval, const GameState& s) {
     m.enemy_centroid = centroid(ps);
     for (const core::Base& b : m.bases) m.radius.push_back(avoid_radius_mm(b));
     for (std::size_t i = 0; i < m.bases.size(); ++i) m.extents.push_back(edge_extents(m.bases[i], m.facings[i]));
-    for (const core::PosedModel& e : m.enemies) m.enemy_radius.push_back(avoid_radius_mm(e.base));
+    for (const core::PosedModel& em : m.enemies) m.enemy_radius.push_back(avoid_radius_mm(em.base));
     for (const core::PosedModel& o : m.others) m.other_radius.push_back(avoid_radius_mm(o.base));
     m.through_enemies = s.flow.move->mode == core::FallBackMode::DesperateEscape;
     m.width = s.battlefield.width_mm;

@@ -1506,13 +1506,13 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     for (const std::uint32_t id : {1u, 2u, 4u, 5u}) r_move(id, MoveType::RemainStationary, 0);
     {
         const Unit& bolters = r_unit(3);
-        action::Shoot volley{bolters.id, ShootingType::Normal, {}};
+        action::Shoot boltgun_volley{bolters.id, ShootingType::Normal, {}};
         for (const ShotDeclaration& d : shot_options(g59, bolters, ShootingType::Normal)) {
             const Model& m = *find_model(bolters, d.model);
-            if (m.weapons[d.weapon_index].name == "Boltgun" && d.target == UnitId{9}) volley.shots.push_back(d);
+            if (m.weapons[d.weapon_index].name == "Boltgun" && d.target == UnitId{9}) boltgun_volley.shots.push_back(d);
         }
-        ASSERT_EQ(volley.shots.size(), 9u);
-        r_act(volley);
+        ASSERT_EQ(boltgun_volley.shots.size(), 9u);
+        r_act(boltgun_volley);
         while (g59.flow.attack) r_act(r_first_legal());
     }
     r_act(action::EndShootStep{});

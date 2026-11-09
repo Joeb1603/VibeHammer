@@ -179,10 +179,10 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
                     o.pick_dice = std::move(items);
                 } else if (key == "--pick-models") {
                     o.pick_models.clear();  // M62: model ids
-                    for (const std::size_t i : items) o.pick_models.push_back(static_cast<unsigned>(i));
+                    for (const std::size_t id : items) o.pick_models.push_back(static_cast<unsigned>(id));
                 } else {
                     o.click_units.clear();  // M63: unit ids
-                    for (const std::size_t i : items) o.click_units.push_back(static_cast<unsigned>(i));
+                    for (const std::size_t id : items) o.click_units.push_back(static_cast<unsigned>(id));
                 }
             }
         } catch (const std::exception&) {
