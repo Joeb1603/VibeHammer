@@ -53,6 +53,13 @@ How to play
      - Watch bot vs bot: the bot plays both sides. In any game with a bot, the sidebar has
        "Pause the bots" (key P); the bar above the board has Step (one action, or the bot's
        next dice roll) and the bot speed (keys N, + and -).
+     - Custom battle...: build an army for each side (Chaos Space Marines against Tyranids, up
+       to 1000 points, with the datasheets' points, unit sizes, wargear options and limits),
+       choose who takes the first turn, then play hotseat, against the bot or bot vs bot on the
+       44" x 60" Incursion battlefield. Deployment: "Auto-place" sets the armies up for you;
+       "Place by hand" has the sides set up one unit at a time (drag a unit, Shift-drag one
+       model, Q / E turn an oval; the bot sets its own units up). Save and Load keep your lists
+       in an "armies" folder created next to the exe.
      - Continue saved game (when there is one), Watch a replay, Quit.
   3. Follow the decision panel at the top; click the board to pick units, targets and moves.
      The start screen's Scenario list has, among others:

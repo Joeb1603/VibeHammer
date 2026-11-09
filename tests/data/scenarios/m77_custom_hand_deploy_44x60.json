@@ -1,0 +1,209 @@
+{
+  "battle_rounds": 5,
+  "battlefield": {
+    "depth_in": 60.0,
+    "width_in": 44.0
+  },
+  "deployment": "alternating",
+  "first_turn": "B",
+  "name": "Custom battle - M73 Chaos Space Marines vs M77 Tyranids",
+  "notes": "D-079: a custom battle (Incursion, 1000 points; agreed with the user): 44\"x60\" portrait, 12\" zones on the south (A) and north (B) edges, 5 battle rounds, decided on points destroyed (D-076). Units are set up by hand, the sides alternating one unit at a time, starting with the side that takes the second turn (D-081); the engine proposes the auto-layout's spots (D-079 part 2).",
+  "result": "points_destroyed",
+  "sides": {
+    "A": {
+      "deployment_zone": {
+        "depth_in": 12.0,
+        "edge": "south"
+      },
+      "name": "M73 Chaos Space Marines",
+      "units": [
+        {
+          "models": [
+            {
+              "count": 1,
+              "type": "Chaos Lord",
+              "weapons": [
+                "Astartes chainblade",
+                "Power fist"
+              ]
+            }
+          ],
+          "points": 95,
+          "unit_file": "data/units/chaos_lord.json"
+        },
+        {
+          "models": [
+            {
+              "count": 1,
+              "type": "Aspiring Champion",
+              "weapons": [
+                "Close combat weapon",
+                "Heavy melee weapon",
+                "Plasma pistol"
+              ]
+            },
+            {
+              "count": 7,
+              "type": "Legionary w/ boltgun",
+              "weapons": [
+                "Boltgun",
+                "Bolt pistol",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "count": 1,
+              "type": "Legionary w/ heavy melee weapon",
+              "weapons": [
+                "Heavy melee weapon",
+                "Bolt pistol",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "count": 1,
+              "type": "Legionary w/ other weapon",
+              "weapons": [
+                "Plasma gun",
+                "Bolt pistol",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "points": 180,
+          "unit_file": "data/units/legionaries.json"
+        },
+        {
+          "models": [
+            {
+              "count": 1,
+              "type": "Havoc Champion",
+              "weapons": [
+                "Astartes chainsword",
+                "Boltgun"
+              ]
+            },
+            {
+              "count": 4,
+              "type": "Havoc w/ missile launcher",
+              "weapons": [
+                "Havoc missile launcher",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "points": 135,
+          "unit_file": "data/units/havocs.json"
+        },
+        {
+          "models": [
+            {
+              "count": 1,
+              "type": "Terminator Champion",
+              "weapons": [
+                "Accursed weapon",
+                "Combi-bolter"
+              ]
+            },
+            {
+              "count": 2,
+              "type": "Power fist and combi-bolter",
+              "weapons": [
+                "Combi-bolter",
+                "Power fist"
+              ]
+            },
+            {
+              "count": 2,
+              "type": "Accursed weapon and combi-bolter",
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            }
+          ],
+          "points": 185,
+          "unit_file": "data/units/chaos_terminator_squad.json"
+        }
+      ]
+    },
+    "B": {
+      "deployment_zone": {
+        "depth_in": 12.0,
+        "edge": "north"
+      },
+      "name": "M77 Tyranids",
+      "units": [
+        {
+          "models": [
+            {
+              "count": 1,
+              "type": "Hive Tyrant",
+              "weapons": [
+                "Heavy venom cannon",
+                "Monstrous scything talons"
+              ]
+            }
+          ],
+          "points": 195,
+          "unit_file": "data/units/hive_tyrant.json"
+        },
+        {
+          "models": [
+            {
+              "count": 10,
+              "type": "Termagants",
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "points": 55,
+          "unit_file": "data/units/termagants.json"
+        },
+        {
+          "models": [
+            {
+              "count": 5,
+              "type": "Genestealer",
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "points": 75,
+          "unit_file": "data/units/genestealers.json"
+        },
+        {
+          "models": [
+            {
+              "count": 3,
+              "type": "Tyrant Guard",
+              "weapons": [
+                "Scything talons and rending claws"
+              ]
+            }
+          ],
+          "points": 80,
+          "unit_file": "data/units/tyrant_guard.json"
+        },
+        {
+          "models": [
+            {
+              "count": 1,
+              "type": "Tyrannofex",
+              "weapons": [
+                "Powerful limbs",
+                "Stinger salvoes",
+                "Fleshborer hive"
+              ]
+            }
+          ],
+          "points": 170,
+          "unit_file": "data/units/tyrannofex.json"
+        }
+      ]
+    }
+  }
+}

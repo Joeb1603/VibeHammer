@@ -1,7 +1,9 @@
-// M74 (D-081): the bots in the deployment step. Every level sets its lowest-id unit waiting up at the engine's proposal
-// (or declares it not set up when the engine finds no legal spot), before any level's own policy, so a hand-deployed
-// bot army ends exactly where Auto-place puts it and plays on as the auto-placed game does. state_hash covers the units
+// M74 (D-081): the bots in the deployment step. Easy sets its lowest-id unit waiting up at the engine's proposal (or
+// declares it not set up when the engine finds no legal spot), before any level's own policy, so a hand-deployed Easy
+// army ends exactly where Auto-place puts it and plays on as the auto-placed game does. state_hash covers the units
 // waiting to be set up only when there are some.
+// M77 (planned, D-081 "Bot deployment"): Normal and Hard now deploy by a heuristic (m77_test.cpp). The tests below that
+// pinned "every level at the proposal" pin it for Easy and check the heuristic's properties for Normal and Hard.
 
 #include <gtest/gtest.h>
 
@@ -19,6 +21,7 @@
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/engine.hpp"
 #include "core/state/deployment.hpp"
+#include "deploy_policy.hpp"
 #include "fallback.hpp"
 #include "session.hpp"
 #include "state_hash.hpp"
@@ -332,7 +335,11 @@ TEST(M74_StateHash, UnitsWaitingToBeSetUpChangeTheHash) {
     EXPECT_NE(state_hash(after), h);
 }
 
-TEST(M74_Bots, EveryLevelSetsUpTheLowestIdUnitAtItsProposal) {
+// M77 (planned change, D-081 "Bot deployment"): this test pinned "every level sets up the lowest-id unit at its
+// proposal" (EveryLevelSetsUpTheLowestIdUnitAtItsProposal) while M74's policy was every level's. It now pins that for
+// Easy, the level that keeps the policy, and for Normal and Hard checks the heuristic's properties at each decision
+// (m77_test.cpp has the rest): a legal set-up of the first unit of deploy_order, no fallback, no chain table.
+TEST(M74_Bots, EasySetsUpTheLowestIdUnitAtItsProposal) {
     for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
         GameState gs = stock_battle(Side::A, DeploymentMode::Hand);
         start_game(gs);
@@ -350,51 +357,72 @@ TEST(M74_Bots, EveryLevelSetsUpTheLowestIdUnitAtItsProposal) {
                     break;
                 }
             }
-            ASSERT_EQ(choice.action, GameAction{*propose_set_up(gs, lowest)});
-            EXPECT_EQ(choice.action, legal.front());
-            EXPECT_TRUE(wh40k::test::starts_with(choice.reason, "D-081: set up ")) << choice.reason;
+            if (l == BotLevel::Easy) {
+                ASSERT_EQ(choice.action, GameAction{*propose_set_up(gs, lowest)});
+                EXPECT_EQ(choice.action, legal.front());
+                EXPECT_TRUE(wh40k::test::starts_with(choice.reason, "D-081: set up ")) << choice.reason;
+            } else {
+                const auto* d = std::get_if<action::DeployUnit>(&choice.action);
+                ASSERT_NE(d, nullptr);
+                EXPECT_EQ(d->unit, deploy_order(gs, side).front());
+                EXPECT_TRUE(set_up_problems(gs, side, *d).empty());
+                EXPECT_TRUE(wh40k::test::starts_with(choice.reason, "D-081 (M77): set up ")) << choice.reason;
+            }
             apply_action(gs, side, choice.action);
             ++decisions;
         }
         EXPECT_EQ(decisions, 14);
         EXPECT_EQ(bot.fallbacks(), 0u);
         EXPECT_EQ(bot.chain_tables_built(), 0u);  // Hard built nothing from a half-deployed army
-        EXPECT_EQ(gs, [] {
-            GameState p = stock_battle(Side::A, DeploymentMode::Auto);
-            start_game(p);
-            return p;
-        }());
+        if (l == BotLevel::Easy) {
+            EXPECT_EQ(gs, [] {
+                GameState p = stock_battle(Side::A, DeploymentMode::Auto);
+                start_game(p);
+                return p;
+            }());
+        }
     }
 }
 
+// M77 (planned change, D-081 "Bot deployment"): this test ran a Normal bot and required the fallback to give the same
+// answer, which held while every level answered with M74's policy. The fallback keeps M74's policy, so that requirement
+// is now made of Easy; every level must still set up both lines and declare only the third not set up.
 TEST(M74_Bots, ABotDeclaresAUnitNotSetUpOnlyWhenNothingFits) {
-    GameState gs = narrow_zone();
-    start_game(gs);
-    Bot bot(level(BotLevel::Normal));
-    std::vector<GameAction> taken;
-    while (gs.flow.stage == Stage::Deploy) {
-        const Side side = decider(gs);
-        const BotChoice choice = bot.decide(gs, side);
-        ASSERT_FALSE(choice.stopped);
-        // The fallback gives the same answer.
-        const FallbackResult fb = fallback_action(gs, side);
-        ASSERT_TRUE(fb.action.has_value());
-        EXPECT_EQ(*fb.action, choice.action);
-        taken.push_back(choice.action);
-        apply_action(gs, side, choice.action);
+    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
+        GameState gs = narrow_zone();
+        start_game(gs);
+        Bot bot(level(l));
+        std::vector<GameAction> taken;
+        while (gs.flow.stage == Stage::Deploy) {
+            const Side side = decider(gs);
+            const BotChoice choice = bot.decide(gs, side);
+            ASSERT_FALSE(choice.stopped);
+            if (l == BotLevel::Easy) {
+                // The fallback gives the same answer.
+                const FallbackResult fb = fallback_action(gs, side);
+                ASSERT_TRUE(fb.action.has_value());
+                EXPECT_EQ(*fb.action, choice.action);
+            }
+            taken.push_back(choice.action);
+            apply_action(gs, side, choice.action);
+        }
+        ASSERT_EQ(taken.size(), 4u);
+        EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[0]));  // B's Intercessors
+        EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[1]));  // A's first line of Termagants
+        EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[2]));  // the second, behind it
+        EXPECT_EQ(taken[3], GameAction{(action::CannotSetUp{UnitId{3}})});  // no room for the third
+        EXPECT_EQ(bot.fallbacks(), 0u);
+        EXPECT_EQ(bot.chain_tables_built(), 0u);
     }
-    ASSERT_EQ(taken.size(), 4u);
-    EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[0]));  // B's Intercessors
-    EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[1]));  // A's first line of Termagants
-    EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[2]));  // the second, behind it
-    EXPECT_EQ(taken[3], GameAction{(action::CannotSetUp{UnitId{3}})});  // no room for the third
-    EXPECT_EQ(bot.fallbacks(), 0u);
 }
 
-TEST(M74_Bots, HandDeployedBotGamesEndWhereAutoPlacedOnesDo) {
+// M77 (planned change, D-081 "Bot deployment"): this test also ran Normal, whose hand deployment ended where Auto-place
+// puts its units while it used M74's policy. Normal now nudges its units (m77_test.cpp:
+// M77_BotDeploy.HandDeployedGamesAtNormalAndHardFinishClean checks its hand-deployed games), so the equality is Easy's.
+TEST(M74_Bots, HandDeployedEasyGamesEndWhereAutoPlacedOnesDo) {
     // --deploy hand against --deploy auto: once the bots have set everything up, the state is the auto-placed game's,
     // so the rest of the game, decided from state hashes, plays the same (D-054) to the same final state.
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal}) {
+    for (const BotLevel l : {BotLevel::Easy}) {
         for (std::uint64_t seed = 1; seed <= 3; ++seed) {
             const Side first = seed % 2 == 0 ? Side::B : Side::A;
             const GameState hand = wh40k::test::random_armies_battle(seed, DeploymentMode::Hand, first);

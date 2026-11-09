@@ -8,6 +8,10 @@ Since M53-M58 there is also a full-size 60"x44" scenario with several units per 
 Since M59-M70 there is a 44"x60" portrait scenario with two real army rosters (`data/scenarios/rosters_44x60.json`,
 "Incursion": 5 Chaos Space Marine units vs 9 Tyranid units, including the oval-based Tyrannofex). It is decided on
 points destroyed after round 5 unless one side is wiped out (D-076), and every bot level plays it.
+Since M71-M77 there are custom battles: an army builder (Chaos Space Marines vs Tyranids, Incursion 1000 pts, the
+list rules read from BSData, D-079, D-082) builds the rosters scenario's battle from two army lists, and the units are
+either auto-placed or set up by hand, the sides alternating one unit at a time through a `PendingDecision` (D-081).
+Every bot level plays them; Normal and Hard deploy by a heuristic (D-081, M77).
 
 The milestone plan is in `PLAN.md`. Before starting work, check which milestone is current and stay inside its scope.
 V1 (M0–M13) is complete. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance
@@ -25,6 +29,8 @@ docs/datasheets/          the two New Recruit army rosters behind rosters_44x60.
 docs/decisions.md         rule interpretations and design decisions (D-001 ...), cited in code
 data/units/*.json         unit datasheets generated from BSData (do not hand-edit)
 data/scenarios/*.json     battlefield size, deployment, armies, loadouts
+data/factions.json        the custom battles' factions and their datasheets (D-079)
+data/armies/*.json        the factions' stock army lists for custom battles (units and loadouts only; D-079)
 tools/extract_rules.py    PDF -> docs/rules/   (needs pdftotext on PATH)
 tools/fetch_bsdata.py     BSData wh40k-11e -> data/units/
 tools/package.ps1         Release build -> VibeHammer.zip for sending the game to someone
@@ -36,7 +42,8 @@ tests/                    wh40k_tests: GoogleTest for wh40k_core, run via CTest
   client/                 wh40k_client_tests: GoogleTest for wh40k_client_logic
   ai/                     wh40k_ai_tests: GoogleTest for wh40k_ai
   replays/*.json          saved replays; each must replay cleanly (regression tests, D-014)
-  data/scenarios/*.json   test-only fixture scenarios (roster units on smaller boards; not in the client's list)
+  data/scenarios/*.json   test-only fixture scenarios (roster units on smaller boards, custom battles; not in the client's list)
+  data/armies/*.json      test-only army lists (custom battles of the M73 and M77 replays, Hard's worst cases)
 ```
 
 ## Build and test (Windows, VS 2026 Community, CMake 4.x)
@@ -71,15 +78,23 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M68_Replay.DISABLED_RegenerateRostersNormalBotGameReplay
 # and m70_rosters_bot_game.json (Hard vs Hard on the rosters, seed 93) likewise (M70):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M70_Replay.DISABLED_RegenerateRostersBotGameReplay
+# and m73_custom_bot_game.json (Normal vs Normal on two custom lists, seed 1) likewise (M73):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M73_Replay.DISABLED_RegenerateCustomBotGameReplay
+# and m75_builder_battle.json (Easy vs Easy on an army-builder battle, seed 1) likewise (M75):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M75_Replay.DISABLED_RegenerateBuilderBattleReplay
+# and m77_custom_hand_deploy_bot_game.json (Normal vs Normal, custom lists set up by hand, seed 1) likewise (M77):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay
 ```
+(The M73, M75 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`.)
 
 On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` and
 `build/default/tests/ai/Debug/wh40k_ai_tests.exe` with the same flags.
 
 - To send the game to someone: `powershell -ExecutionPolicy Bypass -File tools\package.ps1`. It builds Release,
   stages the exe, VC++ runtime DLLs, `data/` and `tests/replays/` with a README, smoke-tests the staged exe, and
-  writes `VibeHammer.zip` in the repo root (gitignored). The exe looks for `data/` next to itself first, then the
-  source tree. Never add `docs/rules/`, `docs/datasheets/` or the PDF to the package.
+  writes `VibeHammer.zip` in the repo root (gitignored). The staged `data/` includes `data/factions.json` and the
+  stock lists in `data/armies/` (M72); the builder saves a player's lists in `armies/` next to the exe (gitignored
+  as `/armies/` in the repo). The exe looks for `data/` next to itself first, then the source tree. Never add `docs/rules/`, `docs/datasheets/` or the PDF to the package.
 - To publish a GitHub release (M52, D-063): set the version in `CMakeLists.txt` and `src/core/version.cpp`, write
   `docs/releases/vX.Y.Z.md`, then push tag `vX.Y.Z` (or run the Release workflow by hand with that tag).
   `.github/workflows/release.yml` builds on Windows, runs ctest, packages and attaches
@@ -101,6 +116,9 @@ Legionaries, Chaos Terminator Squad, Havocs) come from the same tool and catalog
 name and the output file in the same way.
 
 Each unit JSON records the BSData commit it came from in `source.commit` (all of them at `0f9035541630...` today). Pin to that sha unless you are deliberately updating the data.
+Pass `--fetched <YYYY-MM-DD>` to keep a file's existing `source.fetched` date when regenerating it. Since M71 the tool
+also writes a `list_building` block (points by unit size, wargear slots, costs and limits, copy limits; D-079) for the
+nine roster datasheets and Termagants.
 
 ## Rules: the source of truth
 
@@ -180,11 +198,14 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Geometry tests use explicit coordinates in inches, converted with a helper, so the numbers read like the rulebook.
 - Tests that check a decision rather than a numbered rule are named after it (`TEST(D020_FightSequence, ...)`), Rules Appendix tests use `Appendix_...`, and client tests (`wh40k_client_tests`) use the milestone (`M12_...`, `M13_...`).
 - At the end of each milestone, add at least one replay file under `tests/replays/` covering that milestone's flow. Stop the replay before any phase a later milestone will change (as `m9_charge.json` and `m10_fight.json` do), so it stays valid.
-- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, and `M45_Replay.DISABLED_RegenerateBotGameReplay` / `M46_Replay.DISABLED_RegenerateFightMoveReplay` / `M47_Replay.DISABLED_RegenerateDefaultCasualtiesReplay` / `M58_Replay.DISABLED_RegenerateStrikeBotGameReplay` / `M68_Replay.DISABLED_RegenerateRostersNormalBotGameReplay` / `M70_Replay.DISABLED_RegenerateRostersBotGameReplay` in the ai tests for `m45_bot_game.json` / `m46_bot_fight_moves.json` / `m47_default_casualties.json` / `m58_strike_bot_game.json` / `m68_rosters_normal_bot_game.json` / `m70_rosters_bot_game.json`; see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`. The `TheSavedFileMatchesTheGame` tests check that the bot files are what the bots play now:
+- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, and `M45_Replay.DISABLED_RegenerateBotGameReplay` / `M46_Replay.DISABLED_RegenerateFightMoveReplay` / `M47_Replay.DISABLED_RegenerateDefaultCasualtiesReplay` / `M58_Replay.DISABLED_RegenerateStrikeBotGameReplay` / `M68_Replay.DISABLED_RegenerateRostersNormalBotGameReplay` / `M70_Replay.DISABLED_RegenerateRostersBotGameReplay` / `M73_Replay.DISABLED_RegenerateCustomBotGameReplay` / `M75_Replay.DISABLED_RegenerateBuilderBattleReplay` / `M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay` in the ai tests for `m45_bot_game.json` / `m46_bot_fight_moves.json` / `m47_default_casualties.json` / `m58_strike_bot_game.json` / `m68_rosters_normal_bot_game.json` / `m70_rosters_bot_game.json` / `m73_custom_bot_game.json` / `m75_builder_battle.json` / `m77_custom_hand_deploy_bot_game.json`; see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`. The `TheSavedFileMatchesTheGame` tests check that the bot files are what the bots play now:
   - `M47_Replay`: `m47_default_casualties.json` is what Easy plays.
   - `M58_Replay`: `m58_strike_bot_game.json` is what Hard plays, through its first battle rounds.
   - `M68_Replay`: `m68_rosters_normal_bot_game.json` is what Normal plays.
   - `M70_Replay`: `m70_rosters_bot_game.json` is what Hard plays, through round 1. `M70_Replay.BotsWithChainCachesOfTheirOwnPlayTheSameActions` checks that the arena's shared Hard chain cache changes no decision.
+  - `M73_Replay`: `m73_custom_bot_game.json` is what Normal plays on two custom lists.
+  - `M75_Replay`: `m75_builder_battle.json` is what Easy plays, through round 1.
+  - `M77_Replay`: `m77_custom_hand_deploy_bot_game.json` is what Normal plays, its deployment by hand included.
   - The whole M58 and M70 games are their `DISABLED_TheWholeSavedFileMatchesTheGame` tests.
 
 ## Working style for Claude in this repo
@@ -200,7 +221,21 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
   - `--turn <model>:<deg>[:<dx>,<dy>]` makes a scripted turned drag of an oval model.
   - `--window <w>x<h>` opens the window at that size instead of maximized.
 
-  None of these submits an action. While dragging an oval model, Q / E turn it 15° and Shift+wheel turns it 5°. A run with any flag uses the default settings and never reads or writes `vibehammer_settings.json`. `--steps` only clicks panel buttons, so it can't reach decisions made by clicking the board (picking shooters, targets, charges), or the rolls they lead to. A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows. Bot strength is measured with the Release arena: `cmake --build --preset release --target wh40k_bot_arena`, then `.\build\default\src\ai\Release\wh40k_bot_arena.exe --games 200 --a easy --b easy` (flags `--games`, `--a`, `--b` (levels `easy`, `normal`, `hard`, plus the hidden `easy-m55` / `normal-m55`, which play as at M55 for regression comparisons, D-066), `--scenario`, `--seed`, `--step-cap` (default 5000 steps; a Strike game takes about 300), `--per-game 1` (one line per game with hashes of its actions, final state and decision trace, for proving play unchanged, M54), `--trace <seed>` (one game's bot decisions with their reasons and times) and `--weights key=value,...` (overrides level Hard's `BotWeights` for tuning, M44); it exits 1 on any rejected action, reverted move or unfinished game). The bot scenarios are `data/scenarios/bot_termagants_first.json` and `bot_20_termagants.json` (M44), and the several-unit `strike_44x60.json` (M53) and `rosters_44x60.json` (M67). With one unit per side the bots play exactly as before M56/M57; changes to the multi-unit path must keep 1v1 `--per-game` output identical. The roster work (M68 D-077, M69 D-078) is gated on facts the older scenarios don't have, such as the points rule, mixed loadouts, [HAZARDOUS], MONSTERS, units over 20 wounds and sides of more than 7 units. V1, both bot scenarios and Strike play exactly as before it; keep it that way and prove it with `--per-game`.
+  Flags added in M75–M76 (custom battles, D-082):
+  - `--builder 1` opens the army builder. With it, `--select <unit id>` selects a builder unit (its id in the battle,
+    side A's units first) and `--open-slot <group>:<slot>` opens one of its wargear combos.
+  - `--army-a <file>`, `--army-b <file>` (army lists; a side without one keeps its stock army), `--first A|B` and
+    `--deploy auto|hand` start a custom battle, or preload the builder with `--builder 1`. They can't be combined with
+    `--scenario`, `--replay` or `--load`, and `--builder 1` not with `--menu 1`.
+  - `--deploy-unit <unit>:<dx>,<dy>[:<model>:<x>,<y>]` starts placing that unit by hand in its side's first
+    deployment decision, moved from core's proposal (inches), one model optionally put at (x, y). `--turn` also turns
+    a model being placed.
+
+  None of these submits an action. While dragging an oval model, Q / E turn it 15° and Shift+wheel turns it 5°. A run with any flag uses the default settings and never reads or writes `vibehammer_settings.json`. `--steps` only clicks panel buttons, so it can't reach decisions made by clicking the board (picking shooters, targets, charges), or the rolls they lead to. A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows. Bot strength is measured with the Release arena: `cmake --build --preset release --target wh40k_bot_arena`, then `.\build\default\src\ai\Release\wh40k_bot_arena.exe --games 200 --a easy --b easy` (flags `--games`, `--a`, `--b` (levels `easy`, `normal`, `hard`, plus the hidden `easy-m55` / `normal-m55`, which play as at M55 for regression comparisons, D-066), `--scenario`, `--seed`, `--step-cap` (default 5000 steps; a Strike game takes about 300), `--per-game 1` (one line per game with hashes of its actions, final state and decision trace, for proving play unchanged, M54), `--trace <seed>` (one game's bot decisions with their reasons and times) `--weights key=value,...` (overrides level Hard's `BotWeights` for tuning, M44), and for custom battles instead of `--scenario` (M72, M74) `--army-a <file>` / `--army-b <file>` (army lists), `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand` (hand: the bots set the units up in the deployment step); it exits 1 on any rejected action, reverted move or unfinished game). The bot scenarios are `data/scenarios/bot_termagants_first.json` and `bot_20_termagants.json` (M44), and the several-unit `strike_44x60.json` (M53) and `rosters_44x60.json` (M67). With one unit per side the bots play exactly as before M56/M57; changes to the multi-unit path must keep 1v1 `--per-game` output identical. The roster work (M68 D-077, M69 D-078) is gated on facts the older scenarios don't have, such as the points rule, mixed loadouts, [HAZARDOUS], MONSTERS, units over 20 wounds and sides of more than 7 units. V1, both bot scenarios and Strike play exactly as before it; keep it that way and prove it with `--per-game`.
+  Custom battles and hand deployment (M71–M77) change nothing there either: V1, both bot scenarios, Strike and the
+  rosters play exactly as before the batch (the "identity set", checked with `--per-game` against a baseline). The
+  deployment step only exists in a scenario with `"deployment": "alternating"` (D-081); Easy sets up at Auto-place's
+  spots, Normal and Hard by M77's heuristic (never building Hard's chain tables during deployment).
   - In the arena, two Hard bots share one chain cache. A cache never changes a decision.
   - Hard builds missing chain tables on up to 4 threads, all joined before a decision returns (`--weights table_workers=1` builds them serially).
   - On the rosters Hard uses about 0.6 GB, and a side of more than 7 units (the Tyranids) moves as Normal does (`move_search_units`).

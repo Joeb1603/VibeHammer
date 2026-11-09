@@ -3651,6 +3651,37 @@ milestone per session" and "agree each milestone first" for these milestones onl
     that pins today's lopsided value is updated, with the reason recorded.
 - **Colours:** the 10 unit shades per side wrap; the board numbers tell units apart.
 
+**What the batch added (summary, M77):**
+- *List-building data:* the fetch tool reads BSData's list rules into a `list_building` block (points by unit size,
+  the 3rd-copy surcharge, copy limits with Incursion's, wargear slots, option costs and limits) with a `--fetched` flag;
+  the ten roster datasheets regenerated, every existing key byte-identical (M71: 02.06, 02.07, D-079 part 1).
+- *Army lists:* `ArmyList` and the army file format, `data/factions.json`, the stock lists in `data/armies/`, every list
+  rule enforced and rule-cited (`army_problems`: factions, 02.06 counts, 02.07 slots, limits, refused weapons, copies,
+  1000 points, a CHARACTER, fitting the zone), playable defaults, random legal armies, the auto-layout, and
+  `custom_battle_scenario` (M72: 02.06, 02.07, 03.02, 03.03, 24.11, D-079 part 2); the arena's `--army-a`, `--army-b`,
+  `--first` and `--random-armies 1`.
+- *Bots on custom armies:* a budget in front of Hard's chain tables (over 1 GiB or 80 tables Normal answers), Normal's
+  points weighting for one-datasheet sides, the budgets measured (M73, D-080, amends D-077 and D-078).
+- *Deployment by hand:* `Stage::Deploy`, the `DeployUnits` decision and the `DeployUnit` / `CannotSetUp` actions, the
+  sides alternating one unit at a time from the second-turn side, every set-up checked by `set_up_problems` (03.02,
+  03.03, 03.04, D-009, D-064), core's proposals (the auto-layout slot, else a scan), a unit with no legal spot counting
+  as destroyed (M74: 03.02–03.04, 01.03, D-081, amends D-003, D-007, D-065); the arena's `--deploy hand|auto`.
+- *The client:* the army builder ("Custom battle..." on the start screen: two lists, unit editor with greyed refused
+  options, problems, save / load, first turn, deployment mode, play mode and bot level; M75, D-082 part 1) and hand
+  deployment on the board (a ghost unit with core's verdict and the models at fault, dragging, Shift-dragging, turning
+  ovals, Auto-place this unit / the rest, Can't be set up, one undo group per unit; M76, D-082 part 2); the flags
+  `--builder 1`, `--army-a`, `--army-b`, `--first`, `--deploy`, `--open-slot` and `--deploy-unit`.
+- *The bots' deployment:* Easy at Auto-place's spots in id order; Normal and Hard by a heuristic (long-range shooters
+  first and back while in range, melee units last and nearer the enemy, nudged toward the enemy's set-up units within
+  a bounded set of translations core accepts; M77, D-081).
+- *Replays added:* `m72_custom_battle_round2`, `m73_custom_bot_game` (Normal vs Normal), `m74_hand_deployment`,
+  `m75_builder_battle` (Easy vs Easy) and `m77_custom_hand_deploy_bot_game` (Normal vs Normal, set up by hand), with the
+  fixtures `tests/data/scenarios/hand_deployment_44x60.json`, `m73_custom_battle_44x60.json`,
+  `m75_builder_battle_44x60.json`, `m77_custom_hand_deploy_44x60.json` and the lists in `tests/data/armies/`.
+- *Play elsewhere unchanged:* V1, both bot scenarios, Strike and the rosters play exactly as before the batch (the
+  arena's `--per-game` hashes against the pre-batch baseline, 30 files and 4,740 games, every milestone), and every
+  pre-batch replay regenerates byte-identically. No release (the version stays 0.1.0).
+
 ---
 
 ## M71: List-building data from BSData ✅ (done)
@@ -4338,7 +4369,7 @@ query: no rule, `GameState` field, action, event, decision or file format change
   - *Manual check by mouse on Windows:* **open** (for the user): dragging, Shift-dragging, turning with Q / E and
     Shift+wheel, Enter, and Undo during a hand deployment.
 
-## M77: Bot deployment heuristic, final verification, docs, PR
+## M77: Bot deployment heuristic, final verification, docs, PR ✅ (done, with open items)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Decision:** D-081 extended (bot deployment)
 
 > **Bot deployment.**
@@ -4367,12 +4398,104 @@ query: no rule, `GameState` field, action, event, decision or file format change
   - finish a custom battle.
 - Rebase-merged PR.
 
+**Results (2026-11-09):** D-081 gains a "Bot deployment (M77)" part (the design, the readings and the measurements).
+Bot and docs only: no rule, core, `GameState` field, action, event, decision or file format changes; the fallback, the
+client and Easy are unchanged.
+- **Bots** (`src/ai/deploy_policy.*`, `bot.cpp`): `Bot::decide` still answers `DeployUnits` before any level's policy.
+  Easy (and the arena's `normal-m55`) keeps M74's policy; Normal and Hard use `heuristic_deploy_policy`, Hard exactly
+  Normal's, so it builds no chain table during deployment.
+  - *Roles* (`deploy_assessment`): the ranged share of the points the unit is expected to destroy (`unit_role`'s model
+    equivalents against every enemy unit, weighted by its points per model). Long-range shooter: longest usable ranged
+    weapon 24" or more and the share above 0.55; melee-oriented: below 0.45; the rest between. Weighting by points was
+    needed: by model equivalents alone the lascannon Havocs came out melee-leaning (0.43; by points 0.68).
+  - *Order* (`deploy_order`): shooters, the rest, melee units; ties by id.
+  - *Spot:* core's proposal with no enemy set up; otherwise translations of it (x within 6" in 1" steps; a shooter up to
+    6" back, a melee unit forward to the zone's front) ordered by `deploy_candidates` toward the centre of the enemy units
+    set up (melee: nearest; shooters: the furthest back still within range, else no further back, then nearest in x;
+    the rest: nearest in x), the first that `set_up_problems` accepts and that leaves every other unit of the side with a
+    legal spot (`deployment_proposals` on the scratch game, at most 3 checks). The proposal is always a candidate, so
+    `CannotSetUp` comes only when core lists it. Under 0.5 ms a decision in Release.
+- **Tests** (14 new, `tests/ai/m77_test.cpp`): `M77_BotDeploy.*` (11: `RolesComeFromTheWeapons`,
+  `LongRangeShootersFirstMeleeLastTiesById`, `EverySpotIsLegalAndNothingFallsBack` (150 set-ups on the stock armies both
+  ways round and 12 random-army battles, 104 nudged), `WithNoEnemyUnitSetUpItIsTheProposal`,
+  `MeleeUnitsStandNearerTheEnemyThanTheirProposal` (96 melee set-ups, 35 more than 1/2" nearer, none further),
+  `LongRangeShootersStandBackWhileInRange` (29, 15 further back, never forward, never out of range for it),
+  `CandidatesAreBoundedAndStartWithTheBestFacing`, `DeterministicForFreshAndUsedBots`,
+  `HardDeploysAsNormalAndBuildsNoTables`, `NoCannotSetUpWhileTheEngineFindsASpot`,
+  `HandDeployedGamesAtNormalAndHardFinishClean`) and `M77_Replay.*` (3, plus the disabled regenerate test).
+- **Existing tests changed (planned, as M74's Results said; each comment says so):** in `tests/ai/m74_test.cpp`,
+  - `M74_Bots.EveryLevelSetsUpTheLowestIdUnitAtItsProposal` is now `M74_Bots.EasySetsUpTheLowestIdUnitAtItsProposal`:
+    Easy is pinned exactly as before (the proposal, the first legal action, the auto-placed state at the end); Normal
+    and Hard must set up the first unit of `deploy_order` legally, with no fallback and no chain table;
+  - `M74_Bots.ABotDeclaresAUnitNotSetUpOnlyWhenNothingFits` ran Normal and required the fallback's answer; it now runs
+    every level (both lines set up, the third declared not set up) and requires the fallback's answer of Easy;
+  - `M74_Bots.HandDeployedBotGamesEndWhereAutoPlacedOnesDo` is now `M74_Bots.HandDeployedEasyGamesEndWhereAutoPlacedOnesDo`
+    (Easy only; Normal's hand games are checked clean by `M77_BotDeploy.HandDeployedGamesAtNormalAndHardFinishClean`).
+- **Replay** `tests/replays/m77_custom_hand_deploy_bot_game.json` (scenario form, dice seed 1) on the fixture
+  `tests/data/scenarios/m77_custom_hand_deploy_44x60.json`: the Hand-mode custom battle of
+  `tests/data/armies/m73_chaos_space_marines.json` (595 points) and the new `m77_tyranids.json` (a Hive Tyrant with a
+  heavy venom cannon, 10 Termagants, 5 Genestealers, 3 Tyrant Guard, a Tyrannofex), Tyranids first, so the Chaos Space
+  Marines set up first. Normal vs Normal, 322 steps: the 9 set-ups (several nudged), both sides shoot, charge and fight;
+  the Tyranids win on points after battle round 5 (299.67 to 168.88). Written by
+  `M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay` (with the fixture), checked by
+  `M77_Replay.TheScenarioIsTheTwoArmyFilesSetUpByHand`, `...TheGameReplaysToItsResultWithCoreOnly` and
+  `...TheSavedFileMatchesTheGame`.
+- **Docs:** CLAUDE.md (the intro, the layout's `data/factions.json`, `data/armies/` and `tests/data/armies/`, the
+  M73 / M75 / M77 regenerate commands and saved-file list, the fetch tool's `--fetched` and `list_building`, the
+  package's lists, the M75–M76 client flags, the arena's custom-battle flags, and that custom battles and hand
+  deployment leave the identity set's play unchanged); README.md (custom battles and deployment under "What's
+  implemented", the Custom battle button, "interactive deployment" off "Not yet", the data folders); `tools/package.ps1`'s
+  README text (Custom battle, Place by hand, the `armies` folder); this section's batch summary and "Later" item 5's
+  "Open items carried from M71–M77".
+- **Final verification:**
+  - *Builds and ctest:* Debug and Release rebuilt from clean (`--clean-first`, about 6 minutes each) with no warning in
+    the project's code (Release shows one in raylib's bundled `jar_mod.h`, third-party); ctest (Debug and Release):
+    1294 -> 1308 tests, all pass.
+  - *Replays:* `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58, M68, M70, M73, M75 and M77 regenerations
+    leave `tests/replays` and the fixtures byte-identical apart from the new M77 files. `git diff origin/main --
+    tests/replays` (the local `main` is behind it) shows only new files across the batch: `m72_custom_battle_round2`,
+    `m73_custom_bot_game`, `m74_hand_deployment`, `m75_builder_battle`, and the untracked `m77_custom_hand_deploy_bot_game`.
+  - *Identity set:* **met.** The Release arena's `--per-game` output on V1, both bot scenarios, Strike and the rosters
+    (30 files, 4,740 games) matches the pre-batch baseline on every `game` line.
+  - *Release arena, `--random-armies 1`, seeds 1–200, one run at a time:* every run had 0 rejected, reverted, fallback
+    or unfinished games (A Chaos Space Marines / B Tyranids; Hard's decision times and peak RSS by `/usr/bin/time -v`).
+
+    | pairing | auto | hand |
+    |---|---|---|
+    | Easy–Easy | 66 / 134, 15 s | 66 / 134 (identical: Easy deploys at Auto-place's spots), 16 s |
+    | Normal–Normal | 37 / 163, max 166 ms | 49 / 150, 1 draw; max 293 ms |
+    | Hard–Normal | 47 / 153; Hard p95 241 ms, max 2,818 ms; 957 MiB | 39 / 161; Hard p95 293 ms, max 3,243 ms; 950 MiB |
+    | Normal–Hard | 51 / 149; Hard p95 219 ms, max 2,355 ms; 942 MiB | 62 / 138; Hard p95 250 ms, max 2,502 ms; 999 MiB |
+    | Hard–Hard (20) | 9 / 11; p95 261 ms, max 1,629 ms; 708 MiB | 8 / 12; p95 291 ms, max 1,618 ms; 707 MiB |
+
+    The auto rows equal M73's. Hard's peak RSS stays under 1.5 GB (999 MiB at most); its decision maximum is over 3 s
+    once (3.24 s, Hard–Normal by hand), M73's open item again.
+  - *Does the heuristic help Normal?* Recorded, no target: hand 49 / 150 / 1 against auto 37 / 163. A scratch probe with
+    only one side on the heuristic: the Chaos Space Marines alone 48 / 151 / 1 (+11 wins for them), the Tyranids alone
+    48 / 151 / 1 (12 fewer for them). It helps the Chaos side and costs the Tyranid side about as much (D-081). With
+    Hard, the Chaos Space Marines' Hard did worse by hand (39 against 47 wins) and the Tyranids' Hard too (138 against 149).
+  - *Screenshots* (`xvfb-run`, 1600x1000, looked at): the stock builder; a vs-bot hand deployment (the human's Chaos Lord
+    set up, the Normal bot's Tyrannofex 6" west of its Auto-place spot toward it, the human's next unit as a ghost with
+    core's verdict); both bots' deployment complete (the last reason "D-081 (M77): set up Genestealers 8 (melee-oriented
+    ...) 2" west of where Auto-place puts it ..."); a custom battle mid-game (battle round 2, points destroyed 44 / 119).
+- **Acceptance:**
+  - *Replay `m77_custom_hand_deploy_bot_game.json` with `TheSavedFileMatchesTheGame` and the regenerate test:* **met.**
+  - *Clean Debug and Release builds and all of ctest:* **met** (1308 / 1308).
+  - *`git diff main -- tests/replays` shows only new files:* **met** against `origin/main`.
+  - *Identity set unchanged:* **met.**
+  - *Arena on random armies at every level, both deployment modes, clean:* **met** (table above).
+  - *Screenshots:* **met.**
+  - *Manual check by mouse on Windows* (build, save and reload two lists; deploy by hand against the bot, turning the
+    Tyrannofex; finish a custom battle): **open, for the user.**
+  - *Rebase-merged PR:* for the orchestrator (not this milestone's agent).
+
 ---
 
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
-0. **Deployment step:** planned as M74 (engine) and M76 (client), in the custom-battles batch (M71–M77).
+0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
+   (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
 2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
@@ -4406,5 +4529,20 @@ query: no rule, `GameState` field, action, event, decision or file format change
      - *Engine:* the oval-against-oval turn check is conservative (M65; the rosters have one oval).
      - *Fetch tool / datasheets:* a mixed ranged/melee weapon's profiles list under the first profile's type, and
        ability-name modifiers (Deadly Demise X, Scouts X) and hidden-ability conditions are not evaluated (M59).
+   - **Open items carried from M71–M77** (custom battles; each where it was left):
+     - *Bots, Hard on random armies:* its decision maximum is over 3 s (3.16 s at M73, two searches with 10–14 units on
+       the table; no budget binds there, D-080 part 3), and its strength there is no better than Normal's from the Chaos
+       Space Marine seat (M73: 47 of 200 against Normal, Normal 37; as the Tyranids 149, Normal 163). The rates of
+       `kMaxLoadouts`, `kMaxAdvanceSteps` and `move_search_units` were measured at M73 and not re-instrumented since.
+     - *Bots, deployment:* a search-based Hard deployment (Hard uses Normal's heuristic, M77); the bots never turn an
+       oval when setting it up, and their candidates are whole-inch translations of core's proposal (M77, D-081).
+     - *Client, hand deployment:* no snapping or "Fix illegal moves" for a set-up (a refused ghost stays where it was let
+       go, D-082 part 2, M76); at 1280x800 one long unit name in the builder ("Chaos Terminator Squad 3") is clipped
+       before its number (M75).
+     - *Manual checks by mouse on Windows* (for the user, M76, M77): build, save and reload two lists; deploy by hand
+       against the bot (dragging, Shift-dragging, turning the Tyrannofex with Q / E and Shift+wheel, Enter, Undo);
+       finish a custom battle.
+     - *Factions:* custom battles offer Chaos Space Marines and Tyranids only, at Incursion (1000 points); Space Marines
+       stay for the old scenarios (agreed scope).
 6. **Networking:** a server-authoritative host runs the engine, clients send `GameAction`s and receive events or snapshots, and spectators subscribe to events. The engine API shouldn't need to change. If it does, that's a bug in the earlier design.
 7. **Attached units, transports, reserves, aircraft** (17–23).

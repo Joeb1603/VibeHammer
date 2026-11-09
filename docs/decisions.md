@@ -4625,6 +4625,74 @@ deployment heuristic.
   degrees on the Screamer-killer's slot (x 41.5", 1/2" back from the zone front so that its turned base is wholly
   within the zone), and the Screamer-killer's proposal comes from the scan (x 36", at the zone front, the Tyrannofex's
   own slot left free).
+- **Bot deployment (M77; extends the "Bots" part above and D-054).** Agreed with the user (2026-11-09): "a simple
+  heuristic. Easy uses the auto-layout spot. Normal and Hard order their units (long-range shooters first and back,
+  melee last and forward) and nudge them toward the enemy." Implemented in `src/ai/deploy_policy.*`; `Bot::decide` still
+  answers `DeployUnits` before any level's policy.
+  - *Levels.* Easy keeps M74's `deploy_policy` (the lowest-id unit at core's proposal, or `CannotSetUp`). Normal and
+    Hard use `heuristic_deploy_policy`; Hard uses Normal's exactly (same actions and reasons, tested), so it builds no
+    chain table during deployment. Normal as at M55 (`normal-m55`, the arena's hidden regression level, D-066) keeps
+    M74's policy (*conservative*: M55 had no deployment step, and the regression level should change nothing).
+    `fallback.cpp` is unchanged (M74's policy), so a Normal or Hard set-up is never mistaken for a fallback.
+  - *Roles* (`deploy_assessment`, from the unit's weapons with the existing odds helpers). The unit's ranged share is
+    its expected damage at range over its expected damage in all, summed over every enemy unit with models (set up or
+    waiting; the lists are public): `analysis::unit_role`'s model equivalents (its best shooting within half range of
+    its longest usable weapon, with [HEAVY]; every model fighting with its best melee weapon), each weighted by the
+    enemy unit's points per model (1 without points), i.e. the points it is expected to destroy. *Reading:* weighted by
+    model equivalents alone, the stock lascannon Havocs came out melee-leaning (0.43: a lascannon kills one Termagant
+    per wound, five close combat weapons kill more); by points they are 0.68, as a player would class them.
+    - *Long-range shooter:* the longest usable ranged weapon (`threat_ranges`) is 24" or more and the ranged share is
+      above 0.55 (`analysis::kLeanMargin`, Normal's Lean::Ranged margin).
+    - *Melee-oriented:* the ranged share is below 0.45.
+    - *Other:* the rest (e.g. the stock Chaos Terminators, 0.46, and the 18" Termagants, 0.61).
+  - *Order* (`deploy_order`): long-range shooters, then the others, then melee-oriented units, ties by id; each decision
+    sets up the first of the side's units waiting. The roles depend only on the two armies' units, not on positions, so
+    the order is the same at every decision (unless an enemy unit is declared not set up, which drops out).
+  - *The enemy's deployed mass* (`enemy_deployed_centre`): the mean of the centroids (model positions) of the enemy units
+    set up, each unit counting once (*reading* of "the enemy's deployed mass": a horde of 20 doesn't outweigh a
+    monster). With no enemy unit set up yet the unit goes to core's proposal.
+  - *Candidates* (`deploy_candidates`): translations of core's proposal (the formation, its facings and its model order
+    kept), so at most 13 x 14 of them (bounded, no search):
+    - x: -6" .. +6" in 1" steps, keeping the formation's extents on the battlefield;
+    - depth: a long-range shooter 0 .. 6" further back in 1" steps (within the zone); a melee unit 0 .. the distance
+      from its formation's front to the zone's front line in 1" steps, and that distance itself; the others 0.
+    - preference, from the formation's centroid: a melee unit nearest the enemy centre; a long-range shooter, first
+      those within its longest range of the enemy centre, the furthest back of them first, then the rest, the least far
+      back first (out of range, going back only costs), then nearest the enemy centre in x; the others nearest it in x;
+      ties: the smaller |dx|, west first, the smaller depth change.
+  - *Choice:* the first candidate, in that order, for which core's `set_up_problems` is empty and which leaves each of
+    the side's other units that has a legal spot now one (checked with `deployment_proposals` on the bot's scratch game,
+    `Simulator`, at most 3 such checks before settling for the proposal). *Conservative*: a nudge never costs the side a
+    unit. Candidates ordered after the proposal are never tried: the proposal is legal by construction and always among
+    the candidates, so `CannotSetUp` is answered only when core lists it (no proposal: then no translation exists).
+    Reasons: "D-081 (M77): set up Havocs 2 (a long-range shooter: set up early and back) 1" west and 6" back of where
+    Auto-place puts it, to face the enemy's set-up units", "... where Auto-place puts it: no enemy unit is set up yet",
+    "... where Auto-place puts it: no better legal spot nearby".
+  - *Deterministic:* a pure function of the state (no dice, no seed but the scratch game's, whose rolls a set-up never
+    uses); a fresh and a used bot answer alike (tested).
+  - *Cost:* one `OddsCache` and the side's assessments per decision, a handful of `set_up_problems` calls and up to 3
+    scratch set-ups. Release: under 0.5 ms per set-up decision in the arena's traces (`--trace`).
+  - *Measured strength* (Release arena, `--random-armies 1`, seeds 1–200, Normal vs Normal; no target was set): auto
+    37 / 163 (A Chaos Space Marines / B Tyranids), hand 49 / 150 and 1 draw. A scratch probe with only one side
+    deploying by the heuristic (the other at Auto-place's spots): the Chaos Space Marines alone 48 / 151 / 1 (+11 wins
+    for them), the Tyranids alone 48 / 151 / 1 (12 fewer for them). So it helps the Chaos side and costs the Tyranid side
+    about as much; it is a placement policy, not a strength gain. Recorded, not tuned.
+  - *Not done (PLAN.md "Later"):* a search-based Hard deployment; ovals are set up at the proposal's facing (0), never
+    turned; candidates are whole inches only.
+  - *Tests changed (planned):* `M74_Bots.EveryLevelSetsUpTheLowestIdUnitAtItsProposal` becomes
+    `M74_Bots.EasySetsUpTheLowestIdUnitAtItsProposal` (Easy pinned as before; Normal and Hard: a legal set-up of the
+    first unit of `deploy_order`); `M74_Bots.ABotDeclaresAUnitNotSetUpOnlyWhenNothingFits` runs every level (the
+    fallback's equal answer is required of Easy only); `M74_Bots.HandDeployedBotGamesEndWhereAutoPlacedOnesDo` becomes
+    `M74_Bots.HandDeployedEasyGamesEndWhereAutoPlacedOnesDo` (Normal's hand games are checked by
+    `M77_BotDeploy.HandDeployedGamesAtNormalAndHardFinishClean`).
+  - *Tests:* `M77_BotDeploy.*` (roles from the weapons; the order; every spot legal, no fallback; the proposal with no
+    enemy set up; melee units nearer the enemy than their proposal, never further back; long-range shooters never
+    forward, going back never costing the range; the candidates bounded translations, melee nearest first;
+    deterministic; Hard as Normal with no table; `CannotSetUp` only when core lists it; hand-deployed Normal and Hard
+    games finish clean) and `M77_Replay.*` (`tests/replays/m77_custom_hand_deploy_bot_game.json`: Normal vs Normal, dice
+    seed 1, on `tests/data/scenarios/m77_custom_hand_deploy_44x60.json`, the custom battle in Hand mode of
+    `tests/data/armies/m73_chaos_space_marines.json` and `m77_tyranids.json` with the Tyranids taking the first turn, to
+    the result).
 
 ## D-082: Custom battles in the client: the army builder (M75 part 1); hand deployment (M76 part 2)
 **Decided:** 2026-11-09 (M75 of the pre-approved M71–M77 batch; the conservative readings are marked *conservative*).
