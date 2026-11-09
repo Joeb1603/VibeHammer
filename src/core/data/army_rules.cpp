@@ -89,6 +89,15 @@ SlotFit loadout_fits_slots(const ModelWargear& wargear, const std::vector<std::s
     return fit;
 }
 
+std::vector<std::string> loadout_weapons(const ModelWargear& wargear, const std::vector<std::size_t>& options) {
+    std::vector<std::string> weapons = wargear.fixed;
+    for (std::size_t s = 0; s < options.size() && s < wargear.slots.size(); ++s) {
+        const WargearOption& o = wargear.slots[s].options.at(options[s]);
+        weapons.insert(weapons.end(), o.weapons.begin(), o.weapons.end());
+    }
+    return weapons;
+}
+
 int fit_option_points(const ModelWargear& wargear, const SlotFit& fit) {
     if (!fit.fits()) {
         return 0;

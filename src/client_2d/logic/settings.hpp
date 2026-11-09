@@ -13,6 +13,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "core/data/army_list.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::client {
@@ -22,6 +23,22 @@ enum class BotSpeed : std::uint8_t { Slow, Normal, Fast, Instant };
 
 inline constexpr float kMinUiScale = 0.75f;  // the "UI scale" slider's range (D-038)
 inline constexpr float kMaxUiScale = 2.5f;
+
+// The start screen's ways to play, and which sides the bot plays in each (client state, never GameState).
+enum class GameMode : std::uint8_t { Hotseat, VsBot, BotVsBot };
+
+// M75 (D-082): the custom battle the army builder opens on (its last setup). An army left out (nullopt) is that side's
+// stock army (side A: Chaos Space Marines, side B: Tyranids). At its defaults it is left out of the settings file, so a
+// file written before M75 loads and saves unchanged.
+struct CustomBattleSettings {
+    std::optional<core::ArmyList> army_a;
+    std::optional<core::ArmyList> army_b;
+    core::Side first_turn = core::Side::A;
+    core::DeploymentMode deployment = core::DeploymentMode::Auto;
+    GameMode play_mode = GameMode::Hotseat;
+
+    friend bool operator==(const CustomBattleSettings&, const CustomBattleSettings&) = default;
+};
 
 // Everything the start screen and the sidebar toggles set. Saved to vibehammer_settings.json next to the exe.
 struct AppSettings {
@@ -37,6 +54,7 @@ struct AppSettings {
     bool auto_allocate = false;   // D-038
     bool warn_end_shooting = true;  // D-038
     float ui_scale = 1.0f;        // the user's "UI scale" (D-028), kMinUiScale..kMaxUiScale
+    CustomBattleSettings custom_battle;  // M75: the army builder's last setup
 
     friend bool operator==(const AppSettings&, const AppSettings&) = default;
 };
@@ -45,6 +63,10 @@ struct AppSettings {
 // Each key is read on its own: a missing, unknown-valued or wrong-typed key keeps its default. Unknown keys are
 // ignored, and anything that isn't an object gives all the defaults.
 [[nodiscard]] AppSettings settings_from_json(const nlohmann::json& j);
+// M75: "custom_battle" alone (an object; keys at their defaults left out, so the defaults give an empty object). Read
+// key by key like the rest: a missing or bad key, or an army that isn't a readable army list, keeps its default.
+[[nodiscard]] nlohmann::json custom_battle_to_json(const CustomBattleSettings& s);
+[[nodiscard]] CustomBattleSettings custom_battle_from_json(const nlohmann::json& j);
 
 // The defaults when the file is missing, unreadable or not JSON. Never throws.
 [[nodiscard]] AppSettings load_settings(const std::filesystem::path& path);
@@ -58,9 +80,10 @@ bool save_settings(const std::filesystem::path& path, const AppSettings& s);
 [[nodiscard]] const char* bot_speed_key(BotSpeed speed);
 [[nodiscard]] std::optional<BotLevel> bot_level_from_key(std::string_view key);
 [[nodiscard]] std::optional<BotSpeed> bot_speed_from_key(std::string_view key);
+// M75: "hotseat" / "vs_bot" / "bot_vs_bot".
+[[nodiscard]] const char* game_mode_key(GameMode mode);
+[[nodiscard]] std::optional<GameMode> game_mode_from_key(std::string_view key);
 
-// The start screen's ways to play, and which sides the bot plays in each (client state, never GameState).
-enum class GameMode : std::uint8_t { Hotseat, VsBot, BotVsBot };
 using BotSides = std::array<bool, 2>;  // indexed by Side
 [[nodiscard]] BotSides bot_sides_for(GameMode mode, core::Side human);
 

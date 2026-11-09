@@ -1,0 +1,1886 @@
+{
+  "description": "M75: a custom battle built in the army builder (ArmyBuilder edits, D-082): side A, Chaos Space Marines renamed Black Legion, its boltgun Legionaries trading a boltgun for a heavy melee weapon (960 points); side B, Tyranids renamed Hive Fleet Leviathan, the first Termagants split into two loadouts (9 Fleshborers and 1 spinefist) and the Tyrannofex with a Rupture cannon (975 points); Tyranids first, auto-placed (D-079). The Easy bot plays both sides through battle round 1, with dice seed 1. Its scenario file is the builder's battle (custom_battle_scenario). Replaying it needs only the engine.",
+  "expect": {
+    "battle_round": 2,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 186.97998046875,
+        "y_mm": 435.4605407714844
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 218.97998046875,
+        "y_mm": 435.4605407714844
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 250.97998046875,
+        "y_mm": 435.4605407714844
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 282.97998046875,
+        "y_mm": 435.4605407714844
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 314.9799499511719,
+        "y_mm": 435.4605407714844
+      },
+      {
+        "model": 6,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 186.97998046875,
+        "y_mm": 403.4605407714844
+      },
+      {
+        "model": 7,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 218.97998046875,
+        "y_mm": 403.4605407714844
+      },
+      {
+        "model": 8,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 250.97998046875,
+        "y_mm": 403.4605407714844
+      },
+      {
+        "model": 9,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 282.97998046875,
+        "y_mm": 403.4605407714844
+      },
+      {
+        "model": 10,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 314.9799499511719,
+        "y_mm": 403.4605407714844
+      },
+      {
+        "model": 11,
+        "unit": 2,
+        "wounds_remaining": 5,
+        "x_mm": 351.7444763183594,
+        "y_mm": 436.0888671875
+      },
+      {
+        "model": 12,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 390.3070373535156,
+        "y_mm": 411.47222900390625
+      },
+      {
+        "model": 13,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 430.3070373535156,
+        "y_mm": 411.47222900390625
+      },
+      {
+        "model": 14,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 470.3070373535156,
+        "y_mm": 411.47222900390625
+      },
+      {
+        "model": 15,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 510.3070373535156,
+        "y_mm": 411.47222900390625
+      },
+      {
+        "model": 16,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 550.3070068359375,
+        "y_mm": 411.47222900390625
+      },
+      {
+        "model": 17,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 390.3070373535156,
+        "y_mm": 371.47222900390625
+      },
+      {
+        "model": 18,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 430.3070373535156,
+        "y_mm": 371.47222900390625
+      },
+      {
+        "model": 19,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 470.3070373535156,
+        "y_mm": 371.47222900390625
+      },
+      {
+        "model": 20,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 510.3070373535156,
+        "y_mm": 371.47222900390625
+      },
+      {
+        "model": 21,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 550.3070068359375,
+        "y_mm": 371.47222900390625
+      },
+      {
+        "model": 22,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 660.688720703125,
+        "y_mm": 406.63836669921875
+      },
+      {
+        "model": 23,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 700.688720703125,
+        "y_mm": 406.63836669921875
+      },
+      {
+        "model": 24,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 740.688720703125,
+        "y_mm": 406.63836669921875
+      },
+      {
+        "model": 25,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 780.688720703125,
+        "y_mm": 406.63836669921875
+      },
+      {
+        "model": 26,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 820.688720703125,
+        "y_mm": 406.63836669921875
+      },
+      {
+        "model": 27,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 845.4917602539063,
+        "y_mm": 339.57952880859375
+      },
+      {
+        "model": 28,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 877.4917602539063,
+        "y_mm": 339.57952880859375
+      },
+      {
+        "model": 29,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 909.4917602539063,
+        "y_mm": 339.57952880859375
+      },
+      {
+        "model": 30,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 941.4917602539063,
+        "y_mm": 339.57952880859375
+      },
+      {
+        "model": 31,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 973.4917602539063,
+        "y_mm": 339.57952880859375
+      },
+      {
+        "model": 32,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 845.4917602539063,
+        "y_mm": 307.57952880859375
+      },
+      {
+        "model": 33,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 877.4917602539063,
+        "y_mm": 307.57952880859375
+      },
+      {
+        "model": 34,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 909.4917602539063,
+        "y_mm": 307.57952880859375
+      },
+      {
+        "model": 35,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 941.4917602539063,
+        "y_mm": 307.57952880859375
+      },
+      {
+        "model": 36,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 973.4917602539063,
+        "y_mm": 307.57952880859375
+      },
+      {
+        "model": 37,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 41.221092224121094,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 38,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 69.7210922241211,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 39,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 98.2210922241211,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 40,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 126.7210922241211,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 41,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 155.22108459472656,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 42,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 183.72108459472656,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 43,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 212.22108459472656,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 44,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 240.72108459472656,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 45,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 269.2210693359375,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 46,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 297.7210693359375,
+        "y_mm": 1081.2369384765625
+      },
+      {
+        "model": 47,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 360.1636962890625,
+        "y_mm": 1032.5242919921875
+      },
+      {
+        "model": 48,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 392.1636962890625,
+        "y_mm": 1032.5242919921875
+      },
+      {
+        "model": 52,
+        "unit": 8,
+        "wounds_remaining": 2,
+        "x_mm": 542.7119750976563,
+        "y_mm": 1061.6378173828125
+      },
+      {
+        "model": 53,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 654.8499755859375,
+        "y_mm": 1091.7999267578125
+      },
+      {
+        "model": 54,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 704.8499755859375,
+        "y_mm": 1091.7999267578125
+      },
+      {
+        "model": 55,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 754.8499755859375,
+        "y_mm": 1091.7999267578125
+      },
+      {
+        "model": 56,
+        "unit": 10,
+        "wounds_remaining": 10,
+        "x_mm": 850.1799926757813,
+        "y_mm": 1046.56591796875
+      },
+      {
+        "model": 57,
+        "unit": 11,
+        "wounds_remaining": 16,
+        "x_mm": 930.1369018554688,
+        "y_mm": 1050.6920166015625
+      },
+      {
+        "model": 58,
+        "unit": 12,
+        "wounds_remaining": 10,
+        "x_mm": 1024.4847412109375,
+        "y_mm": 1063.169677734375
+      },
+      {
+        "model": 59,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 353.0616149902344,
+        "y_mm": 1178.5216064453125
+      },
+      {
+        "model": 60,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 385.0616149902344,
+        "y_mm": 1178.5216064453125
+      },
+      {
+        "model": 61,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 417.0616149902344,
+        "y_mm": 1178.5216064453125
+      },
+      {
+        "model": 62,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 449.0616149902344,
+        "y_mm": 1178.5216064453125
+      },
+      {
+        "model": 63,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 481.0616149902344,
+        "y_mm": 1178.5216064453125
+      },
+      {
+        "model": 64,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 530.1300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 65,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 558.6300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 66,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 587.1300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 67,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 615.6300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 68,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 644.1300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 69,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 672.6300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 70,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 701.1300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 71,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 729.6300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 72,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 758.1300659179688,
+        "y_mm": 1227.284912109375
+      },
+      {
+        "model": 73,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 786.6300659179688,
+        "y_mm": 1227.284912109375
+      }
+    ],
+    "result": null,
+    "stage": "MoveUnits"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "tests/data/scenarios/m75_builder_battle_44x60.json",
+    "seed": 1
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 46,
+        "path": [
+          {
+            "x": 297.7210693359375,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 269.2210693359375,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 240.72108459472656,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 212.22108459472656,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 183.72108459472656,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 155.22108459472656,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 126.7210922241211,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 39,
+        "path": [
+          {
+            "x": 98.2210922241211,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 69.7210922241211,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 41.221092224121094,
+            "y": 1081.2369384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 488.1636962890625,
+            "y": 1032.5242919921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 456.1636962890625,
+            "y": 1032.5242919921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 424.1636962890625,
+            "y": 1032.5242919921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 392.1636962890625,
+            "y": 1032.5242919921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 47,
+        "path": [
+          {
+            "x": 360.1636962890625,
+            "y": 1032.5242919921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 52,
+        "path": [
+          {
+            "x": 542.7119750976563,
+            "y": 1061.6378173828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 654.8499755859375,
+            "y": 1091.7999267578125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 704.8499755859375,
+            "y": 1091.7999267578125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 754.8499755859375,
+            "y": 1091.7999267578125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 56,
+        "path": [
+          {
+            "x": 850.1799926757813,
+            "y": 1046.56591796875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 57,
+        "path": [
+          {
+            "x": 930.1369018554688,
+            "y": 1050.6920166015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 58,
+        "path": [
+          {
+            "x": 1024.4847412109375,
+            "y": 1063.169677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 481.0616149902344,
+            "y": 1178.5216064453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 62,
+        "path": [
+          {
+            "x": 449.0616149902344,
+            "y": 1178.5216064453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 61,
+        "path": [
+          {
+            "x": 417.0616149902344,
+            "y": 1178.5216064453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 60,
+        "path": [
+          {
+            "x": 385.0616149902344,
+            "y": 1178.5216064453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 59,
+        "path": [
+          {
+            "x": 353.0616149902344,
+            "y": 1178.5216064453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 73,
+        "path": [
+          {
+            "x": 786.6300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 72,
+        "path": [
+          {
+            "x": 758.1300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 71,
+        "path": [
+          {
+            "x": 729.6300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 70,
+        "path": [
+          {
+            "x": 701.1300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 69,
+        "path": [
+          {
+            "x": 672.6300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 68,
+        "path": [
+          {
+            "x": 644.1300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 67,
+        "path": [
+          {
+            "x": 615.6300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 66,
+        "path": [
+          {
+            "x": 587.1300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 65,
+        "path": [
+          {
+            "x": 558.6300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 64,
+        "path": [
+          {
+            "x": 530.1300659179688,
+            "y": 1227.284912109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 57,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 2
+          }
+        ],
+        "type": "Normal",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 314.9799499511719,
+            "y": 435.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 282.97998046875,
+            "y": 435.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 250.97998046875,
+            "y": 435.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 218.97998046875,
+            "y": 435.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 314.9799499511719,
+            "y": 403.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 186.97998046875,
+            "y": 435.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 282.97998046875,
+            "y": 403.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 250.97998046875,
+            "y": 403.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 218.97998046875,
+            "y": 403.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 186.97998046875,
+            "y": 403.4605407714844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 351.7444763183594,
+            "y": 436.0888671875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 390.3070373535156,
+            "y": 411.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 430.3070373535156,
+            "y": 411.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 470.3070373535156,
+            "y": 411.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 510.3070373535156,
+            "y": 411.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 550.3070068359375,
+            "y": 411.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 390.3070373535156,
+            "y": 371.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 430.3070373535156,
+            "y": 371.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 470.3070373535156,
+            "y": 371.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 510.3070373535156,
+            "y": 371.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 550.3070068359375,
+            "y": 371.47222900390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 26,
+        "path": [
+          {
+            "x": 820.688720703125,
+            "y": 406.63836669921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 25,
+        "path": [
+          {
+            "x": 780.688720703125,
+            "y": 406.63836669921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 740.688720703125,
+            "y": 406.63836669921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 700.688720703125,
+            "y": 406.63836669921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 660.688720703125,
+            "y": 406.63836669921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 31,
+        "path": [
+          {
+            "x": 973.4917602539063,
+            "y": 339.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 30,
+        "path": [
+          {
+            "x": 941.4917602539063,
+            "y": 339.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 29,
+        "path": [
+          {
+            "x": 909.4917602539063,
+            "y": 339.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 28,
+        "path": [
+          {
+            "x": 877.4917602539063,
+            "y": 339.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 27,
+        "path": [
+          {
+            "x": 845.4917602539063,
+            "y": 339.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 973.4917602539063,
+            "y": 307.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 941.4917602539063,
+            "y": 307.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 909.4917602539063,
+            "y": 307.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 33,
+        "path": [
+          {
+            "x": 877.4917602539063,
+            "y": 307.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 32,
+        "path": [
+          {
+            "x": 845.4917602539063,
+            "y": 307.57952880859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 12,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 13,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 16,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          51,
+          50,
+          49,
+          48,
+          47
+        ],
+        "target": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 22,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 23,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 24,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 25,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 26,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          52
+        ],
+        "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          52
+        ],
+        "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    }
+  ]
+}

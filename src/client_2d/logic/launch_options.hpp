@@ -13,6 +13,10 @@
 // a click that would submit an action, so it submits nothing.
 // M70: --window <w>x<h> opens the window at that size in pixels (each 320 to 16384) instead of maximized, for
 // screenshots of a small window.
+// M75 (D-082): --builder 1 opens the army builder (the "Custom battle" screen); --army-a <file> and --army-b <file> (army
+// lists), --first A|B and --deploy auto|hand start a custom battle with them (a side without a list keeps its stock
+// army), or with --builder 1 preload the builder. None of them goes with --scenario, --replay or --load, and --builder 1
+// not with --menu 1.
 
 #include <array>
 #include <cstddef>
@@ -20,8 +24,11 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "army_builder.hpp"
+#include "core/data/army_list.hpp"
 #include "saved_game.hpp"
 #include "settings.hpp"
 
@@ -68,6 +75,16 @@ struct LaunchOptions {
     std::vector<unsigned> click_units;   // --click-units (M63)
     std::optional<CliTurn> turn;         // --turn (M66)
     std::optional<CliWindow> window;     // --window (M70)
+    bool builder = false;                // --builder 1 (M75)
+    std::optional<std::string> army_a;   // --army-a (M75)
+    std::optional<std::string> army_b;   // --army-b (M75)
+    std::optional<core::Side> first;     // --first (M75)
+    std::optional<core::DeploymentMode> deploy;  // --deploy (M75)
+    // --open-slot <group>:<slot> (M75): in the builder, open that wargear combo of the selected unit (screenshots).
+    std::optional<std::pair<std::size_t, std::size_t>> open_slot;
+
+    // M75: a custom battle's flags were given (--army-a, --army-b, --first or --deploy).
+    [[nodiscard]] bool custom_battle() const { return army_a || army_b || first || deploy; }
 };
 
 // argv[1..]: "--key value" pairs.
@@ -76,6 +93,12 @@ struct LaunchOptions {
 // M61: the --load file, resolved like --replay (as given, else under `data_root`), loaded with load_game_file.
 // std::invalid_argument ("invalid value for --load: ...") when it is missing, unreadable or fails to load.
 [[nodiscard]] LoadedGame load_launch_save(const std::string& file, const std::filesystem::path& data_root);
+
+// M75: puts --army-a, --army-b, --first and --deploy into `builder` (a list file as given, else under the builder's
+// data root). With both lists their factions must differ; with one, the other side keeps or takes the stock army of a
+// different faction. Unless `options.builder`, the battle must be able to start (no list problem). Every failure is an
+// std::invalid_argument naming the flag (main exits with code 2).
+void apply_launch_armies(const LaunchOptions& options, ArmyBuilder& builder);
 
 // The players a --load game starts with: the save's, with --bot and --bot-level overriding them when given.
 [[nodiscard]] SavePlayers launch_players(const SavePlayers& saved, const LaunchOptions& options);

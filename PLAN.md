@@ -4147,7 +4147,7 @@ measured cost.
     rosters (30 files, 4,740 games) matches the pre-batch baseline on every `game` line.
   - ctest (Debug and Release): 1217 -> 1260 tests, all pass.
 
-## M75: Army builder screen
+## M75: Army builder screen ✅ (done)
 **Effort:** `high` · **Plan mode:** pre-approved (2026-11-09) · **Decision:** D-082 part 1
 
 > **Logic** (`client_2d/logic/army_builder.*`).
@@ -4175,6 +4175,76 @@ measured cost.
   `M75_LaunchOptions`.
 - Replay `m75_builder_battle.json`.
 - Screenshots: the stock builder, an edited list with greyed options and a problem, and a custom battle's start.
+
+**Results (2026-11-09):** D-082 part 1 records the design and every reading taken. Client only: no rule, `GameState`
+field, action, event or file format changes.
+- **Core** (read-only list queries in `core/data/`, so the client re-implements no list rule, D-024):
+  `loadout_weapons` (`army_rules`; the auto-layout's `make_loadout` now uses it, same output), `default_model_weapons`
+  and `unavailable_reason` (`army_list`).
+- **Logic** (`src/client_2d/logic/army_builder.*`): `ArmyBuilder` holds both lists, the first turn, the deployment
+  mode, the play mode, the selection, and per side an edited flag and the list's source.
+  - *Edits:* `set_faction` (picking the other side's faction swaps the two armies: with two factions a refusal would
+    make any change impossible), `rename`, `add_unit` (core's `default_unit`; refused at the copy limit),
+    `remove_unit`, `duplicate_unit`, `set_count` (each type within its range and the unit within its maximum; the unit
+    may drop below its minimum while edited, shown as the 02.06 problem, so Havocs can swap a weapon type),
+    `add_model_type`, `split_group` ("+ another loadout"), `merge_group`, `remove_group`, `set_option` (refused options
+    can't be picked), `reset_to_stock`, `load` (not the other side's faction), `save` / `save_user` (`<data
+    root>/armies/<name>.json`; `data/armies` refused).
+  - *Views:* points per side and unit, problems (`army_problems` + `battle_problems`, attached to units), slots with
+    option points and refusals, model types with unavailable reasons, the add-unit list (from-points, copies / limit,
+    refusal), army files per faction, `preview_unit` (a one-unit battle for the datasheet window), `can_start`,
+    `start_problem`, `setup`, `battle_scenario` and `battle_state`; `custom_battle_state(setup, ...)` for "New game";
+    `plain_first` (problem text with the plain words first).
+- **Settings:** `AppSettings::custom_battle` (`CustomBattleSettings`: both armies as army JSON, first turn,
+  deployment, play mode), every key left out at its default and an army left out while it is its side's stock, so an
+  old settings file loads and saves byte for byte; read key by key (a bad army is the stock army).
+- **Screen** (`src/client_2d/army_builder_screen.*`, `Mode::Builder`, from the start screen's new "Custom battle..."
+  button): side A, the unit editor and side B in three columns over the battle options (first turn, Auto-place /
+  Place by hand with M74's step and a tooltip until M76, bot level, Hotseat / Vs bot with "You play" / Bot vs bot,
+  Back, Start disabled with the reason). Each side: faction, name, points bar (red over 1000), units with D-065's
+  shade and number, Edit / Copy / Remove, "Add unit...", problems, Load / Save / Reset to stock. The editor: per model
+  type its count and range (unavailable types greyed with the reason), per group a stepper, "+ another loadout",
+  Merge, Remove and the slot combos (refused options greyed, the reason in the tooltip), the unit's problems, and
+  "Datasheet" (the game's datasheet window, D-034).
+- **`main.cpp`:** Start builds the battle through core, sets the bot sides and starts a session; "New game" (toolbar
+  and victory pop-up) rebuilds the custom battle from the stored setup with a new seed unless fixed; the start
+  screen's Play buttons, Continue, loads, replays and Main menu forget it, so they behave as before.
+- **Flags:** `--builder 1`, `--army-a <file>`, `--army-b <file>`, `--first A|B`, `--deploy auto|hand` (a custom battle,
+  or the builder preloaded with `--builder 1`); exit 2 for bad values, the same faction twice, an unreadable list, a
+  list with a problem (without `--builder 1`), and with `--scenario`, `--replay`, `--load` (or `--builder 1` with
+  `--menu 1`). For screenshots, `--select <unit id>` selects a builder unit and `--open-slot <group>:<slot>` opens one
+  of its combos.
+- **Tests** (20 new): `tests/client/m75_test.cpp`: `M75_ArmyBuilder.*` (12: the stock lists at 960 and 955; playable
+  defaults; greyed options with the engine's reason and option points; unavailable types with reasons; counts within
+  the datasheet; a split group with two different specials and a spinefist Termagant; copy, points, CHARACTER and
+  loaded-copy problems on their units; opposing factions only; save / load round trip; stock files never
+  overwritten; Start only without problems; the datasheet preview), `M75_Settings.CustomBattleRoundTripsAndOldFilesLoad`,
+  `M75_CustomBattle.NewGameEqualsCoreScenario` (both deployment modes and both first turns),
+  `M75_LaunchOptions.*` (3). `tests/ai/m75_test.cpp`: `M75_Replay.*` (3, plus the disabled regenerate and seed-search
+  tests). No existing test changed.
+- **Replay** `tests/replays/m75_builder_battle.json` (scenario form, seed 1) on the fixture
+  `tests/data/scenarios/m75_builder_battle_44x60.json`, the builder's `battle_scenario()` after ArmyBuilder edits:
+  "Black Legion" with a heavy melee weapon Legionary (960 points) against "Hive Fleet Leviathan" with a split
+  Termagant group (9 Fleshborers, 1 spinefist) and a Rupture cannon Tyrannofex (975 points), Tyranids first,
+  auto-placed. The Easy bot plays both sides through battle round 1 (112 steps; both sides shoot), stopping at battle
+  round 2's first decision. Written by `M75_Replay.DISABLED_RegenerateBuilderBattleReplay` (in the ai tests: Easy plays
+  it); the scenario form keeps `D076_Json.AnOldFileLoadsAndSavesTheSame` unchanged (an embedded custom state would
+  carry points).
+- **Acceptance:**
+  - *The tests listed:* **met.**
+  - *The replay:* **met.**
+  - *Screenshots* (`xvfb-run`, 1600x1000 and 1280x800, looked at): the stock builder; an edited list (a second Chaos
+    Lord, a Havoc short) with the Lord's melee combo open showing the Daemon hammer greyed, both problems listed, the
+    Havocs marked and Start disabled with the reason; the Termagants' split groups with the spinefist combo open and
+    the Strangleweb type greyed; the Hive Tyrant's long slot names; the datasheet window; a custom battle's start
+    from `--army-b` with Tyranids first; a hand-deployed custom battle mid-deployment. **Met**; the layout fits at
+    1280x800 (one long unit name, "Chaos Terminator Squad 3", is clipped before its number, which its swatch shows).
+  - *Old play unchanged:* **met.** `Replay.DISABLED_RegenerateReplays` and the M45, M46, M47, M58, M68, M70 and M73
+    regenerations leave `tests/replays` byte-identical; the only new files are the M75 replay and its fixture. The
+    Release arena's `--per-game` output on V1, both bot scenarios, Strike and the rosters (30 files, 4,740 games)
+    matches the pre-batch baseline on every `game` line (the client isn't in the arena: a guard against the core
+    change, `make_loadout` now calling `loadout_weapons`).
+  - ctest (Debug and Release): 1260 -> 1280 tests, all pass.
 
 ## M76: Hand deployment in the client
 **Effort:** `xhigh` · **Plan mode:** pre-approved (2026-11-09) · **Rules:** 03.02 · **Decision:** D-082 part 2

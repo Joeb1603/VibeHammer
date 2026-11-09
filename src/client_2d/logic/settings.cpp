@@ -14,6 +14,19 @@ using nlohmann::json;
 
 constexpr std::array<const char*, 3> kLevelKeys{"easy", "normal", "hard"};
 constexpr std::array<const char*, 4> kSpeedKeys{"slow", "normal", "fast", "instant"};
+constexpr std::array<const char*, 3> kModeKeys{"hotseat", "vs_bot", "bot_vs_bot"};
+constexpr std::array<const char*, 2> kDeploymentKeys{"auto", "hand"};
+
+// An army list in the settings, or nullopt when it isn't one (core's from_json checks its format and kind).
+std::optional<core::ArmyList> read_army(const json& j, const char* key) {
+    const auto it = j.find(key);
+    if (it == j.end()) return std::nullopt;
+    try {
+        return it->get<core::ArmyList>();
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
 
 void read_bool(const json& j, const char* key, bool& out) {
     if (const auto it = j.find(key); it != j.end() && it->is_boolean()) out = it->get<bool>();
@@ -36,8 +49,34 @@ void read_enum(const json& j, const char* key, const std::array<const char*, N>&
 
 }  // namespace
 
+json custom_battle_to_json(const CustomBattleSettings& s) {
+    const CustomBattleSettings d;
+    json j = json::object();
+    if (s.army_a) j["army_a"] = *s.army_a;
+    if (s.army_b) j["army_b"] = *s.army_b;
+    if (s.first_turn != d.first_turn) j["first_turn"] = s.first_turn == core::Side::A ? "A" : "B";
+    if (s.deployment != d.deployment) j["deployment"] = kDeploymentKeys[static_cast<std::size_t>(s.deployment)];
+    if (s.play_mode != d.play_mode) j["play_mode"] = kModeKeys[static_cast<std::size_t>(s.play_mode)];
+    return j;
+}
+
+CustomBattleSettings custom_battle_from_json(const json& j) {
+    CustomBattleSettings s;
+    if (!j.is_object()) return s;
+    s.army_a = read_army(j, "army_a");
+    s.army_b = read_army(j, "army_b");
+    if (const auto it = j.find("first_turn"); it != j.end() && it->is_string()) {
+        const std::string side = it->get<std::string>();
+        if (side == "A") s.first_turn = core::Side::A;
+        if (side == "B") s.first_turn = core::Side::B;
+    }
+    read_enum(j, "deployment", kDeploymentKeys, s.deployment);
+    read_enum(j, "play_mode", kModeKeys, s.play_mode);
+    return s;
+}
+
 json settings_to_json(const AppSettings& s) {
-    return json{
+    json j{
         {"human_side", s.human_side == core::Side::A ? "A" : "B"},
         {"bot_level", kLevelKeys[static_cast<std::size_t>(s.bot_level)]},
         {"bot_speed", kSpeedKeys[static_cast<std::size_t>(s.bot_speed)]},
@@ -51,6 +90,9 @@ json settings_to_json(const AppSettings& s) {
         {"warn_end_shooting", s.warn_end_shooting},
         {"ui_scale", s.ui_scale},
     };
+    // M75: only when the builder's setup isn't the default, so an older file saves unchanged.
+    if (s.custom_battle != CustomBattleSettings{}) j["custom_battle"] = custom_battle_to_json(s.custom_battle);
+    return j;
 }
 
 AppSettings settings_from_json(const json& j) {
@@ -79,6 +121,7 @@ AppSettings settings_from_json(const json& j) {
             s.ui_scale = std::clamp(static_cast<float>(scale), kMinUiScale, kMaxUiScale);
         }
     }
+    if (const auto it = j.find("custom_battle"); it != j.end()) s.custom_battle = custom_battle_from_json(*it);
     return s;
 }
 
@@ -139,6 +182,15 @@ std::optional<BotLevel> bot_level_from_key(std::string_view key) {
 std::optional<BotSpeed> bot_speed_from_key(std::string_view key) {
     for (std::size_t i = 0; i < kSpeedKeys.size(); ++i) {
         if (key == kSpeedKeys[i]) return static_cast<BotSpeed>(i);
+    }
+    return std::nullopt;
+}
+
+const char* game_mode_key(GameMode mode) { return kModeKeys[static_cast<std::size_t>(mode)]; }
+
+std::optional<GameMode> game_mode_from_key(std::string_view key) {
+    for (std::size_t i = 0; i < kModeKeys.size(); ++i) {
+        if (key == kModeKeys[i]) return static_cast<GameMode>(i);
     }
     return std::nullopt;
 }
