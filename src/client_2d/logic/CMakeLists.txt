@@ -12,6 +12,7 @@ add_library(wh40k_client_logic STATIC
     casualty_picks.cpp
     casualty_plan.cpp
     decision_view.cpp
+    deploy_plan.cpp
     dice_cards.cpp
     drop_fix.cpp
     event_text.cpp

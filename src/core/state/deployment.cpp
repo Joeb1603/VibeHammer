@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/data/formation.hpp"
@@ -129,20 +131,20 @@ PlacedBoxes boxes_of(const std::vector<PosedModel>& placed) {
 
 // The placed unit (each model's pose, in the unit's model order; `boxes` its boxes_of) against the set-up rules of
 // 03.02 / D-081. With `out`, every problem is appended in the documented order (the battlefield and the zone, models
-// on models, coherency, engagement); without it, the first problem found decides (the models on the battlefield are
-// tried first, the cheapest test to fail where units stand). True when there is none. One function for both, so a
-// proposal found by the scan is exactly what validation accepts.
+// on models, coherency, engagement), each with the placed models at fault (M76); without it, the first problem found
+// decides (the models on the battlefield are tried first, the cheapest test to fail where units stand). True when there
+// is none. One function for both, so a proposal found by the scan is exactly what validation accepts.
 bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>& placed, const PlacedBoxes& boxes,
-                  std::vector<std::string>* out) {
-    std::vector<std::string> on_field;
-    std::vector<std::string> on_models;
-    std::vector<std::string> engaged;
+                  std::vector<SetUpProblem>* out) {
+    std::vector<SetUpProblem> on_field;
+    std::vector<SetUpProblem> on_models;
+    std::vector<SetUpProblem> engaged;
     // 03.01 Ending a Move / D-064: not on a model already on the battlefield; 03.02 / 03.04: unengaged. Bounding boxes
     // cull the pairs that can't touch: each unit's, then each model on the battlefield against the whole placed unit,
     // then against each placed model.
     for (const OnBattlefield& t : v.units) {
         if (!boxes_meet(boxes.block, t.reach)) continue;
-        bool engaged_found = false;
+        std::optional<std::size_t> engaged_at;  // this enemy unit's engagement reason, once found
         for (std::size_t k = 0; k < t.poses.size(); ++k) {
             if (!boxes_meet(boxes.block, t.boxes[k])) continue;
             for (std::size_t i = 0; i < placed.size(); ++i) {
@@ -150,15 +152,25 @@ bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>
                 const BasePose a = placed[i].pose();
                 if (bases_overlap(a, t.poses[k])) {
                     if (out == nullptr) return false;
-                    on_models.push_back("03.01: " + model_text(placed[i].id) + " would be set up on " +
-                                        model_text(t.models[k]) + " of " + unit_text(t.id) + " (D-064)");
+                    on_models.push_back(SetUpProblem{"03.01: " + model_text(placed[i].id) + " would be set up on " +
+                                                         model_text(t.models[k]) + " of " + unit_text(t.id) + " (D-064)",
+                                                     {placed[i].id}});
                 }
-                if (t.enemy && !engaged_found && within(base_distance(a, t.poses[k]), kEngagementRangeMm)) {
+                if (t.enemy && within(base_distance(a, t.poses[k]), kEngagementRangeMm)) {
                     if (out == nullptr) return false;
-                    engaged_found = true;
-                    engaged.push_back("03.02: " + unit_text(unit) + " would be set up engaged with " + unit_text(t.id) +
-                                      " (03.04: " + model_text(placed[i].id) + " within 2\" of " +
-                                      model_text(t.models[k]) + ")");
+                    if (!engaged_at) {
+                        // The reason names the first pair found (as before M76); the models list grows below.
+                        engaged_at = engaged.size();
+                        engaged.push_back(SetUpProblem{"03.02: " + unit_text(unit) + " would be set up engaged with " +
+                                                           unit_text(t.id) + " (03.04: " + model_text(placed[i].id) +
+                                                           " within 2\" of " + model_text(t.models[k]) + ")",
+                                                       {placed[i].id}});
+                    } else {
+                        std::vector<ModelId>& at_fault = engaged[*engaged_at].models;
+                        if (std::find(at_fault.begin(), at_fault.end(), placed[i].id) == at_fault.end()) {
+                            at_fault.push_back(placed[i].id);
+                        }
+                    }
                 }
             }
         }
@@ -168,38 +180,42 @@ bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>
         const BasePose p = m.pose();
         if (!wholly_within(v.field, p)) {
             if (out == nullptr) return false;
-            on_field.push_back("03.02: " + model_text(m.id) + " is not wholly on the battlefield");
+            on_field.push_back(SetUpProblem{"03.02: " + model_text(m.id) + " is not wholly on the battlefield", {m.id}});
         } else if (!wholly_within(v.zone, p)) {
             if (out == nullptr) return false;
-            on_field.push_back("D-009: " + model_text(m.id) + " is not wholly within " + side_text(v.side) +
-                               "'s deployment zone");
+            on_field.push_back(SetUpProblem{"D-009: " + model_text(m.id) + " is not wholly within " + side_text(v.side) +
+                                                "'s deployment zone",
+                                            {m.id}});
         }
     }
     // 03.01 Ending a Move / D-064: no model of the unit on another of the unit.
-    std::vector<std::string> within_unit;
+    std::vector<SetUpProblem> within_unit;
     for (std::size_t i = 0; i < placed.size(); ++i) {
         for (std::size_t j = i + 1; j < placed.size(); ++j) {
             if (!boxes_meet(boxes.own[i], boxes.own[j])) continue;
             if (bases_overlap(placed[i].pose(), placed[j].pose())) {
                 if (out == nullptr) return false;
-                within_unit.push_back("03.01: " + model_text(placed[i].id) + " would be set up on " +
-                                      model_text(placed[j].id) + " of its own unit (D-064)");
+                within_unit.push_back(SetUpProblem{"03.01: " + model_text(placed[i].id) + " would be set up on " +
+                                                       model_text(placed[j].id) + " of its own unit (D-064)",
+                                                   {placed[i].id, placed[j].id}});
             }
         }
     }
     // 03.03 (by 03.01 Ending a Move and 03.02): coherency.
-    std::vector<std::string> coherency;
+    std::vector<SetUpProblem> coherency;
     if (placed.size() > 1) {
         const CoherencyResult c = check_coherency(std::span<const PosedModel>(placed));
         if (!c.ok()) {
             if (out == nullptr) return false;
             for (const ModelId id : c.isolated) {
-                coherency.push_back("03.03: " + model_text(id) + " would be more than 2\" from every other model in " +
-                                    unit_text(unit));
+                coherency.push_back(SetUpProblem{"03.03: " + model_text(id) +
+                                                     " would be more than 2\" from every other model in " + unit_text(unit),
+                                                 {id}});
             }
             for (const ModelId id : c.too_far) {
-                coherency.push_back("03.03: " + model_text(id) + " would be more than 9\" from another model in " +
-                                    unit_text(unit));
+                coherency.push_back(SetUpProblem{"03.03: " + model_text(id) +
+                                                     " would be more than 9\" from another model in " + unit_text(unit),
+                                                 {id}});
             }
         }
     }
@@ -212,7 +228,7 @@ bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>
 }
 
 bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>& placed,
-                  std::vector<std::string>* out) {
+                  std::vector<SetUpProblem>* out) {
     return check_placed(v, unit, placed, boxes_of(placed), out);
 }
 
@@ -394,10 +410,10 @@ std::optional<Side> side_to_deploy(const GameState& state) {
     return count(state.units, second) <= count(state.units, first) ? second : first;
 }
 
-std::vector<std::string> set_up_problems(const GameState& state, Side side, const action::DeployUnit& a) {
-    if (auto p = unit_problem(state, side, a.unit)) return {*p};
+std::vector<SetUpProblem> set_up_problem_details(const GameState& state, Side side, const action::DeployUnit& a) {
+    if (auto p = unit_problem(state, side, a.unit)) return {SetUpProblem{*p, {}}};
     const Unit& u = *find_undeployed(state, a.unit);
-    std::vector<std::string> out;
+    std::vector<SetUpProblem> out;
     // 03.02: place its models: each exactly once.
     std::vector<int> placed_count(u.models.size(), 0);
     std::vector<std::size_t> index_of(a.models.size(), u.models.size());
@@ -406,16 +422,17 @@ std::vector<std::string> set_up_problems(const GameState& state, Side side, cons
         std::size_t i = 0;
         while (i < u.models.size() && u.models[i].id != id) ++i;
         if (i == u.models.size()) {
-            out.push_back("03.02: " + model_text(id) + " is not a model of " + unit_text(u.id));
+            out.push_back(SetUpProblem{"03.02: " + model_text(id) + " is not a model of " + unit_text(u.id), {}});
             continue;
         }
         index_of[p] = i;
-        if (++placed_count[i] == 2) out.push_back("03.02: " + model_text(id) + " is placed more than once");
+        if (++placed_count[i] == 2) out.push_back(SetUpProblem{"03.02: " + model_text(id) + " is placed more than once", {id}});
     }
     for (std::size_t i = 0; i < u.models.size(); ++i) {
         if (placed_count[i] == 0) {
-            out.push_back("03.02: " + model_text(u.models[i].id) + " of " + unit_text(u.id) +
-                          " is not placed (every model of the unit is set up)");
+            out.push_back(SetUpProblem{"03.02: " + model_text(u.models[i].id) + " of " + unit_text(u.id) +
+                                           " is not placed (every model of the unit is set up)",
+                                       {u.models[i].id}});
         }
     }
     for (std::size_t p = 0; p < a.models.size(); ++p) {
@@ -423,16 +440,20 @@ std::vector<std::string> set_up_problems(const GameState& state, Side side, cons
         const ModelPlacement& m = a.models[p];
         const Position& at = m.position;
         if (!std::isfinite(at.x) || !std::isfinite(at.y) || !std::isfinite(at.z)) {
-            out.push_back("03.02: " + model_text(m.model) + "'s position must be a finite point on the battlefield");
+            out.push_back(SetUpProblem{"03.02: " + model_text(m.model) + "'s position must be a finite point on the battlefield",
+                                       {m.model}});
         } else if (at.z != 0.0f) {
-            out.push_back("03.02: " + model_text(m.model) +
-                          " must be set up on the battlefield's surface (z 0: there is no terrain)");
+            out.push_back(SetUpProblem{"03.02: " + model_text(m.model) +
+                                           " must be set up on the battlefield's surface (z 0: there is no terrain)",
+                                       {m.model}});
         }
         if (!std::isfinite(m.facing_deg)) {
-            out.push_back("D-074: " + model_text(m.model) + "'s facing must be a finite number of degrees");
+            out.push_back(SetUpProblem{"D-074: " + model_text(m.model) + "'s facing must be a finite number of degrees",
+                                       {m.model}});
         } else if (u.models[index_of[p]].base.shape == BaseShape::Round && m.facing_deg != 0.0f) {
-            out.push_back("D-074: " + model_text(m.model) +
-                          " has a round base, which has no facing; its facing must be 0");
+            out.push_back(SetUpProblem{"D-074: " + model_text(m.model) +
+                                           " has a round base, which has no facing; its facing must be 0",
+                                       {m.model}});
         }
     }
     if (!out.empty()) return out;  // the geometry needs every model once, at a real point
@@ -442,6 +463,12 @@ std::vector<std::string> set_up_problems(const GameState& state, Side side, cons
         placed[index_of[p]] = PosedModel{m.id, a.models[p].position, m.base, stored_facing(m.base, a.models[p].facing_deg)};
     }
     (void)check_placed(make_view(state, side), u.id, placed, &out);
+    return out;
+}
+
+std::vector<std::string> set_up_problems(const GameState& state, Side side, const action::DeployUnit& a) {
+    std::vector<std::string> out;
+    for (SetUpProblem& p : set_up_problem_details(state, side, a)) out.push_back(std::move(p.reason));
     return out;
 }
 

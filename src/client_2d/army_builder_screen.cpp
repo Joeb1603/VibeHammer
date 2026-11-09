@@ -496,9 +496,10 @@ void ArmyBuilderScreen::draw_battle_options(ArmyBuilder& b, AppSettings& s, Buil
     if (ImGui::RadioButton("Place by hand", b.deployment() == core::DeploymentMode::Hand)) {
         b.set_deployment(core::DeploymentMode::Hand);
     }
-    ImGui::SetItemTooltip("The sides set up one unit at a time, the side taking the second turn first (D-081). For now "
-                          "each unit is set up at the spot the engine suggests (the auto-layout's); dragging units into "
-                          "place comes next.");
+    // M76 (D-082 part 2): placing by hand is the board's placement editor now.
+    ImGui::SetItemTooltip("The sides take turns setting up one unit at a time, the side taking the second turn first; "
+                          "once one side is done, the other sets up the rest (D-081). Drag each unit into place in "
+                          "your deployment zone, or auto-place it.");
     ImGui::SameLine(0.0f, gap);
     ImGui::TextUnformatted("Bot level:");
     ImGui::SameLine();

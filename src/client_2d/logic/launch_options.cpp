@@ -5,9 +5,36 @@
 #include <exception>
 #include <stdexcept>
 #include <system_error>
+#include <tuple>
 #include <utility>
 
 namespace wh40k::client {
+
+namespace {
+
+// "<a>,<b>": two finite numbers.
+std::pair<float, float> number_pair(const std::string& text) {
+    const std::size_t comma = text.find(',');
+    if (comma == std::string::npos) throw std::invalid_argument("expected two numbers a,b");
+    const std::string a = text.substr(0, comma);
+    const std::string b = text.substr(comma + 1);
+    std::size_t used = 0;
+    const float x = std::stof(a, &used);
+    if (used != a.size() || !std::isfinite(x)) throw std::invalid_argument("not a number");
+    const float y = std::stof(b, &used);
+    if (used != b.size() || !std::isfinite(y)) throw std::invalid_argument("not a number");
+    return {x, y};
+}
+
+// A positive whole number (an id).
+unsigned id_number(const std::string& text) {
+    if (text.empty() || text.size() > 9 || text.find_first_not_of("0123456789") != std::string::npos) {
+        throw std::invalid_argument("not an id");
+    }
+    return static_cast<unsigned>(std::stoul(text));
+}
+
+}  // namespace
 
 LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
     LaunchOptions o;
@@ -74,6 +101,25 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
                     if (used != dy.size()) throw std::invalid_argument("not a number");
                 }
                 o.turn = t;
+            } else if (key == "--deploy-unit") {
+                // M76: <unit>:<dx>,<dy>[:<model>:<x>,<y>]
+                std::vector<std::string> parts;
+                std::size_t start = 0;
+                while (true) {
+                    const std::size_t colon = value.find(':', start);
+                    parts.push_back(value.substr(start, colon == std::string::npos ? std::string::npos : colon - start));
+                    if (colon == std::string::npos) break;
+                    start = colon + 1;
+                }
+                if (parts.size() != 2 && parts.size() != 4) throw std::invalid_argument("expected unit:dx,dy[:model:x,y]");
+                CliDeployUnit d;
+                d.unit = id_number(parts[0]);
+                std::tie(d.dx_in, d.dy_in) = number_pair(parts[1]);
+                if (parts.size() == 4) {
+                    d.model = id_number(parts[2]);
+                    std::tie(d.x_in, d.y_in) = number_pair(parts[3]);
+                }
+                o.deploy_unit = d;
             } else if (key == "--window") {
                 // M70: <w>x<h> in pixels.
                 const std::size_t x = value.find('x');

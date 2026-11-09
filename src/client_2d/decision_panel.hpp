@@ -13,6 +13,7 @@
 #include "board_interaction.hpp"
 #include "casualty_plan.hpp"
 #include "decision_view.hpp"
+#include "deploy_plan.hpp"
 #include "core/engine/actions.hpp"
 #include "melee_plan.hpp"
 #include "reroll_picks.hpp"
@@ -52,6 +53,13 @@ public:
         if (synced_step_ != session.history().size() || !rerolls_.active()) return nullptr;
         return &rerolls_;
     }
+
+    // M76 (D-082 part 2): the action bar while a human sets a unit up by hand (D-081): the decision, the unit being placed
+    // (`plan`) with core's verdict on it (`problems`, empty when it can be set up there), and the buttons. Returns what
+    // was clicked; the app acts on it (every game change still through GameSession::submit).
+    enum class DeployRequest { None, Place, AutoPlace, AutoPlaceRest, CannotSetUp, Reset };
+    DeployRequest draw_deploy(const GameSession& session, const DeployPlan& plan,
+                              const std::vector<core::SetUpProblem>& problems);
 
 private:
     std::optional<core::GameAction> draw_shot_editor(const GameSession& session, const core::action::Shoot& tmpl,

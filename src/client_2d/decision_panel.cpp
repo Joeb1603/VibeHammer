@@ -14,7 +14,9 @@
 #include "unit_style.hpp"
 #include "casualty_order.hpp"
 #include "core/engine/movement.hpp"
+#include "core/state/deployment.hpp"
 #include "decision_view.hpp"
+#include "deploy_plan.hpp"
 
 namespace wh40k::client {
 
@@ -248,7 +250,7 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
                 path_hint = true;
                 break;
             case EditorKind::Deploy:
-                deploy_hint = true;  // D-081: placing by hand on the board is M76's editor; the buttons auto-place
+                deploy_hint = true;  // D-081: a human places by hand with draw_deploy (M76); here only the buttons
                 break;
             case EditorKind::Shot:
                 if (auto a = draw_shot_editor(session, std::get<core::action::Shoot>(t), selected_model)) chosen = a;
@@ -396,6 +398,82 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
     return {};
 }
 
+DecisionPanel::DeployRequest DecisionPanel::draw_deploy(const GameSession& session, const DeployPlan& plan,
+                                                        const std::vector<core::SetUpProblem>& problems) {
+    const core::GameState& gs = session.state();
+    if (!session.pending()) return DeployRequest::None;
+    sync(session);
+    DeployRequest request = DeployRequest::None;
+    const std::string name = unit_display_name(gs, plan.unit());
+    const std::string place = "Place " + name + " (Enter)";
+    if (!begin_bar(place)) return request;
+    headline(gs, session.pending()->side, "Set up a unit by hand (03.02, D-081)");
+    // The unit being placed, and core's verdict on where it stands now (D-024).
+    const core::Unit* u = core::find_undeployed(gs, plan.unit());
+    const std::string what = "Placing " + name + " (unit " + std::to_string(plan.unit().v) + ")" +
+                             (u != nullptr ? ": " + models_and_points_text(*u) : std::string()) + ".";
+    ImGui::TextUnformatted(what.c_str());
+    ImGui::SameLine();
+    // Every reason, on hover (the first is under the verdict and on the board).
+    const auto all_reasons = [&] {
+        if (problems.size() < 2 || !ImGui::IsItemHovered()) return;
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 30.0f);
+        for (const core::SetUpProblem& p : problems) ImGui::BulletText("%s", p.reason.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    };
+    if (problems.empty()) {
+        ImGui::TextColored(ImVec4(0.5f, 0.9f, 0.5f, 1.0f), "It can be set up here.");
+    } else if (problems.size() == 1) {
+        ImGui::TextColored(kWarning, "Not here:");
+    } else {
+        ImGui::TextColored(kWarning, "Not here (%zu reasons):", problems.size());
+        all_reasons();
+    }
+    const DeployChoices choices = deploy_choices(view_.buttons, plan.unit());
+    // The line under it, kept to the bar's four rows: the consequence of "Can't be set up" when core offers it (D-081),
+    // else core's first reason, else how to place it.
+    if (choices.cannot_set_up) {
+        ImGui::PushStyleColor(ImGuiCol_Text, kWarning);
+        ImGui::TextWrapped("%s Or find a spot by hand.", cannot_set_up_text(gs, plan.unit()).c_str());
+        ImGui::PopStyleColor();
+    } else if (!problems.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, kWarning);
+        ImGui::TextWrapped("%s", problems.front().reason.c_str());
+        ImGui::PopStyleColor();
+        all_reasons();
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("Drag it (or its diamond) to move it, Shift-drag one model; Q / E or Shift+wheel turn it while "
+                           "dragged. Pick another unit in the sidebar.");
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::TableNextColumn();
+    ImGui::BeginDisabled(!problems.empty());
+    if (primary_button(place, true)) request = DeployRequest::Place;
+    ImGui::EndDisabled();
+    ButtonRow row;
+    if (choices.auto_place) {
+        if (row.button("Auto-place this unit")) request = DeployRequest::AutoPlace;
+        ImGui::SetItemTooltip("Set it up where the engine proposes: Auto-place's spot (D-079), or the first legal spot "
+                              "it finds when that is taken (D-081).");
+    }
+    if (row.button("Reset")) request = DeployRequest::Reset;
+    ImGui::SetItemTooltip("Put it back where it started: the engine's proposal, when it has one.");
+    if (row.button("Auto-place the rest")) request = DeployRequest::AutoPlaceRest;
+    ImGui::SetItemTooltip("Set up each of your units still to place where the engine proposes, one at a time whenever "
+                          "it is your turn to set one up (the sides still alternate). A unit with no legal spot is left "
+                          "to you. Undo stops it.");
+    if (choices.cannot_set_up) {
+        if (row.button("Can't be set up")) request = DeployRequest::CannotSetUp;
+        ImGui::SetItemTooltip("%s", cannot_set_up_text(gs, plan.unit()).c_str());
+    }
+    ImGui::EndTable();
+    return request;
+}
+
 std::optional<core::GameAction> DecisionPanel::draw_shot_editor(const GameSession& session,
                                                                 const core::action::Shoot& tmpl,
                                                                 std::optional<core::ModelId> selected_model) {
@@ -426,8 +504,9 @@ void DecisionPanel::draw_shot_grid(const core::GameState& gs, ShotPlan& plan,
     ImGui::PushID(static_cast<int>(plan.unit().v * 10 + static_cast<unsigned>(plan.type())));
     const float cell = ImGui::GetFontSize() * 22.0f;
     const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
-    if (ImGui::BeginTable("##shot_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
-        for (const core::Model& m : gs.find_unit(plan.unit())->models) {
+    const core::Unit* shooter = gs.find_unit(plan.unit());  // M76 audit: never dereferenced unchecked
+    if (shooter != nullptr && ImGui::BeginTable("##shot_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
+        for (const core::Model& m : shooter->models) {
             ImGui::TableNextColumn();
             ImGui::PushID(static_cast<int>(m.id.v));
             const bool selected = selected_model == m.id;
@@ -478,8 +557,9 @@ void DecisionPanel::draw_melee_grid(const core::GameState& gs, MeleePlan& plan,
     ImGui::PushID(static_cast<int>(plan.unit().v));
     const float cell = ImGui::GetFontSize() * 24.0f;
     const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
-    if (ImGui::BeginTable("##melee_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
-        for (const core::Model& m : gs.find_unit(plan.unit())->models) {
+    const core::Unit* fighter = gs.find_unit(plan.unit());  // M76 audit: never dereferenced unchecked
+    if (fighter != nullptr && ImGui::BeginTable("##melee_grid", columns, ImGuiTableFlags_SizingStretchSame)) {
+        for (const core::Model& m : fighter->models) {
             const auto d = plan.declaration_for(m.id);
             if (!d) continue;  // no enemy unit engaged with this model
             ImGui::TableNextColumn();

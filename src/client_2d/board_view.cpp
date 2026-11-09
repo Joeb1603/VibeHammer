@@ -112,9 +112,28 @@ void draw_model(const core::Model& model, Color tint, const BoardCamera& cam, bo
     }
 }
 
-// D-065: the unit's per-side number at the centre of its models, outlined in black so it reads on any shade.
-// It scales with the bases (zoom) within limits set by the UI scale, and is left out when the bases are
-// too small on screen for a number to read.
+// D-065: a unit's number at `c`, outlined in black so it reads on any shade. It scales with the bases (`radius_px`, the
+// largest base's radius on screen, so with the zoom) within limits set by the UI scale, and is left out when the bases
+// are too small on screen for a number to read.
+void draw_label(Vector2 c, float radius_px, const std::string& label, bool dimmed, float ui_scale) {
+    if (label.empty()) return;
+    if (radius_px < 4.0f) return;  // zoomed far out: a number would be a smudge
+    // raylib's default font is a 10 px bitmap: whole multiples of 10 stay crisp.
+    const float wanted = std::clamp(radius_px * 1.6f, 16.0f * ui_scale, 30.0f * ui_scale);
+    const int size = 10 * std::max(1, static_cast<int>(std::lround(wanted / 10.0f)));
+    const int w = MeasureText(label.c_str(), size);
+    const int tx = static_cast<int>(std::lround(c.x)) - w / 2;
+    const int ty = static_cast<int>(std::lround(c.y)) - size / 2;
+    const int o = std::max(1, size / 10);
+    for (int dx = -o; dx <= o; dx += o) {
+        for (int dy = -o; dy <= o; dy += o) {
+            if (dx != 0 || dy != 0) DrawText(label.c_str(), tx + dx, ty + dy, size, BLACK);
+        }
+    }
+    DrawText(label.c_str(), tx, ty, size, dimmed ? Color{185, 185, 190, 255} : RAYWHITE);
+}
+
+// D-065: the unit's per-side number at the centre of its models.
 void draw_unit_label(const core::Unit& unit, const std::string& label, const BoardCamera& cam, bool dimmed,
                      float ui_scale) {
     if (label.empty() || unit.models.empty()) return;
@@ -127,22 +146,7 @@ void draw_unit_label(const core::Unit& unit, const std::string& label, const Boa
         radius_mm = std::max(radius_mm, m.base.diameter_mm * 0.5f);
     }
     const float n = static_cast<float>(unit.models.size());
-    const float r_px = cam.to_px(radius_mm);
-    if (r_px < 4.0f) return;  // zoomed far out: a number would be a smudge
-    // raylib's default font is a 10 px bitmap: whole multiples of 10 stay crisp.
-    const float wanted = std::clamp(r_px * 1.6f, 16.0f * ui_scale, 30.0f * ui_scale);
-    const int size = 10 * std::max(1, static_cast<int>(std::lround(wanted / 10.0f)));
-    const Vector2 c = cam.to_screen(x / n, y / n);
-    const int w = MeasureText(label.c_str(), size);
-    const int tx = static_cast<int>(std::lround(c.x)) - w / 2;
-    const int ty = static_cast<int>(std::lround(c.y)) - size / 2;
-    const int o = std::max(1, size / 10);
-    for (int dx = -o; dx <= o; dx += o) {
-        for (int dy = -o; dy <= o; dy += o) {
-            if (dx != 0 || dy != 0) DrawText(label.c_str(), tx + dx, ty + dy, size, BLACK);
-        }
-    }
-    DrawText(label.c_str(), tx, ty, size, dimmed ? Color{185, 185, 190, 255} : RAYWHITE);
+    draw_label(cam.to_screen(x / n, y / n), cam.to_px(radius_mm), label, dimmed, ui_scale);
 }
 
 }  // namespace
@@ -211,15 +215,21 @@ Color unit_color(const core::GameState& state, core::UnitId id) { return to_colo
 
 void draw_board(const core::GameState& state, const BoardCamera& cam,
                 const std::function<bool(core::UnitId)>& dimmed, std::optional<core::UnitId> emphasised,
-                float ui_scale, const std::function<bool(core::UnitId, core::ModelId)>& model_dimmed) {
+                float ui_scale, const std::function<bool(core::UnitId, core::ModelId)>& model_dimmed,
+                std::optional<core::Side> highlighted_zone) {
     const core::Rect board{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm};
     DrawRectangleRec(cam.to_screen(board), kBoardFill);
     for (const core::Side side : {core::Side::A, core::Side::B}) {
         const core::Rect zone = core::zone_rect(state.battlefield, state.side(side).deployment_zone);
-        DrawRectangleRec(cam.to_screen(zone), ColorAlpha(side_color(side), 0.18f));
+        // M76: the zone a side is setting a unit up in, more strongly (D-082 part 2).
+        DrawRectangleRec(cam.to_screen(zone), ColorAlpha(side_color(side), highlighted_zone == side ? 0.34f : 0.18f));
     }
     draw_grid(state.battlefield, cam);
     DrawRectangleLinesEx(cam.to_screen(board), 2.0f, kEdge);
+    if (highlighted_zone) {
+        const core::Rect zone = core::zone_rect(state.battlefield, state.side(*highlighted_zone).deployment_zone);
+        DrawRectangleLinesEx(cam.to_screen(zone), 3.0f * ui_scale, side_color(*highlighted_zone));
+    }
 
     for (const core::Unit& unit : state.units) {
         const bool grey = dimmed && dimmed(unit.id);
@@ -234,6 +244,32 @@ void draw_board(const core::GameState& state, const BoardCamera& cam,
             draw_unit_label(unit, style->label, cam, dimmed && dimmed(unit.id), ui_scale);
         }
     }
+}
+
+void draw_ghost_unit(const BoardCamera& cam, const std::vector<GhostBase>& bases, Color tint, const std::string& label,
+                     float ui_scale) {
+    if (bases.empty()) return;
+    const Color fault{230, 60, 60, 255};
+    float x = 0.0f;
+    float y = 0.0f;
+    float radius_mm = 0.0f;
+    for (const GhostBase& g : bases) {
+        // Translucent, so the board and anything under it show through (a ghost is not on the battlefield yet).
+        fill_base(cam, g.pose, g.at_fault ? ColorAlpha(mix(tint, fault, 0.6f), 0.75f) : ColorAlpha(tint, 0.7f));
+        x += g.pose.position.x;
+        y += g.pose.position.y;
+        radius_mm = std::max(radius_mm, g.pose.base.diameter_mm * 0.5f);
+    }
+    for (const GhostBase& g : bases) {  // outlines over every fill
+        if (g.at_fault) {
+            draw_base_outline(cam, g.pose, 0.5f * ui_scale, 2.5f * ui_scale, fault);
+        } else {
+            draw_base_outline(cam, g.pose, 0.0f, g.emphasised ? 2.5f * ui_scale : 1.0f, Color{255, 255, 255, 210});
+        }
+        if (g.emphasised && g.at_fault) draw_base_outline(cam, g.pose, 2.5f * ui_scale, 1.5f * ui_scale, RAYWHITE);
+    }
+    const float n = static_cast<float>(bases.size());
+    draw_label(cam.to_screen(x / n, y / n), cam.to_px(radius_mm), label, false, ui_scale);
 }
 
 std::optional<HoveredModel> model_at(const core::GameState& state, const BoardCamera& cam, Vector2 screen) {

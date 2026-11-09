@@ -32,6 +32,21 @@ namespace wh40k::core {
 // 03.04). Units not yet set up are not on the battlefield and are ignored.
 [[nodiscard]] std::vector<std::string> set_up_problems(const GameState& state, Side side, const action::DeployUnit& a);
 
+// M76 (D-082 part 2): one of set_up_problems' reasons with the models of the unit being set up that cause it, for the
+// client's placement editor, which marks them (D-024: which models are at fault comes from core too). `models` is
+// empty for a reason about the unit as a whole (it isn't `side`'s to set up, or a model placed isn't one of its own).
+// An engagement reason (03.04) names the first pair found, as before, and lists every placed model within 2" of that
+// enemy unit; two models of the unit on each other list both.
+struct SetUpProblem {
+    std::string reason;
+    std::vector<ModelId> models;
+    friend bool operator==(const SetUpProblem&, const SetUpProblem&) = default;
+};
+
+// set_up_problems with the models at fault: the same reasons, in the same order.
+[[nodiscard]] std::vector<SetUpProblem> set_up_problem_details(const GameState& state, Side side,
+                                                               const action::DeployUnit& a);
+
 // D-081: why `side` can't declare `unit` as not set up (CannotSetUp); empty when it can: the unit is `side`'s, waiting
 // to be set up, and propose_set_up finds no legal spot for it.
 [[nodiscard]] std::vector<std::string> cannot_set_up_problems(const GameState& state, Side side, UnitId unit);

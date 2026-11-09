@@ -7,6 +7,9 @@
 // - "Allocate damage automatically" (D-038, M25): the defender's allocation order (05.03) and casualty
 //   order (05.04) take their defaults, unless a bot plays the defender (D-054: the bot answers its own). The
 //   default casualty order is D-058's (M47): furthest from the action first, keeping coherency.
+// - "Auto-place the rest of my army" (D-082 part 2, M76): while a side that asked for it sets up a unit (D-081), its
+//   lowest-id unit with a legal spot goes where core proposes (Auto-place's spot). It never declares a unit not set up
+//   (CannotSetUp): once only units without a spot are left it stops, and the player decides.
 
 #include <array>
 #include <cstddef>
@@ -17,6 +20,7 @@
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "session.hpp"
+#include "undo_groups.hpp"
 
 namespace wh40k::client {
 
@@ -26,6 +30,9 @@ struct AutoSettings {
     // D-054 (M39): the sides a bot plays, indexed by side_index. auto_allocate never answers their decisions;
     // the forced skips (a lone skip, D-047) still apply to them, as to a human.
     std::array<bool, 2> bot_controlled{};
+    // D-082 part 2 (M76): the sides that asked to auto-place the rest of their army, indexed by side_index (client
+    // state; never a bot's side: a bot sets its own units up, D-081).
+    std::array<bool, 2> auto_deploy{};
 };
 
 // End shooting / charging / pile-ins / consolidations, pass in the fight sequence, skip an overrun pile-in.
@@ -36,7 +43,8 @@ struct AutoSettings {
 
 // The action the client takes by itself for this decision under `settings`, if any: a lone skip, the
 // first (default) allocation order, or the default casualty order (CasualtyPlan's, D-058). Under
-// skip_empty_steps, also the step's skip when every pile-in or consolidation left is pointless (D-047).
+// skip_empty_steps, also the step's skip when every pile-in or consolidation left is pointless (D-047). M76: under
+// auto_deploy, a set-up at core's proposal (the first DeployUnit button: the lowest-id unit with a legal spot).
 [[nodiscard]] std::optional<core::GameAction> next_auto_action(const core::GameState& state,
                                                                const std::vector<core::GameAction>& legal,
                                                                AutoSettings settings);
@@ -46,6 +54,17 @@ struct AutoSettings {
 std::vector<core::GameAction> run_auto_actions(GameSession& session, AutoSettings settings,
                                                const std::function<bool(const core::GameAction&)>& submit = {},
                                                std::size_t limit = 256);
+
+// D-082 part 2 (M76): whether an automatic action is a unit set up (D-081), which is an Undo group of its own (D-039:
+// Undo takes back the last set-up).
+[[nodiscard]] bool is_set_up(const core::GameAction& action);
+
+// run_auto_actions inside the Undo group open in `groups`: each automatic set-up (is_set_up) closes the group open so
+// far and opens one of its own (the player's, InputOwner::Human: they asked for it), so every unit set up is one group;
+// the other automatic actions stay in the group open when they are taken. The caller ends the last group as before.
+std::vector<core::GameAction> run_auto_actions_grouped(GameSession& session, AutoSettings settings, UndoGroups& groups,
+                                                       const std::function<bool(const core::GameAction&)>& submit = {},
+                                                       std::size_t limit = 256);
 
 // D-038: the units that still have a valid shot (the engine offers a Shoot template only for a unit with
 // at least one, D-016), in legal-action order, each once.
