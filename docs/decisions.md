@@ -4915,7 +4915,7 @@ list queries (below). M76 adds part 2 (placing units by hand in the client).
     `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`. No replay: the flow's actions are M74's
     (`m74_hand_deployment.json` sets the Tyrannofex up by hand), and the editor itself makes no game state.
 
-## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch)
+## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan)
 **Decided:** 2026-11-10 (M78 of the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings are
 marked *conservative*). Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or
 JSON change. Later parts (M79–M83) are added below.
@@ -4978,3 +4978,177 @@ JSON change. Later parts (M79–M83) are added below.
     Shoot 1.50 / 1.08, top-target share 0.78 / 0.65, units never within 12" 1.68 of 5 / 6.42 of 9, first engagement in
     round 4.21 (45 of 200 games without one). Measured with the current levels, whose play is the pre-batch play (the
     four pre-batch baseline rows' wins and points match exactly).
+- **Part 1 (M79): the army plan** (`src/ai/normal/army_plan.{hpp,cpp}`; designed first and measured with a scratch
+  prototype, M79 being plan mode). `ArmyPlan army_plan(OddsCache&, const GameState&, Side, Generation)` gives each of
+  `side`'s units with models a **focus** (an enemy unit) and its **partners** (our units with the same focus). It is a
+  pure, deterministic function of the state (the bots stay stateless: maps keyed by unit id, everything in unit order,
+  ties to unit order), recomputed by each decision that uses it. Nothing reads it in M79, so no play changes; M80–M82
+  do. Bot only: no rule, core, state, action, event, replay or JSON change.
+  - **Turns.** Our turn 0 is the current turn if it is ours, else our next one; K is the number of our turns left in the
+    game (0 after the game's end). What a unit still has of turn 0:
+    - everything (move, shooting, charge) in the opponent's turn, before our Movement phase, or while it isn't yet
+      selected to move. A unit in the middle of its move counts as not moved, its models taken at the move's start (as
+      MoveScoreContext does), so a replan from mid-move gets the same plan;
+    - once it has moved: no move; shooting if it hasn't fallen back or shot yet (until the Shooting phase ends); a
+      charge if it hasn't advanced, fallen back or declared yet (until the Charge phase ends);
+    - from the Fight phase on: nothing new (an engaged unit still fights).
+  - **Reach** (per pair (our unit u, enemy unit e); no odds needed):
+    - d0 is the gap now, edge to edge (unit_distance). T(k) is the travel by our turn k's Normal move: k(M + A) + M,
+      where A = 3.5" (09.06's D6 mean: a unit advances in the turns before it attacks; 0 when M is 0). With no move
+      left in turn 0, T(0) = 0 and T(k) = (k − 1)(M + A) + M.
+    - Shooting arrival ts: the first k < K in which it may shoot and d0 − T(k) is within its longest usable range R
+      (ThreatRanges::max_range_mm; for k = 0 that is shooting_reach_mm).
+    - Charge arrival tc: the first k < K in which it may charge and the 2D6 covers max(d0 − T(k), 2") with P ≥ 0.5
+      (p_charge_roll_covers: within 7" after the move).
+    - Engaged with e now: arrival 0. With neither: no arrival, so u is not a candidate for e.
+  - **Modes,** one per pair: the one whose lone exchange (below) is better (a tie goes to Shoot).
+    - *Shoot:* from ts it shoots in each of our turns from min(d0, R). It closes only to its range, so the reply meets
+      it there. [HEAVY] applies when it needn't move (d0 ≤ R) or after its first volley. Before ts it advances (gap
+      d0 − T(k) − A).
+    - *Charge:* it advances until tc. At tc: a Normal move, its shooting from d0 − T(tc) if in range, then the charge,
+      with p = P(the roll covers). From then on it is engaged (certain: p ≥ 0.5 by tc's definition).
+    - *Engaged:* engaged with e now.
+    - While engaged, each of our turns has its close-quarters shooting (10.06) and its fight.
+  - **The exchange** of a group G (1 to 3 of our units, in unit order) with one target e. It is a MultiExchange with the
+    roles turned round: one defender (e) and several attackers (D-066's class, unchanged).
+    - Each member's volley on e is scaled by what is left of the member, e's volley on a member by what is left of e,
+      and each loss is capped at what is left of its target.
+    - *Strengths* are what is left of a unit: its models' wounds left over their W (model equivalents), as unit_share.
+      So a wounded monster is worth less and easier to finish. This is the plan's own choice: Normal's ScoreLine counts
+      models, which counted a Hive Tyrant at 3 wounds as whole.
+    - *Volleys* are the existing rates: melee_share, close-quarters ranged_share, and ranged_share in next_turn_shot's
+      context (who is engaged now: 04.02, 10.06, 17.03; [HAZARDOUS] priced, D-077). The engagements are found once per
+      call, and the rates are cached per call by (attacker, target, kind, range band, [HEAVY]). The OddsCache caches
+      only per-die odds and lives for one decision, so nothing is kept between calls.
+    - *Sequence:* our turns j = 0, 1, … until three of our turns from the group's first contact t0 (its earliest
+      arrival) are played, or the game ends:
+      - **our turn j:** every member shoots (its mode) and the chargers at tc charge. In the Fight phase every member
+        engaged with e strikes it first (chargers have Fights First, 11.04; already engaged, the active player selects
+        first, 12.04; the first charge counts × p). Then e strikes back at one of them.
+      - **e's turn after our turn j** (if the enemy has one before our third volley turn):
+        - engaged with any member: e fights one of them (close-quarters shooting and its fight), then every engaged
+          member strikes back;
+        - otherwise e makes its reply worst for us. The options, for each member: shoot it (if its gap is within e's M
+          plus longest range: from min(gap, R_e), [HEAVY] within R_e), or shoot it and charge it (P(charge after a
+          Normal move) × e's melee, and the member strikes back × the same P). A charge at P ≥ 0.5 leaves them engaged.
+          A turn with no charge brings e its M closer, for its own later reach: it closes on the group.
+      - e's replies before t0 count too: the members approaching into its reach. This is D-067's "who reaches whom
+        when", on both sides.
+    - *Value:* e's losses minus the members' losses (positive: we win it).
+    - *Who takes the reply:* the member the target's choice hurts most (the largest swing in the exchange's value,
+      strike-back included); a tie goes to unit order. It is not the member closest to the target (D-010). The reply
+      is the enemy player's choice, so the plan assumes the worst for us, as hold_line does; it also doesn't depend on
+      the formation a move will choose. The plan reports the member of the first reply (`reply_to`). M80's shared-reply
+      rule (inside the group, after a move) is the move score's own.
+    - *Horizon:* three of our volleys and the target's two replies between them, cut at the game's end. The brief's
+      example was two (Normal's own horizon), but with two the target's first strike is never repaid: two Legionaries
+      units 18" from a Screamer-killer come out −0.08 with two volleys and +0.06 with three.
+  - **Lone values and what a unit gets apart.**
+    - lone(u, e) is the exchange of {u} with e.
+    - What u gets apart is alone(u, e) = max(0, lone(u, e), lone(u, its closest enemy unit)). 0 means it holds back,
+      as today's Normal does when it would lose; today's line is the one with its closest enemy unit. A unit engaged
+      with e gets lone(u, e) (it can't hold back).
+    - The surplus of a group is gain(G, e) = value(G, e) − Σ alone(u, e).
+    - A group pays when it has at least 2 members, value > 0.05 and gain > 0.05 (kMinValue, kMinGain: 5% of a unit of
+      the mean points; on Strike, 5% of a unit). A single unit never pays: its gain is never positive.
+    - PLAN.md's "beats every member's best value alone" is read as the sum of the members' alternatives, not the
+      largest one: units outside a group still do their best apart, so a group pays only for its surplus. This is
+      stricter (*conservative*).
+  - **Assignment (greedy).**
+    - Candidates for a target e:
+      - the "seeds": our units engaged with e whose closest enemy unit it is. They are always members;
+      - up to 4 unassigned, unengaged units that reach e soonest (min(ts, tc), then the gap, then unit order), with an
+        arrival before K.
+      - An engaged unit is a candidate only for the unit it is engaged with.
+    - The group for e: of the paying subsets of the candidates (always with the seeds; at most 3 members, or the seeds
+      alone if there are more), the best by gain per risk among those of the smallest size. Risk is the members'
+      strengths summed. A bigger size wins only if its best group gains 0.05 more than the smaller size's: each extra
+      member must pay its way.
+    - Repeat: of the targets left, the one whose group has the best gain per risk takes it (a tie goes to the target's
+      unit order, then the members'). Its members leave the pool. Stop when no group pays.
+    - An unassigned unit keeps today's line: its focus is its closest enemy unit, with no partners. An engaged unit's
+      closest enemy unit is one it is engaged with (within 2"), so that is its focus.
+    - *Amends the PLAN.md outline*, which ranked targets by joint value per points at risk and took each target's
+      smallest paying group. Measured with the prototype (the plan at each turn's first MoveUnits decision, 20 rosters
+      games and 40 random-army games, Normal vs Normal; strengths still counted by models then):
+      - ranking by gain per risk gives more surplus per plan than joint value per risk: 0.233 against 0.215 (rosters)
+        and 0.142 against 0.123 (random armies);
+      - letting a third member join when it adds 0.05 gives more than the smallest group: 0.233 against 0.194, and
+        0.142 against 0.128.
+    - Margins: 0.02 lets in noise groups (18% / 20% more units with partners for 3% / 4% more surplus; the 10th
+      percentile of gains falls to 0.04); 0.1 drops real ones (15% / 27% fewer units with partners, 3% / 9% less
+      surplus). Candidates per target: 3 found 18% / 15% fewer units with partners; 5 found 11% / 2% more (14% / 8% more
+      surplus) for a rosters p95 of 2.52 ms against 1.59.
+  - **No-ops.** In these cases every unit's focus is its closest enemy unit, with no partners, and `ArmyPlan::active`
+    is false:
+    - `pre_teamwork(generation)` (M55, M77);
+    - either side with fewer than two units with models: one unit a side, and also a side down to its last unit, ours
+      or theirs, which keeps today's play (*conservative*, the brief's "a side with one unit");
+    - no turn left (K = 0);
+    - before the battle (NotStarted, Deploy).
+  - **Points or shares.** Every value is a unit_share: weighted by points under the points rule with several datasheets
+    (D-077, D-080), plain shares on Strike, V1 and a battle of one datasheet a side. Nothing else depends on the result
+    rule. Under D-007 a side that loses the exchange plays for the draw in the move score (D-066); whether such a unit
+    should still follow its group is for M80 to decide and measure.
+  - **Cost** per call:
+    - |ours| × |theirs| reaches (gaps and arrivals, no odds);
+    - lone exchanges for at most 4 candidates per target and for each unit's closest enemy unit (2 modes each, at most
+      3 volleys);
+    - at most 10 subsets per target per greedy round, which need no new odds.
+    - The odds (expected_outcome) are the cost: at most about 6 per pair evaluated, and at most 333 in any measured
+      call.
+    - Prototype, Release, at every decision of 10 rosters games and 40 random-army games (5,592 and 14,101 calls):
+      rosters mean 0.77 ms, p95 1.59, max 2.75; random armies 0.55 / 1.54 / 4.96. The largest random battle (7 v 7,
+      seed 63): p95 1.92, max 3.11.
+    - Normal's decision p95 is about 9–11 ms, so a consumer computes the plan once per decision: M80 once per MoveUnits
+      decision (never per candidate move), M82 once per Hard decision at the root (never per evaluated state). The
+      implementation must stay within 2 ms p95 and 5 ms max per call, checked by a printed timing test.
+  - **What M80–M82 read:**
+    - the interface: `units` (UnitPlan: unit, focus, partners, group), `groups` (PlanGroup: target; members, each with
+      unit, arrival, mode, lone and alone; value, alone, gain, risk, first contact, reply_to), `find(unit)`,
+      `group_of(unit)`, and `describe(state, plan)` / `describe_unit(state, plan, unit)` for reasons, e.g. "with
+      Legionaries 5 on Screamer-killer 8 (joint +0.45, +0.26 apart)";
+    - M80: the focus (the line), the partners and their arrivals (support credit, and synchronisation: a partner that
+      can't reach the focus by our next turn), reply_to (who is in front) and the mode (chargers or shooters);
+    - M81: the groups' targets (the focus-fire bonus) and the partners (charge credit);
+    - M82: the focus first in each queue, and a group's members for the combined pace.
+  - **Measured** (prototype; values in points-weighted shares; A = Chaos Space Marines, B = Tyranids):
+    - *Two Legionaries units 18" from a Screamer-killer* (the board holds only them, the Screamer-killer and a far Tyrant
+      Guard): alone, the chainsword unit gets −0.92 (it needs a turn to reach, and the Screamer-killer charges it first)
+      and the boltgun unit −0.43. Together: +0.06, a group, just over the margin. At 16" it is +0.22, at 12" +0.48, at
+      22" +0.13. With the whole rosters on the board the Terminators join instead: the Terminators and the boltgun unit
+      get +0.45 against +0.26 apart; both Legionaries units with the Terminators +0.47.
+    - *Tyranid infantry and a monster on a lone Legionaries unit* (12–15" away):
+      - a full-strength Hive Tyrant wins alone (+1.01) and takes no partners: with the Termagants +1.05 (they add 0.04),
+        with the Genestealers +0.77 (the Legionaries' strike-back kills them);
+      - with 3 wounds left the Tyrant gets +0.34 alone and pairs with the Genestealers: +0.77, gain 0.43;
+      - the Genestealers and the Termagants without a monster lose together (−0.16): no group.
+    - *A losing group is not formed:* both Genestealers units 12" from the boltgun Legionaries get −0.22 together (−0.32
+      each alone; M68's lone charge stays unattractive).
+    - *Engaged:* the chainsword Legionaries engaged with a Screamer-killer (−0.04 alone) and the boltgun Legionaries 10"
+      away: +0.39 against +0.09 apart, a group with the engaged unit as its seed.
+    - *Rosters games* (Normal vs Normal, seeds 3 and 5):
+      - round 1: no group pays (the monsters win alone and the infantry adds nothing);
+      - round 2: the Hive Tyrant, Tyrannofex and a Screamer-killer on the Chaos Terminators (+1.83 against +1.57 apart),
+        and both Genestealers units on the Chaos Lord;
+      - round 3: the Havocs and the boltgun Legionaries on a Screamer-killer (+0.45 to +0.62; neither pays alone), the
+        chainsword Legionaries and the Terminators on the other one, and the Legionaries, Lord and Terminators on the
+        Hive Tyrant.
+    - *Strike* (no points): three Termagant units on one Intercessor Squad (+0.18 in shares); the Marines take no
+      partners (each squad wins alone).
+    - *Statistics* (the plan at each turn's first MoveUnits decision): 25% of units have partners on the rosters (330 of
+      1,341) and 27% on random armies (511 of 1,871); mean group size 2.24 on both; surplus per plan 0.23 and 0.15.
+  - **Approximations kept:**
+    - Each exchange is one target against its group alone: the target's friends and our other units take no part (M80's
+      move score still weighs every enemy unit, D-066). So a monster that wins alone takes no partners, even where the
+      target's friends would make it pay.
+    - One mode per pair, kept in a group. A charge at 0.5 or more engages for certain (its first fight and the
+      strike-back count × p).
+    - Gaps are one-dimensional: shooters stop at their longest range (no closing to half range), chargers advance at M +
+      3.5" before their charge, and the target closes M per turn for its own reach only (our arrivals don't count on
+      it).
+    - The target's choice is the worst for us within the group; it never turns to a unit outside it.
+    - A later first contact is not discounted: the three volleys run from the contact, cut at the game's end.
+    - A unit that can't arrive within the game (in late rounds, units that hung back 45–50" away) is never a candidate,
+      so it keeps today's line. M80's approach term, which the PLAN gives only to units with partners, doesn't reach it:
+      an open point for M80.
