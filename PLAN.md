@@ -4491,6 +4491,222 @@ client and Easy are unchanged.
 
 ---
 
+## Teamwork: the bots fight as an army (M78–M83)
+
+**Why (feedback, 2026-11-10):** in multi-unit battles every unit except the big monsters runs away; units should
+team up to take out bigger threats. The code agrees:
+- Normal scores each unit's move alone against its closest enemy unit (`MoveScoreContext`), and friendly units are
+  only obstacles (D-066, "approximations kept").
+- Hard's army value (D-067) treats every pair of units as an independent duel and orders each unit's targets by
+  distance only. On the rosters, Hard's Tyranids (9 units) move as Normal (`move_search_units`, D-078).
+- A traced rosters game (Normal vs Normal, `--trace 3`):
+  - units out of reach score every move about ±0.00 and drift back or sideways;
+  - the Genestealers, Termagants and Tyrant Guard stay 40–50" away all game, and the CSM infantry backs away from the
+    monsters;
+  - the monsters arrive one at a time, and the Havocs split their lascannons over three targets.
+- Holding back is right for a unit alone (M68: lone Genestealers charging boltgun Legionaries deal about 0.24 and take
+  0.50 back). What the bots miss is that several units committing together win, because the enemy answers only one
+  of them.
+
+**Agreed with the user (2026-11-10):**
+- Normal and Hard learn to team up. Easy is unchanged.
+- One-unit-a-side games (V1, `bot_termagants_first`, `bot_20_termagants`) play exactly as before.
+- Strike, the rosters and custom battles change on purpose:
+  - their bot replays (m58, m68, m70, m73, m75, m77) are regenerated;
+  - the old play stays reproducible behind the hidden arena levels `normal-m77` / `hard-m77` (`Generation::M77`, as
+    `easy-m55` / `normal-m55` were for M56).
+
+**Run note:**
+- The batch runs on branch `teamwork`, one milestone per session (`/clear` between them) at the effort shown.
+- M79 and M82 are design first: their decision entry (D-083) is reviewed and agreed before any code.
+- Each milestone is verified the usual way:
+  - clean Debug and Release builds and all of `ctest`;
+  - the identity set (below) unchanged;
+  - `git diff tests/replays` shows only the regenerations the milestone means to make.
+- **Identity set for this batch:** V1 and both bot scenarios (every pairing) match the pre-batch baseline from Step 0.
+  `normal-m77` / `hard-m77` match it on Strike and the rosters.
+- Missed targets are recorded as open items, never lowered. At the end the branch goes to `main` by a rebase-merged
+  pull request, when the user asks.
+
+**Pre-batch baseline** (Release arena at `c54c47c`, seeds 1–200; A = Chaos Space Marines, B = Tyranids):
+
+| Pairing | A wins | B wins | Points destroyed A / B | Survivors A / B | p95 / max ms |
+|---|---|---|---|---|---|
+| rosters normal vs normal | 60 | 140 | 352 / 473 | 19.2 / 35.5 | 11.6 / 470 |
+| rosters normal vs easy | 200 | 0 | 567 / 128 | 30.9 / 10.1 | 8.9 / 759 |
+| rosters easy vs normal | 3 | 197 | 317 / 888 | 2.5 / 30.3 | 5.9 / 596 |
+| random armies normal vs normal | 37 | 163 | 222 / 406 | 11.6 / 19.3 | 8.1 / 190 |
+
+**Acceptance for the batch** (Release arena, seeds 1–200, both seats; confirmed on 201–400 where tuned):
+- *Teamwork visible* (M78's statistics, rosters and random armies):
+  - gang-ups at least 2x the baseline;
+  - lone engagements halved;
+  - units that never come within 12" of an enemy unit cut by at least half;
+  - shooting more concentrated.
+- *Not weaker:*
+  - rosters: the new Normal beats `normal-m77` in at least 55% of games from each seat, and the new Hard beats the
+    new Normal in at least 50% from each seat;
+  - random armies: the new Normal beats `normal-m77` in at least 50% from each seat;
+  - Strike: the Marines win at least as often as now.
+- *Times:* Normal decision p95 at most 15 ms and max under 1 s; Hard max under 3 s, rosters RSS no more than about
+  0.65 GB.
+- *Clean:* 0 rejected actions, reverted moves, fallbacks or unfinished games in every run.
+- *Identity:* as in the run note; replays m45, m46 and m47 byte-identical.
+
+---
+
+## M78: Measuring teamwork
+**Effort:** `high` · **Rules:** none (bot and arena only) · **Decision:** none
+
+> **Arena statistics** (`src/ai/arena.cpp`): counted in `play_bot_session`'s event walk, kept in `GameRecord` /
+> `ArenaResult` and printed by `format_arena`. The `--per-game` line is unchanged. Per side:
+> - **gang-ups:** fight phases in which an enemy unit is engaged by two or more of our units;
+> - **lone engagements:** one of our units engaged with an enemy unit while no other unit of ours is engaged with
+>   that unit or within 12" of it;
+> - **shooting spread:** the mean distinct target units per Shoot, and the share of a phase's shots at its most-shot
+>   target;
+> - **contact:** units that never came within 12" of an enemy unit, and the mean round of first engagement.
+>
+> **The regression switch:** `Generation::M77` (`src/ai/generation.hpp`) and the hidden arena levels `normal-m77` /
+> `hard-m77` (arena only: not in the client, the settings or the save file). Hard learns to take the generation, as
+> Normal does. Nothing plays differently yet.
+
+**Acceptance:**
+- the identity set is unchanged, and so is every `--per-game` line on Strike and the rosters;
+- `M78_Arena` tests count each statistic on hand-built positions (two units engaged with one Screamer-killer is one
+  gang-up; a lone engagement is counted);
+- the statistics' baseline is recorded here, for the batch's targets.
+
+---
+
+## M79: The army plan (Normal)
+**Effort:** `xhigh` · **Plan mode:** design first (D-083 part 1) · **Rules:** none (bot only) · **Decision:** D-083 (amends D-066)
+
+> New `src/ai/normal/army_plan.{hpp,cpp}`: `army_plan(cache, state, side, generation)`. It is a pure, deterministic
+> function of the live state (the bot stays stateless) and gives each of our units an optional **focus** enemy unit
+> and its **partners**.
+> 1. **Reach:** for each pair (our unit, enemy unit), the turns until our unit can attack it: shooting by
+>    `ThreatRanges::shooting_reach_mm`, a charge by `p_charge_after_move`.
+> 2. **Joint exchange** of a group on one target, over our next two volleys and the target's reply:
+>    - the members' shares on the target add up (the points-weighted `ranged_share` / `melee_share`), each from the
+>      turn it arrives;
+>    - the target's reply lands on the one member it hurts most (it attacks one unit a phase; D-010 for ties);
+>    - `MultiExchange` with the roles turned round (one defender, several attackers).
+> 3. **Greedy assignment:**
+>    - enemy units in order of the best joint value per points we put at risk;
+>    - each takes the smallest group (at most 3 units, from those that reach it soonest) whose joint value is
+>      positive and beats every member's best value alone;
+>    - assigned units leave the pool, and this repeats until no group pays;
+>    - unassigned units keep today's play (the closest enemy unit, no partners);
+>    - ties go by unit order.
+> 4. **No-ops:** with one unit a side, or under `Generation::M77` / `M55`, every unit gets the closest enemy unit and
+>    no partners.
+
+**Acceptance:**
+- `M79_ArmyPlan` tests on hand-built roster positions:
+  - two Legionaries units 18" from a Screamer-killer form a group, and neither does alone;
+  - Genestealers, Termagants and the Hive Tyrant pair up on a lone Legionaries unit;
+  - repeated calls and a copied state give the same plan;
+  - one unit a side gives the closest unit with no partners;
+- the plan's cost is measured (decision p95 within the batch's target);
+- nothing plays differently yet (the identity set, and Strike and the rosters, unchanged).
+
+---
+
+## M80: Normal moves as a group
+**Effort:** `xhigh` · **Rules:** none (bot only) · **Decision:** D-083 part 2 (amends D-066, D-077)
+
+> Only for a unit with partners (`move_score.*`, `movement.*`):
+> - **The line follows the focus**, not the closest unit. A closer enemy unit joins the others (D-066) like any
+>   other.
+> - **Support:** the partners' expected volleys on the focus in our next turn are credited on the ScoreLine (new
+>   `ScoreLine::allies_hit`, beside `others_hit`). The focus then replies weaker, and our charge meets fewer models.
+> - **Shared reply:** the focus's reply counts on this unit only if this unit would be its closest target in the
+>   group after the move (D-066's closest-target rule, inside the group).
+> - **Synchronisation:** a unit that ends in the focus's charge or shooting reach while no partner can reach the
+>   focus by our next turn gets no support credit, so it waits at the edge of reach for its partners.
+> - **Approach and cohesion,** small `MoveWeights` terms that are 0 for a unit without partners (Hard's
+>   `BotWeights::move` is unchanged for those units). They fix the ±0.00 drift beyond the horizon:
+>   - `approach`: x the turns saved towards the focus;
+>   - `cohesion`: x max(0, gap to the nearest partner − 6").
+> - **Candidates:** directions sorted towards the focus centroid, formations on that line, and a few spots beside the
+>   nearest partner.
+> - **Activation order:** unchanged (the closest to an enemy first). Later partners plan from where earlier ones
+>   ended.
+> - The move reason names the focus and partners.
+
+**Acceptance:**
+- `M80_Normal` tests:
+  - two Legionaries units advance together on a Screamer-killer and end within 6" of each other;
+  - a lone Legionaries unit, its partner 20" back, does not step into the Screamer-killer's charge reach;
+  - far units close in instead of drifting;
+- M56 and M68 tests that pin pre-batch choices run with `Generation::M77` (assertions unchanged), with a new test for
+  each new choice;
+- the arena's teamwork statistics move towards the batch's targets on the rosters and random armies;
+- `normal-m77` matches the pre-batch baseline.
+
+---
+
+## M81: Focus fire and joint charges (Normal)
+**Effort:** `high` · **Rules:** none (bot only) · **Decision:** D-083 part 3
+
+> - **Shooting** (`choose_shooting`):
+>   - a plan's value adds a finishing bonus (the target's future attacks removed: its reply rate x the share killed)
+>     and a small bonus for the side's focus targets;
+>   - a unit splits its weapons over several targets only when that beats concentrating by a margin;
+>   - units shooting at a focus target shoot first.
+> - **Charges** (`charge.*`):
+>   - a partner already engaged with the target is credited: our side's fight includes its melee (`side_melee`), and
+>     the target's fight back is split;
+>   - a partner that may still charge the target this phase is credited at its charge odds;
+>   - the best-odds charger goes first, so the others follow it in.
+
+**Acceptance:**
+- `M81_Shooting` / `M81_Charge` tests:
+  - the Havocs put every lascannon on one monster rather than three;
+  - a second unit charges a Screamer-killer that a partner already fights, where alone it would not;
+- the shooting-spread and gang-up statistics improve on M80's;
+- not weaker than M80 against `normal-m77`.
+
+---
+
+## M82: Hard on the army plan
+**Effort:** `max` · **Plan mode:** design first (D-083 part 4) · **Rules:** none (bot only) · **Decision:** D-083 part 4 (amends D-067, D-078)
+
+> - **The army value:**
+>   - each unit's target queue follows the army plan (its focus first, then distance), not distance alone;
+>   - for a group on one target, the target's wipe turn comes from the group's combined pace in the attention
+>     timeline, giving the target an earlier P(wiped). The exact form is designed first and agreed.
+> - **Moves:** Hard's default plan is Normal's new plan, so it inherits the grouping. `move_search_units` (7) is
+>   measured again with the new plans (D-078 part 11 found the big side's own search holding back) and changed only
+>   if the arena says so.
+
+**Acceptance:**
+- the new Hard beats the new Normal in at least 50% of rosters games from each seat;
+- Hard's max decision under 3 s, rosters RSS no more than about 0.65 GB;
+- `hard-m77` matches the pre-batch baseline;
+- `M82_` tests for the queue order and the group's wipe turn.
+
+---
+
+## M83: Tuning, replays, docs, pull request
+**Effort:** `high` · **Rules:** none · **Decision:** D-083 (final numbers)
+
+> - Tune `approach`, `cohesion`, the finishing bonus and the group limit with the arena (seeds 1–200, both seats),
+>   then confirm them on seeds 201–400.
+> - Regenerate m58, m68, m70, m73, m75 and m77 on purpose; their `TheSavedFileMatchesTheGame` tests follow the new
+>   play. m45, m46 and m47 come out byte-identical.
+> - Docs: D-083 complete, this batch's results, `README.md`, and `CLAUDE.md`'s bot paragraph (the identity set is
+>   now the one-unit scenarios, plus `normal-m77` / `hard-m77` against the pre-batch baseline).
+> - Screenshots: a rosters bot game at battle rounds 2–3 showing units advancing in pairs (`xvfb-run`,
+>   `--bot both --bot-steps`).
+> - A rebase-merged PR when the user asks.
+
+**Acceptance:** the batch's acceptance above, every item marked met or open. A full bot game watched by mouse on
+Windows is a manual check for the user.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
@@ -4511,6 +4727,7 @@ client and Easy are unchanged.
    - **Candidate units:** Assault/Heavy Intercessors, Infernus, Bladeguard, Hellblasters; Hormagaunts, Neurogaunts,
      Tyranid Warriors.
    - **Open items carried from M59–M70** (each where it was left):
+     - *Bots, teamwork:* units plan alone (D-066, D-067); taken up by M78–M83.
      - *Bots, Hard on the rosters:* Hard's Tyranids (9 units) move as Normal and win no more than Normal's own from
        that seat; Hard's own move search lost there because the army value is optimistic for the bigger army early
        (M69, D-078 part 11; M70's sweep found no clearly better setting, and its search lost even with the plans valued by
