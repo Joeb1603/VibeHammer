@@ -14,6 +14,7 @@
 #include "core/engine/replay.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "generation.hpp"
 #include "session.hpp"
 #include "test_helpers.hpp"
 
@@ -55,7 +56,9 @@ struct BotGame {
 // Plays the game through GameSession (every action validated; the client's automatic skips included, nothing
 // auto-allocated for a bot) and turns its history into a scenario-form replay, as M45 does. Replaying it needs only
 // core. `step_cap` below the game's length stops it early: the history is then a prefix of the whole game's.
-BotGame play_strike_bot_game(std::uint64_t seed = kStrikeSeed, std::size_t step_cap = kStepCap) {
+// D-083 part 3 (M81): `generation`, the bots' (Generation::M77: the pre-batch Hard).
+BotGame play_strike_bot_game(std::uint64_t seed = kStrikeSeed, std::size_t step_cap = kStepCap,
+                             Generation generation = Generation::Current) {
     BotGame g;
     g.replay.description =
         "M58: a whole game played by the bot on both sides, level Hard vs Hard, from the 44\"x60\" Strike scenario "
@@ -64,7 +67,9 @@ BotGame play_strike_bot_game(std::uint64_t seed = kStrikeSeed, std::size_t step_
     g.replay.initial.scenario = kStrikeScenario;
     g.replay.initial.seed = seed;
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{BotLevel::Hard}, BotConfig{BotLevel::Hard}, step_cap);
+    BotConfig hard{BotLevel::Hard};
+    hard.generation = generation;
+    g.record = play_bot_session(session, hard, hard, step_cap);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -90,8 +95,10 @@ TEST(M58_Replay, TheStrikeBotGameReplaysToItsResultWithCoreOnly) {
     // It ends in a result (D-007), not at the step cap; several units a side (D-064).
     ASSERT_TRUE(first.final_state.result.has_value());
     EXPECT_EQ(first.final_state.flow.stage, Stage::GameOver);
-    EXPECT_EQ(first.final_state.result->winner, Side::A);  // seed 11: the Tyranids wiped out in battle round 3
-    EXPECT_EQ(first.final_state.flow.battle_round, 3);
+    // D-083 part 3 (M81): seed 11's game with the current Hard (focus fire) is a Space Marine win in battle round 4; the
+    // pre-batch game, a wipe-out in battle round 3, is checked by ThePreBatchGameIsAWipeOutInBattleRoundThree.
+    EXPECT_EQ(first.final_state.result->winner, Side::A);
+    EXPECT_EQ(first.final_state.flow.battle_round, 4);
     EXPECT_EQ(first.final_state.units.size(), 7u);
     const auto units_of = [&](Side side) {
         return std::count_if(first.final_state.units.begin(), first.final_state.units.end(),
@@ -105,6 +112,20 @@ TEST(M58_Replay, TheStrikeBotGameReplaysToItsResultWithCoreOnly) {
     };
     EXPECT_TRUE(has_side(Side::A));
     EXPECT_TRUE(has_side(Side::B));
+}
+
+TEST(M58_Replay, ThePreBatchGameIsAWipeOutInBattleRoundThree) {
+    // The pre-batch Hard (Generation::M77) with the replay's seed: the whole game (about 60 s in Debug), replayed through
+    // the engine alone, with the assertions the saved file was checked with before M81 (D-083 part 3).
+    const BotGame g = play_strike_bot_game(kStrikeSeed, kStepCap, Generation::M77);
+    ASSERT_TRUE(g.record.finished);
+    EXPECT_EQ(g.record.rejected, 0u);
+    const ReplayResult r = run_replay(g.replay, wh40k::test::repo_root());
+    ASSERT_TRUE(r.ok());
+    ASSERT_TRUE(r.final_state.result.has_value());
+    EXPECT_EQ(r.final_state.flow.stage, Stage::GameOver);
+    EXPECT_EQ(r.final_state.result->winner, Side::A);  // seed 11: the Tyranids wiped out in battle round 3
+    EXPECT_EQ(r.final_state.flow.battle_round, 3);
 }
 
 TEST(M58_Replay, TheSavedFileMatchesTheGame) {

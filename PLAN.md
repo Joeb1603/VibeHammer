@@ -4875,7 +4875,7 @@ battles; V1, both bot scenarios, Strike and every Easy vs Easy game play exactly
 
 ---
 
-## M81: Focus fire and joint charges (Normal)
+## M81: Focus fire and joint charges (Normal) ✅ (done)
 **Effort:** `high` · **Rules:** none (bot only) · **Decision:** D-083 part 3
 
 > - **Shooting** (`choose_shooting`):
@@ -4895,6 +4895,113 @@ battles; V1, both bot scenarios, Strike and every Easy vs Easy game play exactly
   - a second unit charges a Screamer-killer that a partner already fights, where alone it would not;
 - the shooting-spread and gang-up statistics improve on M80's;
 - not weaker than M80 against `normal-m77`.
+
+**Results (2026-11-10):** D-083 part 3 records the design, the measurements and what was dropped. Bot only: no rule,
+core, `GameState` field, action, event or file format change. V1, both bot scenarios and every Easy vs Easy game play
+exactly as before; Strike changes on purpose (Normal and Hard), as do the rosters and custom battles.
+- **What changed:**
+  - **Focus fire** (`src/ai/normal/shooting.{hpp,cpp}`): `choose_shooting` takes the generation and builds a
+    `ShootingAim` once per Shoot decision (inactive under M55 / M77 and with one unit a side). A declaration's value adds
+    a **finishing bonus**: each target's reply (its next turn's attack on the unit of ours it hurts most, valued as the
+    move score values a reply) x the enemy's turns left (at most `kFinishTurns` 3) x its expected models destroyed / its
+    models; and a **focus bonus** of 0.1 x the share destroyed of an army-plan group's target. A split declaration must
+    beat the best concentrated one (each model's loadouts with the most shots at one target) by `kSplitMargin` 0.02,
+    and a unit shooting at a focus target shoots first. Reasons: ", on the focus Screamer-killer 3", ", to finish
+    Screamer-killer 7 (77% to destroy it)", ", concentrated on Chaos Lord 2 (a split is worth no more)".
+  - **Joint charges** (`src/ai/normal/charge.{hpp,cpp}`): `charge_credit` finds a charge's partners at one target: our
+    units engaged with it (weight 1) and, at the Charge decision, the charger's plan partners on it that may still
+    declare a charge (weight: their charge odds). `charged_value` then values the fight of the charger and its partners
+    (the target's fight back split by weight) less the partners' fight without it. `decide_charge` declares, of the
+    units gaining at the best one's target, the best odds first. Reasons: "...; joins Legionaries 1 against
+    Screamer-killer 1", "...; Legionaries 2 may follow (92% charge odds); the best odds of the units charging
+    Screamer-killer 1, ahead of Legionaries 2".
+  - **Hard** plays Normal's shooting in its decisions and its rollouts (`monte_carlo` takes the generation; `hard-m77`
+    passes `M77`) and Normal's charges as its default, so it changes too.
+- **Tuning** (seeds 1–400 together, every candidate in both seats, D-083 part 3): the finishing bonus is the lever;
+  weighting it by the enemy's turns left (at most 3) was best in every seat. The joint charges move the wins by no more
+  than the noise but raise the gang-ups. M80's follow gate (0.2) was re-measured at 0.1 and 0 with M81's terms: no
+  consistent gain, kept. **Confirmed on seeds 401–800** (not used to tune), the new Normal's side's wins against
+  `normal-m77`, M81 / M80: rosters Chaos Space Marines 130 / 102, Tyranids 312 / 281; random armies Chaos Space Marines
+  103 / 86, Tyranids 316 / 311.
+- **Arena** (Release, 200 games a row, 4 runs in parallel; the new Normal against `normal-m77` unless named; A = Chaos
+  Space Marines (Space Marines on Strike), B = Tyranids; in brackets M80's on the same seeds):
+
+  | Pairing (seeds) | Wins A / B | Points A / B | Gang-ups A / B | Lone engagements A / B | Targets per Shoot A / B | Top-target share A / B | Never within 12" A / B | First engagement (games without) | Normal p95 / max ms |
+  |---|---|---|---|---|---|---|---|---|---|
+  | rosters new vs m77 (1–200) | 72 / 128 (65 / 135) | 336 / 437 (362 / 483) | 0.09 / 0.26 (0.02 / 0.38) | 0.70 / 0.81 (0.75 / 0.93) | 1.14 / 1.09 (1.50 / 1.09) | 0.84 / 0.68 (0.78 / 0.65) | 1.93 / 6.53 (1.60 / 6.38) | 4.04 (66) | 11.3 / 451 |
+  | rosters new vs m77 (201–400) | 74 / 126 (63 / 137) | 345 / 458 (362 / 485) | 0.12 / 0.25 (0.01 / 0.36) | 0.67 / 0.96 (0.71 / 0.95) | 1.14 / 1.09 (1.50 / 1.09) | 0.83 / 0.67 (0.77 / 0.65) | 1.76 / 6.49 (1.55 / 6.38) | 4.09 (60) | 11.6 / 371 |
+  | rosters m77 vs new (1–200) | 44 / 156 (56 / 144) | 333 / 485 (352 / 490) | 0.04 / 0.54 (0.04 / 0.42) | 0.89 / 0.68 (0.70 / 0.64) | 1.51 / 1.02 (1.53 / 1.08) | 0.77 / 0.70 (0.78 / 0.65) | 1.68 / 6.24 (1.65 / 6.35) | 4.34 (31) | 6.5 / 79 |
+  | rosters m77 vs new (201–400) | 53 / 147 (61 / 139) | 334 / 499 (354 / 487) | 0.06 / 0.48 (0.02 / 0.42) | 0.79 / 0.71 (0.69 / 0.72) | 1.47 / 1.03 (1.51 / 1.08) | 0.78 / 0.70 (0.77 / 0.65) | 1.74 / 6.39 (1.69 / 6.33) | 4.37 (46) | 6.6 / 80 |
+  | random armies new vs m77 (1–200) | 54 / 146 (44 / 156) | 218 / 387 (226 / 408) | 0.03 / 0.11 (0.04 / 0.20) | 0.47 / 0.49 (0.54 / 0.46) | 1.32 / 1.09 (1.61 / 1.08) | 0.77 / 0.74 (0.69 / 0.74) | 3.19 / 3.96 (3.10 / 3.82) | 4.00 (112) | 6.6 / 149 |
+  | random armies new vs m77 (201–400) | 31 / 169 (31 / 169) | 180 / 384 (193 / 414) | 0.03 / 0.09 (0.02 / 0.12) | 0.49 / 0.52 (0.52 / 0.58) | 1.29 / 1.07 (1.59 / 1.08) | 0.80 / 0.74 (0.70 / 0.73) | 2.92 / 3.71 (2.87 / 3.67) | 3.94 (117) | 6.0 / 319 |
+  | random armies m77 vs new (1–200) | 38 / 162 (39 / 161) | 217 / 411 (225 / 419) | 0.00 / 0.17 (0.04 / 0.17) | 0.63 / 0.48 (0.65 / 0.50) | 1.54 / 1.06 (1.60 / 1.08) | 0.70 / 0.74 (0.69 / 0.73) | 2.98 / 3.75 (2.99 / 3.72) | 4.29 (105) | 5.5 / 159 |
+  | random armies m77 vs new (201–400) | 34 / 166 (33 / 167) | 185 / 400 (193 / 402) | 0.01 / 0.18 (0.02 / 0.14) | 0.45 / 0.47 (0.54 / 0.51) | 1.55 / 1.06 (1.60 / 1.07) | 0.72 / 0.75 (0.70 / 0.73) | 2.81 / 3.63 (2.79 / 3.60) | 4.29 (111) | 5.3 / 216 |
+  | strike new vs m77, m77 vs new (1–200) | 200 / 0 each (200 / 0) | – | 0.01 / 0.01, 0.01 / 0.01 | 0.18 / 0.14, 0.19 / 0.19 | 1.44 / 1.06, 1.74 / 1.02 | 0.57 / 0.76, 0.53 / 0.78 | 0.04 / 0.09, 0.04 / 0.10 | 2.87 (161), 2.66 (153) | 6.8 / 67, 4.6 / 18 |
+  | rosters new vs easy (1–200) | 200 / 0 (200 / 0) | 546 / 101 (564 / 130) | 0.03 / 0.07 | 0.48 / 0.14 | 1.48 / 1.00 (1.93 / 1.00) | 0.62 / 0.77 | 3.71 / 6.65 | 3.99 (133) | 13.1 / 310 |
+  | rosters easy vs new (1–200) | 2 / 198 (3 / 197) | 278 / 907 (314 / 890) | 1.34 / 2.48 (1.39 / 1.72) | 2.06 / 2.05 | 1.08 / 1.08 (1.10 / 1.23) | 0.76 / 0.72 | 0.12 / 3.53 | 2.79 (1) | 7.4 / 183 |
+  | rosters new vs new (1–200) | 57 / 143 (59 / 141) | 327 / 460 (363 / 501) | 0.12 / 0.36 (0.05 / 0.51) | 0.82 / 0.90 (0.79 / 0.80) | 1.14 / 1.03 (1.53 / 1.09) | 0.84 / 0.74 (0.77 / 0.65) | 1.89 / 6.53 (1.68 / 6.22) | 4.08 (55) | 11.2 / 360 (A), 6.5 / 225 (B) |
+  | random armies new vs new (1–200) | 46 / 154 (45 / 155) | 212 / 396 (233 / 425) | 0.04 / 0.15 (0.04 / 0.26) | 0.55 / 0.56 (0.66 / 0.50) | 1.28 / 1.07 (1.62 / 1.08) | 0.78 / 0.75 (0.69 / 0.74) | 3.09 / 3.80 (2.95 / 3.65) | 4.04 (109) | 6.4 / 270 (A), 5.5 / 187 (B) |
+  | strike new vs new (1–200) | 200 / 0 (200 / 0) | – | 0.00 / 0.02 | 0.18 / 0.12 | 1.44 / 1.01 (1.74 / 1.07) | 0.56 / 0.78 (0.53 / 0.75) | 0.04 / 0.08 | 2.83 (160) | 6.7 / 67 |
+
+  Over seeds 1–400 the new Normal wins 146 of 400 rosters games as the Chaos Space Marines (M80 128, pre-batch 130),
+  303 as the Tyranids (M80 283, pre-batch 270), 85 random-army games as the Chaos Space Marines (M80 75, pre-batch 70)
+  and 328 as the Tyranids (M80 328, pre-batch 330). Every run was clean (0 rejected actions, reverted moves, fallbacks or
+  unfinished games).
+- **Hard** (Release, seeds 1–60, the new Hard against the new Normal, for M82; pre-batch in brackets, M78's table):
+  rosters hard vs normal 36 / 24 (54 / 6), points 344 / 293 (352 / 190), Hard's decision p95 284 ms, max 1.80 s (all
+  decisions 146 ms / 1.80 s; pre-batch 133 ms / 2.40 s), RSS 0.65 GB; rosters normal vs hard 18 / 42 (16 / 44), max
+  1.57 s, RSS 0.62 GB; Strike hard vs hard 60 / 0 (60 / 0), p95 240 ms (159), max 1.12 s (1.13). Taken apart (the same seeds, wins
+  only: run beside the identity runs, so their times aren't comparable): the new Hard against `normal-m77` 47 / 13, the
+  pre-batch Hard (`hard-m77`) against the new Normal 38 / 22. So most of the drop is the new Normal's Tyranids being
+  stronger (the pre-batch Hard loses 16 more games to them), and M81's shooting and charges in Hard's own play are worth
+  about nothing against the new Normal (36 against 38) and cost 7 games against the pre-batch one. For M82: today's Hard
+  beats today's Normal in 60% of these games as the Chaos Space Marines and 70% as the Tyranids (M82's 50% from each
+  seat), by a much smaller margin than before the batch (90% / 73%). Hard's p95 rose (284 ms against 133 for the Chaos
+  Space Marines' decisions): the rollouts' shooting now builds the army plan and the replies at each Shoot decision.
+- **Trace** (rosters, Normal vs Normal, seed 3; the result as before, Tyranids on points): `R3 A Shoot: Havocs 4: 1x
+  Plasma gun - supercharge at Screamer-killer 7, 2x Havoc lascannon at Screamer-killer 7 (...), on the focus
+  Screamer-killer 7`, then `Legionaries 5: 9x Boltgun at Screamer-killer 7 (...), on the focus Screamer-killer 7`;
+  `R5 A Shoot: Legionaries 5: 1x Bolt pistol at Screamer-killer 7, 9x Boltgun at Screamer-killer 7 (...), to finish
+  Screamer-killer 7 (77% to destroy it)`. Before the batch the Havocs split their lascannons over three monsters in
+  battle round 2; now over two (two at a Screamer-killer, two and the plasma gun at the Hive Tyrant the round-1 volley
+  wounded).
+- **Tests** (6 new, `tests/ai/m81_test.cpp`): `M81_Shooting.TheHavocsPutEveryLascannonOnOneMonster`,
+  `AUnitFinishesAWoundedTarget`, `ShootingAtTheFocusGoesFirst`, `OneUnitASideShootsAsBefore`;
+  `M81_Charge.ASecondUnitJoinsAFightAPartnerIsIn`, `TheBestOddsChargerGoesFirst`; each checks the M77 switch's choice
+  too. And 2 new pre-batch content tests: `M58_Replay.ThePreBatchGameIsAWipeOutInBattleRoundThree`,
+  `M73_Replay.ThePreBatchGameShootsAndFightsOnBothSides`. Existing tests changed:
+  - `M58_Replay.TheStrikeBotGameReplaysToItsResultWithCoreOnly` checks the regenerated game's battle round 4 (was 3;
+    the pre-batch game's round 3 moved, unchanged, to the new test) and `M73_Replay.TheCustomBotGameReplaysToItsResultWithCoreOnly`
+    keeps its shooting check (the new game has no fight; the fight check moved to the pre-batch game), as M80 did for
+    m68 and m70. `play_strike_bot_game` and `play_custom_bot_game` take a generation.
+  - No test of a shooting or charge choice needed `Generation::M77`: none failed (the brief's list is empty).
+- **Replays:** regenerated on purpose (seeds kept): `m58_strike_bot_game.json` (Hard vs Hard on Strike: a Space Marine
+  win in battle round 4), `m68_rosters_normal_bot_game.json`, `m70_rosters_bot_game.json` (Hard), `m73_custom_bot_game.json`
+  (no fight now) and `m77_custom_hand_deploy_bot_game.json`, each ending in a result. Byte-identical: every core replay,
+  m45, m46, m47, m75 and every fixture scenario.
+- **Identity:** at the current levels V1, both bot scenarios and every Easy vs Easy file match the pre-batch baseline (20
+  of 30 files; Strike's and the rosters' five Normal/Hard files each differ on purpose, Strike now too); at the m77
+  levels all 30 files match (4,740 games). `M78_Regression.TheM77LevelsMatchThePreBatchHashes` passes unchanged.
+- **Acceptance:**
+  - `M81_Shooting` / `M81_Charge` tests: met. The Havocs put every lascannon (and the plasma gun) on one monster where
+    the pre-batch Normal splits them over three (a hand-built position: three monsters 14" away; in the traced game seed
+    3 the current Normal still splits them over two in battle round 2, worth more there by the margin); a second unit
+    charges a Screamer-killer its partner fights, where alone it doesn't (and doesn't with the partner 20" back).
+  - Shooting spread and gang-ups improve on M80's: shooting spread met everywhere (the Chaos Space Marines' targets per
+    Shoot 1.14 against 1.50–1.53 on the rosters, 1.28–1.32 against 1.59–1.62 on random armies; the top-target shares
+    up). Gang-ups partly. The new Normal's side against `normal-m77`, up or level in every seat: rosters Chaos Space
+    Marines 0.09–0.12 a game (M80 0.01–0.02; the batch's target 0.08 met), Tyranids 0.48–0.54 (0.42); random armies Chaos
+    Space Marines 0.03 (0.02–0.04), Tyranids 0.17–0.18 (0.14–0.17). New against new, the Chaos Space Marines' up (rosters
+    0.12 against 0.05) and the Tyranids' down (rosters 0.36 against 0.51, random armies 0.15 against 0.26): the Chaos
+    Space Marines now shoot the monsters down before they gang up. Open for M82–M83: the Tyranids' gang-ups against the
+    new Normal, lone engagements (the new side's rosters 0.67–0.71, not halved) and units never within 12" (the rosters'
+    Chaos Space Marines 1.76–1.93 against M80's 1.55–1.60; the Tyranids 6.24–6.39, level).
+  - Not weaker than M80 against `normal-m77`: met, in every seat (seeds 1–400: +18, +20, +10, 0; seeds 401–800: +28,
+    +31, +17, +5). The batch's 55% / 50% targets stay open (the rosters' Chaos Space Marines win 37%, the random armies'
+    21%).
+  - Normal decision p95 at most 15 ms and max under 1 s: met (rosters 13.1 ms / 451 ms, random armies 6.6 ms / 319 ms).
+  - `normal-m77` matches the pre-batch baseline: met (all 30 files, `hard-m77` too).
+  - Debug `ctest`: 1346 tests, all pass. Release builds.
 
 ---
 

@@ -279,7 +279,7 @@ std::optional<HardMovePlan> hard_plan_unit_move(HardContext& hc, analysis::OddsC
     for (std::size_t k = 0; k < checked; ++k) {
         const std::size_t i = order[k];
         std::optional<MonteCarloResult> r;
-        if (mc) r = monte_carlo(eval, cache, plans[i].after, u->side, seed, lw);
+        if (mc) r = monte_carlo(eval, cache, plans[i].after, u->side, seed, lw, {}, nullptr, hc.generation);
         const double v = blend(lw, values[i], r);
         if (have_default && i == 0) default_value = v;
         // Something other than Normal's plan only when it is worth more than the margin more (BotWeights::margin).
@@ -338,7 +338,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
             Option o;
             o.start = stay;
             o.chain = eval.evaluate(sim.state());
-            if (use_lookahead(lw)) o.mc = monte_carlo(eval, cache, sim.state(), side, mc_seed, lw);
+            if (use_lookahead(lw)) o.mc = monte_carlo(eval, cache, sim.state(), side, mc_seed, lw, {}, nullptr, hc.generation);
             o.value = blend(lw, o.chain, o.mc);
             o.text = "Remain Stationary";
             o.where = gap_text(sim.state(), *unit);
@@ -409,7 +409,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
             Option o;
             o.start = advance;
             o.chain = mean;
-            if (use_lookahead(lw)) o.mc = monte_carlo(eval, cache, gs, side, mc_seed, lw, opening);
+            if (use_lookahead(lw)) o.mc = monte_carlo(eval, cache, gs, side, mc_seed, lw, opening, nullptr, hc.generation);
             o.value = blend(lw, o.chain, o.mc);
             o.text = "Advance (" + signed_value(o.chain.score) + " on average over the advance roll)";
             if (values != nullptr) values->advance = o.value;

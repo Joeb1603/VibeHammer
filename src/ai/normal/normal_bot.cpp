@@ -34,7 +34,7 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     analysis::OddsCache cache;  // per decision: the bot keeps no state between decisions but its plan memo
     const DecisionKind& kind = gs.pending->kind;
     if (std::holds_alternative<decision::Shoot>(kind)) {
-        if (const auto c = normal::choose_shooting(cache, gs, legal)) {
+        if (const auto c = normal::choose_shooting(cache, gs, legal, gen)) {
             return single(action::Shoot{c->unit, c->type, c->shots}, normal::describe_shooting(gs, *c));
         }
         return single(action::EndShootStep{}, "End shooting: no shot is worth anything");
