@@ -25,6 +25,14 @@
 // - After the roll (SelectChargeTargets, the real roll is known): each offered target set's planned move; the best
 //   one if it beats holding, otherwise SkipChargeMove (also when no legal move exists).
 // - The charge move itself replays the plan (memoized); from a mid-move state it replans from the move's start.
+// - D-083 part 3 (M81), joint charges (not under Generation::M55 / M77; nothing changes for a unit with no partner, so
+//   one unit a side charges as before): a charge at one target credits the partners in that fight. Our units already
+//   engaged with the target fight it too, and a partner in the army plan (the charger's group on that target) that may
+//   still declare a charge this phase is counted at its charge odds (P(2D6 covers the gap)). The charge's value is the
+//   fight of the charger and its partners against the target, the target's fight back split among the units it is
+//   engaged with, less the partners' fight without the charger (the engaged ones, and a plan partner whose lone charge
+//   pays): what the charge adds. The Charge step declares the
+//   best-odds charger of the group whose target the most valuable charge is at, so the others follow it in.
 
 #include <array>
 #include <cstdint>
@@ -39,6 +47,7 @@
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "generation.hpp"
+#include "normal/army_plan.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -56,6 +65,28 @@ struct ChargePlan {
                                                          std::uint64_t seed, const std::string& reason,
                                                          std::vector<std::string>* problems = nullptr);
 
+// D-083 part 3 (M81): a partner in a charge's fight: engaged with the target already (weight 1) or a plan partner that may
+// still charge it this phase (weight: its charge odds).
+struct ChargePartner {
+    core::UnitId unit;
+    double weight = 1.0;
+    bool engaged = true;
+    // It fights the target without the charger too: engaged, or a plan partner that charges it alone (its lone exchange
+    // with the target in the plan pays in Charge mode). Otherwise it charges only to join the charger.
+    bool without = true;
+    friend bool operator==(const ChargePartner&, const ChargePartner&) = default;
+};
+struct ChargeCredit {
+    core::UnitId target;
+    std::vector<ChargePartner> partners;  // unit order
+};
+// The partners of `unit`'s charge at `target` in `state` (`unit`'s side at its Charge decision, or with a charge of its
+// in progress); `plan`, the army plan of `unit`'s side (nullptr: no potential chargers). nullopt: none, or a
+// pre-teamwork generation.
+[[nodiscard]] std::optional<ChargeCredit> charge_credit(const core::GameState& state, core::UnitId unit,
+                                                        core::UnitId target, const ArmyPlan* plan,
+                                                        Generation generation = Generation::Current);
+
 // How many of the remaining half-turns the value looks at: 2 (the enemy's next turn and ours), 1 in the last
 // battle round when the enemy still has its turn, 0 in the game's last turn (D-007).
 [[nodiscard]] int turns_left(const core::GameState& state);
@@ -72,9 +103,12 @@ struct ChargePlan {
 // add up), and the enemy units outside the charge with no other target may charge us next turn; one target with
 // no other enemy unit is M42's value. M55 valued each target from our full strength and summed them (double
 // counting).
+// D-083 part 3 (M81): `credit`, the partners of a charge at one target (charge_credit): the value is what the charge adds
+// to their fight (see the file comment); ignored for several targets or a pre-teamwork generation.
 [[nodiscard]] double charged_value(analysis::OddsCache& cache, const core::GameState& after_commit, core::UnitId unit,
                                    std::span<const core::UnitId> targets, int turns,
-                                   Generation generation = Generation::Current);
+                                   Generation generation = Generation::Current,
+                                   const ChargeCredit* credit = nullptr);
 
 // M43's seam: what declaring a charge with `unit` is worth from `state`.
 // - `state`: `unit`'s side to act, at its Charge decision, or earlier in the same turn (a Shoot or MoveUnits
@@ -96,14 +130,17 @@ struct ChargeProspect {
     std::array<bool, 13> success_by_roll{};     // [n]: a roll of n has a legal charge move
     std::array<double, 13> value_by_roll{};     // [n]: its value (the best set), hold where it fails
     std::array<int, 13> engaged_by_roll{};      // [n]: models it ends engaged
+    std::vector<ChargePartner> partners;        // D-083 part 3 (M81): the best set's partners (one target), if any
 };
 // D-066 (M56): `losses_from`, the enemy unit our shooting is at (the losses come off its front); nullopt: the
-// closest one (M55 always).
+// closest one (M55 always). D-083 part 3 (M81): `plan`, the army plan of `unit`'s side, for the partners that may still
+// charge (nullptr: only the partners already engaged are credited).
 [[nodiscard]] std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const core::GameState& state,
                                                             core::UnitId unit, std::uint64_t seed,
                                                             double enemy_losses = 0.0,
                                                             std::optional<core::UnitId> losses_from = std::nullopt,
-                                                            Generation generation = Generation::Current);
+                                                            Generation generation = Generation::Current,
+                                                            const ArmyPlan* plan = nullptr);
 
 // The decisions (nullopt: no answer of the Normal level's own; the caller uses the baseline's).
 [[nodiscard]] std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core::GameState& state,

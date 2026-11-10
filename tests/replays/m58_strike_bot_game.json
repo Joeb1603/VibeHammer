@@ -1,105 +1,105 @@
 {
   "description": "M58: a whole game played by the bot on both sides, level Hard vs Hard, from the 44\"x60\" Strike scenario (3 Intercessor Squads against 4 Termagant units) with dice seed 11 (D-067). Replaying it needs only the engine.",
   "expect": {
-    "battle_round": 3,
+    "battle_round": 4,
     "models": [
-      {
-        "model": 1,
-        "unit": 1,
-        "wounds_remaining": 2,
-        "x_mm": 316.15869140625,
-        "y_mm": 908.6949462890625
-      },
       {
         "model": 2,
         "unit": 1,
         "wounds_remaining": 2,
-        "x_mm": 348.15869140625,
-        "y_mm": 908.6949462890625
+        "x_mm": 279.0039978027344,
+        "y_mm": 921.07421875
       },
       {
         "model": 3,
         "unit": 1,
         "wounds_remaining": 2,
-        "x_mm": 380.15869140625,
-        "y_mm": 908.6949462890625
+        "x_mm": 262.45330810546875,
+        "y_mm": 948.5827026367188
       },
       {
         "model": 4,
         "unit": 1,
         "wounds_remaining": 2,
-        "x_mm": 412.15869140625,
-        "y_mm": 908.6949462890625
+        "x_mm": 310.1751403808594,
+        "y_mm": 913.8362426757813
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 330.5373840332031,
+        "y_mm": 939.830810546875
       },
       {
         "model": 6,
         "unit": 2,
         "wounds_remaining": 2,
-        "x_mm": 542.4774169921875,
-        "y_mm": 943.66455078125
+        "x_mm": 559.0806884765625,
+        "y_mm": 851.9969482421875
       },
       {
         "model": 7,
         "unit": 2,
         "wounds_remaining": 2,
-        "x_mm": 574.4774169921875,
-        "y_mm": 943.66455078125
+        "x_mm": 591.0806884765625,
+        "y_mm": 851.9969482421875
       },
       {
         "model": 8,
         "unit": 2,
         "wounds_remaining": 2,
-        "x_mm": 606.4774169921875,
-        "y_mm": 943.66455078125
+        "x_mm": 623.0806884765625,
+        "y_mm": 851.9969482421875
       },
       {
         "model": 9,
         "unit": 2,
         "wounds_remaining": 2,
-        "x_mm": 638.4774169921875,
-        "y_mm": 943.66455078125
+        "x_mm": 655.0806884765625,
+        "y_mm": 851.9969482421875
       },
       {
         "model": 10,
         "unit": 2,
-        "wounds_remaining": 1,
-        "x_mm": 670.4774169921875,
-        "y_mm": 943.66455078125
+        "wounds_remaining": 2,
+        "x_mm": 687.0806884765625,
+        "y_mm": 851.9969482421875
       },
       {
         "model": 11,
         "unit": 3,
         "wounds_remaining": 1,
-        "x_mm": 1108.487548828125,
-        "y_mm": 947.6068115234375
+        "x_mm": 908.720947265625,
+        "y_mm": 861.399169921875
       },
       {
         "model": 12,
         "unit": 3,
         "wounds_remaining": 2,
-        "x_mm": 1103.987548828125,
-        "y_mm": 884.386962890625
+        "x_mm": 940.720947265625,
+        "y_mm": 861.399169921875
       },
       {
         "model": 13,
         "unit": 3,
         "wounds_remaining": 2,
-        "x_mm": 1135.987548828125,
-        "y_mm": 884.386962890625
+        "x_mm": 972.720947265625,
+        "y_mm": 861.399169921875
       },
       {
         "model": 14,
         "unit": 3,
         "wounds_remaining": 2,
-        "x_mm": 1099.0609130859375,
-        "y_mm": 916.5078125
+        "x_mm": 1004.720947265625,
+        "y_mm": 861.399169921875
       },
       {
         "model": 15,
         "unit": 3,
         "wounds_remaining": 2,
-        "x_mm": 1178.3702392578125,
-        "y_mm": 884.6468505859375
+        "x_mm": 1036.720947265625,
+        "y_mm": 861.399169921875
       }
     ],
     "result": {
@@ -385,13 +385,13 @@
           {
             "model": 3,
             "profile_index": 1,
-            "target": 5,
+            "target": 4,
             "weapon_index": 0
           },
           {
             "model": 4,
             "profile_index": 1,
-            "target": 5,
+            "target": 4,
             "weapon_index": 0
           },
           {
@@ -403,13 +403,6 @@
         ],
         "type": "Assault",
         "unit": 1
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "batch": 0,
-        "kind": "SelectAttackBatch"
       },
       "side": "A"
     },
@@ -429,25 +422,6 @@
           21
         ],
         "target": 4
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "OrderCasualties",
-        "priority": [
-          35,
-          34,
-          30,
-          33,
-          32,
-          29,
-          31,
-          28,
-          27,
-          26
-        ],
-        "target": 5
       },
       "side": "B"
     },
@@ -496,11 +470,14 @@
         "kind": "OrderCasualties",
         "priority": [
           26,
+          30,
           29,
           28,
           27,
           31,
           32,
+          35,
+          34,
           33
         ],
         "target": 5
@@ -520,25 +497,25 @@
           {
             "model": 12,
             "profile_index": 1,
-            "target": 6,
+            "target": 5,
             "weapon_index": 0
           },
           {
             "model": 13,
             "profile_index": 1,
-            "target": 6,
+            "target": 5,
             "weapon_index": 0
           },
           {
             "model": 14,
             "profile_index": 1,
-            "target": 6,
+            "target": 7,
             "weapon_index": 0
           },
           {
             "model": 15,
             "profile_index": 1,
-            "target": 6,
+            "target": 7,
             "weapon_index": 0
           }
         ],
@@ -549,7 +526,7 @@
     },
     {
       "action": {
-        "batch": 1,
+        "batch": 0,
         "kind": "SelectAttackBatch"
       },
       "side": "A"
@@ -558,18 +535,15 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          36,
-          40,
-          37,
-          39,
-          38,
-          41,
-          42,
-          45,
-          44,
-          43
+          28,
+          27,
+          31,
+          32,
+          35,
+          34,
+          33
         ],
-        "target": 6
+        "target": 5
       },
       "side": "B"
     },
@@ -577,11 +551,18 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          31,
-          32,
-          33
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55
         ],
-        "target": 5
+        "target": 7
       },
       "side": "B"
     },
@@ -600,7 +581,7 @@
     {
       "action": {
         "kind": "StartMove",
-        "move_type": "Normal",
+        "move_type": "Advance",
         "unit": 4
       },
       "side": "B"
@@ -611,8 +592,8 @@
         "model": 21,
         "path": [
           {
-            "x": 197.0,
-            "y": 982.5499877929688,
+            "x": 74.648193359375,
+            "y": 1067.5101318359375,
             "z": 0.0
           }
         ]
@@ -625,8 +606,8 @@
         "model": 22,
         "path": [
           {
-            "x": 225.5,
-            "y": 982.5499877929688,
+            "x": 101.07768249511719,
+            "y": 1079.44677734375,
             "z": 0.0
           }
         ]
@@ -639,8 +620,8 @@
         "model": 23,
         "path": [
           {
-            "x": 254.0,
-            "y": 982.5499877929688,
+            "x": 127.50717163085938,
+            "y": 1091.38330078125,
             "z": 0.0
           }
         ]
@@ -653,22 +634,8 @@
         "model": 24,
         "path": [
           {
-            "x": 282.5,
-            "y": 982.5499877929688,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 25,
-        "path": [
-          {
-            "x": 311.0,
-            "y": 982.5499877929688,
+            "x": 153.93666076660156,
+            "y": 1103.3199462890625,
             "z": 0.0
           }
         ]
@@ -692,11 +659,25 @@
     {
       "action": {
         "kind": "ProposeModelMove",
+        "model": 31,
+        "path": [
+          {
+            "x": 468.8790588378906,
+            "y": 996.3492431640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
         "model": 32,
         "path": [
           {
-            "x": 555.7000122070313,
-            "y": 1007.949951171875,
+            "x": 497.3790588378906,
+            "y": 996.3492431640625,
             "z": 0.0
           }
         ]
@@ -709,8 +690,36 @@
         "model": 33,
         "path": [
           {
-            "x": 584.2000122070313,
-            "y": 1007.949951171875,
+            "x": 525.8790283203125,
+            "y": 996.3492431640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 554.3790283203125,
+            "y": 996.3492431640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 582.8790283203125,
+            "y": 996.3492431640625,
             "z": 0.0
           }
         ]
@@ -726,8 +735,126 @@
     {
       "action": {
         "kind": "StartMove",
-        "move_type": "RemainStationary",
+        "move_type": "Advance",
         "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 1164.399169921875,
+            "y": 972.8826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 52,
+        "path": [
+          {
+            "x": 1192.899169921875,
+            "y": 972.8826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 1221.399169921875,
+            "y": 972.8826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 1249.899169921875,
+            "y": 972.8826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 1278.399169921875,
+            "y": 972.8826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 1221.399169921875,
+            "y": 944.3826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 1249.899169921875,
+            "y": 944.3826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 1278.399169921875,
+            "y": 944.3826904296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
       },
       "side": "B"
     },
@@ -742,53 +869,11 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 41,
+        "model": 45,
         "path": [
           {
-            "x": 624.6680908203125,
-            "y": 1038.6717529296875,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 42,
-        "path": [
-          {
-            "x": 653.1680908203125,
-            "y": 1038.6717529296875,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 43,
-        "path": [
-          {
-            "x": 681.6680908203125,
-            "y": 1038.6717529296875,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 38,
-        "path": [
-          {
-            "x": 681.6680908203125,
-            "y": 1010.1717529296875,
+            "x": 1067.8406982421875,
+            "y": 1103.2574462890625,
             "z": 0.0
           }
         ]
@@ -801,8 +886,50 @@
         "model": 44,
         "path": [
           {
-            "x": 710.1680908203125,
-            "y": 1038.6717529296875,
+            "x": 1039.3406982421875,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 1010.8406982421875,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 1067.8406982421875,
+            "y": 1074.7574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 982.3406982421875,
+            "y": 1103.2574462890625,
             "z": 0.0
           }
         ]
@@ -815,8 +942,8 @@
         "model": 39,
         "path": [
           {
-            "x": 710.1680908203125,
-            "y": 1010.1717529296875,
+            "x": 1039.3406982421875,
+            "y": 1074.7574462890625,
             "z": 0.0
           }
         ]
@@ -826,11 +953,53 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 45,
+        "model": 41,
         "path": [
           {
-            "x": 738.6680908203125,
-            "y": 1038.6717529296875,
+            "x": 953.8406982421875,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 1010.8406982421875,
+            "y": 1074.7574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 982.3406982421875,
+            "y": 1074.7574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 953.8406982421875,
+            "y": 1074.7574462890625,
             "z": 0.0
           }
         ]
@@ -847,18 +1016,6 @@
       "action": {
         "kind": "Shoot",
         "shots": [
-          {
-            "model": 46,
-            "profile_index": 0,
-            "target": 3,
-            "weapon_index": 0
-          },
-          {
-            "model": 47,
-            "profile_index": 0,
-            "target": 3,
-            "weapon_index": 0
-          },
           {
             "model": 48,
             "profile_index": 0,
@@ -908,7 +1065,7 @@
             "weapon_index": 0
           }
         ],
-        "type": "Normal",
+        "type": "Assault",
         "unit": 7
       },
       "side": "B"
@@ -932,59 +1089,11 @@
         "kind": "Shoot",
         "shots": [
           {
-            "model": 21,
+            "model": 31,
             "profile_index": 0,
             "target": 1,
             "weapon_index": 0
           },
-          {
-            "model": 22,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
-          },
-          {
-            "model": 23,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
-          },
-          {
-            "model": 24,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
-          },
-          {
-            "model": 25,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
-          }
-        ],
-        "type": "Normal",
-        "unit": 4
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "OrderCasualties",
-        "priority": [
-          5,
-          4,
-          3,
-          2,
-          1
-        ],
-        "target": 1
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "Shoot",
-        "shots": [
           {
             "model": 32,
             "profile_index": 0,
@@ -994,7 +1103,19 @@
           {
             "model": 33,
             "profile_index": 0,
-            "target": 2,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 34,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 35,
+            "profile_index": 0,
+            "target": 1,
             "weapon_index": 0
           }
         ],
@@ -1005,44 +1126,15 @@
     },
     {
       "action": {
-        "batch": 0,
-        "kind": "SelectAttackBatch"
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "Shoot",
-        "shots": [
-          {
-            "model": 38,
-            "profile_index": 0,
-            "target": 2,
-            "weapon_index": 0
-          },
-          {
-            "model": 39,
-            "profile_index": 0,
-            "target": 2,
-            "weapon_index": 0
-          }
-        ],
-        "type": "Assault",
-        "unit": 6
-      },
-      "side": "B"
-    },
-    {
-      "action": {
         "kind": "OrderCasualties",
         "priority": [
-          10,
-          8,
-          7,
-          9,
-          6
+          1,
+          2,
+          3,
+          4,
+          5
         ],
-        "target": 2
+        "target": 1
       },
       "side": "A"
     },
@@ -1061,7 +1153,7 @@
     {
       "action": {
         "kind": "StartMove",
-        "move_type": "Normal",
+        "move_type": "Advance",
         "unit": 3
       },
       "side": "A"
@@ -1073,7 +1165,7 @@
         "path": [
           {
             "x": 1079.0,
-            "y": 644.4000244140625,
+            "y": 720.5999755859375,
             "z": 0.0
           }
         ]
@@ -1087,7 +1179,7 @@
         "path": [
           {
             "x": 1111.0,
-            "y": 644.4000244140625,
+            "y": 720.5999755859375,
             "z": 0.0
           }
         ]
@@ -1101,7 +1193,7 @@
         "path": [
           {
             "x": 1143.0,
-            "y": 644.4000244140625,
+            "y": 720.5999755859375,
             "z": 0.0
           }
         ]
@@ -1115,7 +1207,7 @@
         "path": [
           {
             "x": 1175.0,
-            "y": 644.4000244140625,
+            "y": 720.5999755859375,
             "z": 0.0
           }
         ]
@@ -1129,7 +1221,7 @@
         "path": [
           {
             "x": 1207.0,
-            "y": 644.4000244140625,
+            "y": 720.5999755859375,
             "z": 0.0
           }
         ]
@@ -1145,8 +1237,22 @@
     {
       "action": {
         "kind": "StartMove",
-        "move_type": "Advance",
+        "move_type": "Normal",
         "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 503.3209533691406,
+            "y": 683.5992431640625,
+            "z": 0.0
+          }
+        ]
       },
       "side": "A"
     },
@@ -1156,8 +1262,8 @@
         "model": 4,
         "path": [
           {
-            "x": 519.9217529296875,
-            "y": 800.931884765625,
+            "x": 471.3209533691406,
+            "y": 683.5992431640625,
             "z": 0.0
           }
         ]
@@ -1170,8 +1276,8 @@
         "model": 3,
         "path": [
           {
-            "x": 487.9217529296875,
-            "y": 800.931884765625,
+            "x": 439.3209533691406,
+            "y": 683.5992431640625,
             "z": 0.0
           }
         ]
@@ -1184,8 +1290,8 @@
         "model": 2,
         "path": [
           {
-            "x": 455.9217529296875,
-            "y": 800.931884765625,
+            "x": 407.3209533691406,
+            "y": 683.5992431640625,
             "z": 0.0
           }
         ]
@@ -1198,8 +1304,8 @@
         "model": 1,
         "path": [
           {
-            "x": 423.9217529296875,
-            "y": 800.931884765625,
+            "x": 375.3209533691406,
+            "y": 683.5992431640625,
             "z": 0.0
           }
         ]
@@ -1223,39 +1329,11 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 6,
+        "model": 10,
         "path": [
           {
-            "x": 600.7984008789063,
-            "y": 802.8653564453125,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 7,
-        "path": [
-          {
-            "x": 632.7984008789063,
-            "y": 802.8653564453125,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 8,
-        "path": [
-          {
-            "x": 664.7984008789063,
-            "y": 802.8653564453125,
+            "x": 787.119384765625,
+            "y": 664.2646484375,
             "z": 0.0
           }
         ]
@@ -1268,8 +1346,8 @@
         "model": 9,
         "path": [
           {
-            "x": 696.7984008789063,
-            "y": 802.8653564453125,
+            "x": 755.119384765625,
+            "y": 664.2646484375,
             "z": 0.0
           }
         ]
@@ -1279,11 +1357,39 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 10,
+        "model": 8,
         "path": [
           {
-            "x": 728.7984008789063,
-            "y": 802.8653564453125,
+            "x": 723.119384765625,
+            "y": 664.2646484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 691.119384765625,
+            "y": 664.2646484375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 659.119384765625,
+            "y": 664.2646484375,
             "z": 0.0
           }
         ]
@@ -1331,7 +1437,7 @@
             "weapon_index": 0
           }
         ],
-        "type": "Normal",
+        "type": "Assault",
         "unit": 3
       },
       "side": "A"
@@ -1340,13 +1446,11 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          46,
-          47,
           48,
           49,
+          50,
           51,
           52,
-          50,
           53,
           54,
           55
@@ -1360,9 +1464,70 @@
         "kind": "Shoot",
         "shots": [
           {
-            "model": 6,
+            "model": 1,
+            "profile_index": 1,
+            "target": 4,
+            "weapon_index": 0
+          },
+          {
+            "model": 2,
             "profile_index": 1,
             "target": 5,
+            "weapon_index": 0
+          },
+          {
+            "model": 3,
+            "profile_index": 1,
+            "target": 5,
+            "weapon_index": 0
+          },
+          {
+            "model": 4,
+            "profile_index": 1,
+            "target": 5,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 1,
+            "target": 5,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 1,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          31,
+          32,
+          33,
+          34,
+          35
+        ],
+        "target": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 6,
+            "profile_index": 1,
+            "target": 6,
             "weapon_index": 0
           },
           {
@@ -1397,8 +1562,706 @@
     },
     {
       "action": {
-        "batch": 1,
-        "kind": "SelectAttackBatch"
+        "kind": "OrderCasualties",
+        "priority": [
+          40,
+          39,
+          38,
+          37,
+          36,
+          45,
+          44,
+          43,
+          42,
+          41
+        ],
+        "target": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 1332.28076171875,
+            "y": 1026.7642822265625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 354.279052734375,
+            "y": 996.3492431640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 1093.24072265625,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 1064.74072265625,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 1036.24072265625,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 1007.74072265625,
+            "y": 1074.7574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 1007.74072265625,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 979.24072265625,
+            "y": 1074.7574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 979.24072265625,
+            "y": 1103.2574462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 4
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 179.33665466308594,
+            "y": 1103.3199462890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 152.90716552734375,
+            "y": 1091.38330078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 126.4776840209961,
+            "y": 1079.44677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 100.0481948852539,
+            "y": 1067.5101318359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 36,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          },
+          {
+            "model": 37,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          },
+          {
+            "model": 41,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          },
+          {
+            "model": 42,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          },
+          {
+            "model": 43,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          },
+          {
+            "model": 44,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          },
+          {
+            "model": 45,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 21,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 22,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 23,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          },
+          {
+            "model": 24,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 55,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 35,
+            "profile_index": 0,
+            "target": 1,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Assault",
+        "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          1,
+          5,
+          4,
+          3,
+          2
+        ],
+        "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 349.0,
+            "y": 824.3984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 381.0,
+            "y": 824.3984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 413.0,
+            "y": 824.3984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 445.0,
+            "y": 824.3984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 1265.3209228515625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 1233.3209228515625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 1201.3209228515625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 1169.3209228515625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 1137.3209228515625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 864.8806762695313,
+            "y": 851.9969482421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 832.8806762695313,
+            "y": 851.9969482421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 800.8806762695313,
+            "y": 851.9969482421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 768.8806762695313,
+            "y": 851.9969482421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 736.8806762695313,
+            "y": 851.9969482421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 6,
+            "profile_index": 1,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 7,
+            "profile_index": 1,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 8,
+            "profile_index": 1,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 9,
+            "profile_index": 1,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 10,
+            "profile_index": 1,
+            "target": 6,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Assault",
+        "unit": 2
       },
       "side": "A"
     },
@@ -1406,13 +2269,13 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          39,
-          38,
-          41,
           45,
-          42,
+          37,
+          36,
           44,
-          43
+          43,
+          42,
+          41
         ],
         "target": 6
       },
@@ -1423,31 +2286,31 @@
         "kind": "Shoot",
         "shots": [
           {
-            "model": 1,
-            "profile_index": 1,
-            "target": 6,
-            "weapon_index": 0
-          },
-          {
             "model": 2,
             "profile_index": 1,
-            "target": 5,
+            "target": 4,
             "weapon_index": 0
           },
           {
             "model": 3,
             "profile_index": 1,
-            "target": 4,
+            "target": 5,
             "weapon_index": 0
           },
           {
             "model": 4,
             "profile_index": 1,
-            "target": 4,
+            "target": 6,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 1,
+            "target": 6,
             "weapon_index": 0
           }
         ],
-        "type": "Assault",
+        "type": "Normal",
         "unit": 1
       },
       "side": "A"
@@ -1463,13 +2326,10 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          25,
-          24,
-          23,
-          22,
-          21
+          42,
+          41
         ],
-        "target": 4
+        "target": 6
       },
       "side": "B"
     },
@@ -1484,22 +2344,62 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          42,
-          44,
-          43
+          24,
+          23,
+          22,
+          21
         ],
-        "target": 6
+        "target": 4
       },
       "side": "B"
     },
     {
       "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 11,
+            "profile_index": 1,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 12,
+            "profile_index": 1,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 13,
+            "profile_index": 1,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 14,
+            "profile_index": 1,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 1,
+            "target": 7,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
-          33,
-          32
+          55
         ],
-        "target": 5
+        "target": 7
       },
       "side": "B"
     },
@@ -1512,7 +2412,7 @@
     {
       "action": {
         "kind": "DeclareCharge",
-        "unit": 3
+        "unit": 1
       },
       "side": "A"
     },
@@ -1520,20 +2420,20 @@
       "action": {
         "kind": "StartChargeMove",
         "targets": [
-          7
+          5
         ],
-        "unit": 3
+        "unit": 1
       },
       "side": "A"
     },
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 11,
+        "model": 2,
         "path": [
           {
-            "x": 1212.7867431640625,
-            "y": 826.0660400390625,
+            "x": 332.8855285644531,
+            "y": 974.9557495117188,
             "z": 0.0
           }
         ]
@@ -1543,11 +2443,11 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 12,
+        "model": 3,
         "path": [
           {
-            "x": 1244.7867431640625,
-            "y": 826.0660400390625,
+            "x": 344.6502685546875,
+            "y": 941.7416381835938,
             "z": 0.0
           }
         ]
@@ -1557,11 +2457,11 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 13,
+        "model": 4,
         "path": [
           {
-            "x": 1276.7867431640625,
-            "y": 826.0660400390625,
+            "x": 364.0566711425781,
+            "y": 967.7177734375,
             "z": 0.0
           }
         ]
@@ -1571,25 +2471,11 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 14,
+        "model": 5,
         "path": [
           {
-            "x": 1239.860107421875,
-            "y": 858.1868896484375,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 15,
-        "path": [
-          {
-            "x": 1319.16943359375,
-            "y": 826.325927734375,
+            "x": 402.3001708984375,
+            "y": 968.624267578125,
             "z": 0.0
           }
         ]
@@ -1612,20 +2498,34 @@
       "action": {
         "kind": "StartPileIn",
         "targets": [
-          7
+          5
         ],
-        "unit": 3
+        "unit": 1
       },
       "side": "A"
     },
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 11,
+        "model": 5,
         "path": [
           {
-            "x": 1249.2867431640625,
-            "y": 889.285888671875,
+            "x": 384.4189147949219,
+            "y": 993.7123413085938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 316.3348388671875,
+            "y": 1002.4642333984375,
             "z": 0.0
           }
         ]
@@ -1640,31 +2540,7 @@
     },
     {
       "action": {
-        "kind": "StartPileIn",
-        "targets": [
-          3
-        ],
-        "unit": 7
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 54,
-        "path": [
-          {
-            "x": 1279.0821533203125,
-            "y": 884.0321655273438,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "CommitUnitMove"
+        "kind": "EndPileIns"
       },
       "side": "B"
     },
@@ -1672,7 +2548,7 @@
       "action": {
         "kind": "SelectToFight",
         "type": "Normal",
-        "unit": 3
+        "unit": 1
       },
       "side": "A"
     },
@@ -1680,63 +2556,52 @@
       "action": {
         "declarations": [
           {
-            "model": 11,
+            "model": 2,
             "profile_index": 0,
             "targets": [
               {
                 "attacks": 3,
-                "unit": 7
+                "unit": 5
               }
             ],
             "weapon_index": 2
           },
           {
-            "model": 12,
+            "model": 3,
             "profile_index": 0,
             "targets": [
               {
                 "attacks": 3,
-                "unit": 7
+                "unit": 5
               }
             ],
             "weapon_index": 2
           },
           {
-            "model": 13,
+            "model": 4,
             "profile_index": 0,
             "targets": [
               {
                 "attacks": 3,
-                "unit": 7
+                "unit": 5
               }
             ],
             "weapon_index": 2
           },
           {
-            "model": 14,
+            "model": 5,
             "profile_index": 0,
             "targets": [
               {
                 "attacks": 3,
-                "unit": 7
-              }
-            ],
-            "weapon_index": 2
-          },
-          {
-            "model": 15,
-            "profile_index": 0,
-            "targets": [
-              {
-                "attacks": 3,
-                "unit": 7
+                "unit": 5
               }
             ],
             "weapon_index": 2
           }
         ],
         "kind": "Fight",
-        "unit": 3
+        "unit": 1
       },
       "side": "A"
     },
@@ -1744,39 +2609,9 @@
       "action": {
         "kind": "OrderCasualties",
         "priority": [
-          53,
-          54,
-          55
+          35
         ],
-        "target": 7
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "StartMove",
-        "move_type": "Advance",
-        "unit": 5
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 32,
-        "path": [
-          {
-            "x": 344.50115966796875,
-            "y": 1095.431396484375,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "CommitUnitMove"
+        "target": 5
       },
       "side": "B"
     },
@@ -1794,8 +2629,8 @@
         "model": 21,
         "path": [
           {
-            "x": 39.34092712402344,
-            "y": 1080.4783935546875,
+            "x": 100.0481948852539,
+            "y": 762.7101440429688,
             "z": 0.0
           }
         ]
@@ -1808,64 +2643,8 @@
         "model": 22,
         "path": [
           {
-            "x": 57.208892822265625,
-            "y": 1103.3199462890625,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 23,
-        "path": [
-          {
-            "x": 62.182464599609375,
-            "y": 1062.6104736328125,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 24,
-        "path": [
-          {
-            "x": 80.05043029785156,
-            "y": 1085.4520263671875,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "CommitUnitMove"
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "StartMove",
-        "move_type": "Advance",
-        "unit": 6
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 43,
-        "path": [
-          {
-            "x": 961.068115234375,
-            "y": 1038.6717529296875,
+            "x": 126.4776840209961,
+            "y": 774.6467895507813,
             "z": 0.0
           }
         ]
@@ -1893,54 +2672,10 @@
             "profile_index": 0,
             "target": 1,
             "weapon_index": 0
-          },
-          {
-            "model": 23,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
-          },
-          {
-            "model": 24,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
           }
         ],
         "type": "Assault",
         "unit": 4
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "Shoot",
-        "shots": [
-          {
-            "model": 32,
-            "profile_index": 0,
-            "target": 1,
-            "weapon_index": 0
-          }
-        ],
-        "type": "Assault",
-        "unit": 5
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "Shoot",
-        "shots": [
-          {
-            "model": 43,
-            "profile_index": 0,
-            "target": 2,
-            "weapon_index": 0
-          }
-        ],
-        "type": "Assault",
-        "unit": 6
       },
       "side": "B"
     },
@@ -1967,25 +2702,11 @@
     {
       "action": {
         "kind": "ProposeModelMove",
-        "model": 1,
-        "path": [
-          {
-            "x": 316.15869140625,
-            "y": 908.6949462890625,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
         "model": 2,
         "path": [
           {
-            "x": 348.15869140625,
-            "y": 908.6949462890625,
+            "x": 279.0039978027344,
+            "y": 921.07421875,
             "z": 0.0
           }
         ]
@@ -1998,8 +2719,8 @@
         "model": 3,
         "path": [
           {
-            "x": 380.15869140625,
-            "y": 908.6949462890625,
+            "x": 262.45330810546875,
+            "y": 948.5827026367188,
             "z": 0.0
           }
         ]
@@ -2012,8 +2733,22 @@
         "model": 4,
         "path": [
           {
-            "x": 412.15869140625,
-            "y": 908.6949462890625,
+            "x": 310.1751403808594,
+            "y": 913.8362426757813,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 330.5373840332031,
+            "y": 939.830810546875,
             "z": 0.0
           }
         ]
@@ -2029,91 +2764,7 @@
     {
       "action": {
         "kind": "StartMove",
-        "move_type": "Normal",
-        "unit": 3
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 11,
-        "path": [
-          {
-            "x": 1108.487548828125,
-            "y": 947.6068115234375,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 14,
-        "path": [
-          {
-            "x": 1099.0609130859375,
-            "y": 916.5078125,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 12,
-        "path": [
-          {
-            "x": 1103.987548828125,
-            "y": 884.386962890625,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 13,
-        "path": [
-          {
-            "x": 1135.987548828125,
-            "y": 884.386962890625,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "ProposeModelMove",
-        "model": 15,
-        "path": [
-          {
-            "x": 1178.3702392578125,
-            "y": 884.6468505859375,
-            "z": 0.0
-          }
-        ]
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "CommitUnitMove"
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "StartMove",
-        "move_type": "Normal",
+        "move_type": "Advance",
         "unit": 2
       },
       "side": "A"
@@ -2124,8 +2775,8 @@
         "model": 6,
         "path": [
           {
-            "x": 542.4774169921875,
-            "y": 943.66455078125,
+            "x": 559.0806884765625,
+            "y": 851.9969482421875,
             "z": 0.0
           }
         ]
@@ -2138,8 +2789,8 @@
         "model": 7,
         "path": [
           {
-            "x": 574.4774169921875,
-            "y": 943.66455078125,
+            "x": 591.0806884765625,
+            "y": 851.9969482421875,
             "z": 0.0
           }
         ]
@@ -2152,8 +2803,8 @@
         "model": 8,
         "path": [
           {
-            "x": 606.4774169921875,
-            "y": 943.66455078125,
+            "x": 623.0806884765625,
+            "y": 851.9969482421875,
             "z": 0.0
           }
         ]
@@ -2166,8 +2817,8 @@
         "model": 9,
         "path": [
           {
-            "x": 638.4774169921875,
-            "y": 943.66455078125,
+            "x": 655.0806884765625,
+            "y": 851.9969482421875,
             "z": 0.0
           }
         ]
@@ -2180,8 +2831,92 @@
         "model": 10,
         "path": [
           {
-            "x": 670.4774169921875,
-            "y": 943.66455078125,
+            "x": 687.0806884765625,
+            "y": 851.9969482421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 908.720947265625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 940.720947265625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 972.720947265625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 1004.720947265625,
+            "y": 861.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 1036.720947265625,
+            "y": 861.399169921875,
             "z": 0.0
           }
         ]
@@ -2199,113 +2934,26 @@
         "kind": "Shoot",
         "shots": [
           {
-            "model": 6,
-            "profile_index": 1,
-            "target": 4,
-            "weapon_index": 0
-          },
-          {
-            "model": 7,
-            "profile_index": 1,
-            "target": 4,
-            "weapon_index": 0
-          },
-          {
-            "model": 8,
-            "profile_index": 1,
-            "target": 4,
-            "weapon_index": 0
-          },
-          {
-            "model": 9,
-            "profile_index": 1,
-            "target": 5,
-            "weapon_index": 0
-          },
-          {
-            "model": 10,
-            "profile_index": 1,
-            "target": 6,
-            "weapon_index": 0
-          }
-        ],
-        "type": "Normal",
-        "unit": 2
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "batch": 0,
-        "kind": "SelectAttackBatch"
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "OrderCasualties",
-        "priority": [
-          24,
-          23,
-          22,
-          21
-        ],
-        "target": 4
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "batch": 1,
-        "kind": "SelectAttackBatch"
-      },
-      "side": "A"
-    },
-    {
-      "action": {
-        "kind": "OrderCasualties",
-        "priority": [
-          32
-        ],
-        "target": 5
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "OrderCasualties",
-        "priority": [
-          43
-        ],
-        "target": 6
-      },
-      "side": "B"
-    },
-    {
-      "action": {
-        "kind": "Shoot",
-        "shots": [
-          {
-            "model": 1,
-            "profile_index": 1,
-            "target": 4,
-            "weapon_index": 0
-          },
-          {
             "model": 2,
-            "profile_index": 1,
+            "profile_index": 0,
             "target": 4,
             "weapon_index": 0
           },
           {
             "model": 3,
-            "profile_index": 1,
+            "profile_index": 0,
             "target": 4,
             "weapon_index": 0
           },
           {
             "model": 4,
-            "profile_index": 1,
+            "profile_index": 0,
+            "target": 4,
+            "weapon_index": 0
+          },
+          {
+            "model": 5,
+            "profile_index": 0,
             "target": 4,
             "weapon_index": 0
           }

@@ -26,6 +26,7 @@
 #include "analysis/odds.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
+#include "generation.hpp"
 #include "hard/evaluator.hpp"
 #include "hard/weights.hpp"
 
@@ -80,9 +81,11 @@ struct RolloutTrace {
 // rollout_budget(weights, start).rollouts rollouts from `start` (a state in `side`'s turn), each to the start of
 // `side`'s next turn.
 // Deterministic: a pure function of its arguments. `traces`, if given, gets every rollout (diagnostics only).
+// D-083 part 3 (M81): `generation`, Hard's (HardContext::generation): the rollouts' shooting is Normal's at it.
 [[nodiscard]] MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds,
                                            const core::GameState& start, core::Side side, std::uint64_t seed,
                                            const LookaheadWeights& weights, const Opening& opening = {},
-                                           std::vector<RolloutTrace>* traces = nullptr);
+                                           std::vector<RolloutTrace>* traces = nullptr,
+                                           Generation generation = Generation::Current);
 
 }  // namespace wh40k::ai::hard

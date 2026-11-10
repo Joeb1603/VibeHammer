@@ -4915,7 +4915,7 @@ list queries (below). M76 adds part 2 (placing units by hand in the client).
     `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`. No replay: the flow's actions are M74's
     (`m74_hand_deployment.json` sets the Tyrannofex up by hand), and the editor itself makes no game state.
 
-## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group)
+## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group; part 3, M81: focus fire and joint charges)
 **Decided:** 2026-11-10 (M78 of the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings are
 marked *conservative*). Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or
 JSON change. Later parts (M79–M83) are added below.
@@ -5317,4 +5317,134 @@ JSON change. Later parts (M79–M83) are added below.
     the new game still fights on both sides) and m70's melee and a destroyed unit on each side
     (`M70_Replay.ThePreBatchGameFightsAndLosesAUnitOnBothSides`; the new Hard vs Hard game with seed 93 has no melee
     and destroys no whole unit).
+- **Part 3 (M81): focus fire and joint charges (Normal)** (`src/ai/normal/shooting.{hpp,cpp}`, `charge.{hpp,cpp}`;
+  Hard through Normal's answers and its rollouts, `hard/lookahead.{hpp,cpp}`, `hard/hard_bot.cpp`). Bot only: no rule,
+  core, state, action, event or JSON change. Amends D-054's shooting (M41: the unit and declaration worth the most) and
+  charge value (M42), and D-066's charged value. Every new behaviour is off under `pre_teamwork(generation)` (M55, M77),
+  and nothing changes with one unit a side, so V1 and both bot scenarios play exactly as before (below).
+  - **Focus fire: `ShootingAim`,** built once per Shoot decision by `choose_shooting` (which now takes the generation;
+    `normal_answer` and the lookahead's rollouts pass theirs). Inactive (every value exactly as before) under a
+    pre-teamwork generation and when neither side has two units with models. Active, a declaration's value
+    (`declaration_value`, so the coordinate descent itself) adds for each target t:
+    - **the finishing bonus:** reply(t) x the enemy's turns left after ours (at most `kFinishTurns` = 3) x t's expected
+      models destroyed / its models now. reply(t) is t's attack in its next turn on the one of our units it hurts most,
+      valued as the move score values a reply (shares of our unit, points-weighted, D-077): its shooting after a Normal
+      move towards it (`next_turn_shot`: who is engaged now decides, 04.02, 10.06, 17.03) plus, unengaged, P(charge
+      after a Normal move) x its melee (engaged with that unit: its fight). Computed on first use per target (only the
+      targets offered are asked). It counts models destroyed, not wounds: a model's attacks go only with the model, so
+      finishing a wounded monster is worth its replies, and four lascannons spread over three monsters (each wounded,
+      none destroyed) are worth less than four on one. 0 in the game's last turn (the enemy has no turn left).
+    - **the focus bonus:** `kFocusWeight` (0.1) x t's share destroyed, when t is the target of a group in the army plan
+      (any group of the shooting side: "the side's focus targets").
+  - **Splits:** after the descent, if the declaration has several targets, each of them is tried concentrated: each
+    model's loadouts with the most shots at it (a model that can't reach it shoots as it likes), descended again. The
+    split stays only if it beats the best concentrated declaration by `kSplitMargin` (0.02 shares). The concentrated
+    declarations are small (most models have one loadout left), so the cost is a few evaluations per target.
+  - **Order:** a unit whose declaration has a shot at a focus target shoots before one that doesn't (then the most
+    valuable, ties in the engine's order, as before), so the shots that follow see the focus's losses.
+  - **Reasons** (`ShootingChoice::notes`, appended by `describe_shooting`): ", on the focus Screamer-killer 3", ", to
+    finish Screamer-killer 3 (64% to destroy it)" (from a 25% chance of destroying a target that has a reply), ",
+    concentrated on Hive Tyrant 5 (a split is worth no more)". The brief's "finishes" became "to finish": at 37% it
+    is a try, not a fact.
+  - **Joint charges: `ChargeCredit`** (`charge_credit`): the partners of a charge at one target:
+    - our units engaged with the target already (weight 1; any unit, plan or not: they fight it either way);
+    - the charger's partners on that target in the army plan (its focus is the target) that may still declare a charge
+      (`declare_charge_problem`: not declared, not engaged, not advanced or fallen back, within 12"; Charge phase only),
+      at their odds `p_charge_now` (P(2D6 covers the gap)). `decide_charge` and `decide_charge_targets` compute the plan
+      once per decision and pass it; the move score's `charge_prospect` (refine_move_score) passes none, so it credits
+      only the engaged partners.
+  - **The value** (`charged_parts_joint`, one target with partners; several targets keep D-066's shared value): the
+    fight of the charger and its partners against the target through charged_parts' horizon (this Fight phase: the
+    chargers first (Fights First, 11.04), then the engaged ones; the target strikes back; its turn: close-quarters
+    shooting, it fights first, ours strike back; our turn: close quarters and the fight), less the same fight of the
+    partners without the charger. Each member's volleys count x its weight and what is left of it; the target's fight
+    back on a member counts x weight / (1 + the other members' weights), its expected share when present (the target
+    attacks one unit's worth at a time: an even split, as M80's shared reply). In the fight without the charger, a
+    potential partner counts only if it would charge alone (its plan member's mode is Charge and its lone exchange pays);
+    otherwise it charges only to join (first try, below). The difference is what the charge adds: the charger's own
+    damage, the target's earlier death (its replies shrink), and the partners' losses it takes over. With no partner the
+    value is the pre-batch one, term by term (the old code path).
+    - The brief's "our side's fight includes its melee (`side_melee`)": `side_melee` values only this phase's fight at
+      the live state (plan_melee); the charge value needs the next turns too, so the group fight uses charged_parts' own
+      rates (`melee_share` of the models in reach this phase, then whole units), as the single-target value always did.
+  - **Order:** of the units whose prospect gains, the ones charging the same single target as the best (largest gain)
+    one: the best odds first (then the larger gain), so the others can follow it in, or hold if it fails. Reason:
+    "Legionaries 1: declare a charge (97% charge odds against Screamer-killer 1; ...; Legionaries 2 may follow (92%
+    charge odds); the best odds of the units charging Screamer-killer 1, ahead of Legionaries 2)", and "...; joins
+    Legionaries 1 against Screamer-killer 1" for a fight already under way.
+  - **How it was found** (Release arena, the new Normal against `normal-m77` from each seat, seeds 1-400 in one run
+    each (200 seeds can't tell two candidates apart: about 8 wins of noise); A = Chaos Space Marines, B = Tyranids; the
+    new Normal's side's wins; M80's on the same seeds: rosters A 128, B 283; random armies A 75, B 328):
 
+    | Variant | rosters A | rosters B | random A | random B |
+    |---|---|---|---|---|
+    | shooting only (finish x1 turn, focus 0.1, split 0.02) | 129 | 291 | 89 | 319 |
+    | shooting and charges (the same weights) | 130 | 289 | 89 | 320 |
+    | finish x0.5 | | | 83 | 322 |
+    | finish x2 | 149 | 297 | 84 | 323 |
+    | finish x2, no focus bonus or order | 152 | 298 | 88 | 316 |
+    | finish x2, follow gate 0.1 | 145 | 298 | 90 | 321 |
+    | finish x3 | 140 | 302 | 85 | 325 |
+    | finish x the enemy's turns left, at most 2 | 150 | 300 | 85 | 325 |
+    | **finish x the enemy's turns left, at most 3 (chosen)** | **146** | **303** | **85** | **328** |
+    | the chosen, without the charge credit and order | 145 | 305 | 84 | 328 |
+    | the chosen, no potential chargers (engaged partners only) | 147 | 303 | 85 | 328 |
+
+    and at finish x1: no finishing bonus (focus and split only) random A 72, B 323; no focus bonus or order A 93, B 321;
+    no split margin A 82, B 323; follow gate 0.1 rosters A 133, B 298, random A 92, B 316; follow gate 0 rosters A 131,
+    B 299, random A 89, B 319. With every M81 term off the binary played M80's games exactly (random B 328: the check
+    that the switches were clean).
+    - The finishing bonus is the lever (random A 72 without it, 89 with it at x1); weighting it by the replies it removes
+      over the enemy's turns left (at most 3, the plan's three volleys, part 1) gave the most in every seat. The random-
+      army Tyranids are the one seat it doesn't help (325-328 against 328): every shooting variant cost them 0-12 wins.
+    - **Confirmed on seeds 401-800** (not used to tune; the M80 play from the same binary with every M81 term off):
+      rosters A 130 against 102, B 312 against 281; random armies A 103 against 86, B 316 against 311.
+    - The joint charges change the wins by no more than the noise (the chosen without them: -1 / +2 / -1 / 0) but double
+      the Chaos Space Marines' gang-ups on the rosters (0.04 to 0.10 a game) and add to the Tyranids' (0.45 to 0.51); the
+      potential chargers add little to the engaged-partner credit. Kept: the brief's behaviour, measured harmless.
+    - **The follow gate** (M80's `MoveWeights::follow` 0.2, the brief's question): lowered with M81's terms it moved no
+      seat beyond the noise in a consistent direction. At finish x1, 0.1 / 0 against 0.2: rosters A +3 / +1, B +9 / +10,
+      random A +3 / 0, B -4 / -1; at finish x2, 0.1: rosters A -4, B +1, random A +6, B -2. Kept at 0.2 (*conservative*:
+      no evidence for a change). The plan's joint exchange (part 1), which the gate measures, is unchanged by M81; the
+      joint charge value is the charge planner's, which the move score already reads for a unit's own charge.
+  - **Stability** (M80: 57-63% of an earlier mover's partners are still partners when they move): focus fire reads the
+    plan at each Shoot decision and joint charges at each Charge decision; nothing is kept between decisions (the bots
+    stay stateless). The engaged-partner credit needs no plan at all, which makes the most common joint charge (joining a
+    fight) independent of the plan's churn.
+  - **Hard** plays Normal's shooting (its own Shoot decisions are Normal's, and its rollouts' shooting is
+    `choose_shooting` at Hard's generation: `monte_carlo` takes it, default `Current`), Normal's charge decisions as its
+    default (with its margin), and so changes with M81 on every scenario with several units a side, Strike included
+    (m58 regenerated). `hard-m77` passes `M77` everywhere, so it plays the pre-batch Hard. Measured for M82 (PLAN.md,
+    M81's Results).
+  - **Approximations kept:**
+    - reply(t) is the target's next turn, from where it stands, against the unit it hurts most; the later turns repeat
+      it (no movement, no attrition of ours), cut at the game's end.
+    - Models destroyed are a unit's share of its models, all models alike (a model with a special weapon counts as any).
+    - The focus bonus is for any group target of the side, not only the shooter's own group's.
+    - A concentrated declaration is "most shots at one target" per model, not every combination.
+    - A partner's weight is its charge roll's odds (no placement check); a potential partner's hold value is not
+      counted (it would lose it by charging); the target's fight back is split evenly by weight, not by its models'
+      reach or its own preference.
+    - Several-target charges get no partner credit.
+  - **Cost:** the aim (the army plan, about 0.7 ms, and a reply per target asked) once per Shoot decision; the
+    concentrated declarations (a few evaluations per target of a split); the plan once per Charge and charge-move
+    decision, and four rates per partner. Normal's decision p95 and max: PLAN.md, M81's Results.
+  - **Tests** (`tests/ai/m81_test.cpp`, 6): `M81_Shooting.TheHavocsPutEveryLascannonOnOneMonster` (three monsters 14"
+    away, the Hive Tyrant at 8 of 12 wounds: M77 splits the four lascannons over all three; now all of them and the
+    plasma gun at the Tyrant), `AUnitFinishesAWoundedTarget` (a Screamer-killer at 1 wound and a fresh Tyrant: M77 all
+    at the Tyrant, now the Screamer-killer more likely than not destroyed and the reason says so; at 10 wounds the
+    lascannons stay on the Tyrant), `ShootingAtTheFocusGoesFirst` (the Havocs' lascannons at the Tyrant Guard are worth
+    the most, M77 shoots them first; now the boltgun Legionaries at the plan's focus first), `OneUnitASideShootsAsBefore`
+    (V1: the aim inactive, the same choice); `M81_Charge.ASecondUnitJoinsAFightAPartnerIsIn` (the boltgun Legionaries
+    7.5" from a Screamer-killer the chainswords are engaged with: M77 holds (a charge move -1.06, holding +0.01), now
+    they declare, "joins Legionaries 1"; alone, the chainswords 20" back, they still don't),
+    `TheBestOddsChargerGoesFirst` (the chainswords 97%, the boltguns 92% with the larger gain: the chainswords declare
+    first). Each checks the M77 switch's choice too.
+  - **Existing tests:** no test of a shooting or charge choice failed; only the saved bot games changed. Regenerated on
+    purpose (seeds kept): `m58_strike_bot_game.json` (Hard vs Hard on Strike: now a Space Marine win in battle round 4,
+    was round 3), `m68_rosters_normal_bot_game.json`, `m70_rosters_bot_game.json`, `m73_custom_bot_game.json` (Normal on
+    two custom lists: the new game has no fight) and `m77_custom_hand_deploy_bot_game.json`; their fixture scenarios came
+    out byte-identical, and so did m45, m46, m47 and m75. The content checks that described the old games moved to the
+    pre-batch games, assertions unchanged, as M80 did: `M58_Replay.ThePreBatchGameIsAWipeOutInBattleRoundThree` (the
+    saved file's test now checks round 4) and `M73_Replay.ThePreBatchGameShootsAndFightsOnBothSides` (the saved file's
+    test keeps the shooting check).

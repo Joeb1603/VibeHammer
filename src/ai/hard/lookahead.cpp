@@ -274,8 +274,8 @@ std::optional<GameAction> offered_start(const std::vector<GameAction>& legal, co
 // rollout is M44's, unchanged.
 class RolloutPolicy {
 public:
-    RolloutPolicy(const Evaluator& eval, analysis::OddsCache& odds, std::uint64_t seed)
-        : eval_(eval), odds_(odds), seed_(seed) {}
+    RolloutPolicy(const Evaluator& eval, analysis::OddsCache& odds, std::uint64_t seed, Generation generation)
+        : eval_(eval), odds_(odds), seed_(seed), generation_(generation) {}
 
     GameAction next(const GameState& s, core::Side side, std::deque<GameAction>& queue) {
         const std::vector<GameAction> legal = core::legal_actions(s, side);
@@ -336,7 +336,7 @@ private:
     // shooting less like the real one: Hard's Marines finished later (Release arena, 200 seeds: mean end round 3.645
     // against 3.555).
     std::optional<GameAction> shoot(const GameState& s, const std::vector<GameAction>& legal) {
-        if (const std::optional<normal::ShootingChoice> c = normal::choose_shooting(odds_, s, legal)) {
+        if (const std::optional<normal::ShootingChoice> c = normal::choose_shooting(odds_, s, legal, generation_)) {
             return GameAction{core::action::Shoot{c->unit, c->type, c->shots}};
         }
         for (const GameAction& a : legal) {
@@ -436,6 +436,7 @@ private:
     const Evaluator& eval_;
     analysis::OddsCache& odds_;
     std::uint64_t seed_;
+    Generation generation_;  // D-083 part 3 (M81): Normal's shooting as the generation plays it
     std::vector<core::UnitId> stuck_;
 };
 
@@ -483,7 +484,7 @@ RolloutBudget rollout_budget(const LookaheadWeights& weights, const GameState& s
 
 MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, const GameState& start,
                              core::Side side, std::uint64_t seed, const LookaheadWeights& weights,
-                             const Opening& opening, std::vector<RolloutTrace>* traces) {
+                             const Opening& opening, std::vector<RolloutTrace>* traces, Generation generation) {
     MonteCarloResult out;
     if (!eval.ok()) return out;
     const int h_start = half_turn_of(start);
@@ -497,7 +498,7 @@ MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds, c
         rs.u64(seed);
         rs.u64(static_cast<std::uint64_t>(i));
         Simulator sim(start, rs.value());
-        RolloutPolicy policy(eval, odds, rs.value());
+        RolloutPolicy policy(eval, odds, rs.value(), generation);
         std::deque<GameAction> queue(opening.actions.begin(), opening.actions.end());
         bool advance_moves_taken = false;
         std::size_t steps = 0;

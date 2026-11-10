@@ -188,14 +188,151 @@ ChargedValue charged_parts_shared(analysis::OddsCache& cache, const core::GameSt
     return out;
 }
 
+// D-083 part 3 (M81): the fight of several of our units (each present with a weight: 1, or a partner's charge odds)
+// against one target. Each member's volleys are scaled by its weight and what is left of it, the target's by what is
+// left of it, and the target's fight back on a member is shared: its weight over 1 + the other members' weights (the
+// expected share of the target's attacks it takes when present).
+class GroupFight {
+public:
+    explicit GroupFight(double them) : them0_(them), them_(them) {}
+    std::size_t add(double us, double weight) {
+        us0_.push_back(us);
+        us_.push_back(us);
+        w_.push_back(weight);
+        return us_.size() - 1;
+    }
+    void we_hit(std::size_t i, double rate) {
+        if (us0_[i] > 0.0) them_ -= std::min(them_, w_[i] * rate * us_[i] / us0_[i]);
+    }
+    void they_hit(std::size_t i, double rate) {
+        double others = 0.0;
+        for (std::size_t j = 0; j < w_.size(); ++j) {
+            if (j != i) others += w_[j];
+        }
+        if (them0_ > 0.0) us_[i] -= std::min(us_[i], w_[i] / (1.0 + others) * rate * them_ / them0_);
+    }
+    void we_lose(std::size_t i, double share) { us_[i] -= std::min(us_[i], std::max(0.0, share)); }
+    [[nodiscard]] double value() const {
+        double ours = 0.0;
+        for (std::size_t i = 0; i < us_.size(); ++i) ours += us0_[i] - us_[i];
+        return (them0_ - them_) - ours;
+    }
+
+private:
+    double them0_;
+    double them_;
+    std::vector<double> us0_;
+    std::vector<double> us_;
+    std::vector<double> w_;
+};
+
+// A partner's rates against the target, and the target's against it.
+struct PartnerRates {
+    const core::Unit* unit = nullptr;
+    double weight = 1.0;
+    bool engaged = true;
+    bool without = true;     // it fights the target without the charger too
+    double fight_now = 0.0;  // its fight this phase: its models in reach (engaged), or all of them (a charge)
+    double melee = 0.0;
+    double cq = 0.0;
+    double their_now = 0.0;  // the target's fight back on it this phase
+    double their_melee = 0.0;
+    double their_cq = 0.0;
+};
+
+// The fight of `members` (with the charger at `u`, its rates `ours`/`theirs`, when given) against `e`, through the
+// horizon of charged_parts.
+ChargedValue group_fight(const core::GameState& after, const core::Unit* u, const core::Unit& e, double u_now,
+                         double e_now, const Rates& ours, const Rates& theirs, const std::vector<PartnerRates>& members,
+                         int turns, double others_loss) {
+    GroupFight g(alive(after, e));
+    std::optional<std::size_t> c;
+    if (u != nullptr) c = g.add(alive(after, *u), 1.0);
+    std::vector<std::size_t> idx;
+    for (const PartnerRates& m : members) idx.push_back(g.add(alive(after, *m.unit), m.weight));
+    // This Fight phase: the chargers (Fights First, 11.04), then the units already engaged (the active player's); the
+    // target strikes back, its attacks shared.
+    if (c) g.we_hit(*c, u_now);
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        if (!members[i].engaged) g.we_hit(idx[i], members[i].fight_now);
+    }
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        if (members[i].engaged) g.we_hit(idx[i], members[i].fight_now);
+    }
+    if (c) g.they_hit(*c, e_now);
+    for (std::size_t i = 0; i < members.size(); ++i) g.they_hit(idx[i], members[i].their_now);
+    ChargedValue out;
+    out.now = g.value();
+    if (turns >= 1) {  // their turn, engaged: close-quarters shooting, then it fights first; we strike back
+        if (c) g.they_hit(*c, theirs.cq);
+        for (std::size_t i = 0; i < members.size(); ++i) g.they_hit(idx[i], members[i].their_cq);
+        if (c) g.they_hit(*c, theirs.melee);
+        for (std::size_t i = 0; i < members.size(); ++i) g.they_hit(idx[i], members[i].their_melee);
+        if (c) g.we_lose(*c, others_loss);
+        if (c) g.we_hit(*c, ours.melee);
+        for (std::size_t i = 0; i < members.size(); ++i) g.we_hit(idx[i], members[i].melee);
+    }
+    if (turns >= 2) {  // our turn, engaged
+        if (c) g.we_hit(*c, ours.cq);
+        for (std::size_t i = 0; i < members.size(); ++i) g.we_hit(idx[i], members[i].cq);
+        if (c) g.we_hit(*c, ours.melee);
+        for (std::size_t i = 0; i < members.size(); ++i) g.we_hit(idx[i], members[i].melee);
+        if (c) g.they_hit(*c, theirs.melee);
+        for (std::size_t i = 0; i < members.size(); ++i) g.they_hit(idx[i], members[i].their_melee);
+    }
+    out.total = g.value();
+    return out;
+}
+
+// D-083 part 3 (M81): one target with partners: the group's fight with the charger less the partners' fight without it.
+ChargedValue charged_parts_joint(analysis::OddsCache& cache, const core::GameState& after, const core::Unit& u,
+                                 const core::Unit& e, const ChargeCredit& credit, int turns, double others_loss) {
+    std::vector<PartnerRates> members;
+    for (const ChargePartner& p : credit.partners) {
+        const core::Unit* pu = after.find_unit(p.unit);
+        if (pu == nullptr || pu->models.empty() || pu->side != u.side) continue;
+        PartnerRates r;
+        r.unit = pu;
+        r.weight = p.weight;
+        r.engaged = p.engaged;
+        r.without = p.without;
+        r.melee = melee_share(cache, after, *pu, e);
+        r.cq = ranged_share(cache, after, *pu, e, 0.0f, true);
+        r.fight_now = p.engaged ? melee_share(cache, after, fighters(*pu, e), e) : r.melee;
+        r.their_melee = melee_share(cache, after, e, *pu);
+        r.their_cq = ranged_share(cache, after, e, *pu, 0.0f, true);
+        r.their_now = p.engaged ? melee_share(cache, after, fighters(e, *pu), *pu) : r.their_melee;
+        members.push_back(r);
+    }
+    const Rates ours = rates_of(cache, after, u, e, std::nullopt);
+    const Rates theirs = rates_of(cache, after, e, u, std::nullopt);
+    const double u_now = melee_share(cache, after, fighters(u, e), e);
+    const double e_now = melee_share(cache, after, fighters(e, u), u);
+    const ChargedValue with = group_fight(after, &u, e, u_now, e_now, ours, theirs, members, turns, others_loss);
+    std::vector<PartnerRates> apart;  // the partners that fight the target without the charger
+    for (const PartnerRates& m : members) {
+        if (m.without) apart.push_back(m);
+    }
+    if (apart.empty()) return with;
+    const ChargedValue without = group_fight(after, nullptr, e, 0.0, 0.0, ours, theirs, apart, turns, 0.0);
+    return ChargedValue{with.total - without.total, with.now - without.now};
+}
+
 ChargedValue charged_parts(analysis::OddsCache& cache, const core::GameState& after, core::UnitId unit,
-                           std::span<const core::UnitId> targets, int turns, Generation gen) {
+                           std::span<const core::UnitId> targets, int turns, Generation gen,
+                           const ChargeCredit* credit) {
     ChargedValue out;
     const core::Unit* u = after.find_unit(unit);
     if (u == nullptr || u->models.empty()) return out;
     // D-066 (M56): the enemy units outside the charge may still charge us next turn (M55: not counted).
     const bool others = gen != Generation::M55 && has_other_enemies(after, *u, targets);
     const double others_loss = others && turns >= 1 ? others_threat(cache, after, *u, targets, true) : 0.0;
+    // D-083 part 3 (M81): one target with partners in its fight.
+    if (!pre_teamwork(gen) && credit != nullptr && !credit->partners.empty() && targets.size() == 1 &&
+        targets.front() == credit->target) {
+        const core::Unit* e = after.find_unit(credit->target);
+        if (e != nullptr && !e->models.empty()) return charged_parts_joint(cache, after, *u, *e, *credit, turns, others_loss);
+    }
     if (gen != Generation::M55) {
         std::vector<const core::Unit*> ts;
         for (const core::UnitId id : targets) {
@@ -401,13 +538,53 @@ double hold_value(analysis::OddsCache& cache, const core::GameState& state, core
 }
 
 double charged_value(analysis::OddsCache& cache, const core::GameState& after_commit, core::UnitId unit,
-                     std::span<const core::UnitId> targets, int turns, Generation gen) {
-    return charged_parts(cache, after_commit, unit, targets, turns, gen).total;
+                     std::span<const core::UnitId> targets, int turns, Generation gen, const ChargeCredit* credit) {
+    return charged_parts(cache, after_commit, unit, targets, turns, gen, credit).total;
+}
+
+std::optional<ChargeCredit> charge_credit(const core::GameState& state, core::UnitId unit, core::UnitId target,
+                                          const ArmyPlan* plan, Generation gen) {
+    if (pre_teamwork(gen)) return std::nullopt;
+    const core::Unit* u = state.find_unit(unit);
+    const core::Unit* e = state.find_unit(target);
+    if (u == nullptr || e == nullptr || u->models.empty() || e->models.empty() || e->side == u->side) {
+        return std::nullopt;
+    }
+    ChargeCredit out;
+    out.target = target;
+    // Our units engaged with the target already (whatever the plan says: they fight it).
+    for (const core::Unit& f : state.units) {
+        if (f.side != u->side || f.id == unit || f.models.empty()) continue;
+        const std::vector<core::UnitId> eng = core::engaged_enemy_units(state, f);
+        if (std::find(eng.begin(), eng.end(), target) != eng.end()) out.partners.push_back(ChargePartner{f.id, 1.0, true, true});
+    }
+    // The charger's partners on the target in the army plan that may still declare a charge (11.02), at their odds.
+    const UnitPlan* up = plan != nullptr ? plan->find(unit) : nullptr;
+    if (up != nullptr && up->focus == target && core::phase_of(state.flow.stage) == core::Phase::Charge) {
+        for (const core::UnitId pid : up->partners) {
+            if (std::any_of(out.partners.begin(), out.partners.end(), [&](const ChargePartner& p) { return p.unit == pid; })) {
+                continue;
+            }
+            const core::Unit* p = state.find_unit(pid);
+            if (p == nullptr || p->models.empty()) continue;
+            if (core::declare_charge_problem(state, *p)) continue;  // 11.02: it can't declare one (any more)
+            const double odds = analysis::ThreatRanges::p_charge_now(core::unit_distance(*p, *e).value_or(0.0f));
+            const PlanGroup* g = plan->group_of(unit);
+            const PlanMember* m = g != nullptr ? g->member(pid) : nullptr;
+            const bool alone = m != nullptr && m->mode == AttackMode::Charge && m->lone > 0.0;
+            if (odds > 0.0) out.partners.push_back(ChargePartner{pid, odds, false, alone});
+        }
+    }
+    if (out.partners.empty()) return std::nullopt;
+    std::sort(out.partners.begin(), out.partners.end(),
+              [](const ChargePartner& a, const ChargePartner& b) { return a.unit.v < b.unit.v; });
+    return out;
 }
 
 std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const core::GameState& state,
                                               core::UnitId unit, std::uint64_t seed, double enemy_losses,
-                                              std::optional<core::UnitId> losses_from, Generation gen) {
+                                              std::optional<core::UnitId> losses_from, Generation gen,
+                                              const ArmyPlan* plan) {
     const core::Unit* u0 = state.find_unit(unit);
     if (u0 == nullptr || u0->models.empty()) return std::nullopt;
     const core::Side side = u0->side;
@@ -446,6 +623,9 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
         std::array<double, 13> value{};
         std::array<int, 13> eng{};
         std::optional<int> full_roll;  // a roll whose move engaged every model: a larger one does no better
+        // D-083 part 3 (M81): a charge at one target credits its partners (none under a pre-teamwork generation).
+        const std::optional<ChargeCredit> credit =
+            set.size() == 1 ? charge_credit(gs, unit, set.front(), plan, gen) : std::nullopt;
         const auto check = [&](const core::GameState& after_roll, core::UnitId id, std::span<const core::UnitId> t) {
             const std::optional<int> roll = after_roll.find_unit(id)->phase_flags.charge_roll;
             if (!roll || *roll < 0 || *roll > 12) return false;
@@ -455,12 +635,12 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
                 eng[r] = eng[static_cast<std::size_t>(*full_roll)];
                 return true;
             }
-            const std::optional<ChargePlan> plan =
+            const std::optional<ChargePlan> move =
                 plan_charge_move(after_roll, side, id, std::vector<core::UnitId>(t.begin(), t.end()), seed, {});
-            if (!plan) return false;
-            value[r] = charged_value(cache, plan->after, id, t, turns, gen);
-            eng[r] = plan->score.engaged;
-            if (plan->score.engaged == static_cast<int>(u.models.size())) full_roll = *roll;
+            if (!move) return false;
+            value[r] = charged_value(cache, move->after, id, t, turns, gen, credit ? &*credit : nullptr);
+            eng[r] = move->score.engaged;
+            if (move->score.engaged == static_cast<int>(u.models.size())) full_roll = *roll;
             return true;
         };
         const std::optional<analysis::ChargeOdds> odds = analysis::charge_odds(gs, unit, set, check);
@@ -478,6 +658,7 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
         if (gain > best_gain + kBetter) {
             best_gain = gain;
             out.targets = set;
+            out.partners = credit ? credit->partners : std::vector<ChargePartner>{};
         }
     }
     double success_weight = 0.0;
@@ -500,20 +681,57 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
 std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
                                           const std::vector<core::GameAction>& legal, std::uint64_t seed,
                                           Generation gen) {
+    // D-083 part 3 (M81): the army plan, for the partners that may still charge (once per decision).
+    std::optional<ArmyPlan> plan;
+    if (!pre_teamwork(gen)) plan = army_plan(cache, state, side, gen);
     std::optional<ChargeProspect> best;  // the largest expected gain; ties keep the engine's order
+    std::vector<ChargeProspect> gaining;  // D-083 part 3: every prospect with a gain, in the engine's order
     for (const core::GameAction& a : legal) {
         const auto* d = std::get_if<core::action::DeclareCharge>(&a);
         const core::Unit* u = d != nullptr ? state.find_unit(d->unit) : nullptr;
         if (u == nullptr || u->side != side) continue;
-        std::optional<ChargeProspect> p = charge_prospect(cache, state, d->unit, seed, 0.0, std::nullopt, gen);
+        std::optional<ChargeProspect> p =
+            charge_prospect(cache, state, d->unit, seed, 0.0, std::nullopt, gen, plan ? &*plan : nullptr);
         if (!p) continue;
+        if (plan && p->gain > kBetter) gaining.push_back(*p);
         if (!best || p->gain > best->gain + kBetter) best = std::move(p);
     }
     if (best && best->gain > kBetter) {
+        // D-083 part 3 (M81): of the units with a gain charging the same single target as the best one, the best odds
+        // first (then the larger gain), so the others follow it in.
+        std::string lead;
+        if (plan && best->targets.size() == 1) {
+            const ChargeProspect* first = &*best;
+            for (const ChargeProspect& p : gaining) {
+                if (p.unit == best->unit || p.targets != best->targets) continue;
+                if (p.p_success > first->p_success + kBetter ||
+                    (!(first->p_success > p.p_success + kBetter) && p.gain > first->gain + kBetter)) {
+                    first = &p;
+                }
+            }
+            if (first->unit != best->unit) {
+                lead = "; the best odds of the units charging " + names_of(state, best->targets) + ", ahead of " +
+                       name_of(state, best->unit);
+                best = *first;
+            }
+        }
+        std::string partners;
+        std::string followers;
+        for (const ChargePartner& p : best->partners) {
+            if (p.engaged) {
+                partners += (partners.empty() ? "; joins " : ", ") + name_of(state, p.unit);
+            } else {
+                followers += (followers.empty() ? "; " : ", ") + name_of(state, p.unit) + " may follow (" +
+                             percent(p.weight) + " charge odds)";
+            }
+        }
+        if (!partners.empty()) partners += " against " + names_of(state, best->targets);
+        partners += followers;
         return single(core::action::DeclareCharge{best->unit},
                       name_of(state, best->unit) + ": declare a charge (" + percent(best->p_success) +
                           " charge odds against " + names_of(state, best->targets) + "; a charge move " +
-                          signed_value(best->success_mean) + " on average, holding " + signed_value(best->hold) + ")");
+                          signed_value(best->success_mean) + " on average, holding " + signed_value(best->hold) +
+                          partners + lead + ")");
     }
     const core::GameAction end = core::action::EndChargeStep{};
     if (!offered(legal, end)) return std::nullopt;
@@ -541,6 +759,9 @@ std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, co
     const int roll = u->phase_flags.charge_roll.value_or(0);
     const int turns = turns_left(state);
     const double hold = hold_value(cache, state, d.unit, gen);
+    // D-083 part 3 (M81): the army plan, for the partners that may still charge.
+    std::optional<ArmyPlan> army;
+    if (!pre_teamwork(gen)) army = army_plan(cache, state, side, gen);
     std::optional<ChargePlan> best;
     double best_value = 0.0;
     std::string best_reason;
@@ -554,7 +775,10 @@ std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, co
             if (first_problems.empty()) first_problems = std::move(problems);
             continue;
         }
-        const double v = charged_value(cache, plan->after, d.unit, s->targets, turns, gen);
+        const std::optional<ChargeCredit> credit =
+            s->targets.size() == 1 ? charge_credit(state, d.unit, s->targets.front(), army ? &*army : nullptr, gen)
+                                   : std::nullopt;
+        const double v = charged_value(cache, plan->after, d.unit, s->targets, turns, gen, credit ? &*credit : nullptr);
         if (!best || v > best_value + kBetter) {
             best_value = v;
             best_reason = client::unit_display_name(state, u->id) + ": charge move into " + names_of(state, s->targets) + " (roll " +

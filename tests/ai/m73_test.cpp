@@ -29,6 +29,7 @@
 #include "core/engine/replay.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "generation.hpp"
 #include "hard/evaluator.hpp"
 #include "hard/hard_bot.hpp"
 #include "normal/value.hpp"
@@ -44,9 +45,10 @@ namespace normal = wh40k::ai::normal;
 
 namespace {
 
-BotConfig level(BotLevel l) {
+BotConfig level(BotLevel l, Generation g = Generation::Current) {
     BotConfig c;
     c.level = l;
+    c.generation = g;
     return c;
 }
 
@@ -396,7 +398,8 @@ struct BotGame {
 
 // Played through GameSession as the arena plays (every action validated, the client's automatic skips, nothing
 // auto-allocated for a bot); its history a scenario-form replay. Replaying it needs only core.
-BotGame play_custom_bot_game(std::uint64_t seed = kReplaySeed) {
+// D-083 part 3 (M81): `generation`, the bots' (Generation::M77: the pre-batch Normal).
+BotGame play_custom_bot_game(std::uint64_t seed = kReplaySeed, Generation generation = Generation::Current) {
     BotGame g;
     g.replay.description =
         "M73: a whole custom battle played by the bot on both sides, level Normal vs Normal, with dice seed " +
@@ -411,7 +414,7 @@ BotGame play_custom_bot_game(std::uint64_t seed = kReplaySeed) {
     g.replay.initial.scenario = kBattleScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
-    g.record = play_bot_session(session, level(BotLevel::Normal), level(BotLevel::Normal), 5000);
+    g.record = play_bot_session(session, level(BotLevel::Normal, generation), level(BotLevel::Normal, generation), 5000);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -440,10 +443,28 @@ TEST(M73_Replay, TheCustomBotGameReplaysToItsResultWithCoreOnly) {
     ASSERT_TRUE(second.ok());
     EXPECT_EQ(first.final_state, second.final_state);  // deterministic
     ASSERT_TRUE(first.final_state.result.has_value());  // a result, not the step cap
+    // Both sides shot. D-083 part 3 (M81): the current Normal's game with this seed has no fight; the flow the seed was
+    // chosen for (both sides shoot and fight) is the pre-batch Normal's, checked by ThePreBatchGameShootsAndFightsOnBothSides.
+    for (const Side side : {Side::A, Side::B}) {
+        EXPECT_TRUE(std::any_of(saved.steps.begin(), saved.steps.end(), [&](const ReplayStep& s) {
+            return s.side == side && std::holds_alternative<action::Shoot>(s.action);
+        }));
+    }
+}
+
+TEST(M73_Replay, ThePreBatchGameShootsAndFightsOnBothSides) {
+    // The pre-batch Normal (Generation::M77) with the replay's seed, replayed through the engine alone, with the
+    // assertions the saved file was checked with before M81 (D-083 part 3).
+    const BotGame g = play_custom_bot_game(kReplaySeed, Generation::M77);
+    ASSERT_TRUE(g.record.finished);
+    EXPECT_EQ(g.record.rejected, 0u);
+    const ReplayResult first = run_replay(g.replay, repo_root());
+    ASSERT_TRUE(first.ok()) << "step " << *first.failed_step << ": " << first.reasons.front();
+    ASSERT_TRUE(first.final_state.result.has_value());  // a result, not the step cap
     // Both sides fought (12.x) and both shot.
     for (const Side side : {Side::A, Side::B}) {
         const auto by = [&](auto pred) {
-            return std::any_of(saved.steps.begin(), saved.steps.end(),
+            return std::any_of(g.replay.steps.begin(), g.replay.steps.end(),
                                [&](const ReplayStep& s) { return s.side == side && pred(s.action); });
         };
         EXPECT_TRUE(by([](const GameAction& a) { return std::holds_alternative<action::Shoot>(a); }));
