@@ -4516,9 +4516,14 @@ team up to take out bigger threats. The code agrees:
   - the old play stays reproducible behind the hidden arena levels `normal-m77` / `hard-m77` (`Generation::M77`, as
     `easy-m55` / `normal-m55` were for M56).
 
-**Run note:**
-- The batch runs on branch `teamwork`, one milestone per session (`/clear` between them) at the effort shown.
-- M79 and M82 are design first: their decision entry (D-083) is reviewed and agreed before any code.
+**Run note (agreed with the user 2026-11-10: "just do all of it"):**
+- M78–M83 are pre-approved as one batch on branch `teamwork` and run back to back without `/clear` and without
+  per-milestone sign-off. This overrides "one milestone per session" and "agree each milestone first" for these
+  milestones only.
+- Each milestone is implemented by a sub-agent at the effort shown, then verified, marked ✅, committed and pushed.
+- M79 and M82 are design first: their part of D-083 is written before any code and reviewed by the orchestrator.
+- Tests: while iterating, only the suites a change can touch; the full `ctest -j4` before every milestone's commit;
+  at the end, a Release `ctest` too.
 - Each milestone is verified the usual way:
   - clean Debug and Release builds and all of `ctest`;
   - the identity set (below) unchanged;
