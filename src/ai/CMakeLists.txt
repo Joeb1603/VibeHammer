@@ -14,6 +14,7 @@ add_library(wh40k_ai STATIC
     hard/evaluator.cpp
     hard/hard_bot.cpp
     hard/lookahead.cpp
+    normal/army_plan.cpp
     normal/charge.cpp
     normal/defense.cpp
     normal/fight.cpp

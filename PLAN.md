@@ -4636,7 +4636,7 @@ core, `GameState` field, action, event or file format change, and no play change
 
 ---
 
-## M79: The army plan (Normal)
+## M79: The army plan (Normal) ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** design first (D-083 part 1) · **Rules:** none (bot only) · **Decision:** D-083 (amends D-066)
 
 > New `src/ai/normal/army_plan.{hpp,cpp}`: `army_plan(cache, state, side, generation)`. It is a pure, deterministic
@@ -4667,6 +4667,84 @@ core, `GameState` field, action, event or file format change, and no play change
   - one unit a side gives the closest unit with no partners;
 - the plan's cost is measured (decision p95 within the batch's target);
 - nothing plays differently yet (the identity set, and Strike and the rosters, unchanged).
+
+**Results (2026-11-10):** D-083 part 1 records the design, written and measured first with a scratch prototype, then
+reviewed and implemented. Bot only: no rule, core, `GameState` field, action, event or file format change. Nothing
+reads the plan yet, so no play changes anywhere.
+- **The plan** (`src/ai/normal/army_plan.{hpp,cpp}`): `army_plan(cache, state, side, generation)` gives each of our
+  units with models a focus and its partners, plus per group the joint value, the members' alone values, the gain, the
+  risk, each member's arrival and mode, and who takes the first reply. `describe` and `describe_unit` give trace reasons.
+  - *Reach:* turns until our unit can shoot (gap within its longest range after its moves) or charge (a roll that
+    covers the gap left with P ≥ 0.5), advancing in the turns before; the turns are cut at our turns left. A unit in the
+    middle of a move is taken at its move's start, so a replan gets the same plan.
+  - *Joint exchange:* `MultiExchange` with the roles turned round, strengths by wounds left in points-weighted shares
+    (plain shares on Strike). Three of our volleys from first contact. Fights strike both ways. The target's reply is
+    the one worst for us, before contact too, and it closes in each turn it doesn't charge.
+  - *Greedy:* a group pays when value > 0.05 and gain > 0.05 over the sum of the members' alternatives (max(0, alone on
+    the target, alone on their closest enemy unit)). Groups are ranked by gain per risk; a third member joins only if it
+    adds 0.05; at most 4 candidates per target, the soonest to arrive. An engaged unit is a member of any group on the
+    unit it fights.
+  - *No-op:* M55 / M77, fewer than two of our units, no turn left, before the battle.
+  - *Changed from the outline:* three volleys instead of two (with two, two Legionaries units 18" from a Screamer-killer
+    come out −0.08: its first charge is never repaid); gain per risk instead of joint value per risk, and growth by
+    marginal gain instead of the smallest group (prototype surplus per plan, rosters / random armies: 0.233 / 0.142,
+    against 0.215 / 0.123 and 0.194 / 0.128).
+  - *Changed in review:* the design first made either side's last unit a no-op; it is now only our side's, since ganging
+    up on the enemy's last unit is what the plan is for.
+- **Measured** (the test fixtures, Release; values in points-weighted shares):
+
+  | Position | Alone | Together | Plan |
+  |---|---|---|---|
+  | both Legionaries units 12" from a Screamer-killer | −0.30 / −0.90 | +0.48 | a pair |
+  | the same at 16" (the test) | −0.70 / −0.53 | +0.22 | a pair |
+  | the same at 18" (PLAN.md's wording) | −0.92 / −0.43 | +0.06 | a pair, 0.01 over the margin |
+  | Hive Tyrant 14" from a lone Legionaries unit, full strength | Tyrant +1.16, Genestealers −0.37, Termagants −0.37 | Termagants + Tyrant add < 0.05; Genestealers + Tyrant less than the Tyrant alone | no group |
+  | the same, the Tyrant at 3 wounds | Tyrant +0.38 | Genestealers + Tyrant +0.88 (apart +0.38) | Genestealers + Tyrant |
+  | both Genestealers units 12" from the boltgun Legionaries | −0.42 / −0.42 | below 0 | no group |
+  | the chainsword Legionaries engaged with a Screamer-killer, the boltgun unit 10" away | −0.04 / +0.13 | +0.38 (apart +0.09) | a pair, the engaged unit its seed |
+
+  So PLAN.md's two worded cases are tested where they hold firmly. The Screamer-killer pair is tested at 16" rather than
+  18", where it rests on a +0.06 margin. "Genestealers, Termagants and the Hive Tyrant pair up" is two tests: a
+  full-strength Tyrant wins alone and takes no partners, a wounded one pairs with the Genestealers. In games (Normal vs
+  Normal, the plan at every decision) 22% of the rosters' units and 23% of random armies' have partners; the groups seen
+  include three monsters on the Chaos Terminators, and the Havocs with a Legionaries unit on a Screamer-killer.
+- **Cost** (Release, the plan at every decision of Normal vs Normal games: rosters seeds 1–10, 5,592 calls; random
+  armies seeds 1–40, 14,101 calls):
+
+  | | mean | p95 | max (ms) |
+  |---|---|---|---|
+  | rosters | 0.66 | 1.34 | 2.95 |
+  | random armies | 0.45 | 1.27 | 3.34 |
+
+  One earlier random-army run had a single 13.2 ms call that didn't recur; a rerun timing every slow call five more times
+  found none. Debug, printed by `TheCostIsMeasured`: about 14 ms. Normal's decision p95 is about 9–11 ms, so with the
+  plan computed once per decision (M80, M81) it stays within the batch's 15 ms; Hard (M82) must compute it once per
+  decision, never per evaluated state.
+- **Tests** (12 new, `tests/ai/m79_test.cpp`):
+  - `M79_ArmyPlan.TwoLegionariesUnitsTeamUpOnAScreamerKiller`, `AFullStrengthHiveTyrantNeedsNoPartners`,
+    `AWoundedHiveTyrantPairsWithGenestealers`, `ALosingGroupIsNotFormed`, `AnEngagedUnitJoinsAsASeed`,
+    `AGroupGangsUpOnTheEnemysLastUnit`, `ASideWithOneUnitHasNoPlan`;
+  - `TheSameStateGivesTheSamePlan`: repeated calls, a copied state and a fresh cache at four states (one from a played
+    rosters game), and the middle of a move;
+  - `OneUnitASideIsTheClosestWithNoPartners`, `TheM77SwitchGivesTheClosestWithNoPartners` (M77, M55, and before the
+    battle);
+  - `StrikeWithoutPointsUsesShares` (no points: the group's risk is 0.7 + 0.3 + 0.8 shares);
+  - `TheCostIsMeasured` (printed).
+
+  No existing test changed.
+- **Acceptance:**
+  - `M79_ArmyPlan` tests on hand-built roster positions: met, with the wording changes above:
+    - two Legionaries units form a group on a Screamer-killer and neither does alone (16", not 18");
+    - the Genestealers pair with a wounded Hive Tyrant, and a full-strength one needs no partners;
+    - repeated calls and a copied state give the same plan;
+    - one unit a side gives the closest unit with no partners.
+  - The plan's cost is measured: met (the table above). Decision times are unchanged, since nothing calls it yet.
+  - Nothing plays differently: met.
+    - The identity set: all 30 files match the pre-batch baseline at the current levels, and all 30 at the m77 levels
+      (4,740 games each).
+    - Every replay regenerates byte-identically (`git status tests/` shows only the new test file).
+    - The final Release build's per-game lines for rosters and Strike Normal vs Normal (seeds 1–20) match too.
+  - Debug `ctest`: 1327 tests, all pass. Release builds.
 
 ---
 
