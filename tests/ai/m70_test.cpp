@@ -75,11 +75,16 @@ Replay rosters_replay_header(std::uint64_t seed) {
 // The arena's play (play_bot_session: both Hard bots share one chain cache, D-078) through GameSession (every action
 // validated, the client's automatic skips included, nothing auto-allocated for a bot), turned into a scenario-form
 // replay as M45 and M58 do. `step_cap` below the game's length stops it early: the history is then a prefix.
-BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed, std::size_t step_cap = kStepCap) {
+// D-083 part 2 (M80): `generation` M77 plays the pre-batch Hard (hard-m77).
+BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed, std::size_t step_cap = kStepCap,
+                              Generation generation = Generation::Current) {
     BotGame g;
     g.replay = rosters_replay_header(seed);
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{BotLevel::Hard}, BotConfig{BotLevel::Hard}, step_cap);
+    BotConfig hard;
+    hard.level = BotLevel::Hard;
+    hard.generation = generation;
+    g.record = play_bot_session(session, hard, hard, step_cap);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -143,8 +148,24 @@ TEST(M70_Replay, TheRostersBotGameReplaysToItsResultWithCoreOnly) {
     EXPECT_EQ(end.flow.battle_round, 5);
     EXPECT_EQ(end.units.size(), 14u);  // 5 Chaos Space Marine units and 9 Tyranid units
 
+    // D-083 part 2 (M80): the regenerated game (the current Hard, the same seed) has no melee and destroys no whole
+    // unit; the flow this seed was chosen for ("both sides fight in melee, and each side loses at least one whole unit")
+    // is the pre-batch Hard's, checked by ThePreBatchGameFightsAndLosesAUnitOnBothSides.
+}
+
+TEST(M70_Replay, ThePreBatchGameFightsAndLosesAUnitOnBothSides) {
+    // The pre-batch Hard (Generation::M77) with the replay's seed: the whole game (about 50 s in Debug), replayed through
+    // the engine alone, with the assertions the saved file was checked with before M80.
+    const BotGame g = play_rosters_bot_game(kRostersSeed, kStepCap, Generation::M77);
+    ASSERT_TRUE(g.record.finished);
+    EXPECT_EQ(g.record.rejected, 0u);
+    const ReplayResult r = run_replay(g.replay, wh40k::test::repo_root());
+    ASSERT_TRUE(r.ok());
+    const GameState& end = r.final_state;
+    ASSERT_TRUE(end.result.has_value());
+    EXPECT_EQ(end.flow.battle_round, 5);
     // Both sides fight in melee, and each side loses at least one whole unit.
-    const auto has = [&](auto pred) { return std::any_of(saved.steps.begin(), saved.steps.end(), pred); };
+    const auto has = [&](auto pred) { return std::any_of(g.replay.steps.begin(), g.replay.steps.end(), pred); };
     for (const Side side : {Side::A, Side::B}) {
         SCOPED_TRACE(side == Side::A ? "side A" : "side B");
         EXPECT_TRUE(has([&](const ReplayStep& s) { return s.side == side && std::holds_alternative<action::Fight>(s.action); }));

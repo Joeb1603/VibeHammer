@@ -221,20 +221,28 @@ bool escape_stands(HardContext& hc, analysis::OddsCache& cache, const GameState&
 }  // namespace
 
 std::optional<HardMovePlan> hard_plan_unit_move(HardContext& hc, analysis::OddsCache& cache, const GameState& origin,
-                                                bool lookahead, bool normal_default) {
+                                                bool lookahead, bool normal_default, const normal::ArmyPlan* army) {
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
+    // D-083 part 2 (M80): Normal's army plan once for both of Normal's scores below (a caller that has it passes it).
+    std::optional<normal::ArmyPlan> own_plan;
+    if (army == nullptr && !pre_teamwork(hc.generation)) {
+        own_plan = normal::army_plan(cache, origin, u->side, hc.generation);
+        army = &*own_plan;
+    }
     // Normal's plan (M43) is the default; the best few candidates that stand compete with it.
     std::vector<normal::PlannedMove> plans;
     const bool with_default = normal_default && hc.weights.margin >= 0.0;
     if (with_default) {
-        if (std::optional<normal::PlannedMove> np = normal::plan_unit_move(cache, origin, hc.generation)) plans.push_back(std::move(*np));
+        if (std::optional<normal::PlannedMove> np = normal::plan_unit_move(cache, origin, hc.generation, army)) {
+            plans.push_back(std::move(*np));
+        }
     }
     const bool have_default = !plans.empty();
     for (normal::PlannedMove& pm : normal::standing_moves(cache, origin, hc.weights.move,
                                                           std::max<std::size_t>(1, hc.weights.static_plans),
-                                                          kStandingAttempts, hc.generation)) {
+                                                          kStandingAttempts, hc.generation, army)) {
         if (have_default && pm.candidate.ends == plans.front().candidate.ends) continue;
         plans.push_back(std::move(pm));
     }
@@ -308,10 +316,16 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
     const LookaheadWeights& lw = hc.weights.lookahead;
     const std::uint64_t mc_seed = rollout_seed(gs);
     std::vector<Option> options;
+    // D-083 part 2 (M80): Normal's army plan, once for the decision (the same at the move's start: the moving unit counts
+    // as not moved, D-083 part 1), for every Normal score below.
+    std::optional<normal::ArmyPlan> army_plan;
+    if (!pre_teamwork(hc.generation)) army_plan = normal::army_plan(cache, gs, side, hc.generation);
+    const normal::ArmyPlan* army = army_plan ? &*army_plan : nullptr;
     // Normal's move type (M43) is the default (BotWeights::margin).
     std::optional<GameAction> normal_start;
     if (hc.weights.margin >= 0.0) {
-        if (const std::optional<PolicyResult> r = normal::decide_move_units(cache, gs, side, legal, seed, nullptr, hc.generation)) {
+        if (const std::optional<PolicyResult> r =
+                normal::decide_move_units(cache, gs, side, legal, seed, nullptr, hc.generation, army)) {
             normal_start = r->action;
         }
     }
@@ -336,7 +350,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
     const auto planned = [&](const GameAction& start) -> std::optional<Option> {
         Simulator sim(gs, seed);
         if (!sim.step(side, start).ok()) return std::nullopt;
-        std::optional<HardMovePlan> plan = hard_plan_unit_move(hc, cache, sim.state(), true);
+        std::optional<HardMovePlan> plan = hard_plan_unit_move(hc, cache, sim.state(), true, true, army);
         if (!plan) return std::nullopt;
         const auto& m = std::get<core::action::StartMove>(start);
         if (plan->move.candidate.proposals.empty() && m.move_type == core::MoveType::Normal) return std::nullopt;
@@ -376,7 +390,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
             }
             // An estimate before the roll: the chain's best plans only (the move after the real roll is planned
             // with Normal's plan as the default).
-            const std::optional<HardMovePlan> plan = hard_plan_unit_move(hc, cache, sim.state(), false, false);
+            const std::optional<HardMovePlan> plan = hard_plan_unit_move(hc, cache, sim.state(), false, false, army);
             if (!plan) {
                 all = false;
                 break;
@@ -418,7 +432,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
         Simulator sim(gs, seed);
         core::ScriptedDice sixes(std::vector<int>(u.models.size(), 6));
         if (sim.step(side, escape, sixes).ok()) {
-            if (std::optional<HardMovePlan> plan = hard_plan_unit_move(hc, cache, sim.state(), false)) {
+            if (std::optional<HardMovePlan> plan = hard_plan_unit_move(hc, cache, sim.state(), false, true, army)) {
                 const int w = std::max(1, u.models.front().characteristics.wounds);
                 const double lost = static_cast<double>(u.models.size()) * hazard_wounds_per_model(u) / w;
                 GameState after = plan->move.after;

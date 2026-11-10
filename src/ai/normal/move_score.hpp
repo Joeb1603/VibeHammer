@@ -53,6 +53,16 @@
 // the other units' replies by marginal exposure. The hypothetical volleys apply 10.06's and 17.03's -1s and price
 // [HAZARDOUS] (analysis::ShotContext); an engaged enemy MONSTER/VEHICLE may be shot (17.03) and still shoots
 // (10.06), and a MONSTER/VEHICLE of ours can be shot while engaged (17.03).
+// D-083 part 2 (M80): a unit that follows its group in the army plan (army_plan.hpp: it has partners, and the group's
+// gain is at least MoveWeights::follow of its risk; under D-007 not while it loses its exchange with the focus) moves as
+// a member of it. While some partner reaches the focus by our next turn (its arrival in the plan: the synchronised
+// partners) the line follows the focus, and the enemy unit closest to it becomes one of the others; the synchronised
+// partners' expected volleys on the focus this turn and in our next turn take it down on the line
+// (ScoreLine::allies_hit: it replies weaker, and what is left of it caps our own hits), and its reply is shared: 1/k on
+// this unit, k = 1 + the synchronised partners in its reach (it attacks one unit a phase). Until then the unit keeps its
+// closest enemy unit's line (so it waits at the edge of the focus's reach for its partners). Two small terms
+// (MoveWeights): approach, x the turns saved towards the focus beyond the line's horizon (where it scores about 0 for
+// every move), and cohesion, x the gap to the nearest partner beyond 6". A unit that follows no group scores as before.
 
 #include <array>
 #include <cstdint>
@@ -71,6 +81,7 @@
 #include "core/rules/shooting_types.hpp"
 #include "core/state/game_state.hpp"
 #include "generation.hpp"
+#include "normal/army_plan.hpp"
 #include "normal/value.hpp"
 
 namespace wh40k::ai::normal {
@@ -88,6 +99,10 @@ struct MoveWeights {
     double survival = 1.0;    // x P(we survive the enemy's next turn) x how much we lose the exchange x game progress
     double edge = 0.05;       // x (1 - room / M) x the enemy's shooting rate on us
     double coherency = 0.05;  // x the share of our models in coherency groups of two or fewer
+    // D-083 part 2 (M80): only for a unit that follows its group in the army plan (nothing for any other unit).
+    double approach = 0.05;   // x the turns saved towards the focus beyond the line's horizon
+    double cohesion = 0.005;  // x max(0, the gap to the nearest partner - 6"), per inch
+    double follow = 0.2;      // a unit follows its group when the group's gain is at least this share of its risk
 };
 
 struct MoveScore {
@@ -98,6 +113,8 @@ struct MoveScore {
     double edge = 0.0;
     double coherency = 0.0;
     double tie_break = 0.0;  // a side winning the exchange prefers to be closer, a losing side further (1e-5 per inch)
+    double approach = 0.0;   // D-083 part 2 (M80): a unit with partners only
+    double cohesion = 0.0;
     double total = 0.0;
     // What the reason says.
     float gap_mm = 0.0f;               // edge to edge, the closest pair after the move
@@ -108,6 +125,10 @@ struct MoveScore {
     bool in_enemy_half_range = false;  // within half the enemy's longest range
     std::string enemy_reply;           // its best reply: "stays and shoots", "closes and charges", ...
     bool refined = false;              // from the simulated state (refine_move_score)
+    // D-083 part 2 (M80), a unit that follows its group: its focus when the line follows it, and the share of the
+    // focus's reply counted on it (1: it stands alone; 1/k: it shares the reply with k - 1 synced partners in its reach).
+    std::optional<core::UnitId> focus;
+    double reply_share = 1.0;
 };
 
 // Both units' losses through the horizon, valued with the time preference: their losses minus ours, each
@@ -132,6 +153,10 @@ public:
         x_.we_lose(share);
         value_ -= w_us_ * (before - x_.us());
     }
+    // D-083 part 2 (M80): a loss of `share` of them from our partners' volleys (already scaled by their strength). It is
+    // not this unit's value (the partners hit the focus whatever this move does): it weakens the focus's replies and
+    // caps our later hits.
+    void allies_hit(double share) { x_.they_lose(share); }
     // The next half-turn: later losses count less for the side that prefers them later.
     void next_half_turn() {
         w_us_ *= our_discount_;
@@ -166,6 +191,32 @@ struct OtherShot {
     double models_destroyed = 0.0;
 };
 
+// D-083 part 2 (M80): the group a unit moves with, from the army plan (MoveScoreContext::team()).
+struct MoveTeam {
+    struct Partner {
+        core::UnitId unit;
+        int arrival = kNoArrival;            // the plan's: our turns until it can attack the focus
+        AttackMode mode = AttackMode::Shoot;
+        float gap_mm = 0.0f;                 // to the focus now, edge to edge
+        float catch_up_mm = 0.0f;            // its Move if it hasn't moved yet this phase (cohesion), else 0
+        bool synced = false;                 // it reaches the focus by our next turn (arrival <= 1)
+        double now = 0.0;                    // its expected volley on the focus this turn (shares of the focus)
+        double next = 0.0;                   // and in our next turn
+        std::vector<core::PosedModel> models;
+    };
+    core::UnitId focus;
+    bool line = true;                        // the line follows the focus (else the closest enemy unit's, as before)
+    std::vector<core::PosedModel> focus_models;
+    AttackMode mode = AttackMode::Shoot;     // ours, in the plan
+    std::vector<Partner> partners;           // unit order
+    bool synced = false;                     // some partner reaches the focus by our next turn
+    double support_now = 0.0;                // the synced partners' volleys this turn, summed
+    double support_next = 0.0;               // and in our next turn
+    float start_gap_mm = 0.0f;               // ours to the focus at the move's start
+    float reach_mm = 0.0f;                   // approach: the line's horizon, our Move plus our attack's reach
+    float per_turn_mm = 0.0f;                // approach: a turn's travel (M plus the D6's mean)
+};
+
 // Everything the score needs about the position before the move: the two units, their threat ranges and rates,
 // the turns left. Rates are cached by what changes them (range and half-range bands, [HEAVY], shooting type), so
 // a candidate costs a few lookups and one exact outcome for our shooting.
@@ -174,8 +225,12 @@ public:
     // `origin`: the state before the move (MoveUnits pending, or the move just started with no model moved). The
     // enemy is the enemy unit closest to `unit` there. `origin` must outlive the context. D-066: the other enemy
     // units are weighed too, unless `generation` is M55 (the regression switch).
+    // D-083 part 2 (M80): `plan`, the army plan of `unit`'s side in `origin` (army_plan(cache, origin, side,
+    // generation): a caller that has it passes it, so it is computed once per decision); nullptr: computed here. A unit
+    // with partners in it follows its focus instead (see the file comment). Pre-teamwork generations read no plan.
     MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                     MoveWeights weights = {}, Generation generation = Generation::Current);
+                     MoveWeights weights = {}, Generation generation = Generation::Current,
+                     const ArmyPlan* plan = nullptr);
 
     [[nodiscard]] const core::GameState& origin() const noexcept { return origin_; }
     [[nodiscard]] const core::Unit& unit() const noexcept { return us_; }
@@ -215,9 +270,11 @@ public:
     // The enemy's turn and our next turn from `line` (after our turn), the units `gap_mm` apart and unengaged,
     // our models' centroid at `our_centroid`. `reply` / `p_enemy_charge` get the enemy's reply. D-066: `others`, the
     // other enemy units' threat, if any.
+    // D-083 part 2 (M80): `reply_elsewhere`, the focus replies to a partner, not to us (the shared reply).
     [[nodiscard]] double hold_line(const ScoreLine& line, float gap_mm, const core::Position& our_centroid,
                                    std::string* reply = nullptr, double* p_enemy_charge = nullptr,
-                                   double* p_survive = nullptr, const OtherThreat* others = nullptr);
+                                   double* p_survive = nullptr, const OtherThreat* others = nullptr,
+                                   bool reply_elsewhere = false);
     // The units engaged after our charge (or a combat we stay in): our fight now (`our_fighters`: the share of
     // our models that fight, we strike first), then their turn (they fight on or fall back) and ours.
     [[nodiscard]] double engaged_line(const ScoreLine& line, double our_fighters = 1.0, double* p_survive = nullptr,
@@ -242,6 +299,15 @@ public:
     // side losing the exchange without the tiebreak: D-066's closest-target rule for the other units' replies).
     [[nodiscard]] bool points_rule() const noexcept { return points_rule_; }
     [[nodiscard]] bool plays_for_draw() const noexcept { return !points_rule_ && lean_ < 0.0; }
+    // D-083 part 2 (M80): the unit's group (nullptr: it has no partners, or the generation reads no plan).
+    [[nodiscard]] const MoveTeam* team() const noexcept { return team_ ? &*team_ : nullptr; }
+    // The terms of a unit with partners (0 without): approach and cohesion, and whether the focus's reply counts on
+    // the unit at `positions` (its gap to the focus `gap_mm`).
+    [[nodiscard]] double approach_term(const std::vector<core::Position>& positions) const;
+    // The synced partners support the line (it follows the focus and some partner reaches it by our next turn).
+    [[nodiscard]] bool supported() const noexcept { return team_ && team_->line && team_->synced; }
+    [[nodiscard]] double cohesion_term(const std::vector<core::Position>& positions) const;
+    [[nodiscard]] double reply_share(float gap_mm) const;
 
 private:
     struct RateKey {
@@ -336,6 +402,9 @@ private:
     [[nodiscard]] std::pair<double, double> other_at_engaged_us(Other& o, float gap_mm);
     [[nodiscard]] float gap_to_other(const Other& o, const std::vector<core::Position>& positions) const;
     std::vector<Other> others_;
+    // D-083 part 2 (M80)
+    void make_team(const ArmyPlan& plan, const core::Unit& focus, bool line);
+    std::optional<MoveTeam> team_;
 };
 
 // The whole-turn score of ending the move at `plan` (cheap: every candidate gets one).

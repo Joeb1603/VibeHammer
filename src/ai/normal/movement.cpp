@@ -101,6 +101,22 @@ Position centroid_of(const std::vector<Position>& ps) {
     return Position{c.x / n, c.y / n, 0.0f};
 }
 
+// D-083 part 2 (M80): " with Legionaries 5", " with Havocs 4 and Legionaries 5", " with A, B and C".
+std::string with_text(const GameState& gs, const MoveTeam& team) {
+    std::string out;
+    for (std::size_t i = 0; i < team.partners.size(); ++i) {
+        out += i == 0 ? " with " : i + 1 == team.partners.size() ? " and " : ", ";
+        out += client::unit_display_name(gs, team.partners[i].unit);
+    }
+    return out;
+}
+
+// "Screamer-killer 3 with Legionaries 5" (nothing without a team).
+std::string team_text(const GameState& gs, const MoveTeam* team) {
+    if (team == nullptr) return {};
+    return client::unit_display_name(gs, team->focus) + with_text(gs, *team);
+}
+
 // ---- the geometry of the move in progress, for the cheap checks (the engine still decides) ----
 
 // D-074 part 3 (M66): an oval keeps its facing (`facings`, from the move's start) through the whole move; the checks
@@ -133,9 +149,14 @@ struct MoveGeometry {
     float depth = 0.0f;
     bool has_enemy = false;
     Position enemy_centroid;
+    // D-083 part 2 (M80): a unit with partners lines up on its focus (enemy_centroid is the focus's), and its labels
+    // name the focus and the partners.
+    bool teamed = false;
+    std::string focus_name;
+    std::string with_text;  // " with Legionaries 5 and Havocs 4"
 };
 
-std::optional<MoveGeometry> geometry_of(const GameState& origin) {
+std::optional<MoveGeometry> geometry_of(const GameState& origin, const MoveTeam* team = nullptr) {
     if (!origin.flow.move) return std::nullopt;
     const core::MoveInProgress& mv = *origin.flow.move;
     const core::Unit* u = origin.find_unit(mv.unit);
@@ -171,11 +192,18 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin) {
         if (other.side != u->side || other.id == u->id) continue;
         for (const core::Model& m : other.models) g.others.push_back(core::posed_of(m));
     }
-    if (const core::Unit* e = closest_enemy(origin, *u)) {
+    const core::Unit* focus = team != nullptr ? origin.find_unit(team->focus) : nullptr;
+    if (focus != nullptr && focus->models.empty()) focus = nullptr;
+    if (const core::Unit* e = focus != nullptr ? focus : closest_enemy(origin, *u)) {
         std::vector<Position> ps;
         for (const core::Model& m : e->models) ps.push_back(m.position);
         g.enemy_centroid = centroid_of(ps);
         g.has_enemy = true;
+    }
+    if (focus != nullptr) {
+        g.teamed = true;
+        g.focus_name = client::unit_display_name(origin, focus->id);
+        g.with_text = with_text(origin, *team);
     }
     for (const core::Base& b : g.bases) g.radius.push_back(avoid_radius_mm(b));
     for (std::size_t i = 0; i < g.bases.size(); ++i) g.extents.push_back(edge_extents(g.bases[i], g.facings[i]));
@@ -240,10 +268,25 @@ bool ends_ok(const MoveGeometry& g, const std::vector<Position>& ends) {
     return core::check_coherency(std::span<const core::PosedModel>(placed)).ok();
 }
 
+// D-083 part 2 (M80): a unit with partners names its focus and partners: "6\" towards Screamer-killer 3 with
+// Legionaries 5", "3\" back from ...", "stays where it is, on ... with ...".
+std::string team_label(const MoveGeometry& g, const std::string& label) {
+    if (!g.teamed) return label;
+    const auto ends_with = [&](const char* w) {
+        const std::string t = w;
+        return label.size() >= t.size() && label.compare(label.size() - t.size(), t.size(), t) == 0;
+    };
+    const char* link = ends_with("towards")    ? " "
+                       : ends_with("back")     ? " from "
+                       : ends_with("sideways") ? " to "
+                                               : ", on ";
+    return label + link + g.focus_name + g.with_text;
+}
+
 // "3\" back", "2\" obliquely towards": the centroid's move relative to the line to the enemy.
 std::string move_label(const MoveGeometry& g, float dx, float dy) {
     const float len = std::sqrt(dx * dx + dy * dy);
-    if (!(len > 0.01f)) return "stays where it is";
+    if (!(len > 0.01f)) return team_label(g, "stays where it is");
     std::string dir = "";
     if (g.has_enemy) {
         const Position c = centroid_of(g.starts);
@@ -261,7 +304,7 @@ std::string move_label(const MoveGeometry& g, float dx, float dy) {
                                   : "back";
         }
     }
-    return inches(len) + (dir.empty() ? "" : " " + dir);
+    return team_label(g, inches(len) + (dir.empty() ? "" : " " + dir));
 }
 
 std::optional<MoveCandidate> translation(const MoveGeometry& g, const client::UnitVector& d, float t) {
@@ -368,13 +411,16 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_proposals(const 
 }
 
 // Line abreast (ranks = 1) or two ranks facing the enemy, centred `offset` from the unit's centroid along the line
-// to it (positive towards it), shifted inside the battlefield.
-std::optional<MoveCandidate> formation(const MoveGeometry& g, int ranks, float offset_mm) {
+// to it (positive towards it), shifted inside the battlefield. D-083 part 2 (M80): `at`, centred there instead (the
+// spots beside a partner), facing the enemy from there.
+std::optional<MoveCandidate> formation(const MoveGeometry& g, int ranks, float offset_mm,
+                                       const std::optional<Position>& at = std::nullopt) {
     const std::size_t n = g.starts.size();
     if (!g.has_enemy || n < 2 || (ranks == 2 && n < 4)) return std::nullopt;
     const Position c0 = centroid_of(g.starts);
-    float ax = g.enemy_centroid.x - c0.x;
-    float ay = g.enemy_centroid.y - c0.y;
+    const Position from = at ? *at : c0;
+    float ax = g.enemy_centroid.x - from.x;
+    float ay = g.enemy_centroid.y - from.y;
     const float al = std::sqrt(ax * ax + ay * ay);
     if (!(al > 0.0f)) return std::nullopt;
     ax /= al;
@@ -404,8 +450,8 @@ std::optional<MoveCandidate> formation(const MoveGeometry& g, int ranks, float o
             slots.push_back(Slot{lateral, depth, k});
         }
     }
-    float cx = c0.x + ax * offset_mm;
-    float cy = c0.y + ay * offset_mm;
+    float cx = at ? at->x : c0.x + ax * offset_mm;
+    float cy = at ? at->y : c0.y + ay * offset_mm;
     // Shift the whole formation inside the battlefield.
     float min_x = 1e9f;
     float max_x = -1e9f;
@@ -576,10 +622,11 @@ std::string move_type_text(core::MoveType t, std::optional<core::FallBackMode> m
     }
 }
 
-// "13.2\" from Termagants, outside its half range, its charge odds next turn 8%".
+// "13.2\" from Termagants, outside its half range, its charge odds next turn 8%". D-083 part 2 (M80): from the focus
+// of a unit with partners (the line's enemy), else the closest enemy unit.
 std::string position_text(const GameState& gs, core::UnitId unit, const MoveScore& s) {
     const core::Unit* u = gs.find_unit(unit);
-    const core::Unit* e = u != nullptr ? closest_enemy(gs, *u) : nullptr;
+    const core::Unit* e = s.focus ? gs.find_unit(*s.focus) : u != nullptr ? closest_enemy(gs, *u) : nullptr;
     if (e == nullptr) return "no enemy left";
     std::string out = inches(s.gap_mm) + " from " + client::unit_display_name(gs, e->id);
     if (s.half_range_models > 0) {
@@ -612,7 +659,8 @@ struct Option {
 // An Advance before its roll (D-054): each of the six results on a scratch state with that roll scripted, the best
 // move for it; the candidates are made once for the largest roll and filtered per roll.
 std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState& gs, core::Side side,
-                                     core::UnitId unit, Generation gen) {
+                                     core::UnitId unit, Generation gen, const ArmyPlan* plan,
+                                     const MoveWeights& weights) {
     const GameAction start = core::action::StartMove{unit, core::MoveType::Advance, std::nullopt};
     std::array<std::optional<GameState>, 7> states;
     std::size_t widest = 1;
@@ -630,8 +678,8 @@ std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState
             widest = f;
         }
     }
-    const std::vector<MoveCandidate> cands = move_candidates(*states[widest]);
-    MoveScoreContext ctx(cache, *states[widest], unit, MoveWeights{}, gen);
+    MoveScoreContext ctx(cache, *states[widest], unit, weights, gen, plan);
+    const std::vector<MoveCandidate> cands = move_candidates(*states[widest], ctx.team());
     const std::vector<Ranked> ranked = rank(ctx, core::MoveType::Advance, cands);
     Option opt;
     opt.start = start;
@@ -650,7 +698,9 @@ std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState
         }
     }
     opt.value = mean;
-    opt.text = "Advance (" + signed_value(mean) + " on average over the advance roll)";
+    const std::string team = team_text(gs, ctx.team());
+    opt.text = "Advance" + (team.empty() ? "" : " on " + team) + " (" + signed_value(mean) +
+               " on average over the advance roll)";
     return opt;
 }
 
@@ -719,13 +769,69 @@ double escape_losses(const core::Unit& u) {
     return static_cast<double>(u.models.size()) * hazard_wounds_per_model(u) / w;
 }
 
+// D-083 part 2 (M80): a few spots beside the partner nearest to the unit (edge to edge), level with it on either side
+// of its line to the focus and 3" further back: the unit translated straight there (as far as its move goes), and a
+// line abreast centred there facing the focus.
+void beside_partner(const MoveGeometry& g, const MoveTeam& team, std::vector<MoveCandidate>& out) {
+    const MoveTeam::Partner* nearest = nullptr;
+    float best = std::numeric_limits<float>::max();
+    for (const MoveTeam::Partner& p : team.partners) {
+        float gap = std::numeric_limits<float>::max();
+        for (std::size_t i = 0; i < g.starts.size(); ++i) {
+            const core::BasePose at{g.starts[i], g.bases[i], g.facings[i]};
+            for (const core::PosedModel& m : p.models) gap = std::min(gap, core::base_distance(at, m.pose()));
+        }
+        if (gap < best) {
+            best = gap;
+            nearest = &p;
+        }
+    }
+    if (nearest == nullptr || nearest->models.empty()) return;
+    std::vector<Position> ps;
+    for (const core::PosedModel& m : nearest->models) ps.push_back(m.position);
+    const Position pc = centroid_of(ps);
+    float ax = g.enemy_centroid.x - pc.x;
+    float ay = g.enemy_centroid.y - pc.y;
+    const float al = std::sqrt(ax * ax + ay * ay);
+    if (!(al > 0.0f)) return;
+    ax /= al;
+    ay /= al;
+    const float px = -ay;
+    const float py = ax;
+    // Half widths across the line: the partner's spread, and ours in a line abreast.
+    float partner_half = 0.0f;
+    for (const core::PosedModel& m : nearest->models) {
+        partner_half = std::max(partner_half, std::fabs((m.position.x - pc.x) * px + (m.position.y - pc.y) * py) +
+                                                  avoid_radius_mm(m.base));
+    }
+    float spacing = 0.0f;
+    for (const core::Base& b : g.bases) spacing = std::max(spacing, 2.0f * avoid_radius_mm(b) + kSlotGapMm);
+    const float our_half = 0.5f * spacing * static_cast<float>(g.starts.size());
+    const float side = partner_half + our_half + 2.0f * kIn;
+    const Position c0 = centroid_of(g.starts);
+    for (const float back : {0.0f, 3.0f * kIn}) {
+        for (const float sgn : {-1.0f, 1.0f}) {
+            const Position spot{pc.x + px * side * sgn - ax * back, pc.y + py * side * sgn - ay * back, 0.0f};
+            float dx = spot.x - c0.x;
+            float dy = spot.y - c0.y;
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len > 0.1f * kIn) {
+                const float t = std::min(len, g.unit_max_mm);
+                const client::UnitVector d{dx / len, dy / len};
+                if (std::optional<MoveCandidate> c = translation(g, d, t)) out.push_back(std::move(*c));
+            }
+            if (std::optional<MoveCandidate> c = formation(g, 1, 0.0f, spot)) out.push_back(std::move(*c));
+        }
+    }
+}
+
 }  // namespace
 
 // ---- candidates ----
 
-std::vector<MoveCandidate> move_candidates(const GameState& origin) {
+std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTeam* team) {
     std::vector<MoveCandidate> out;
-    const std::optional<MoveGeometry> geo = geometry_of(origin);
+    const std::optional<MoveGeometry> geo = geometry_of(origin, team);
     if (!geo) return out;
     const MoveGeometry& g = *geo;
     // Staying where it is (a Normal or Advance move with no model moved: possible while the unit is unengaged).
@@ -792,6 +898,7 @@ std::vector<MoveCandidate> move_candidates(const GameState& origin) {
             if (std::optional<MoveCandidate> c = formation(g, ranks, off * kIn)) out.push_back(std::move(*c));
         }
     }
+    if (g.teamed) beside_partner(g, *team, out);
     return out;
 }
 
@@ -802,24 +909,25 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_moves(const Game
     return slot_proposals(*geo, ends);
 }
 
-std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const GameState& origin, Generation gen) {
+std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const GameState& origin, Generation gen,
+                                          const ArmyPlan* plan, const MoveWeights& weights) {
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
-    const std::vector<MoveCandidate> cands = move_candidates(origin);
-    MoveScoreContext ctx(cache, origin, u->id, MoveWeights{}, gen);
+    MoveScoreContext ctx(cache, origin, u->id, weights, gen, plan);
+    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     return choose(ctx, origin, u->side, cands, ranked, decision_seed(origin), true);
 }
 
 std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameState& origin, const MoveWeights& weights,
-                                        std::size_t count, std::size_t attempts, Generation gen) {
+                                        std::size_t count, std::size_t attempts, Generation gen, const ArmyPlan* plan) {
     std::vector<PlannedMove> out;
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return out;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return out;
-    const std::vector<MoveCandidate> cands = move_candidates(origin);
-    MoveScoreContext ctx(cache, origin, u->id, weights, gen);
+    MoveScoreContext ctx(cache, origin, u->id, weights, gen, plan);
+    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     const std::uint64_t seed = decision_seed(origin);
     std::size_t tried = 0;
@@ -901,12 +1009,20 @@ std::optional<core::UnitId> unit_to_move(const GameState& gs, const std::vector<
 
 std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const GameState& gs, core::Side side,
                                               const std::vector<GameAction>& legal, std::uint64_t seed,
-                                              MoveTypeValues* values, Generation gen) {
+                                              MoveTypeValues* values, Generation gen, const ArmyPlan* plan,
+                                              const MoveWeights& weights) {
     const std::optional<core::UnitId> unit = unit_to_move(gs, legal, gen);
     if (!unit) return std::nullopt;
     const core::Unit& u = *gs.find_unit(*unit);
     std::vector<Option> options;
-    MoveScoreContext ctx(cache, gs, *unit, MoveWeights{}, gen);
+    // D-083 part 2 (M80): the army plan, once per decision (the same for the move's start: the moving unit counts as
+    // not moved, D-083 part 1).
+    std::optional<ArmyPlan> own_plan;
+    if (plan == nullptr && !pre_teamwork(gen)) {
+        own_plan = army_plan(cache, gs, side, gen);
+        plan = &*own_plan;
+    }
+    MoveScoreContext ctx(cache, gs, *unit, weights, gen, plan);
 
     // Remain Stationary (09.04).
     const GameAction stay = core::action::StartMove{*unit, core::MoveType::RemainStationary, std::nullopt};
@@ -920,7 +1036,8 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
             o.score = refine_move_score(ctx, PlannedEnd{core::MoveType::RemainStationary, starts, 0.0f}, sim.state(),
                                         seed, true);
             o.value = o.score.total;
-            o.text = "Remain Stationary";
+            const std::string team = team_text(gs, ctx.team());
+            o.text = "Remain Stationary" + (team.empty() ? "" : ", on " + team);
             if (values != nullptr) values->remain_stationary = o.value;
             options.push_back(std::move(o));
         }
@@ -929,7 +1046,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     const auto planned = [&](const GameAction& start, double cost) -> std::optional<Option> {
         Simulator sim(gs, seed);
         if (!sim.step(side, start).ok()) return std::nullopt;
-        std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen);
+        std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen, plan, weights);
         if (!pm) return std::nullopt;
         const auto& m = std::get<core::action::StartMove>(start);
         if (pm->candidate.proposals.empty() && m.move_type == core::MoveType::Normal) return std::nullopt;  // = stay
@@ -951,7 +1068,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     }
     const GameAction advance = core::action::StartMove{*unit, core::MoveType::Advance, std::nullopt};
     if (offered(legal, advance)) {
-        if (std::optional<Option> o = advance_option(cache, gs, side, *unit, gen)) {
+        if (std::optional<Option> o = advance_option(cache, gs, side, *unit, gen, plan, weights)) {
             if (values != nullptr) values->advance = o->value;
             options.push_back(std::move(*o));
         }
@@ -970,7 +1087,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
         Simulator sim(gs, seed);
         core::ScriptedDice sixes(std::vector<int>(u.models.size(), 6));
         if (sim.step(side, escape, sixes).ok()) {
-            if (std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen)) {
+            if (std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen, plan, weights)) {
                 const double lost = escape_losses(u);
                 Option o;
                 o.start = escape;
@@ -1017,7 +1134,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
 }
 
 std::optional<PolicyResult> continue_unit_move(analysis::OddsCache& cache, const GameState& gs, core::Side side,
-                                               Generation gen) {
+                                               Generation gen, const MoveWeights& weights) {
     if (!gs.flow.move) return std::nullopt;
     const core::MoveInProgress& mv = *gs.flow.move;
     if (mv.type != core::MoveType::Normal && mv.type != core::MoveType::Advance &&
@@ -1026,7 +1143,7 @@ std::optional<PolicyResult> continue_unit_move(analysis::OddsCache& cache, const
     }
     const std::string who = name_of(gs, mv.unit);
     const GameState origin = move_origin(gs);
-    if (std::optional<PlannedMove> pm = plan_unit_move(cache, origin, gen)) {
+    if (std::optional<PlannedMove> pm = plan_unit_move(cache, origin, gen, nullptr, weights)) {
         std::string text = move_type_text(mv.type, mv.mode);
         if (mv.type == core::MoveType::Advance) {
             const core::Unit* u = gs.find_unit(mv.unit);

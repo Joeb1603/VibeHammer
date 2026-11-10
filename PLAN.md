@@ -4748,7 +4748,7 @@ reads the plan yet, so no play changes anywhere.
 
 ---
 
-## M80: Normal moves as a group
+## M80: Normal moves as a group ✅ (done)
 **Effort:** `xhigh` · **Rules:** none (bot only) · **Decision:** D-083 part 2 (amends D-066, D-077)
 
 > Only for a unit with partners (`move_score.*`, `movement.*`):
@@ -4779,6 +4779,99 @@ reads the plan yet, so no play changes anywhere.
   each new choice;
 - the arena's teamwork statistics move towards the batch's targets on the rosters and random armies;
 - `normal-m77` matches the pre-batch baseline.
+
+**Results (2026-11-10):** D-083 part 2 records the design, the measurements and the dead ends. Bot only: no rule, core,
+`GameState` field, action, event or file format change. The first play change of the batch, on the rosters and custom
+battles; V1, both bot scenarios, Strike and every Easy vs Easy game play exactly as before.
+- **What changed** (`src/ai/normal/move_score.{hpp,cpp}`, `movement.{hpp,cpp}`, `hard/hard_bot.{hpp,cpp}`):
+  - the army plan is computed once per Move Units decision (Normal's and Hard's) and read by every move score of it;
+  - a unit **follows its group** when it has partners, the group's gain is at least a fifth of its risk
+    (`MoveWeights::follow` 0.2), and (under D-007) it doesn't lose its exchange with the focus; every other unit scores
+    exactly as before;
+  - while some partner reaches the focus by our next turn the **line follows the focus** (the closest enemy unit joins
+    the others), the partners' volleys are credited (`ScoreLine::allies_hit`: the focus replies weaker, our hits are
+    capped by what is left of it), and the focus's **reply is shared** 1/k with the synced partners in its reach;
+    until then the unit keeps its closest enemy unit's line;
+  - `approach` (0.05 x the turns saved towards the focus beyond the horizon) and `cohesion` (0.005 x the inches beyond 6"
+    from the nearest partner); candidates on the focus's line and beside the nearest partner; an off-focus charge valued
+    by the charge planner; reasons that name the focus and partners;
+  - `plan_unit_move`, `decide_move_units` and `continue_unit_move` take the score's `MoveWeights`; the arena's Hard
+    `--weights` takes `approach`, `cohesion` and `follow`.
+- **Arena** (Release, 200 games a row, 4 runs in parallel; the new Normal against `normal-m77`; A = Chaos Space Marines,
+  B = Tyranids; in brackets the pre-batch play on the same seeds):
+
+  | Pairing (seeds) | Wins A / B | Points A / B | Gang-ups A / B | Lone engagements A / B | Never within 12" A / B | First engagement (games without) | Normal p95 / max ms |
+  |---|---|---|---|---|---|---|---|
+  | rosters new vs m77 (1–200) | 65 / 135 (60 / 140) | 362 / 483 (352 / 473) | 0.02 / 0.38 | 0.75 / 0.93 | 1.60 / 6.38 | 4.11 (36) | 11.5 / 277 |
+  | rosters new vs m77 (201–400) | 63 / 137 (70 / 130) | 362 / 485 (366 / 458) | 0.01 / 0.36 | 0.71 / 0.95 | 1.55 / 6.38 | 4.05 (40) | 11.6 / 528 |
+  | rosters m77 vs new (1–200) | 56 / 144 (60 / 140) | 352 / 490 (352 / 473) | 0.04 / 0.42 | 0.70 / 0.64 | 1.65 / 6.35 | 4.32 (35) | 6.7 / 68 |
+  | rosters m77 vs new (201–400) | 61 / 139 (70 / 130) | 354 / 487 (366 / 458) | 0.02 / 0.42 | 0.69 / 0.72 | 1.69 / 6.33 | 4.35 (38) | 6.8 / 130 |
+  | random armies new vs m77 (1–200) | 44 / 156 (37 / 163) | 226 / 408 (222 / 406) | 0.04 / 0.20 | 0.54 / 0.46 | 3.10 / 3.82 | 4.07 (106) | 6.5 / 192 |
+  | random armies new vs m77 (201–400) | 31 / 169 (33 / 167) | 193 / 414 (190 / 401) | 0.02 / 0.12 | 0.52 / 0.58 | 2.87 / 3.67 | 3.91 (111) | 5.9 / 301 |
+  | random armies m77 vs new (1–200) | 39 / 161 (37 / 163) | 225 / 419 (222 / 406) | 0.04 / 0.17 | 0.65 / 0.50 | 2.99 / 3.72 | 4.15 (95) | 5.4 / 136 |
+  | random armies m77 vs new (201–400) | 33 / 167 (33 / 167) | 193 / 402 (190 / 401) | 0.02 / 0.14 | 0.54 / 0.51 | 2.79 / 3.60 | 4.13 (110) | 5.3 / 259 |
+  | strike new vs m77, m77 vs new (1–200) | 200 / 0 each (200 / 0) | – | the pre-batch play, game for game | | | 2.63 (151) | 6.8 / 71 |
+  | rosters new vs easy (1–200) | 200 / 0 (200 / 0) | 564 / 130 (567 / 128) | 0.01 / 0.09 | 0.48 / 0.16 | 3.54 / 6.36 | 4.01 (125) | 12.8 / 460 |
+  | rosters easy vs new (1–200) | 3 / 197 (3 / 197) | 314 / 890 (317 / 888) | 1.39 / 1.72 | 1.78 / 2.21 | 0.33 / 3.69 | 2.78 (0) | 7.0 / 390 |
+  | rosters new vs new (1–200) | 59 / 141 (60 / 140) | 363 / 501 (352 / 473) | 0.05 / 0.51 (0.04 / 0.28) | 0.79 / 0.80 (0.70 / 0.98) | 1.68 / 6.22 (1.68 / 6.42) | 4.08 (33) (4.21 (45)) | 11.4 / 344 (A), 6.8 / 102 (B) |
+  | random armies new vs new (1–200) | 45 / 155 (37 / 163) | 233 / 425 (222 / 406) | 0.04 / 0.26 (0.04 / 0.13) | 0.66 / 0.50 (0.50 / 0.41) | 2.95 / 3.65 (3.17 / 3.92) | 4.05 (91) (4.25 (113)) | 6.5 / 191 (A), 5.4 / 208 (B) |
+
+  Over seeds 1–400 the new Normal wins 128 of 400 rosters games as the Chaos Space Marines (pre-batch 130), 283 as the
+  Tyranids (270), 75 random-army games as the Chaos Space Marines (70) and 328 as the Tyranids (330). Every run was clean
+  (0 rejected actions, reverted moves, fallbacks or unfinished games). Tuned on seeds 1–400 together (200 seeds alone
+  could not tell the candidates apart: two runs of one strength differ by about 8 wins); the rows above show both halves.
+- **Trace** (rosters, Normal vs Normal, seed 3; `--trace 3`; the result as before, Tyranids on points):
+  - before: `R2 B StartMove: Genestealers 8: Normal move 4" sideways - 36.1" from Havocs 4 ... (-0.16; ...)`, `R1 A
+    StartMove: Chaos Terminator Squad 3: Advance ... 8.8" back - 44.8" from Hive Tyrant 5 ... (+0.00; ...)`;
+  - now: `R2 B StartMove: Screamer-killer 7: Normal move 5" obliquely towards Chaos Terminator Squad 3 with Screamer-killer 3
+    and Hive Tyrant 5 - 29" from Chaos Terminator Squad 3 ...`, `R3 B StartMove: Hive Tyrant 5: Advance on Legionaries 1
+    with Screamer-killer 3 ... its charge odds next turn 58%`, `R4 B StartMove: Screamer-killer 3: Normal move 7" towards
+    Legionaries 1 with Hive Tyrant 5 - 8.1" from Legionaries 1 ...`, `R4 A StartMove: Havocs 4: Advance on
+    Screamer-killer 7 with Legionaries 5 ...`. The far Tyranid infantry (no partners) still hold back: the approach term
+    for units without partners was measured and not adopted (D-083 part 2).
+- **Tests** (10 new, `tests/ai/m80_test.cpp`): `M80_Normal.TwoLegionariesUnitsAdvanceTogetherOnAScreamerKiller`,
+  `ALoneUnitWaitsOutsideTheMonstersChargeReach`, `FarUnitsCloseInRatherThanDrift`, `AUnitWithoutPartnersMovesAsBefore`,
+  `TheReasonNamesTheFocusAndPartners`, `TheDesperateEscapeGuardStillHolds`;
+  `M80_MoveScore.PartnersVolleysWeakenTheFocusButAreNotThisUnitsValue`, `TheGroupsLineFollowsTheFocus`,
+  `AUnitWhosePartnersCannotArriveKeepsItsOwnLine`; `M80_Regression.TheCurrentLevelsDifferFromM77OnTheRosters`
+  (replaces `M78_Regression.TheM77LevelsPlayAsTheCurrentOnes`, no longer true). And 2 new pre-batch content tests:
+  `M68_Replay.ThePreBatchGameShootsSuperchargedAndFightsOnBothSides`, `M70_Replay.ThePreBatchGameFightsAndLosesAUnitOnBothSides`.
+  Existing tests changed:
+  - `M68_Movement.ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatStands` runs with `Generation::M77`
+    (assertions unchanged; seed 193's new game never reaches the position), the current choice in
+    `TheDesperateEscapeGuardStillHolds`;
+  - `M68_Replay.TheRostersBotGameReplaysToItsResultWithCoreOnly` and `M70_Replay...` keep their structural checks on the
+    regenerated files; the content they were chosen for (m68's supercharged plasma shot; m70's melee and a destroyed unit
+    on each side) moved, assertions unchanged, to the pre-batch games above: the new m68 game still fights on both sides
+    but makes no [HAZARDOUS] shot, and the new Hard vs Hard m70 game has no melee and destroys no whole unit (seeds
+    kept, as the brief says).
+  - No M56, M57, M58 or M73 test needed a change.
+- **Replays:** regenerated on purpose: `m68_rosters_normal_bot_game.json`, `m70_rosters_bot_game.json` (Hard) and
+  `m77_custom_hand_deploy_bot_game.json`, each still ending in a result (battle round 5, on points). Byte-identical:
+  every core replay, m45, m46, m47, m58 (Strike plays as before), m73 (no group followed in it), m75 and the fixture
+  scenarios.
+- **Identity:** at the current levels V1, both bot scenarios, Strike (every pairing, Hard included) and every Easy vs
+  Easy file match the pre-batch baseline (25 of 30 files; the rosters' five Normal/Hard files differ on purpose); at the
+  m77 levels all 30 files match (4,740 games). `M78_Regression.TheM77LevelsMatchThePreBatchHashes` passes unchanged.
+- **Acceptance:**
+  - `M80_Normal` tests: met, with one reading: two Legionaries units advance together and end within 6" of each other
+    when the group is followed (`follow` 0), but the default gate (a group's gain at least 0.2 of its risk) doesn't follow
+    a pair of 180-point Legionaries units (+0.13 for 2.55 at risk), so today's Normal keeps their pre-batch moves (the
+    test checks both); a lone unit with its partner 20" back stays out of the Screamer-killer's charge reach (met); far
+    units close in (met: the Tyrant and Genestealers pair 38" away).
+  - M56 and M68 tests that pin pre-batch choices run with `Generation::M77`, with a new test for the new choice: met (the
+    one M68 test; no M56 test pinned a changed choice).
+  - Teamwork statistics towards the batch's targets: partly. Rosters Normal vs Normal: the Tyranids' gang-ups 1.8x
+    (0.51 against 0.28; target 2x) and lone engagements -18% (target -50%); the Chaos Space Marines' gang-ups 0.05 (target
+    0.08), lone engagements up (0.79 against 0.70); units never within 12" barely move (6.22 of 9 against 6.42; target
+    3.21). Random armies: the Tyranids' gang-ups 2x (0.26 against 0.13, met), lone engagements up, never within 12" -7%.
+    Open for M81-M83: the Chaos Space Marines' groups (below the gate today) and the far Tyranid infantry.
+  - Not weaker than `normal-m77` in either seat (rosters, random armies, Strike): met within the noise (seeds 1–400: -2
+    and -2 in two seats, +13 and +5 in the others; Strike game for game the same). The batch's 55% / 50% targets are
+    open (the rosters' Chaos Space Marines win 32%, the random armies' 19%).
+  - Normal decision p95 at most 15 ms and max under 1 s: met (rosters 11.6 ms / 528 ms, random armies 6.5 ms / 301 ms).
+  - `normal-m77` matches the pre-batch baseline: met (all 30 files).
+  - Debug `ctest`: 1338 tests, all pass. Release builds.
 
 ---
 
