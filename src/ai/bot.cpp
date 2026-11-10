@@ -47,6 +47,7 @@ std::uint64_t decision_seed(const core::GameState& state) {
 
 Bot::Bot(BotConfig config) : config_(config), hard_(std::make_unique<hard::HardContext>()) {
     hard_->weights = config_.hard;
+    hard_->generation = hard_generation(config_.generation);
 }
 
 Bot::~Bot() = default;
@@ -59,6 +60,7 @@ Bot::Bot(const Bot& other)
       memo_hits_(other.memo_hits_),
       fallbacks_(other.fallbacks_) {
     hard_->weights = config_.hard;
+    hard_->generation = hard_generation(config_.generation);
 }
 
 Bot& Bot::operator=(const Bot& other) {
@@ -76,6 +78,7 @@ void Bot::set_config(BotConfig config) {
     config_ = config;
     if (!hard_) hard_ = std::make_unique<hard::HardContext>();
     hard_->weights = config_.hard;
+    hard_->generation = hard_generation(config_.generation);
     forget();
 }
 
@@ -86,6 +89,7 @@ void Bot::share_chain_cache(Bot& other) {
         if (!b->hard_) {
             b->hard_ = std::make_unique<hard::HardContext>();
             b->hard_->weights = b->config_.hard;
+            b->hard_->generation = hard_generation(b->config_.generation);
         }
     }
     hard_->chains.share_with(other.hard_->chains);
@@ -134,6 +138,7 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
                     if (!hard_) {
                         hard_ = std::make_unique<hard::HardContext>();
                         hard_->weights = config_.hard;
+                        hard_->generation = hard_generation(config_.generation);
                     }
                     chosen = hard::hard_policy(state, side, legal, decision_seed(state), *hard_);
                     break;

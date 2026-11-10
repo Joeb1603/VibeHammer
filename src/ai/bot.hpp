@@ -36,7 +36,7 @@ using BotLevel = client::BotLevel;
 struct BotConfig {
     BotLevel level = BotLevel::Easy;
     hard::BotWeights hard{};  // M44: level Hard's weights (the tuned defaults; the arena can override them)
-    Generation generation = Generation::Current;  // D-066: the M55 regression switch (arena and tests only)
+    Generation generation = Generation::Current;  // D-066, D-083: the M55 / M77 regression switches (arena and tests)
 };
 
 struct BotChoice {

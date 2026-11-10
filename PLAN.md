@@ -4560,7 +4560,7 @@ team up to take out bigger threats. The code agrees:
 
 ---
 
-## M78: Measuring teamwork
+## M78: Measuring teamwork ✅ (done)
 **Effort:** `high` · **Rules:** none (bot and arena only) · **Decision:** none
 
 > **Arena statistics** (`src/ai/arena.cpp`): counted in `play_bot_session`'s event walk, kept in `GameRecord` /
@@ -4581,6 +4581,58 @@ team up to take out bigger threats. The code agrees:
 - `M78_Arena` tests count each statistic on hand-built positions (two units engaged with one Screamer-killer is one
   gang-up; a lone engagement is counted);
 - the statistics' baseline is recorded here, for the batch's targets.
+
+**Results (2026-11-10):** D-083 part 0 records the definitions and every reading taken. Bot and arena only: no rule,
+core, `GameState` field, action, event or file format change, and no play change anywhere.
+- **Statistics** (`src/ai/arena.{hpp,cpp}`): `TeamworkCounter` sees the initial state and, after every accepted action
+  (the client's automatic ones now counted one at a time: the same submits in the same order), its events and the state
+  right after it. `engagement_snapshot` (gang-ups and lone engagements, taken at each Fight phase's start, both players'
+  turns) and `distinct_targets` are the testable pieces. Shooting's top-target share counts weapon selections (one
+  model's weapon profile at one target), not attack dice. `GameRecord::teamwork` / `ArenaResult::teamwork`, and three
+  new `format_arena` lines (`teamwork (M78)`, `shooting spread (M78)`, `contact (M78)`). The `--per-game` line is
+  unchanged.
+- **Regression switch:** `Generation::M77`, `pre_teamwork()` and `hard_generation()` (`src/ai/generation.hpp`); the
+  hidden arena levels `normal-m77` / `hard-m77` (`arena_main.cpp` only). `M55` tests are unchanged; Normal's deploy
+  heuristic now tests `!= M55` (was `== Current`). Hard keeps its generation in `HardContext` (`M77`, or `Current` for
+  anything else: Hard still ignores `M55`) and passes it to every Normal function it calls that takes one, and to
+  `standing_moves` (new trailing argument).
+- **The statistics' baseline** (Release arena, current levels, which still play the pre-batch play; per game, A / B;
+  A = Chaos Space Marines (Space Marines on Strike), B = Tyranids; 4 runs in parallel):
+
+  | Pairing (seeds) | Wins A / B | Points A / B | Gang-ups (distinct) | Lone engagements | Targets per Shoot | Top-target share | Never within 12" (of units) | First engagement round (games without) | p95 / max ms |
+  |---|---|---|---|---|---|---|---|---|---|
+  | rosters normal vs normal (1–200) | 60 / 140 | 352 / 473 | 0.04 (0.02) / 0.28 (0.24) | 0.70 / 0.98 | 1.50 / 1.08 | 0.78 / 0.65 | 1.68 of 5 / 6.42 of 9 | 4.21 (45) | 9.3 / 579 |
+  | rosters normal vs easy (1–200) | 200 / 0 | 567 / 128 | 0.04 (0.01) / 0.09 (0.07) | 0.47 / 0.13 | 1.94 / 1.00 | 0.62 / 0.75 | 3.55 of 5 / 6.35 of 9 | 3.97 (126) | 6.3 / 505 |
+  | rosters easy vs normal (1–200) | 3 / 197 | 317 / 888 | 1.34 (0.73) / 1.86 (1.38) | 1.89 / 2.42 | 1.10 / 1.23 | 0.75 / 0.64 | 0.31 of 5 / 3.78 of 9 | 2.77 (0) | 4.0 / 364 |
+  | rosters hard vs normal (1–60) | 54 / 6 | 352 / 190 | 0.00 (0.00) / 0.02 (0.02) | 0.08 / 0.07 | 1.62 / 1.06 | 0.75 / 0.79 | 4.12 of 5 / 8.03 of 9 | 4.57 (53) | 133 / 2400 |
+  | rosters normal vs hard (1–60) | 16 / 44 | 342 / 436 | 0.07 (0.05) / 0.25 (0.22) | 0.72 / 0.87 | 1.51 / 1.07 | 0.78 / 0.64 | 1.78 of 5 / 6.43 of 9 | 4.14 (18) | 10.8 / 2268 |
+  | random armies normal vs normal (1–200) | 37 / 163 | 222 / 406 | 0.04 (0.02) / 0.13 (0.12) | 0.50 / 0.41 | 1.59 / 1.08 | 0.69 / 0.73 | 3.17 of 4.81 / 3.92 of 5.28 | 4.25 (113) | 6.1 / 194 |
+  | strike normal vs normal (1–200) | 200 / 0 | – | 0.01 (0.01) / 0.01 (0.01) | 0.20 / 0.20 | 1.74 / 1.07 | 0.53 / 0.75 | 0.04 of 3 / 0.08 of 4 | 2.63 (151) | 6.1 / 77 |
+  | strike hard vs hard (1–60) | 60 / 0 | – | 0.00 (0.00) / 0.02 (0.02) | 0.27 / 0.15 | 1.75 / 1.08 | 0.54 / 0.75 | 0.10 of 3 / 0.12 of 4 | 2.57 (46) | 159 / 1126 |
+
+  The rosters' Hard runs peaked at 0.61 GB RSS. Every run was clean: 0 rejected actions, reverted moves, fallbacks or
+  unfinished games. What it shows: on the rosters (Normal vs Normal) gang-ups are rare (about one game in four for the
+  Tyranids, one in 25 for the Chaos Space Marines) and lone engagements outnumber them 3 to 1 or more; 6.4 of the 9
+  Tyranid units and 1.7 of the 5 Chaos Space Marine units never come within 12" of an enemy unit; a Chaos Space Marine
+  Shoot splits over 1.5 targets. **Targets for the batch** (PLAN.md's batch acceptance, rosters Normal vs Normal):
+  gang-ups at least 0.08 / 0.56 per game, lone engagements at most 0.35 / 0.49, never within 12" at most 0.84 / 3.21;
+  random armies: gang-ups at least 0.08 / 0.26, lone at most 0.25 / 0.20, never within 12" at most 1.58 / 1.96.
+- **No play change:** the win counts and points of the four pre-batch baseline rows match exactly (60/140 352/473,
+  200/0 567/128, 3/197 317/888, 37/163 222/406). The identity set: all 30 files match the pre-batch baseline at the
+  current levels and all 30 at the m77 levels (`run_identity.sh ... m77`, 4,740 games each). Every replay regenerates
+  byte-identically (`git status tests/` shows only the new test file).
+- **Tests** (7 new, `tests/ai/m78_test.cpp`): `M78_Arena.TwoUnitsEngagedWithOneEnemyCountAsAGangUp` (the Legionaries
+  and the Chaos Lord engaged with one Screamer-killer; the monster fixture's Tyrant and Tyrant Guard on the
+  Legionaries), `M78_Arena.ALoneEngagementIsCounted` (alone; the Lord 8" away supports, 13" doesn't),
+  `M78_Arena.ShootingSpreadCountsDistinctTargets`, `M78_Arena.ContactCountsUnitsNeverWithin12AndTheFirstEngagementRound`,
+  `M78_Arena.StatisticsDoNotChangeThePerGameLine` (bot_20_termagants seed 1 pinned to the pre-batch line),
+  `M78_Regression.TheM77LevelsPlayAsTheCurrentOnes` (Strike and rosters, Hard's cut short; replaced once M80 changes
+  play) and `M78_Regression.TheM77LevelsMatchThePreBatchHashes` (Strike Normal seeds 2 and 3, rosters Normal seeds 11
+  and 63, rosters Easy vs Hard seed 5, pinned to the pre-batch baseline's per-game hashes; must pass through M83). No
+  existing test changed.
+- **Acceptance:** identity set unchanged, and every `--per-game` line on Strike and the rosters (met: above);
+  `M78_Arena` tests count each statistic on hand-built positions (met); the statistics' baseline recorded (met: the
+  table). Debug `ctest`: 1315 tests, all pass; Release builds.
 
 ---
 

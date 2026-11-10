@@ -213,7 +213,7 @@ bool escape_stands(HardContext& hc, analysis::OddsCache& cache, const GameState&
         }
         const GameState& after = sim.state();
         if (!after.pending || !std::holds_alternative<core::decision::MoveModels>(after.pending->kind)) continue;
-        if (normal::standing_moves(cache, after, hc.weights.move, 1, kStandingAttempts).empty()) return false;
+        if (normal::standing_moves(cache, after, hc.weights.move, 1, kStandingAttempts, hc.generation).empty()) return false;
     }
     return true;
 }
@@ -229,12 +229,12 @@ std::optional<HardMovePlan> hard_plan_unit_move(HardContext& hc, analysis::OddsC
     std::vector<normal::PlannedMove> plans;
     const bool with_default = normal_default && hc.weights.margin >= 0.0;
     if (with_default) {
-        if (std::optional<normal::PlannedMove> np = normal::plan_unit_move(cache, origin)) plans.push_back(std::move(*np));
+        if (std::optional<normal::PlannedMove> np = normal::plan_unit_move(cache, origin, hc.generation)) plans.push_back(std::move(*np));
     }
     const bool have_default = !plans.empty();
     for (normal::PlannedMove& pm : normal::standing_moves(cache, origin, hc.weights.move,
                                                           std::max<std::size_t>(1, hc.weights.static_plans),
-                                                          kStandingAttempts)) {
+                                                          kStandingAttempts, hc.generation)) {
         if (have_default && pm.candidate.ends == plans.front().candidate.ends) continue;
         plans.push_back(std::move(pm));
     }
@@ -299,7 +299,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
     } else {
         // D-067: Normal's activation order (D-066: the unit closest to an enemy unit first), so Normal's own answer
         // (the default) is for the same unit.
-        unit = normal::unit_to_move(gs, legal);
+        unit = normal::unit_to_move(gs, legal, hc.generation);
     }
     if (!unit) return std::nullopt;
     const core::Unit& u = *gs.find_unit(*unit);
@@ -311,7 +311,7 @@ std::optional<PolicyResult> hard_move_units(HardContext& hc, analysis::OddsCache
     // Normal's move type (M43) is the default (BotWeights::margin).
     std::optional<GameAction> normal_start;
     if (hc.weights.margin >= 0.0) {
-        if (const std::optional<PolicyResult> r = normal::decide_move_units(cache, gs, side, legal, seed)) {
+        if (const std::optional<PolicyResult> r = normal::decide_move_units(cache, gs, side, legal, seed, nullptr, hc.generation)) {
             normal_start = r->action;
         }
     }
@@ -547,7 +547,7 @@ std::optional<PolicyResult> decide_charge_army(HardContext& hc, analysis::OddsCa
     // Normal's answer (M42, D-066) is the default.
     std::optional<std::size_t> normal_index;
     if (hc.weights.margin >= 0.0) {
-        if (const std::optional<PolicyResult> n = normal::decide_charge(cache, gs, side, legal, seed)) {
+        if (const std::optional<PolicyResult> n = normal::decide_charge(cache, gs, side, legal, seed, hc.generation)) {
             for (std::size_t i = 0; i < options.size(); ++i) {
                 if (options[i].action == n->action) normal_index = i;
             }
@@ -594,7 +594,7 @@ std::optional<PolicyResult> decide_charge(HardContext& hc, analysis::OddsCache& 
         // Normal's answer (M42) is the default.
         bool declare = cv.wanted;
         if (hc.weights.margin >= 0.0) {
-            const std::optional<PolicyResult> n = normal::decide_charge(cache, gs, side, legal, seed);
+            const std::optional<PolicyResult> n = normal::decide_charge(cache, gs, side, legal, seed, hc.generation);
             const bool normal_declares = n && std::holds_alternative<core::action::DeclareCharge>(n->action);
             declare = normal_declares ? !deviates(hc, cv.hold.score, cv.charge.score)
                                       : deviates(hc, cv.charge.score, cv.hold.score);
@@ -640,7 +640,7 @@ std::optional<PolicyResult> decide_charge_targets(HardContext& hc, analysis::Odd
     // Normal's answer (M42: the planned move if it beats holding) is the default.
     bool charge = best_value.score > hold.score + kBetter;
     if (hc.weights.margin >= 0.0) {
-        const std::optional<PolicyResult> n = normal::decide_charge_targets(cache, gs, side, legal, seed);
+        const std::optional<PolicyResult> n = normal::decide_charge_targets(cache, gs, side, legal, seed, hc.generation);
         const bool normal_charges = n && std::holds_alternative<core::action::StartChargeMove>(n->action);
         charge = normal_charges ? !deviates(hc, hold.score, best_value.score) : deviates(hc, best_value.score, hold.score);
     }
@@ -692,7 +692,7 @@ std::optional<PolicyResult> decide_casualties(HardContext& hc, analysis::OddsCac
     };
     std::vector<Cand> cands;
     std::string normal_reason;
-    if (std::optional<normal::CasualtyOrder> o = normal::casualty_order(cache, gs)) {
+    if (std::optional<normal::CasualtyOrder> o = normal::casualty_order(cache, gs, hc.generation)) {
         cands.push_back(Cand{o->priority, "Normal's order"});
         normal_reason = o->reason;
     }
@@ -771,7 +771,7 @@ std::optional<PolicyResult> decide_coherency(HardContext& hc, analysis::OddsCach
     if (!eval.ok()) return std::nullopt;
     // Normal's pick (M41) first: the default.
     std::vector<core::ModelId> order;
-    if (const std::optional<core::ModelId> n = normal::coherency_removal(cache, gs, unit_id)) order.push_back(*n);
+    if (const std::optional<core::ModelId> n = normal::coherency_removal(cache, gs, unit_id, nullptr, hc.generation)) order.push_back(*n);
     const bool have_normal = !order.empty();
     for (const core::Model& m : unit->models) {
         if (std::find(order.begin(), order.end(), m.id) == order.end()) order.push_back(m.id);
@@ -812,7 +812,7 @@ std::optional<PolicyResult> decide_consolidation(HardContext& hc, analysis::Odds
     // Normal's answer (M41) is the default: not moving, or the consolidation it starts.
     std::optional<GameAction> normal_start;
     if (hc.weights.margin >= 0.0) {
-        if (const std::optional<PolicyResult> n = normal::decide_consolidation(cache, gs, side, legal, seed)) {
+        if (const std::optional<PolicyResult> n = normal::decide_consolidation(cache, gs, side, legal, seed, hc.generation)) {
             normal_start = n->action;
         }
     }
@@ -909,7 +909,7 @@ std::optional<PolicyResult> hard_answer(const GameState& gs, core::Side side, co
     if (!hard_decides) return std::nullopt;
     // D-080 (M73): over the chain tables' budget, Normal's whole answer (the same seed), its reasons prefixed.
     if (const std::optional<std::string> why = chain_budget_problem(gs, hc.weights)) {
-        PolicyResult r = normal_policy(gs, side, legal, seed);
+        PolicyResult r = normal_policy(gs, side, legal, seed, hc.generation);
         r.reason = *why + r.reason;
         for (PlannedStep& step : r.rest) step.reason = *why + step.reason;
         return r;
@@ -955,7 +955,7 @@ std::optional<std::string> chain_budget_problem(const GameState& gs, const BotWe
 PolicyResult hard_policy(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
                          std::uint64_t seed, HardContext& context) {
     if (std::optional<PolicyResult> r = hard_answer(gs, side, legal, seed, context)) return std::move(*r);
-    return normal_policy(gs, side, legal, seed);
+    return normal_policy(gs, side, legal, seed, context.generation);
 }
 
 std::optional<PolicyResult> hard_casualties(HardContext& context, analysis::OddsCache& cache, const GameState& gs,

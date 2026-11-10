@@ -1,7 +1,8 @@
 // wh40k_bot_arena (M39, D-054): bot vs bot games, headless. Run it in Release for strength numbers.
 //
 // Usage: wh40k_bot_arena [--games N] [--a easy|normal|hard] [--b easy|normal|hard] [--scenario <file>]
-//   (--a / --b also take the hidden regression levels easy-m55 and normal-m55, D-066: Easy and Normal as at M55)
+//   (--a / --b also take the hidden regression levels easy-m55 and normal-m55, D-066: Easy and Normal as at M55, and
+//   normal-m77 and hard-m77, D-083 (M78): Normal and Hard as before the Teamwork batch, main at c54c47c)
 //                        [--seed <first>] [--step-cap N] [--trace <seed>] [--weights key=value,...]
 //   Plays N games (default 200) with seeds first, first + 1, ... (default 1); side A is played at level --a,
 //   side B at --b (default easy). The scenario is relative to the repo root (default
@@ -46,7 +47,8 @@ using wh40k::ai::BotConfig;
 using wh40k::ai::BotLevel;
 
 // The level, and (D-066, M56) the hidden regression levels "easy-m55" and "normal-m55": Easy and Normal exactly as
-// they played at M55, for measuring the M56 changes in one binary. Arena and tests only; the client never offers them.
+// they played at M55, for measuring the M56 changes in one binary. D-083 (M78): "normal-m77" and "hard-m77", Normal
+// and Hard as before the Teamwork batch (M78-M83). Arena and tests only; the client never offers them.
 void parse_level(const std::string& v, BotConfig& config) {
     using wh40k::ai::Generation;
     if (v == "easy") {
@@ -64,6 +66,12 @@ void parse_level(const std::string& v, BotConfig& config) {
     } else if (v == "normal-m55") {
         config.level = BotLevel::Normal;
         config.generation = Generation::M55;
+    } else if (v == "normal-m77") {
+        config.level = BotLevel::Normal;
+        config.generation = Generation::M77;
+    } else if (v == "hard-m77") {
+        config.level = BotLevel::Hard;
+        config.generation = Generation::M77;
     } else {
         throw std::invalid_argument("not easy, normal or hard");
     }
@@ -133,6 +141,7 @@ std::string level_name(const BotConfig& c) {
         case BotLevel::Hard: name = "hard"; break;
     }
     if (c.generation == wh40k::ai::Generation::M55) name += "-m55";
+    if (c.generation == wh40k::ai::Generation::M77) name += "-m77";
     return name;
 }
 

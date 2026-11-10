@@ -77,9 +77,11 @@ struct PlannedMove {
 // M44's seam (the Hard level): the candidates of the move just started in `origin` that stand when simulated in full,
 // in the cheap score's order (with `weights`), up to `count` of them after at most `attempts` simulations. Each
 // keeps its cheap score (not refined). A pure function of its arguments; Normal's plan_unit_move doesn't use it.
+// D-083 (M78): `generation` is the score's (MoveScoreContext's); Hard passes its own (Current or M77).
 [[nodiscard]] std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const core::GameState& origin,
                                                       const MoveWeights& weights, std::size_t count,
-                                                      std::size_t attempts);
+                                                      std::size_t attempts,
+                                                      Generation generation = Generation::Current);
 
 // D-067 (M57, the Hard level's army path): the candidate of the move just started in `origin` whose end is furthest
 // from the closest enemy model (the most edge-to-edge room left to every enemy unit; a tie to the earlier
