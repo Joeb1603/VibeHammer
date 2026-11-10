@@ -4979,7 +4979,9 @@ JSON change. Later parts (M79–M83) are added below.
     round 4.21 (45 of 200 games without one). Measured with the current levels, whose play is the pre-batch play (the
     four pre-batch baseline rows' wins and points match exactly).
 - **Part 1 (M79): the army plan** (`src/ai/normal/army_plan.{hpp,cpp}`; designed first and measured with a scratch
-  prototype, M79 being plan mode). `ArmyPlan army_plan(OddsCache&, const GameState&, Side, Generation)` gives each of
+  prototype, M79 being plan mode, then reviewed: the no-op case below was narrowed, the rest accepted as designed; the
+  implementation gives the prototype's plans exactly, at 1,317 Move Units decisions of 5 rosters and 20 random-army
+  games). `ArmyPlan army_plan(OddsCache&, const GameState&, Side, Generation)` gives each of
   `side`'s units with models a **focus** (an enemy unit) and its **partners** (our units with the same focus). It is a
   pure, deterministic function of the state (the bots stay stateless: maps keyed by unit id, everything in unit order,
   ties to unit order), recomputed by each decision that uses it. Nothing reads it in M79, so no play changes; M80–M82
@@ -5082,8 +5084,10 @@ JSON change. Later parts (M79–M83) are added below.
   - **No-ops.** In these cases every unit's focus is its closest enemy unit, with no partners, and `ArmyPlan::active`
     is false:
     - `pre_teamwork(generation)` (M55, M77);
-    - either side with fewer than two units with models: one unit a side, and also a side down to its last unit, ours
-      or theirs, which keeps today's play (*conservative*, the brief's "a side with one unit");
+    - fewer than two of **our** units with models (one unit a side, or our last unit: no partners are possible). An
+      enemy side down to its last unit still gets a plan: ganging up on it (the last monster, say) is what the plan is
+      for. The design first made either side's last unit a no-op (*conservative*); the review narrowed it to ours. The
+      one-unit scenarios are 1v1, so they are no-ops either way;
     - no turn left (K = 0);
     - before the battle (NotStarted, Deploy).
   - **Points or shares.** Every value is a unit_share: weighted by points under the points rule with several datasheets
@@ -5100,14 +5104,17 @@ JSON change. Later parts (M79–M83) are added below.
     - Prototype, Release, at every decision of 10 rosters games and 40 random-army games (5,592 and 14,101 calls):
       rosters mean 0.77 ms, p95 1.59, max 2.75; random armies 0.55 / 1.54 / 4.96. The largest random battle (7 v 7,
       seed 63): p95 1.92, max 3.11.
+    - The implementation (flat per-call tables, the engagements found once), the same calls: rosters mean 0.66 ms, p95
+      1.34, max 2.95; random armies 0.45 / 1.27 / 3.34. One earlier run's random-army maximum, 13.2 ms, did not recur in
+      the rerun (a slow-call check, timing each slow call five more times, found none): a scheduling outlier.
     - Normal's decision p95 is about 9–11 ms, so a consumer computes the plan once per decision: M80 once per MoveUnits
       decision (never per candidate move), M82 once per Hard decision at the root (never per evaluated state). The
       implementation must stay within 2 ms p95 and 5 ms max per call, checked by a printed timing test.
   - **What M80–M82 read:**
     - the interface: `units` (UnitPlan: unit, focus, partners, group), `groups` (PlanGroup: target; members, each with
       unit, arrival, mode, lone and alone; value, alone, gain, risk, first contact, reply_to), `find(unit)`,
-      `group_of(unit)`, and `describe(state, plan)` / `describe_unit(state, plan, unit)` for reasons, e.g. "with
-      Legionaries 5 on Screamer-killer 8 (joint +0.45, +0.26 apart)";
+      `group_of(unit)`, and `describe(state, plan)` / `describe_unit(state, plan, unit)` for reasons, in display names
+      (D-065), e.g. "with Legionaries 2 on Screamer-killer 1 (joint +0.22, apart +0.00)";
     - M80: the focus (the line), the partners and their arrivals (support credit, and synchronisation: a partner that
       can't reach the focus by our next turn), reply_to (who is in front) and the mode (chargers or shooters);
     - M81: the groups' targets (the focus-fire bonus) and the partners (charge credit);
@@ -5115,8 +5122,9 @@ JSON change. Later parts (M79–M83) are added below.
   - **Measured** (prototype; values in points-weighted shares; A = Chaos Space Marines, B = Tyranids):
     - *Two Legionaries units 18" from a Screamer-killer* (the board holds only them, the Screamer-killer and a far Tyrant
       Guard): alone, the chainsword unit gets −0.92 (it needs a turn to reach, and the Screamer-killer charges it first)
-      and the boltgun unit −0.43. Together: +0.06, a group, just over the margin. At 16" it is +0.22, at 12" +0.48, at
-      22" +0.13. With the whole rosters on the board the Terminators join instead: the Terminators and the boltgun unit
+      and the boltgun unit −0.43. Together: +0.06, a group, just over the margin. At 16" it is +0.22 (each alone −0.70
+      and −0.53), at 12" +0.48, at 22" +0.13. The test stands at 16" rather than PLAN.md's 18", so that it doesn't rest
+      on a +0.06 margin. With the whole rosters on the board the Terminators join instead: the Terminators and the boltgun unit
       get +0.45 against +0.26 apart; both Legionaries units with the Terminators +0.47.
     - *Tyranid infantry and a monster on a lone Legionaries unit* (12–15" away):
       - a full-strength Hive Tyrant wins alone (+1.01) and takes no partners: with the Termagants +1.05 (they add 0.04),
@@ -5150,5 +5158,19 @@ JSON change. Later parts (M79–M83) are added below.
     - The target's choice is the worst for us within the group; it never turns to a unit outside it.
     - A later first contact is not discounted: the three volleys run from the contact, cut at the game's end.
     - A unit that can't arrive within the game (in late rounds, units that hung back 45–50" away) is never a candidate,
-      so it keeps today's line. M80's approach term, which the PLAN gives only to units with partners, doesn't reach it:
-      an open point for M80.
+      so it keeps today's line, with no partners. Bringing such units in is M80's: its brief measures a small approach
+      term for units without partners beyond the horizon.
+  - **Tests** (`tests/ai/m79_test.cpp`, 12; hand-built roster positions unless named):
+    - `M79_ArmyPlan.TwoLegionariesUnitsTeamUpOnAScreamerKiller` (16"; each lone value below 0, each member's alone 0);
+    - `AFullStrengthHiveTyrantNeedsNoPartners` and `AWoundedHiveTyrantPairsWithGenestealers` (PLAN.md's "Genestealers,
+      Termagants and the Hive Tyrant pair up", measured: the full-strength Tyrant wins alone and takes no partners; at 3
+      wounds it pairs with the Genestealers, and the Termagants add less than the margin);
+    - `ALosingGroupIsNotFormed`, `AnEngagedUnitJoinsAsASeed`, `AGroupGangsUpOnTheEnemysLastUnit`,
+      `ASideWithOneUnitHasNoPlan`;
+    - `TheSameStateGivesTheSamePlan` (repeated calls, a copied state and a fresh cache at four states, one from a played
+      rosters game; and the middle of a move after a model was moved);
+    - `OneUnitASideIsTheClosestWithNoPartners` (V1), `TheM77SwitchGivesTheClosestWithNoPartners` (M77, M55, and before
+      the battle);
+    - `StrikeWithoutPointsUsesShares` (the round 1 position of a Strike game, rebuilt by hand: three damaged Termagant
+      units on one Intercessor Squad, the group's risk 0.7 + 0.3 + 0.8 shares);
+    - `TheCostIsMeasured` (printed: the rosters' start and the largest random battle).
