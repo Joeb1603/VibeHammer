@@ -12,14 +12,71 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bot.hpp"
 #include "core/data/army_list.hpp"
+#include "core/engine/events.hpp"
 #include "core/state/game_state.hpp"
 #include "session.hpp"
 
 namespace wh40k::ai {
+
+// ---- M78 (D-083 part 0): teamwork statistics, counted per side in play_bot_session ----
+
+// The engagements at one moment, by side (indexed by side_index), for M78's statistics. Only units with models count.
+struct EngagementSnapshot {
+    // Gang-ups: the enemy units that two or more of this side's units are engaged with (03.04, engaged_enemy_units), in
+    // GameState order.
+    std::array<std::vector<core::UnitId>, 2> ganged_up;
+    // Lone engagements: this side's units engaged with an enemy unit that no other unit of this side is within 12" of
+    // (edge to edge, unit_distance; an engaged unit is within 2", so "engaged with it or within 12" of it" is the same),
+    // in GameState order, each unit once.
+    std::array<std::vector<core::UnitId>, 2> lone;
+};
+[[nodiscard]] EngagementSnapshot engagement_snapshot(const core::GameState& state);
+
+// The distinct target units of one Shoot's weapon selections (10.02, ShootingStarted).
+[[nodiscard]] int distinct_targets(const core::event::ShootingStarted& shoot);
+
+// One game's teamwork statistics, by side (indexed by side_index).
+struct TeamworkStats {
+    // Taken at the start of each Fight phase (the state after the action whose events start it), both sides:
+    std::array<int, 2> gang_ups{};          // (Fight phase, enemy unit ganged up on) pairs
+    std::array<int, 2> ganged_units{};      // distinct enemy units ever ganged up on
+    std::array<int, 2> lone_engagements{};  // (Fight phase, our unit in a lone engagement) pairs
+    // Shooting spread (ShootingStarted): Shoots, their distinct targets summed, and per shooting phase with a selection,
+    // the share of the side's weapon selections (one model's weapon profile at one target, not attack dice) aimed at
+    // its most-selected target unit, summed over those phases.
+    std::array<int, 2> shoots{};
+    std::array<int, 2> shoot_targets{};
+    std::array<int, 2> shooting_phases{};
+    std::array<double, 2> top_share_sum{};
+    // Contact, checked on the initial state and after every accepted action: the units ever on the battlefield with
+    // models, those of them never within 12" of an enemy unit with models (destroyed or not), and the battle round of
+    // the side's first engagement (0: none).
+    std::array<int, 2> units{};
+    std::array<int, 2> never_within_12{};
+    std::array<int, 2> first_engagement_round{};
+};
+
+// Counts TeamworkStats from the accepted actions' events and the state after each one.
+class TeamworkCounter {
+public:
+    // The state before any action (the game started), then after every accepted action with that action's events.
+    void observe(const std::vector<core::GameEvent>& events, const core::GameState& after);
+    // The statistics so far (a shooting phase still open counts as ended).
+    [[nodiscard]] TeamworkStats stats() const;
+
+private:
+    void flush_shooting();
+    TeamworkStats stats_;
+    std::array<std::vector<std::uint32_t>, 2> ganged_;  // distinct enemy unit ids ganged up on, sorted
+    std::array<std::vector<std::pair<std::uint32_t, int>>, 2> phase_shots_;  // target id, selections (this phase)
+    std::vector<std::uint32_t> seen_;       // units ever on the battlefield with models, sorted
+    std::vector<std::uint32_t> contacted_;  // of those, the ones that came within 12" of an enemy unit, sorted
+};
 
 struct GameRecord {
     std::uint64_t seed = 0;
@@ -40,6 +97,7 @@ struct GameRecord {
     std::size_t reverted = 0;               // UnitMoveReverted events
     std::size_t fallbacks = 0;              // decisions the bots answered with the fallback
     std::vector<std::string> problems;      // why the game stopped early, if it did
+    TeamworkStats teamwork;                 // M78 (D-083 part 0); not on the --per-game line
 };
 
 // One game from `scenario` (not started) with the dice `seed`, side A played by `a` and side B by `b`. Stops at
@@ -73,6 +131,10 @@ struct ArenaResult {
     std::array<int, 2> coherency_removed{};     // M41: total models removed for coherency, by side
     std::array<int, 2> fight_move_steps{};      // M46: totals, by side
     std::array<int, 2> fight_moves{};           // M46: totals, by side
+    // M78 (D-083 part 0): every game's TeamworkStats summed (first_engagement_round: the rounds summed over the games
+    // with an engagement), and by side the games with an engagement.
+    TeamworkStats teamwork;
+    std::array<int, 2> engaged_games{};
     std::size_t fallbacks = 0;
     double p50_ms = 0.0;
     double p95_ms = 0.0;
@@ -137,7 +199,8 @@ struct ArmySource {
 
 // The arena's report: win / draw / loss counts, mean end round, mean surviving models, mean wounds lost per
 // side, rejected actions, UnitMoveReverted count, fallbacks, p50 / p95 / max decision time, (M43) the seeds that
-// lost models to coherency and (M46) the Pile In / Consolidate steps the bots answered and the moves they made.
+// lost models to coherency, (M46) the Pile In / Consolidate steps the bots answered and the moves they made and (M78)
+// the teamwork statistics (TeamworkStats) per game.
 [[nodiscard]] std::string format_arena(const ArenaResult& r, const core::GameState& scenario);
 
 }  // namespace wh40k::ai

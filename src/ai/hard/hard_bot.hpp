@@ -43,10 +43,13 @@
 
 namespace wh40k::ai::hard {
 
-// What Hard keeps between decisions: its weights and a cache of chain tables (never behaviour, D-054).
+// What Hard keeps between decisions: its weights and a cache of chain tables (never behaviour, D-054). D-083 (M78): and
+// the generation it plays (hard_generation of BotConfig::generation: Current or M77), passed to every Normal function
+// Hard calls, so the Teamwork batch's changes to Hard can be gated on it as Normal's are.
 struct HardContext {
     BotWeights weights{};
     ChainCache chains;
+    Generation generation = Generation::Current;
 };
 
 // D-080 (M73): Hard's budget for a decision's chain tables (BotWeights::chain_budget_mib and chain_budget_tables, 0: no

@@ -4914,3 +4914,67 @@ list queries (below). M76 adds part 2 (placing units by hand in the client).
     `tests/m76_set_up_problems_test.cpp`: `D082_SetUpProblems.*` and
     `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`. No replay: the flow's actions are M74's
     (`m74_hand_deployment.json` sets the Tyrannofex up by hand), and the editor itself makes no game state.
+
+## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch)
+**Decided:** 2026-11-10 (M78 of the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings are
+marked *conservative*). Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or
+JSON change. Later parts (M79–M83) are added below.
+- **Part 0 (M78): the arena's teamwork statistics** (`src/ai/arena.{hpp,cpp}`). `play_bot_session` feeds a
+  `TeamworkCounter` the initial state and then, after every accepted action, that action's events and the state right
+  after it. To make that possible the client's automatic actions are now counted one at a time (run_auto_actions with
+  a submit callback that is the default `session.submit` followed by the count; the same actions in the same order).
+  The per-game result is `GameRecord::teamwork` (`TeamworkStats`, per side), summed in `ArenaResult::teamwork`, and
+  printed by `format_arena` as three new lines, per game. **The `--per-game` line is unchanged** (the identity set
+  parses it). Definitions, per side:
+  - **Gang-ups:** taken at the start of each Fight phase (the state after the action whose events hold
+    `PhaseStarted{Fight}`: the positions the charges left, before any pile-in), in both players' turns. A gang-up is
+    an enemy unit with models that two or more of our units are engaged with (03.04, `engaged_enemy_units`); the
+    count is of (Fight phase, enemy unit) pairs. Also the distinct enemy units ever ganged up on in the game.
+    *Conservative:* the start of the phase, not each fight activation (one clear moment, unaffected by the order the
+    fights are picked in); a Fight phase the engine ends inside the action that starts it has no engaged unit, so it
+    counts nothing.
+  - **Lone engagements:** at the same moment, our units engaged with at least one enemy unit that no other unit of ours
+    is within 12" of (edge to edge, `unit_distance`, `within`). An engaged unit is within 2", so "engaged with it or
+    within 12" of it" is one test. Each unit counts once per Fight phase, however many enemy units it fights.
+  - **Shooting spread:** for each `ShootingStarted`, the distinct target units of its selections (the mean per Shoot);
+    and for each shooting phase in which a side made a weapon selection, the share of that side's selections at its
+    most-selected target unit (the mean over those phases). *Conservative:* a selection is one model's weapon profile
+    at one target (as `ShootingStarted` lists them), not attack dice, so the share needs no dice and doesn't move with
+    random attacks or Blast. A phase is closed by any `PhaseStarted` / `PhaseEnded` event, or the game's end.
+  - **Contact:** after the initial state and every accepted action: the units ever on the battlefield with models,
+    and those of them that never came within 12" of an enemy unit with models (a unit destroyed before it did counts;
+    a unit never set up, D-081, isn't on the battlefield and doesn't count); and the battle round in which a side first
+    had an engaged unit (the mean over the games with one; the games without are counted). An engagement is both
+    sides', so the first-engagement round is the same for both sides of a game.
+  - **The summary lines** (format_arena, after the pile-in line): `teamwork (M78), per game: gang-ups A x / B y
+    (distinct enemy units ...); lone engagements ...`, `shooting spread (M78): distinct targets per shoot ...;
+    top-target share of a shooting phase's weapon selections ...` and `contact (M78), per game: units never within 12"
+    of an enemy unit A x of n / B y of m; first engagement round A r (k games without) / B ...`.
+  - **Cost:** a unit-distance check per unit after every action, skipped once a unit has been within 12" (the
+    engagement test runs until the side's first engagement); decision times are unaffected (they are timed around
+    `decide` only).
+- **Part 0 (M78): the regression switch `Generation::M77`** (`src/ai/generation.hpp`): plays as the pre-batch bots
+  (main at c54c47c), so every M79–M82 behaviour is off under it. Hidden arena levels `normal-m77` and `hard-m77`
+  (`arena_main.cpp` only: never the client, the settings or a save file), next to `easy-m55` / `normal-m55`.
+  - `M55` keeps its exact meaning: every existing `generation == Generation::M55` / `!= M55` test is unchanged, so
+    `M77` behaves as `Current` today. The one test that was `== Generation::Current` (`uses_deploy_heuristic`: Normal
+    deploys by M77's heuristic, D-081) became `!= Generation::M55`, so `normal-m77` deploys as the pre-batch Normal.
+  - `pre_teamwork(g)` (true for `M55` and `M77`) is the gate for the batch's new behaviour.
+  - **Hard takes a generation:** `HardContext::generation` is `hard_generation(BotConfig::generation)`: `M77` stays
+    `M77`, anything else is `Current` (*conservative*: Hard ignored `M55` before, D-066, and still does). Hard passes it
+    to every Normal function it calls that takes one (`plan_unit_move`, `unit_to_move`, `decide_move_units`,
+    `decide_charge`, `decide_charge_targets`, `casualty_order`, `coherency_removal`, `decide_consolidation`,
+    `normal_policy`) and to `standing_moves`, which gained a trailing `generation` argument (default `Current`).
+    Normal's own `escape_stands` passes its generation to `standing_moves` too, except `M55`'s, which keeps the current
+    score it used before (*conservative*: no change for `M55`). The Evaluator, the lookahead's rollouts and
+    `choose_shooting` take no generation yet; the milestone that changes one of them adds it (M81 / M82).
+  - **Proof:** `M78_Regression.TheM77LevelsPlayAsTheCurrentOnes` (same per-game lines for the current and the m77 levels
+    on Strike and the rosters, Hard's cut short) and `M78_Regression.TheM77LevelsMatchThePreBatchHashes` (5 games pinned
+    to the pre-batch baseline's per-game hashes: 2 Strike and 2 rosters Normal games, 1 rosters Easy vs Hard game; it
+    must keep passing through M83). The identity set: all 30 files match the pre-batch baseline at the current levels
+    and at the m77 levels (`run_identity.sh ... m77`).
+  - **The statistics' baseline** (PLAN.md, M78's Results, for the batch's targets): on the rosters, Normal vs Normal,
+    per game, Chaos Space Marines / Tyranids: gang-ups 0.04 / 0.28, lone engagements 0.70 / 0.98, distinct targets per
+    Shoot 1.50 / 1.08, top-target share 0.78 / 0.65, units never within 12" 1.68 of 5 / 6.42 of 9, first engagement in
+    round 4.21 (45 of 200 games without one). Measured with the current levels, whose play is the pre-batch play (the
+    four pre-batch baseline rows' wins and points match exactly).

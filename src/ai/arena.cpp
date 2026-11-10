@@ -9,8 +9,10 @@
 #include "core/data/load_error.hpp"
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/actions.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/points_destroyed.hpp"
+#include "core/state/queries.hpp"
 #include "session.hpp"
 #include "state_hash.hpp"
 
@@ -44,7 +46,140 @@ double percentile(std::vector<double> v, double p) {
     return v[i];
 }
 
+bool has_id(const std::vector<std::uint32_t>& sorted, std::uint32_t id) {
+    return std::binary_search(sorted.begin(), sorted.end(), id);
+}
+
+void insert_id(std::vector<std::uint32_t>& sorted, std::uint32_t id) {
+    const auto it = std::lower_bound(sorted.begin(), sorted.end(), id);
+    if (it == sorted.end() || *it != id) sorted.insert(it, id);
+}
+
+bool within_12(const core::Unit& a, const core::Unit& b) {
+    const std::optional<float> d = core::unit_distance(a, b);
+    return d && core::within(*d, 12.0f * core::MM_PER_INCH);
+}
+
 }  // namespace
+
+// ---- M78 (D-083 part 0): teamwork statistics ----
+
+EngagementSnapshot engagement_snapshot(const core::GameState& state) {
+    EngagementSnapshot out;
+    const std::vector<core::Unit>& units = state.units;
+    // engaged[i]: the enemy units unit i is engaged with.
+    std::vector<std::vector<core::UnitId>> engaged(units.size());
+    for (std::size_t i = 0; i < units.size(); ++i) {
+        if (!units[i].models.empty()) engaged[i] = core::engaged_enemy_units(state, units[i]);
+    }
+    for (std::size_t e = 0; e < units.size(); ++e) {
+        const core::Unit& enemy = units[e];
+        if (enemy.models.empty()) continue;
+        const std::size_t ours = core::side_index(core::opponent(enemy.side));
+        int engaging = 0;
+        for (std::size_t i = 0; i < units.size(); ++i) {
+            if (std::find(engaged[i].begin(), engaged[i].end(), enemy.id) != engaged[i].end()) ++engaging;
+        }
+        if (engaging >= 2) out.ganged_up[ours].push_back(enemy.id);
+    }
+    for (std::size_t i = 0; i < units.size(); ++i) {
+        const core::Unit& u = units[i];
+        const bool lone = std::any_of(engaged[i].begin(), engaged[i].end(), [&](core::UnitId eid) {
+            const core::Unit* enemy = state.find_unit(eid);
+            if (enemy == nullptr) return false;
+            return std::none_of(units.begin(), units.end(), [&](const core::Unit& other) {
+                return other.id != u.id && other.side == u.side && !other.models.empty() && within_12(other, *enemy);
+            });
+        });
+        if (lone) out.lone[core::side_index(u.side)].push_back(u.id);
+    }
+    return out;
+}
+
+int distinct_targets(const core::event::ShootingStarted& shoot) {
+    std::vector<std::uint32_t> targets;
+    for (const core::WeaponSelection& s : shoot.selections) insert_id(targets, s.target.v);
+    return static_cast<int>(targets.size());
+}
+
+void TeamworkCounter::flush_shooting() {
+    for (std::size_t s = 0; s < 2; ++s) {
+        int total = 0;
+        int top = 0;
+        for (const auto& [target, n] : phase_shots_[s]) {
+            total += n;
+            top = std::max(top, n);
+        }
+        if (total > 0) {
+            ++stats_.shooting_phases[s];
+            stats_.top_share_sum[s] += static_cast<double>(top) / static_cast<double>(total);
+        }
+        phase_shots_[s].clear();
+    }
+}
+
+void TeamworkCounter::observe(const std::vector<core::GameEvent>& events, const core::GameState& after) {
+    for (const core::GameEvent& e : events) {
+        if (const auto* p = std::get_if<core::event::PhaseStarted>(&e)) {
+            flush_shooting();
+            if (p->phase == core::Phase::Fight) {  // the start of a Fight phase: the state after this action
+                const EngagementSnapshot snap = engagement_snapshot(after);
+                for (std::size_t s = 0; s < 2; ++s) {
+                    stats_.gang_ups[s] += static_cast<int>(snap.ganged_up[s].size());
+                    stats_.lone_engagements[s] += static_cast<int>(snap.lone[s].size());
+                    for (const core::UnitId id : snap.ganged_up[s]) insert_id(ganged_[s], id.v);
+                    stats_.ganged_units[s] = static_cast<int>(ganged_[s].size());
+                }
+            }
+        } else if (std::holds_alternative<core::event::PhaseEnded>(e)) {
+            flush_shooting();
+        } else if (const auto* sh = std::get_if<core::event::ShootingStarted>(&e)) {
+            const core::Unit* u = after.find_unit(sh->unit);
+            if (u == nullptr) continue;
+            const std::size_t s = core::side_index(u->side);
+            ++stats_.shoots[s];
+            stats_.shoot_targets[s] += distinct_targets(*sh);
+            for (const core::WeaponSelection& sel : sh->selections) {
+                auto& shots = phase_shots_[s];
+                const auto it = std::find_if(shots.begin(), shots.end(),
+                                             [&](const std::pair<std::uint32_t, int>& t) { return t.first == sel.target.v; });
+                if (it == shots.end()) {
+                    shots.emplace_back(sel.target.v, 1);
+                } else {
+                    ++it->second;
+                }
+            }
+        }
+    }
+    // Contact, after every action.
+    for (const core::Unit& u : after.units) {
+        if (u.models.empty()) continue;
+        const std::size_t s = core::side_index(u.side);
+        if (!has_id(seen_, u.id.v)) {
+            insert_id(seen_, u.id.v);
+            ++stats_.units[s];
+            ++stats_.never_within_12[s];
+        }
+        if (!has_id(contacted_, u.id.v)) {
+            const bool close = std::any_of(after.units.begin(), after.units.end(), [&](const core::Unit& e) {
+                return e.side != u.side && !e.models.empty() && within_12(u, e);
+            });
+            if (close) {
+                insert_id(contacted_, u.id.v);
+                --stats_.never_within_12[s];
+            }
+        }
+        if (stats_.first_engagement_round[s] == 0 && core::is_engaged(after, u)) {
+            stats_.first_engagement_round[s] = std::max(1, after.flow.battle_round);
+        }
+    }
+}
+
+TeamworkStats TeamworkCounter::stats() const {
+    TeamworkCounter copy = *this;
+    copy.flush_shooting();
+    return copy.stats_;
+}
 
 GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
                          std::size_t step_cap, std::vector<double>* decision_ms, std::vector<std::string>* trace,
@@ -68,9 +203,13 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     autos.auto_allocate = false;
     autos.bot_controlled = {true, true};
     std::size_t logged = 0;
+    TeamworkCounter teamwork;  // M78 (D-083 part 0)
+    teamwork.observe({}, session.state());
+    // After every accepted action (so the state is the one right after it, for M78's statistics).
     const auto count_new = [&] {
         for (; logged < session.log().size(); ++logged) {
             const client::LogEntry& entry = session.log()[logged];
+            teamwork.observe(entry.events, session.state());
             rec.reverted += reverts_in(entry);
             for (const core::GameEvent& e : entry.events) {
                 if (const auto* r = std::get_if<core::event::ModelRemovedForCoherency>(&e)) {
@@ -86,7 +225,12 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
         }
     };
     while (session.pending() && session.history().size() < step_cap) {
-        (void)client::run_auto_actions(session, autos);
+        // M78: each automatic action counted as it is taken (the default submit, then the count).
+        (void)client::run_auto_actions(session, autos, [&](const core::GameAction& action) {
+            const bool ok = session.submit(action).ok();
+            count_new();
+            return ok;
+        });
         count_new();
         if (!session.pending()) break;
         const core::Side side = session.pending()->side;
@@ -134,6 +278,7 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     const std::array<int, 2> wounds_at_end = wounds_left(end);
     for (std::size_t i = 0; i < 2; ++i) rec.wounds_lost[i] = wounds_at_start[i] - wounds_at_end[i];
     rec.fallbacks = bots[0].fallbacks() + bots[1].fallbacks();
+    rec.teamwork = teamwork.stats();
     return rec;
 }
 
@@ -175,6 +320,18 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
             r.fight_move_steps[s] += g.fight_move_steps[s];
             r.fight_moves[s] += g.fight_moves[s];
             r.mean_points_destroyed[s] += g.points_destroyed[s];
+            const TeamworkStats& t = g.teamwork;  // M78
+            r.teamwork.gang_ups[s] += t.gang_ups[s];
+            r.teamwork.ganged_units[s] += t.ganged_units[s];
+            r.teamwork.lone_engagements[s] += t.lone_engagements[s];
+            r.teamwork.shoots[s] += t.shoots[s];
+            r.teamwork.shoot_targets[s] += t.shoot_targets[s];
+            r.teamwork.shooting_phases[s] += t.shooting_phases[s];
+            r.teamwork.top_share_sum[s] += t.top_share_sum[s];
+            r.teamwork.units[s] += t.units[s];
+            r.teamwork.never_within_12[s] += t.never_within_12[s];
+            r.teamwork.first_engagement_round[s] += t.first_engagement_round[s];
+            if (t.first_engagement_round[s] > 0) ++r.engaged_games[s];
         }
     }
     if (!r.games.empty()) {
@@ -306,6 +463,32 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                   "pile-in / consolidate steps answered: A %d, B %d; pile-ins and consolidations made: A %d, B %d\n",
                   r.fight_move_steps[0], r.fight_move_steps[1], r.fight_moves[0], r.fight_moves[1]);
     out += buf;
+    {  // M78 (D-083 part 0): teamwork, per game
+        const TeamworkStats& t = r.teamwork;
+        const double n = r.games.empty() ? 1.0 : static_cast<double>(r.games.size());
+        const auto ratio = [](double x, int d) { return d > 0 ? x / static_cast<double>(d) : 0.0; };
+        std::snprintf(buf, sizeof buf,
+                      "teamwork (M78), per game: gang-ups A %.2f / B %.2f (distinct enemy units A %.2f / B %.2f); lone "
+                      "engagements A %.2f / B %.2f\n",
+                      t.gang_ups[0] / n, t.gang_ups[1] / n, t.ganged_units[0] / n, t.ganged_units[1] / n,
+                      t.lone_engagements[0] / n, t.lone_engagements[1] / n);
+        out += buf;
+        std::snprintf(buf, sizeof buf,
+                      "shooting spread (M78): distinct targets per shoot A %.3f / B %.3f; top-target share of a shooting "
+                      "phase's weapon selections A %.3f / B %.3f\n",
+                      ratio(t.shoot_targets[0], t.shoots[0]), ratio(t.shoot_targets[1], t.shoots[1]),
+                      ratio(t.top_share_sum[0], t.shooting_phases[0]), ratio(t.top_share_sum[1], t.shooting_phases[1]));
+        out += buf;
+        std::snprintf(buf, sizeof buf,
+                      "contact (M78), per game: units never within 12\" of an enemy unit A %.2f of %.2f / B %.2f of "
+                      "%.2f; first engagement round A %.2f (%d games without) / B %.2f (%d games without)\n",
+                      t.never_within_12[0] / n, t.units[0] / n, t.never_within_12[1] / n, t.units[1] / n,
+                      ratio(t.first_engagement_round[0], r.engaged_games[0]),
+                      static_cast<int>(r.games.size()) - r.engaged_games[0],
+                      ratio(t.first_engagement_round[1], r.engaged_games[1]),
+                      static_cast<int>(r.games.size()) - r.engaged_games[1]);
+        out += buf;
+    }
     std::string coherency;  // M43: which games lost models to coherency (for --trace)
     for (const GameRecord& g : r.games) {
         if (g.coherency_removed[0] + g.coherency_removed[1] > 0) coherency += " " + std::to_string(g.seed);

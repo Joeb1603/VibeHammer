@@ -700,7 +700,9 @@ bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side s
         }
         const GameState& after = sim.state();
         if (!after.pending || !std::holds_alternative<core::decision::MoveModels>(after.pending->kind)) continue;
-        if (standing_moves(cache, after, MoveWeights{}, 1, kMaxSimulatedMoves).empty()) return false;
+        // D-083 (M78): the score of `gen`, except M55's (which kept the current score here, as before M78).
+        const Generation score_gen = gen == Generation::M55 ? Generation::Current : gen;
+        if (standing_moves(cache, after, MoveWeights{}, 1, kMaxSimulatedMoves, score_gen).empty()) return false;
     }
     return true;
 }
@@ -811,13 +813,13 @@ std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const Game
 }
 
 std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameState& origin, const MoveWeights& weights,
-                                        std::size_t count, std::size_t attempts) {
+                                        std::size_t count, std::size_t attempts, Generation gen) {
     std::vector<PlannedMove> out;
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return out;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return out;
     const std::vector<MoveCandidate> cands = move_candidates(origin);
-    MoveScoreContext ctx(cache, origin, u->id, weights);
+    MoveScoreContext ctx(cache, origin, u->id, weights, gen);
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     const std::uint64_t seed = decision_seed(origin);
     std::size_t tried = 0;

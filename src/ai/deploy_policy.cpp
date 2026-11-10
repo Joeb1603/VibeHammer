@@ -289,8 +289,8 @@ std::vector<core::action::DeployUnit> deploy_candidates(const core::GameState& s
 bool uses_deploy_heuristic(const BotConfig& config) {
     switch (effective_level(config.level)) {
         case BotLevel::Easy: return false;
-        case BotLevel::Normal: return config.generation == Generation::Current;
-        case BotLevel::Hard: return true;  // Hard ignores the generation (D-066) and deploys as Normal does
+        case BotLevel::Normal: return config.generation != Generation::M55;  // D-083 (M78): M77 deploys as Current
+        case BotLevel::Hard: return true;  // Hard (hard-m77 too, D-083) deploys as Normal does (D-066)
     }
     return false;
 }
