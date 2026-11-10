@@ -274,34 +274,9 @@ TEST(M78_Arena, StatisticsDoNotChangeThePerGameLine) {
 
 // ---- The regression switch: Generation::M77 ----
 
-TEST(M78_Regression, TheM77LevelsPlayAsTheCurrentOnes) {
-    // Until M80 nothing branches on M77: a few Strike and rosters games (Hard's cut short by a step cap, Debug-sized)
-    // give the same per-game lines (hashes of the actions, the final state and every decision's reason).
-    struct Run {
-        const char* file;
-        BotLevel a;
-        BotLevel b;
-        std::uint64_t seed;
-        std::size_t step_cap;
-    };
-    for (const Run& run : {Run{"strike_44x60.json", BotLevel::Normal, BotLevel::Normal, 1, 5000},
-                           Run{"strike_44x60.json", BotLevel::Hard, BotLevel::Hard, 1, 40},
-                           Run{"rosters_44x60.json", BotLevel::Normal, BotLevel::Normal, 1, 200},
-                           Run{"rosters_44x60.json", BotLevel::Hard, BotLevel::Normal, 1, 40}}) {
-        const GameState s = scenario(run.file);
-        const PerGameReport current = run_per_game(s, 1, run.seed, level(run.a), level(run.b), run.step_cap);
-        const PerGameReport m77 = run_per_game(s, 1, run.seed, level(run.a, Generation::M77),
-                                               level(run.b, Generation::M77), run.step_cap);
-        EXPECT_EQ(first_line(m77.text), first_line(current.text)) << run.file;
-    }
-    EXPECT_TRUE(pre_teamwork(Generation::M77));
-    EXPECT_TRUE(pre_teamwork(Generation::M55));
-    EXPECT_FALSE(pre_teamwork(Generation::Current));
-    // Hard ignores M55 (D-066) and takes M77.
-    EXPECT_EQ(hard_generation(Generation::M55), Generation::Current);
-    EXPECT_EQ(hard_generation(Generation::M77), Generation::M77);
-    EXPECT_EQ(hard_generation(Generation::Current), Generation::Current);
-}
+// M78_Regression.TheM77LevelsPlayAsTheCurrentOnes (Strike and rosters games gave the same per-game lines at the
+// current and the m77 levels) held until M80, which changes play on purpose: replaced by
+// M80_Regression.TheCurrentLevelsDifferFromM77OnTheRosters (m80_test.cpp).
 
 TEST(M78_Regression, TheM77LevelsMatchThePreBatchHashes) {
     // The pre-batch baseline (Release arena of main at c54c47c, --per-game 1): normal-m77 and hard-m77 must keep playing

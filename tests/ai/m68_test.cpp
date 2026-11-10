@@ -62,9 +62,10 @@ constexpr std::size_t kGenestealers = 6;
 constexpr std::size_t kGuard = 8;
 constexpr std::size_t kTyrant = 9;
 
-BotConfig level(BotLevel l) {
+BotConfig level(BotLevel l, Generation g = Generation::Current) {
     BotConfig c;
     c.level = l;
+    c.generation = g;
     return c;
 }
 
@@ -527,9 +528,12 @@ TEST(M68_Movement, ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatSt
     // south edge, a Screamer-killer 2.7" north. Planned with no failed hazard roll (D-054) a fall-back move stands; after
     // the likely losses none does, and M68's first build had to reset the move (a UnitMoveReverted). Now Normal, like
     // Hard (D-067's escape_stands), keeps them in the fight (D-077).
+    // D-083 part 2 (M80): the current Normal plays this game differently (it never reaches the position), so the game
+    // and the decision are the pre-batch Normal's (Generation::M77), assertions unchanged;
+    // M80_Normal.TheDesperateEscapeGuardStillHolds checks the current Normal's choice at the same position.
     const GameState scenario = wh40k::test::load_rosters_scenario();
     wh40k::client::GameSession session = wh40k::client::GameSession::new_game(scenario, 193);
-    std::array<Bot, 2> bots{Bot(level(BotLevel::Normal)), Bot(level(BotLevel::Normal))};
+    std::array<Bot, 2> bots{Bot(level(BotLevel::Normal, Generation::M77)), Bot(level(BotLevel::Normal, Generation::M77))};
     wh40k::client::AutoSettings autos;  // as the arena plays a bot game
     autos.skip_empty_steps = true;
     autos.auto_allocate = false;
@@ -552,7 +556,7 @@ TEST(M68_Movement, ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatSt
             OddsCache cache;
             EXPECT_FALSE(normal::standing_moves(cache, sixes.state(), normal::MoveWeights{}, 1, normal::kMaxSimulatedMoves).empty());
             // ... and Normal doesn't make the escape.
-            Bot bot(level(BotLevel::Normal));
+            Bot bot(level(BotLevel::Normal, Generation::M77));
             const BotChoice c = bot.decide(gs, side);
             EXPECT_NE(c.action, escape) << c.reason;
             EXPECT_TRUE(validate_action(gs, side, c.action).ok());
@@ -731,7 +735,8 @@ struct BotGame {
 
 // Played through GameSession (every action validated, the client's automatic skips included, nothing auto-allocated
 // for a bot), its history a scenario-form replay, as M45 and M58 do. Replaying it needs only core.
-BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed) {
+// D-083 part 2 (M80): `generation` M77 plays the pre-batch Normal (normal-m77).
+BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed, Generation generation = Generation::Current) {
     BotGame g;
     g.replay.description =
         "M68: a whole game played by the bot on both sides, level Normal vs Normal, from the 44\"x60\" portrait roster "
@@ -742,7 +747,7 @@ BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed) {
     g.replay.initial.scenario = wh40k::test::kRostersScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
-    g.record = play_bot_session(session, level(BotLevel::Normal), level(BotLevel::Normal), 5000);
+    g.record = play_bot_session(session, level(BotLevel::Normal, generation), level(BotLevel::Normal, generation), 5000);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -765,9 +770,24 @@ TEST(M68_Replay, TheRostersBotGameReplaysToItsResultWithCoreOnly) {
     ASSERT_TRUE(first.final_state.result.has_value());
     EXPECT_TRUE(first.final_state.result->points.has_value());
     EXPECT_EQ(first.final_state.flow.battle_round, 5);
-    // The flow: a supercharged plasma shot, and both armies fighting in melee.
+    // The flow: both armies fighting in melee. D-083 part 2 (M80): the regenerated game (the current Normal, the same
+    // seed) makes no [HAZARDOUS] shot; the pre-batch game's supercharged plasma shot is checked by
+    // ThePreBatchGameShootsSuperchargedAndFightsOnBothSides.
     const auto has = [&](auto pred) { return std::any_of(saved.steps.begin(), saved.steps.end(), pred); };
-    GameState gs = replay_initial_state(saved, repo_root());
+    for (const Side side : {Side::A, Side::B}) {
+        EXPECT_TRUE(has([&](const ReplayStep& s) { return s.side == side && std::holds_alternative<action::Fight>(s.action); }));
+    }
+}
+
+TEST(M68_Replay, ThePreBatchGameShootsSuperchargedAndFightsOnBothSides) {
+    // The pre-batch Normal (Generation::M77) with the replay's seed, replayed through the engine alone, with the
+    // assertions the saved file was checked with before M80: a supercharged plasma shot, and both armies in melee.
+    const BotGame g = play_rosters_bot_game(kRostersSeed, Generation::M77);
+    ASSERT_TRUE(g.record.finished);
+    const ReplayResult r = run_replay(g.replay, repo_root());
+    ASSERT_TRUE(r.ok());
+    const auto has = [&](auto pred) { return std::any_of(g.replay.steps.begin(), g.replay.steps.end(), pred); };
+    GameState gs = replay_initial_state(g.replay, repo_root());
     EXPECT_TRUE(has([&](const ReplayStep& s) {
         const auto* shoot = std::get_if<action::Shoot>(&s.action);
         if (shoot == nullptr) return false;

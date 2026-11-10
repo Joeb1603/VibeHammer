@@ -4915,7 +4915,7 @@ list queries (below). M76 adds part 2 (placing units by hand in the client).
     `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`. No replay: the flow's actions are M74's
     (`m74_hand_deployment.json` sets the Tyrannofex up by hand), and the editor itself makes no game state.
 
-## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan)
+## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group)
 **Decided:** 2026-11-10 (M78 of the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings are
 marked *conservative*). Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or
 JSON change. Later parts (M79–M83) are added below.
@@ -5174,3 +5174,147 @@ JSON change. Later parts (M79–M83) are added below.
     - `StrikeWithoutPointsUsesShares` (the round 1 position of a Strike game, rebuilt by hand: three damaged Termagant
       units on one Intercessor Squad, the group's risk 0.7 + 0.3 + 0.8 shares);
     - `TheCostIsMeasured` (printed: the rosters' start and the largest random battle).
+- **Part 2 (M80): Normal moves as a group** (`src/ai/normal/move_score.{hpp,cpp}`, `movement.{hpp,cpp}`; Hard through
+  Normal's move plans, `hard_bot.cpp`). Bot only: no rule, core, state, action, event or JSON change. Amends D-066 (the
+  line follows the closest enemy unit, except for a unit that follows its group) and, through it, D-077's move score.
+  The first milestone that changes play: on the rosters and custom battles; V1, the bot scenarios, Strike (every pairing,
+  Hard included) and every Easy vs Easy game play exactly as before (below).
+  - **The plan once per decision.** `decide_move_units` computes `army_plan` once (Hard's `hard_move_units` likewise,
+    and passes it to Normal's answer), and every `MoveScoreContext` of that decision (Remain Stationary, the Normal
+    move's plan, each Advance roll, the escape) reads it: the plan at the move's start is the plan at Move Units (the
+    moving unit counts as not moved, part 1). `continue_unit_move` and `hard_plan_unit_move` compute it once when called
+    alone. A context given no plan computes its own (`plan == nullptr`); a pre-teamwork generation (M55, M77) reads none.
+  - **Which units follow a group.** A unit follows its group when (*conservative*, measured below):
+    - it has partners in the plan and its focus has models;
+    - the group is a clear surplus: its gain is at least `MoveWeights::follow` (0.2) of its risk (what its members put
+      at stake, part 1). Two full Legionaries units on a Screamer-killer (+0.13 to +0.22 for 2.55 at risk) don't clear
+      it; a wounded Hive Tyrant and Genestealers (+0.42 for 0.98) do;
+    - under D-007 (no points rule) it doesn't lose its exchange with the focus (its best attacks at half range and in
+      melee against the focus's, as `lean_`): a losing unit plays for the draw (D-066) and keeps its own line. On Strike
+      this and the gate leave every unit as it was (the Termagant groups of part 1 are 0.1 of their risk), so Strike
+      plays exactly as before; the brief's question ("should a unit that plays for the draw still follow its group?")
+      is answered no, *conservative*, and couldn't be told apart on Strike (D-007 on or off: the same 200 games).
+    - Every other unit scores exactly as before: nothing is added to its sum (tested: the same plan as `Generation::M77`).
+  - **The line.** While some partner reaches the focus by our next turn (its arrival in the plan at most 1: "synced"),
+    the line follows the focus, and the closest enemy unit, if another, is one of D-066's others (marginal exposure
+    under the points rule, as any other). Until then the unit keeps its closest enemy unit's line, and only the approach
+    and cohesion terms and the candidates follow the focus.
+  - **Support (`ScoreLine::allies_hit`, `Exchange::they_lose`).** The synced partners' expected volleys on the focus, by
+    their mode in the plan: a shooter's from min(gap, its longest range) (`next_turn_shot`); a charger's fight at the
+    odds of covering the gap left after its moves (`p_charge_roll_covers`), then engaged (close-quarters shooting and
+    its fight); an engaged member's close-quarters shooting and fight. This turn's land after our shooting, our next
+    turn's at its start (and in the engaged lines' next turns). They take the focus down on the line (its replies are
+    scaled by what is left of it, and our later hits are capped at it) but are not this unit's value: the partners hit
+    the focus whatever this move does.
+  - **Shared reply.** The focus attacks one unit a phase (D-010). When this unit ends in its reach (its Move plus its
+    longest range, or a charge after a Normal move) the focus's reply counts on it with the share 1/k, k = 1 + the synced
+    partners in its reach where they stand; the rest of the time it answers a partner, and only the other enemy units
+    reply to us (`hold_line(..., reply_elsewhere)`). The brief's "the focus's preferred target in the group, as the plan
+    decides who takes the reply" is read as an even split (measured best of three, below).
+  - **Synchronisation** follows from the two rules above: with no synced partner, or none in the focus's reach, the unit
+    stands alone against the focus (no support, the whole reply), so it waits at the edge of the focus's reach for its
+    partners (`M80_Normal.ALoneUnitWaitsOutsideTheMonstersChargeReach`). A partner 20" back never forms a group with it
+    anyway: the plan's own synchronisation (part 1: a group pays only when its members arrive together).
+  - **Approach and cohesion** (`MoveWeights::approach` 0.05, `cohesion` 0.005; only for a unit that follows its group,
+    so Hard's `BotWeights::move` is unchanged for every other unit): approach x the turns saved towards the focus beyond
+    the line's horizon, turns(gap) = max(0, gap - reach) / (M + 3.5"), the reach being our Move plus our longest range
+    (a shooter in the plan) or plus 7" (a charger: even odds), nothing for an engaged member; cohesion x max(0, the gap
+    to the nearest partner, less its Move if it hasn't moved yet this phase, - 6"), per inch. They replace the +-0.00
+    drift beyond the horizon: `M80_Normal.FarUnitsCloseInRatherThanDrift` (the Tyrant and the Genestealers 38" away close
+    10-12"; before the batch the Genestealers drifted back).
+  - **An off-focus charge.** When the line follows the focus but the refined charge prospect's best target set doesn't
+    include it, the charge term is the charge planner's own gain (its hold and charged values, M42 / D-066) instead of
+    the line's engaged line, which values a fight with the focus.
+  - **Candidates** (`move_candidates(origin, team)`): directions sorted by the line to the focus's centroid, formations on
+    that line, and the spots beside the nearest partner (level with it and 3" back, either side of its line to the
+    focus): a straight translation (as far as the move goes) and a line abreast centred there. Without a team: the
+    candidates as before.
+  - **Reasons.** "Hive Tyrant 2: Normal move 8\" towards Legionaries 1 with Genestealers 1 - 6.6\" from Legionaries 1, ...",
+    "Advance on Legionaries 1 with Hive Tyrant 2 (...)", "Remain Stationary, on ... with ..."; the position text is the
+    focus's while the line follows it.
+  - **Weights for the tests and M83.** `plan_unit_move`, `decide_move_units` and `continue_unit_move` take the move
+    score's `MoveWeights` (Normal plays `MoveWeights{}`); the arena's `--weights` (Hard) takes `approach`, `cohesion`
+    and `follow`.
+  - **How it was found** (Release arena, the new Normal against `normal-m77` from each seat; one seat a run, the other
+    side `normal-m77`; the numbers are the new Normal's side's wins). With 200 seeds two runs of the same strength differ
+    by about 8 wins, so every candidate after the first round was run on seeds 1-400 (the brief's 1-200 then 201-400,
+    in one run). Pre-batch baselines (`normal-m77` against itself): rosters, Chaos Space Marines (A) 60 + 70 and
+    Tyranids (B) 140 + 130 over seeds 1-200 + 201-400; random armies A 37 + 33, B 163 + 167.
+    - First round (seeds 1-200; baselines A 60 / B 140 rosters, A 37 / B 163 random armies):
+
+      | Variant | rosters A | rosters B | random A | random B |
+      |---|---|---|---|---|
+      | reply on the group's member in front (closest), others by marginal exposure | 63 | 131 | 42 | 149 |
+      | the same, the closest enemy unit always counted among the others | 55 | 119 | 44 | 154 |
+      | the same, every other by the closest-target rule | 55 | 93 | 42 | 138 |
+      | team only when the focus is the closest enemy unit | 52 | 135 | 43 | 160 |
+      | reply shared 1/k (split) | 58 | 150 | 52 | 151 |
+      | split, a unit with no synced partner keeps its closest line | 58 | 144 | 52 | 153 |
+
+      Counting more of the others' replies made every side passive and lose (the never-within-12" counts rose); the
+      split reply made the groups commit and was the best of the three reply rules (closest in group, the plan's
+      `reply_to`, split). Ablations of the split rule (support off, the beside-partner spots off, cohesion off, approach
+      0 or 0.1) moved no seat by more than the noise. Every variant left the random-army Tyranids about 10 wins short.
+    - The gate (seeds 1-400; baselines A 130 / B 270 rosters, A 70 / B 330 random armies). Measured with the loss of
+      each datasheet's points: the ungated groups made the favoured random-army Tyranids trade more evenly (about 15
+      points more lost by each side a game), which costs a favourite wins on the points tiebreak.
+
+      | Variant (split, no synced partner: closest line) | rosters A | rosters B | random A | random B |
+      |---|---|---|---|---|
+      | no gate | 120 | 287 | 88 | 318 |
+      | follow at gain/risk 0.08 | 128 | 284 | 74 | 318 |
+      | 0.12 | 126 | 283 | 79 | 316 |
+      | 0.18 | 129 | 282 | 77 | 325 |
+      | **0.2 (chosen)** | **128** | **283** | **75** | **328** |
+      | 0.2, and the line on the focus only when it is the closest enemy unit | 128 | 282 | 78 | 327 |
+      | 0.15, the same | 132 | 290 | 75 | 321 |
+      | no gate, the same | 124 | 294 | 81 | 321 |
+      | 0.2 only for units that win apart (alone > 0.05); others follow any paying group (seeds A rosters, B random) | 111 | | | 317 |
+
+      0.2 is the only setting not weaker than the baseline in any seat beyond the noise (-2 and -2); it keeps most of
+      the Tyranid gang-ups (below). The confirmation on 201-400 is in PLAN.md (M80 Results): 63 / 139 / 31 / 167 there
+      against 70 / 130 / 33 / 167.
+    - **Units without partners beyond the horizon** (the brief's question): an approach term towards the closest enemy
+      unit, on top of the chosen setting (seeds 1-400):
+
+      | Approach for units without partners | rosters A | rosters B | random A | random B |
+      |---|---|---|---|---|
+      | 0.05 | 177 | 281 | 80 | 317 |
+      | 0.02 | 179 | 287 | 70 | 314 |
+      | 0.05, only for a unit winning its exchange | 129 | 286 | 78 | 326 |
+      | 0.05, clamped at the target's reach | 169 | 293 | 79 | 312 |
+      | 0.05, only for a unit not outranged by the target | 165 | 276 | 93 | 319 |
+
+      It is the strongest lever found (the rosters' Chaos Space Marines win 44% instead of 32% against `normal-m77`), but
+      every form costs the random-army Tyranids 11-18 wins: the cheap Termagants, Genestealers and Screamer-killers close
+      in and are shot (+16 points lost a game against +6 for the Chaos Space Marines). Not adopted (*conservative*: not
+      measured better in every seat); an open item for M81-M83.
+  - **Plan stability** (measured, not changed): within a Movement phase the plan is recomputed at each decision, and of
+    the partners an earlier mover had, 57% (rosters) and 63% (random armies) were still its partners when they moved: a
+    unit that held at the edge of the focus's reach delays its arrival, and the group no longer pays (the two Legionaries
+    side by side at 16": the chainswords hold, the boltguns then fall back). The bots stay stateless; M81-M83 may revisit.
+  - **Cost:** the plan once per decision (part 1: about 0.7 ms mean, 1.3 ms p95 in Release), a few rates per synced
+    partner, the beside-partner candidates (at most 8). Normal's decision p95 on the rosters 11.6 ms and on random armies
+    6.5 ms, the largest 528 ms (the pre-batch Normal's: 11.6 / 8.1 ms and 470-759 ms).
+  - **Approximations kept:** the partners' volleys assume they attack the focus (M81 adds focus fire); a partner not yet
+    moved is taken where it stands for the shared reply; the support is the plan's mode, not the partner's own move score;
+    the reply share is even, not the focus's own preference; one group per unit, recomputed at each decision.
+  - **Tests** (`tests/ai/m80_test.cpp`, 10): `M80_Normal.TwoLegionariesUnitsAdvanceTogetherOnAScreamerKiller` (22": with
+    `follow` 0 both close in and end within 6" of each other, before the batch the chainswords fell back; with the
+    default gate the pair isn't followed and moves as before), `ALoneUnitWaitsOutsideTheMonstersChargeReach` (the partner
+    20" back: no group, and handed one, the same move as alone), `FarUnitsCloseInRatherThanDrift`,
+    `AUnitWithoutPartnersMovesAsBefore` (the Chaos Lord beside the Legionaries pair: the same plan, label and score as
+    M77, Normal move and Advance), `TheReasonNamesTheFocusAndPartners`, `TheDesperateEscapeGuardStillHolds` (M68's
+    position, the current Normal); `M80_MoveScore.PartnersVolleysWeakenTheFocusButAreNotThisUnitsValue`,
+    `TheGroupsLineFollowsTheFocus` (the line, the synced partner, the support, the reply shared 1/2), and
+    `AUnitWhosePartnersCannotArriveKeepsItsOwnLine`; `M80_Regression.TheCurrentLevelsDifferFromM77OnTheRosters` (replaces
+    `M78_Regression.TheM77LevelsPlayAsTheCurrentOnes`; V1 the same).
+  - **Existing tests:** pinned to the pre-batch play with `Generation::M77`, assertions unchanged:
+    `M68_Movement.ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatStands` (seed 193 no longer reaches the
+    position). The bot replays whose play changed were regenerated with their seeds (m68, m70, m77); m58 and m73 came out
+    byte-identical (no group is followed in them). The content checks that described the old games moved to the
+    pre-batch games, assertions unchanged: m68's supercharged plasma shot (`M68_Replay.ThePreBatchGameShootsSuperchargedAndFightsOnBothSides`;
+    the new game still fights on both sides) and m70's melee and a destroyed unit on each side
+    (`M70_Replay.ThePreBatchGameFightsAndLosesAUnitOnBothSides`; the new Hard vs Hard game with seed 93 has no melee
+    and destroys no whole unit).
+

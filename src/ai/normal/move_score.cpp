@@ -6,6 +6,7 @@
 
 #include "analysis/charge_odds.hpp"
 #include "bounds.hpp"
+#include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/units.hpp"
@@ -105,6 +106,8 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         // and select first, 12.04), then the rest of the horizon.
         line.we_hit(ctx.close_quarters_rate(true));
         s.shoot_now = line.value();
+        // D-083 part 2 (M80): the synced partners' volleys on the focus this turn.
+        if (ctx.supported()) line.allies_hit(ctx.team()->support_now);
         OtherThreat threat;
         if (others) threat = ctx.other_threat(plan.positions, std::nullopt);
         s.hold = ctx.engaged_line(line, 1.0, &s.p_survive, others ? &threat : nullptr) - s.shoot_now;
@@ -136,6 +139,9 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         }
         line.we_hit(share);
         s.shoot_now = line.value();
+        // D-083 part 2 (M80): the synced partners' volleys on the focus this turn (not this unit's value).
+        const MoveTeam* team = ctx.team();
+        if (ctx.supported()) line.allies_hit(team->support_now);
         // The defender removes its front models (the worst case for a charge, M40's distance_after_casualties).
         const auto k = static_cast<std::size_t>(std::floor(models_destroyed + 1e-9));
         const float gap_after = k < gaps.size() ? gaps[k] : kFar;
@@ -143,12 +149,27 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         OtherThreat threat;
         if (others) threat = ctx.other_threat(plan.positions, other);
         const OtherThreat* tp = others ? &threat : nullptr;
-        const double hold_total =
+        double hold_total =
             ctx.hold_line(line, gap_after, our_centroid, &s.enemy_reply, &s.p_enemy_charge, &s.p_survive, tp);
+        // D-083 part 2 (M80): the focus answers one of the group's members in its reach; this unit's share of its
+        // reply (the rest of the time it answers a partner, and only the other enemy units reply to us).
+        s.reply_share = ctx.supported() ? ctx.reply_share(s.gap_mm) : 1.0;
+        if (s.reply_share < 1.0) {
+            const double elsewhere = ctx.hold_line(line, gap_after, our_centroid, nullptr, nullptr, nullptr, tp, true);
+            hold_total = s.reply_share * hold_total + (1.0 - s.reply_share) * elsewhere;
+        }
         s.hold = hold_total - s.shoot_now;
         if (allow.charge) {
             const auto n = static_cast<double>(us.models.size());
-            if (prospect != nullptr) {
+            const bool off_line = team != nullptr && team->line && prospect != nullptr &&
+                                  std::find(prospect->targets.begin(), prospect->targets.end(), team->focus) ==
+                                      prospect->targets.end();
+            if (off_line) {
+                // D-083 part 2 (M80): the best charge is at another unit than the focus the line follows: the charge
+                // planner's own value of it (its hold and charged values, M42 / D-066).
+                s.p_charge = prospect->p_success;
+                s.charge = prospect->gain;
+            } else if (prospect != nullptr) {
                 // M42's charge prospect: the exact odds of each roll and the models its charge move engages (only
                 // they fight in this Fight phase); our line values the fight.
                 const auto& pmf = analysis::two_d6_pmf();
@@ -214,7 +235,30 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         s.tie_break = -kGapTieBreakPerInch * ctx.lean() * static_cast<double>(s.gap_mm / core::MM_PER_INCH);
     }
     s.total = s.shoot_now + s.charge + s.hold + s.edge + s.coherency + s.tie_break;
+    // D-083 part 2 (M80): approach and cohesion, for a unit with partners only (added only then, so every other score
+    // is the same sum as before).
+    if (ctx.team() != nullptr) {
+        if (ctx.team()->line) s.focus = ctx.team()->focus;
+        s.approach = ctx.approach_term(plan.positions);
+        s.cohesion = ctx.cohesion_term(plan.positions);
+        s.total += s.approach + s.cohesion;
+    }
     return s;
+}
+
+// D-083 part 2 (M80): the focus of the group `us` follows in `plan`: it has partners there, the focus (an enemy unit)
+// has models, and the group is a clear surplus: its gain at least `follow` of its risk (what it puts at stake). nullptr:
+// the unit doesn't follow a group.
+const core::Unit* followed_focus(const ArmyPlan& plan, const core::GameState& origin, const core::Unit& us,
+                                 double follow) {
+    if (!plan.active) return nullptr;
+    const UnitPlan* up = plan.find(us.id);
+    const PlanGroup* group = plan.group_of(us.id);
+    if (up == nullptr || group == nullptr || up->partners.empty() || !up->focus) return nullptr;
+    if (group->gain < follow * group->risk) return nullptr;
+    const core::Unit* focus = origin.find_unit(*up->focus);
+    if (focus == nullptr || focus->models.empty() || focus->side == us.side) return nullptr;
+    return focus;
 }
 
 }  // namespace
@@ -222,7 +266,7 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
 // ---- the context ----
 
 MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                                   MoveWeights weights, Generation generation)
+                                   MoveWeights weights, Generation generation, const ArmyPlan* plan)
     : cache_(cache), origin_(origin), weights_(weights), generation_(generation) {
     const core::Unit* u = origin.find_unit(unit);
     if (u == nullptr) throw std::logic_error("MoveScoreContext: unknown unit");
@@ -245,7 +289,36 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
     our_ranges_ = ranged_ranges(us_);
     turns_ = turns_left(origin);
     start_engaged_ = core::is_engaged(origin, us_);
-    if (const core::Unit* e = closest_enemy(origin, us_)) {
+    // D-083 part 2 (M80): the group the unit follows, from the army plan (pre-teamwork generations read none).
+    std::optional<ArmyPlan> own_plan;
+    const core::Unit* focus = nullptr;
+    bool line_focus = false;
+    if (!pre_teamwork(generation_)) {
+        if (plan == nullptr) {
+            own_plan = army_plan(cache_, origin, us_.side, generation_);
+            plan = &*own_plan;
+        }
+        focus = followed_focus(*plan, origin, us_, weights_.follow);
+        if (focus != nullptr && !points_rule_) {
+            // Under D-007 a unit that loses its exchange with the focus (as lean_ measures it: its best attacks against
+            // the focus's, at half range and in melee) plays for the draw (D-066) and keeps its own line.
+            const double ours = ranged_share(cache_, origin, us_, *focus, us_threat_.max_range_mm * 0.5f) +
+                                melee_share(cache_, origin, us_, *focus);
+            const analysis::ThreatRanges fth = analysis::threat_ranges(*focus);
+            const double theirs = ranged_share(cache_, origin, *focus, us_, fth.max_range_mm * 0.5f) +
+                                  melee_share(cache_, origin, *focus, us_);
+            if (ours < theirs) focus = nullptr;
+        }
+        // The line follows the focus while some partner reaches it by our next turn (its arrival in the plan); until
+        // then the unit keeps its closest enemy unit's line and only approaches the focus.
+        if (focus != nullptr) {
+            for (const PlanMember& m : plan->group_of(unit)->members) {
+                line_focus = line_focus || (m.unit != unit && m.arrival <= 1);
+            }
+        }
+    }
+    const core::Unit* e = line_focus ? focus : closest_enemy(origin, us_);
+    if (e != nullptr) {
         enemy_ = *e;
         enemy_mv_ = monster_or_vehicle(*e);
         rate_us_ = hazard_rate(origin, us_, *e);
@@ -327,7 +400,127 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 others_.push_back(std::move(x));
             }
         }
+        if (focus != nullptr) make_team(*plan, *focus, line_focus);
     }
+}
+
+void MoveScoreContext::make_team(const ArmyPlan& plan, const core::Unit& focus, bool line) {
+    const PlanGroup* group = plan.group_of(us_.id);
+    const UnitPlan* up = plan.find(us_.id);
+    if (group == nullptr || up == nullptr) return;
+    MoveTeam t;
+    t.focus = focus.id;
+    t.line = line;
+    t.focus_models = core::posed_models(focus);
+    if (const PlanMember* me = group->member(us_.id)) t.mode = me->mode;
+    t.start_gap_mm = core::unit_distance(us_, focus).value_or(kFar);
+    const float m = us_threat_.move_mm;
+    t.per_turn_mm = m > 0.0f ? m + kMeanAdvanceMm : 0.0f;
+    // The line's horizon: our next turn's Move, then our shooting (Shoot) or a charge at even odds (7", Charge).
+    const float attack = t.mode == AttackMode::Shoot ? us_threat_.max_range_mm : 7.0f * core::MM_PER_INCH;
+    t.reach_mm = m + attack;
+    const bool our_turn = core::turn_side(origin_) == us_.side;
+    for (const core::UnitId pid : up->partners) {
+        const core::Unit* p = origin_.find_unit(pid);
+        const PlanMember* pm = group->member(pid);
+        if (p == nullptr || p->models.empty() || pm == nullptr) continue;
+        MoveTeam::Partner x;
+        x.unit = pid;
+        x.arrival = pm->arrival;
+        x.mode = pm->mode;
+        x.gap_mm = core::unit_distance(*p, focus).value_or(kFar);
+        x.models = core::posed_models(*p);
+        const analysis::ThreatRanges pth = analysis::threat_ranges(*p);
+        const bool moved = our_turn && origin_.flow.stage == core::Stage::MoveUnits && p->phase_flags.selected_to_move;
+        x.catch_up_mm = moved || !our_turn ? 0.0f : pth.move_mm;
+        x.synced = x.arrival <= 1;
+        if (x.synced) {
+            // Its expected volleys on the focus from its arrival (the plan's mode): engaged, close-quarters shooting and
+            // the fight; a shooter from its longest range (or the gap, if closer); a charger at the odds of covering the
+            // gap left after its moves, then engaged.
+            const double fight = melee_share(cache_, origin_, *p, focus);
+            const double engaged = ranged_share(cache_, origin_, *p, focus, 0.0f, true) + fight;
+            double first = 0.0;
+            double later = 0.0;
+            if (x.mode == AttackMode::Engaged) {
+                first = later = engaged;
+            } else if (x.mode == AttackMode::Shoot) {
+                const float at = std::min(x.gap_mm, pth.max_range_mm);
+                if (const std::optional<analysis::ShotContext> c = next_turn_shot(origin_, *p, focus, at)) {
+                    first = later = ranged_share(cache_, origin_, *p, focus, *c);
+                }
+            } else {
+                // Its moves before the charge: this turn's (unless it has moved: a Normal move if it charges now, an
+                // Advance if it charges next turn), then next turn's Normal move.
+                const bool still = x.catch_up_mm > 0.0f;
+                const float travel = x.arrival == 0 ? (still ? pth.move_mm : 0.0f)
+                                                    : (still ? pth.move_mm + kMeanAdvanceMm : 0.0f) + pth.move_mm;
+                const double pc =
+                    analysis::p_charge_roll_covers(std::max(x.gap_mm - travel, core::kEngagementRangeMm));
+                first = pc * fight;
+                later = pc * engaged + (1.0 - pc) * first;
+            }
+            if (x.arrival == 0) {
+                x.now = first;
+                x.next = later;
+            } else {
+                x.next = first;
+            }
+            t.support_now += x.now;
+            t.support_next += x.next;
+            t.synced = true;
+        }
+        t.partners.push_back(std::move(x));
+    }
+    team_ = std::move(t);
+}
+
+double MoveScoreContext::approach_term(const std::vector<core::Position>& positions) const {
+    if (!team_ || !(team_->per_turn_mm > 0.0f) || team_->mode == AttackMode::Engaged) return 0.0;
+    float gap_mm = kFar;
+    for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
+        const core::BasePose at{positions[i], us_.models[i].base, us_.models[i].facing_deg};
+        for (const core::PosedModel& m : team_->focus_models) {
+            gap_mm = std::min(gap_mm, core::base_distance(at, m.pose()));
+        }
+    }
+    if (!(gap_mm < kFar)) return 0.0;
+    const auto turns = [&](float g) {
+        return static_cast<double>(std::max(0.0f, g - team_->reach_mm) / team_->per_turn_mm);
+    };
+    return weights_.approach * (turns(team_->start_gap_mm) - turns(gap_mm));
+}
+
+double MoveScoreContext::cohesion_term(const std::vector<core::Position>& positions) const {
+    if (!team_ || !(weights_.cohesion > 0.0) || team_->partners.empty()) return 0.0;
+    float best = kFar;
+    for (const MoveTeam::Partner& p : team_->partners) {
+        float gap = kFar;
+        for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
+            const core::BasePose at{positions[i], us_.models[i].base, us_.models[i].facing_deg};
+            for (const core::PosedModel& m : p.models) gap = std::min(gap, core::base_distance(at, m.pose()));
+        }
+        best = std::min(best, std::max(0.0f, gap - p.catch_up_mm));
+    }
+    if (!(best < kFar)) return 0.0;
+    const double beyond = std::max(0.0, static_cast<double>(best / core::MM_PER_INCH) - 6.0);
+    return -weights_.cohesion * beyond;
+}
+
+double MoveScoreContext::reply_share(float gap_mm) const {
+    if (!supported()) return 1.0;  // alone against the focus
+    // The focus attacks one unit a phase (D-010): it answers one of the group's members in its reach (its Move and its
+    // longest range, or a charge after its Normal move): this unit, after the move, and the synced partners where they
+    // stand. Each counts an equal share (the enemy answers only one of them).
+    const auto in_reach = [&](float g) {
+        return core::within(g, them_threat_.shooting_reach_mm()) || them_threat_.p_charge_after_move(g) > 0.0;
+    };
+    if (!in_reach(gap_mm)) return 1.0;
+    int k = 1;
+    for (const MoveTeam::Partner& p : team_->partners) {
+        if (p.synced && in_reach(p.gap_mm)) ++k;
+    }
+    return 1.0 / static_cast<double>(k);
 }
 
 ScoreLine MoveScoreContext::new_line() const {
@@ -543,6 +736,7 @@ double MoveScoreContext::our_next_turn(const ScoreLine& line, float gap_mm) {
     if (turns_ < 2) return line.value();
     ScoreLine y = line;
     y.next_half_turn();
+    if (supported()) y.allies_hit(team_->support_next);  // D-083 part 2: our partners' volleys
     // Stay ([HEAVY]), close to our half range or close by our M; shoot; then charge if the roll can cover the gap.
     const float m = us_threat_.move_mm;
     const float half = us_threat_.max_range_mm * 0.5f;
@@ -597,6 +791,7 @@ double MoveScoreContext::enemy_turn_from(const ScoreLine& line, float from_mm, f
     c.we_hit(melee_rate(true));
     if (turns_ >= 2) {
         c.next_half_turn();
+        if (supported()) c.allies_hit(team_->support_next);  // D-083 part 2: our partners' volleys
         c.we_hit(close_quarters_rate(true));
         c.we_hit(melee_rate(true));
         c.they_hit(melee_rate(false));
@@ -610,13 +805,26 @@ double MoveScoreContext::enemy_turn_from(const ScoreLine& line, float from_mm, f
 
 double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const core::Position& our_centroid,
                                    std::string* reply, double* p_enemy_charge, double* p_survive,
-                                   const OtherThreat* others) {
+                                   const OtherThreat* others, bool reply_elsewhere) {
     if (p_enemy_charge != nullptr) *p_enemy_charge = 0.0;
     if (p_survive != nullptr) *p_survive = 1.0;
     const double w = survival_weight_;
     if (turns_ == 0 || !enemy_) {
         if (reply != nullptr) *reply = "the game ends";
         return line.value() + w;
+    }
+    if (reply_elsewhere && !enemy_engaged_elsewhere_ && gap_mm < kFar) {
+        // D-083 part 2 (M80): the focus replies to a partner (the shared reply); the other enemy units still reply.
+        if (reply != nullptr) *reply = "replies to a partner";
+        ScoreLine y = line;
+        y.next_half_turn();
+        double survive = 1.0;
+        if (others != nullptr) {
+            y.others_hit(others->unengaged);
+            survive *= others->survive;
+        }
+        if (p_survive != nullptr) *p_survive = survive;
+        return our_next_turn(y, gap_mm) + w * survive;
     }
     if (enemy_engaged_elsewhere_ || gap_mm >= kFar) {
         // Engaged with another unit of ours it can neither shoot us nor charge (04.02, 11.02); wiped out, nothing.
@@ -736,6 +944,7 @@ double MoveScoreContext::engaged_line(const ScoreLine& line, double our_fighters
     stay.we_hit(melee_rate(true));
     if (turns_ >= 2) {
         stay.next_half_turn();
+        if (supported()) stay.allies_hit(team_->support_next);  // D-083 part 2: our partners' volleys
         stay.we_hit(close_quarters_rate(true));
         stay.we_hit(melee_rate(true));
         stay.they_hit(melee_rate(false));

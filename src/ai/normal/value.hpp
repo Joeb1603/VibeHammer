@@ -52,6 +52,9 @@ public:
     // D-066 (M56): a loss of `share` of us from a unit this exchange doesn't follow (another enemy unit), already
     // scaled by that unit's own strength; capped at what is left of us.
     void we_lose(double share) { us_ -= std::min(us_, std::max(0.0, share)); }
+    // D-083 part 2 (M80): a loss of `share` of them from our partners' volleys (already scaled by their strength);
+    // capped at what is left of them.
+    void they_lose(double share) { them_ -= std::min(them_, std::max(0.0, share)); }
     [[nodiscard]] double us() const noexcept { return us_; }
     [[nodiscard]] double them() const noexcept { return them_; }
     [[nodiscard]] double us0() const noexcept { return us0_; }

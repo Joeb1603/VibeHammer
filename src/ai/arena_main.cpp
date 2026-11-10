@@ -11,7 +11,8 @@
 //   seed and prints every bot decision, its reason and (M44) its time instead. --weights (M44, for tuning) overrides the Hard
 //   level's weights (hard/weights.hpp) for both sides: tempo, material, share, plans, rollouts, rollout_actions,
 //   budget_actions, full_budget_units and table_workers (M69), static_plans, margin, move_search_units (M69),
-//   chain_budget_mib and chain_budget_tables (M73, D-080; 0: no limit), delay, survival, edge, coherency.
+//   chain_budget_mib and chain_budget_tables (M73, D-080; 0: no limit), delay, survival, edge, coherency, and (M80,
+//   D-083 part 2) approach, cohesion and follow (Hard's own move scores; Normal keeps MoveWeights{}).
 //   --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
 //   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
@@ -127,6 +128,12 @@ void apply_weights(const std::string& text, wh40k::ai::hard::BotWeights& w) {
             w.move.edge = d;
         } else if (key == "coherency") {
             w.move.coherency = d;
+        } else if (key == "approach") {  // D-083 part 2 (M80)
+            w.move.approach = d;
+        } else if (key == "cohesion") {
+            w.move.cohesion = d;
+        } else if (key == "follow") {
+            w.move.follow = d;
         } else {
             throw std::invalid_argument("unknown weight");
         }
