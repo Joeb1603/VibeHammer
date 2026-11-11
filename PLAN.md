@@ -145,13 +145,87 @@ Open items still carried are listed under "Later" below.
 
 ---
 
+## One bot, objectives, and the bot playing for them (M85–M87)
+
+Agreed with the user on 2026-11-11, after a rosters game (Hard Tyranids) where the monsters rushed in alone and the
+infantry backed off to its own edge. With points destroyed as the only score, staying out of range is often the best
+move, and three bot levels plus the hidden M55/M77 copies make every bot change expensive. So: one bot (Normal),
+objectives with a mission of our own (D-084: objectives first, kills still count), then the bot plays for them.
+Each milestone is planned in detail in plan mode at the start of its own session and built in that session.
+
+## M85: One bot
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11)
+
+> Reduce the bots to one, Normal. Tag the current commit `bots-three-levels` and push the tag, so the old bots stay
+> recoverable from git. Delete Easy (`baseline_bot`), Hard (`src/ai/hard/`), the hidden levels `easy-m55`,
+> `normal-m55`, `normal-m77` and `hard-m77`, `src/ai/generation.hpp` and every `Generation::` / `pre_teamwork` branch;
+> Normal keeps its current (post-Teamwork) behaviour. The client loses the level choice on the start screen and in
+> settings (a settings file that still names a level loads and ignores it). The arena's `--a` / `--b` drop the levels
+> and `--weights` tunes Normal. The Easy/Hard replays (m45, m47, m58, m70, m75) and their tests go (kept in git under
+> the tag). A new decision records the move to one bot (amends D-054). CLAUDE.md, `docs/dev/bot_arena.md`,
+> `docs/dev/replays.md` and README follow.
+
+**Acceptance**
+- Normal's replays m46, m68, m73 and m77 are byte-identical and their `TheSavedFileMatchesTheGame` checks pass; core
+  replays are untouched.
+- `--per-game` for Normal vs Normal on V1, both bot scenarios, Strike, the rosters and random armies is identical
+  before and after.
+- Every deleted test is listed in the Results, by name, with the code it tested. No test of code that stays is
+  deleted or weakened.
+- `package.ps1`'s bot smoke test passes. Build and full `ctest` green.
+
+---
+
+## M86: Objectives and a mission
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11)
+
+> Objective areas and control (14.02 Level of Control: the OC of models within range, compared at the end of each
+> phase and turn, ties uncontrolled; 14.03 Secured Objectives as state only, nothing secures yet). An objective area is
+> a terrain objective with no terrain effects (no terrain yet); read 13 and 14 first, use D-009 for "within", and ask
+> if anything is ambiguous. Control is part of `GameState`. The mission is D-084, as a scenario option
+> `"result": "mission"` with every number in the scenario file, so balancing never needs code. New scenario
+> `data/scenarios/incursion_objectives_44x60.json` (the rosters armies plus the three areas); custom battles get the
+> same mission and areas. Client: areas drawn with their controller's colour, VP per side in the sidebar, the result
+> line names VP, and the objective scenario is the start screen's default. The bot ignores objectives here.
+
+**Acceptance**
+- Rule-named tests for 14.02 and 14.03 and for D-084's scoring and result (ScriptedDice); state round-trip tests for
+  every new field.
+- A replay of a short objective game under `tests/replays/`; every old replay byte-identical; old scenarios unchanged.
+- The bot plays the objective scenario and custom battles to the end with no rejected action (arena, 200 games).
+- Build and full `ctest` green.
+
+---
+
+## M87: The bot plays for objectives
+**Effort:** `xhigh` · **Plan mode:** yes (agreed 2026-11-11)
+
+> The army plan assigns groups to objective areas (take, hold, contest), weighing each area's VP, distance and
+> threat, as well as to enemy units. A unit without a group heads for an area instead of holding back (replacing
+> `make_lone_approach` in `src/ai/normal/move_score.cpp`). Objective terms go into the move score. Tune the bot, and the
+> mission's numbers in the scenario file (VP, area sizes, home distance), with the Release arena on the objective
+> scenario and random armies, 200 games a seat.
+
+**Acceptance**
+- Each seat wins 40–60% in Normal vs Normal on the objective scenario and on random armies.
+- Objectives give more VP than kills on average.
+- "Units never within 12"" and lone engagements well down from M83; no single blob (gang-up and contact metrics). If
+  it still blobs, the fallback is three middle areas (left, centre, right) instead of one.
+- Changes to play on the non-objective scenarios are recorded; Normal's replays regenerated on purpose if they change.
+- Build and full `ctest` green.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
-2. **Objectives** (14) and a simple mission. This enables Objective Consolidation and Bolter Discipline.
+2. **Objectives** (14) and a simple mission: planned as M86 (engine, D-084) and M87 (the bot). This enables Objective
+   Consolidation and Bolter Discipline.
+   - **Bot personalities** (after M87): Aggressive (values kills and charges, takes risks) and Tactical (values
+     objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
 4. **Core stratagems** (15): Command Re-roll, Fire Overwatch, Heroic Intervention, etc. These are new reactive PendingDecisions.
 5. **More unit types** (M59–M70 added the fetch-tool fixes, Hazardous, Sustained Hits, Extra Attacks, Twin-linked,
@@ -172,7 +246,8 @@ Open items still carried are listed under "Later" below.
        is outreached and still holds back 40-50" away), the Chaos Space Marine seat against `normal-m77` (49% rosters,
        21.5% random armies against the 55% / 50% targets), Normal's rosters p95 (16 ms) and Hard's first-decision
        maximum (3.5 s) on this machine, Hard's narrower margin over the new Normal (57.5% / 53.3%), and the plan's
-       stability (about 60% of an earlier mover's partners are still partners when they move, M80).
+       stability (about 60% of an earlier mover's partners are still partners when they move, M80). M87 takes over
+       the gang-up, lone-engagement and holding-back items (with objectives); M85 drops the Hard and `normal-m77` ones.
      - *Bots, Hard on the rosters:* Hard's Tyranids (9 units) move as Normal and win no more than Normal's own from
        that seat; Hard's own move search lost there because the army value is optimistic for the bigger army early
        (M69, D-078 part 11; M70's sweep found no clearly better setting, and its search lost even with the plans valued by
