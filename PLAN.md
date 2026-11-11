@@ -153,8 +153,8 @@ move, and three bot levels plus the hidden M55/M77 copies make every bot change 
 objectives with a mission of our own (D-084: objectives first, kills still count), then the bot plays for them.
 Each milestone is planned in detail in plan mode at the start of its own session and built in that session.
 
-## M85: One bot
-**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11)
+## M85: One bot ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11; design approved 2026-11-11)
 
 > Reduce the bots to one, Normal. Tag the current commit `bots-three-levels` and push the tag, so the old bots stay
 > recoverable from git. Delete Easy (`baseline_bot`), Hard (`src/ai/hard/`), the hidden levels `easy-m55`,
@@ -173,6 +173,106 @@ Each milestone is planned in detail in plan mode at the start of its own session
 - Every deleted test is listed in the Results, by name, with the code it tested. No test of code that stays is
   deleted or weakened.
 - `package.ps1`'s bot smoke test passes. Build and full `ctest` green.
+
+**Results** (2026-11-11, D-085)
+- **Tag:** `bots-three-levels` on b24c689, pushed. Easy, Hard, `generation.hpp`, their tests and replays are there.
+- **Design as agreed in plan mode, with three findings:**
+  - Normal sent every decision it had no answer for to Easy's policy. That code moved verbatim, its reasons too, to
+    `src/ai/normal/defaults.*` (`normal::default_answer`); only the M55 branches went.
+  - The client already ignores unknown flags (`launch_options.hpp`). So `--bot-level`, removed, is ignored like any
+    other unknown flag; it does not exit 2 (the plan's question assumed it would).
+  - The army plan's no-op answer is exposed as `normal::no_plan`, since it is what `Generation::M77` read. M80, M81
+    and M83 keep their "with and without partners" comparisons through it, instead of losing them.
+- **Arena:** `--a` / `--b` are gone (exit 2). `--weights` sets both sides' `normal::MoveWeights`, and `--weights-a` /
+  `--weights-b` set one side's. Checked: explicit default weights reproduce the default games, and another weight for
+  one side changes play.
+- **Identity:** Release `--per-game 1`, 200 games each, old binary (`--a normal --b normal`) against new. V1, both bot
+  scenarios, Strike, the rosters, random armies (auto and hand deployment) and the M73 lists all match: 1,600 of 1,600
+  `game` lines identical (actions, final state and trace hashes).
+- **Replays:** m46, m68, m73 and m77 are byte-identical, and their `TheSavedFileMatchesTheGame` tests pass. Core
+  replays are untouched. m45, m47, m58, m70 and m75 are deleted.
+- **Removed from shared code** (nothing else called them):
+  - `normal::furthest_standing_move`;
+  - the shooting's given army plan (`choose_shooting` / `ShootingAim` `plan`);
+  - `AttackOutcome::wounds_left_pmf`;
+  - `bot_log`'s Hard parsing (`drop_hard_block`, `WinDrawLoss`, `ReasonSummary::odds`);
+  - `uses_deploy_heuristic`, `effective_level`, `chain_tables_built`, `share_chain_cache`;
+  - `BotLevel`, with the settings, save and CLI level keys.
+- **Tests kept, changed or moved:**
+  - *Easy's single-decision checks:* now the defaults' answer (`tests/ai/default_choice.hpp`; M46, M47, M56, M60–M63,
+    M66, M68).
+  - *M74's deployment policy:* called directly (M74).
+  - *Games Easy or Hard played:* now the bot on the same seeds (M39–M43, M46, M54, M56, M60–M63, M66–M68, M72–M74,
+    M77). M42's grid still compares with the default charge move.
+  - *The M68/M80 Desperate Escape position:* only the pre-batch bots reached it, so it is kept as
+    `tests/data/states/m68_desperate_escape.json`.
+  - *M56's threat test:* keeps M55's end (17.6" from Squad 1) as a number.
+  - *M45's bot game:* the whole-game check now plays the bot (no file).
+  - *M75:* keeps the builder's scenario checks.
+  - *Client:* settings and saves that name a level load and drop it (M38, M39). `--bot-level` is ignored (M61).
+- **Renamed** (same checks, minus the removed levels):
+  - M39_Arena.FortySeededEasyGames… → FortySeededGames…, EasyGamesUseTheBoard… → GamesUseTheBoard…
+  - M41_Arena.…AsWellAsEasyInBothSeats → NormalPlaysCleanGames
+  - M43_Arena.NormalMovementWinsSooner… → NormalMovementPlaysCleanGamesThatTheSpaceMarinesWin
+  - M46_PileIn / M46_Consolidate NormalAndHard… → Normal…; M46_Easy → M46_Defaults
+  - M47_Easy ×2 → M47_Defaults; M56_Easy ×4 → M56_Defaults
+  - M60–M63 and M66 EveryLevel… / EasyAndNormal… → TheBotAndItsDefaults… / TheBot…
+  - M68_Games → TheBotPlaysTheRostersClean, DISABLED_FortyGamesPlayTheRostersClean
+  - M72 / M73 …AtEasy / …AtEveryLevel → …Clean
+  - M74_Bots EasySetsUp… → M74sPolicySetsUp…, HandDeployedEasyGames… → GamesHandDeployedByM74sPolicy…
+  - M75_Replay.TheBuilderBattleReplaysThroughBattleRoundOne → M75_Builder.TheScenarioFileStartsTheBuildersBattle
+  - M77_BotDeploy.HandDeployedGamesAtNormalAndHard… → HandDeployedGamesFinishClean
+  - M79_ArmyPlan.TheM77Switch… → BeforeTheBattleThereIsNoPlan (its not-started part)
+  - client M39_Settings.BotLevelAndSpeedKeys → BotSpeedKeys
+  - New: M38_Settings.AnOldFileWithABotLevelLoadsAndIgnoresIt.
+- **Deleted** (96; each tested only removed code):
+  - *Hard's evaluator, lookahead, chain cache, budgets and decisions* (`src/ai/hard/`):
+    - every M44 test but M44_Scenarios: Evaluator ×6, MonteCarlo, NeverPeeksAtDice, Levels, PlayForTheDraw, Arena,
+      Diagnostics ×3;
+    - all of M57 (12), M69 (18) and M82 (11: Evaluator ×3, Hard, Regression, Diagnostics ×4, and Rollouts, whose
+      given-plan parameter went);
+    - M47_Hard.TheDefaultOrderIsAFourthCasualtyCandidate;
+    - M61_Rollouts.TheLookaheadAnswersTheDecisionOnItsScratchCopies;
+    - M63_Bots.DISABLED_HardGamesOnTheMonsterFixtureAreClean;
+    - M66_Bots.HardDecidesLegallyAtTheTyrannofexsDecisions, DISABLED_HardPlaysTheTyrannofexClean;
+    - M73_HardGuard ×4;
+    - M77_BotDeploy.HardDeploysAsNormalAndBuildsNoTables;
+    - M83_Hard.RanksItsMovesWithoutTheLoneApproach;
+    - M45_BotLog's Hard parsing ×4 (HardMoveReasonKeepsTheMoveAndItsOdds, HardAdvanceDropsTheScoreAndKeepsTheRoll,
+      TheChosenOptionsOddsAreShownForACharge, ARuleNumberBeforeHardsBlockStays). The Advance's score drop is now
+      checked in NormalReasonsLoseTheirScoresAndExtraClauses.
+  - *The level dispatch:* M39_Levels.EveryLevelIsBuiltAndHardIsItsOwnLevel.
+  - *Generation (M55 / M77):*
+    - M42_ChargeTargets.ChargesBothUnitsWhenTheTargetAloneCannotBeEngaged (Normal at M55);
+    - M56_Regression.TheM55SwitchPlaysAsM55;
+    - M78_Regression.TheM77LevelsMatchThePreBatchHashes;
+    - M80_Regression.TheCurrentLevelsDifferFromM77OnTheRosters;
+    - the pre-batch replay checks M58_Replay.ThePreBatchGameIsAWipeOutInBattleRoundThree,
+      M68_Replay.ThePreBatchGameShootsSuperchargedAndFightsOnBothSides,
+      M70_Replay.ThePreBatchGameFightsAndLosesAUnitOnBothSides and
+      M73_Replay.ThePreBatchGameShootsAndFightsOnBothSides.
+  - *Easy as a player:* M47_Arena.EasyTermagantsKeepCoherency.
+  - *The deleted replays:*
+    - M45_Replay.DISABLED_RegenerateBotGameReplay;
+    - M47_Replay ×4 (TheDefaultCasualtiesGame…, TheSavedFileMatchesTheGame, DISABLED_Regenerate…, DISABLED_PrintSeeds);
+    - M58_Replay ×4 besides the pre-batch one;
+    - M70_Replay ×6 besides the pre-batch one (BotsWithChainCachesOfTheirOwnPlayTheSameActions was Hard's shared
+      cache);
+    - M75_Replay.TheSavedFileMatchesTheGame and DISABLED_SearchBuilderBattleSeed.
+  - The exact list: the TEST names at `bots-three-levels` and not at M85's commit, less the renames above.
+- **Debug time:**
+  - Games Easy played in a second or two now take Normal's time: the ai tests took about 20 minutes in Debug.
+  - M68_Games was cut from 8 roster games to 4 (105 s), and M67_Arena from 5 to 3 (82 s).
+  - The other converted game tests keep their seeds (M60 86 s, M66 83 s, M62 73 s, M61 67 s).
+- **Package and client:**
+  - `package.ps1`'s smoke tests pass (bot-steps 5 of 5).
+  - The start screen's Bot section shows only Speed.
+  - `ctest` (all suites) is green.
+- **Docs:**
+  - D-085 is added, with "Amended / Superseded by D-085" notes on D-054, D-066, D-067, D-078, D-080 and D-083.
+  - CLAUDE.md, README, `docs/dev/bot_arena.md` (rewritten, with the identity set), `docs/dev/replays.md`,
+    `docs/dev/client_flags.md` and `package.ps1`'s README are updated.
+  - The Hard and `normal-m77` open items are removed from Later.
 
 ---
 
@@ -240,26 +340,17 @@ Each milestone is planned in detail in plan mode at the start of its own session
      Tyranid Warriors.
    - **Open items carried from M59–M70** (each where it was left):
      - *Bots, teamwork:* done in M78–M83 (D-083): an army plan forms groups of two or three units on one target;
-       Normal moves its groups together, focuses fire, finishes wounded units and charges jointly; Hard's army value
-       reads the plan; a unit without a group closes in unless outreached. Left open (M83's Results): the rosters'
-       Tyranid gang-ups (1.7x, not 2x), lone engagements and units never within 12" (not halved: the Tyranid infantry
-       is outreached and still holds back 40-50" away), the Chaos Space Marine seat against `normal-m77` (49% rosters,
-       21.5% random armies against the 55% / 50% targets), Normal's rosters p95 (16 ms) and Hard's first-decision
-       maximum (3.5 s) on this machine, Hard's narrower margin over the new Normal (57.5% / 53.3%), and the plan's
-       stability (about 60% of an earlier mover's partners are still partners when they move, M80). M87 takes over
-       the gang-up, lone-engagement and holding-back items (with objectives); M85 drops the Hard and `normal-m77` ones.
-     - *Bots, Hard on the rosters:* Hard's Tyranids (9 units) move as Normal and win no more than Normal's own from
-       that seat; Hard's own move search lost there because the army value is optimistic for the bigger army early
-       (M69, D-078 part 11; M70's sweep found no clearly better setting, and its search lost even with the plans valued by
-       the engine-played rollouts alone). Calibrating the army value and the move horizon for big armies is left.
-     - *Bots, Hard's chain:* no state for a third unit, so an engaged target's 17.03 -1 and a MONSTER's close-quarters
-       shot at another unit appear only in the half-turn in progress (M69, D-078 part 10).
+       Normal moves its groups together, focuses fire, finishes wounded units and charges jointly; a unit without a
+       group closes in unless outreached. Left open (M83's Results): the rosters' Tyranid gang-ups (1.7x, not 2x), lone
+       engagements and units never within 12" (not halved: the Tyranid infantry is outreached and still holds back
+       40-50" away), Normal's rosters p95 (16 ms) on this machine, and the plan's stability (about 60% of an earlier
+       mover's partners are still partners when they move, M80). M87 takes over the gang-up, lone-engagement and
+       holding-back items (with objectives). (M85, D-085: the Hard and `normal-m77` items went with them.)
      - *Bots:* they never turn an oval (M66, M68, M69); random damage is planned at the preview's maximum (M62, M68);
        the Desperate Escape guard checks one to three failed hazard rolls (M68, M69); the firer's own hazard loss is
        priced in the choice of profile but not taken off Normal's move score, and D-071's "no hazard roll after the
        last enemy model is destroyed" is ignored there (M68); Normal's two-half-turn horizon keeps far units holding
        (M68: measured right for these armies).
-     - *Bots, speed:* Strike's Hard vs Hard decision p95 rose 5.7% at M69 at the same play (not profiled).
      - *Client:* the per-model editors choose one declaration per model, and the Split popup splits only the main
        weapon (M60); no setting re-rolls [TWIN-LINKED] automatically (M61); at a narrow window the action bar can
        still clip a long casualty hint or the "Damage left to allocate" box (scroll the bar; M70).
@@ -267,12 +358,10 @@ Each milestone is planned in detail in plan mode at the start of its own session
      - *Fetch tool / datasheets:* a mixed ranged/melee weapon's profiles list under the first profile's type, and
        ability-name modifiers (Deadly Demise X, Scouts X) and hidden-ability conditions are not evaluated (M59).
    - **Open items carried from M71–M77** (custom battles; each where it was left):
-     - *Bots, Hard on random armies:* its decision maximum is over 3 s (3.16 s at M73, two searches with 10–14 units on
-       the table; no budget binds there, D-080 part 3), and its strength there is no better than Normal's from the Chaos
-       Space Marine seat (M73: 47 of 200 against Normal, Normal 37; as the Tyranids 149, Normal 163). The rates of
-       `kMaxLoadouts`, `kMaxAdvanceSteps` and `move_search_units` were measured at M73 and not re-instrumented since.
-     - *Bots, deployment:* a search-based Hard deployment (Hard uses Normal's heuristic, M77); the bots never turn an
-       oval when setting it up, and their candidates are whole-inch translations of core's proposal (M77, D-081).
+     - *Bots, random armies:* the rates of `kMaxLoadouts` and `kMaxAdvanceSteps` were measured at M73 and not
+       re-instrumented since. (M85, D-085: Hard's items there went with Hard.)
+     - *Bots, deployment:* the bot never turns an oval when setting it up, and its candidates are whole-inch
+       translations of core's proposal (M77, D-081).
      - *Client, hand deployment:* no snapping or "Fix illegal moves" for a set-up (a refused ghost stays where it was let
        go, D-082 part 2, M76); at 1280x800 one long unit name in the builder ("Chaos Terminator Squad 3") is clipped
        before its number (M75).

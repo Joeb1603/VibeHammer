@@ -1,7 +1,7 @@
 // M78 (D-083 part 0): measuring teamwork. The arena's teamwork statistics (gang-ups, lone engagements, shooting spread,
-// contact) counted on hand-built roster positions by the functions the arena uses, the --per-game line unchanged, and
-// the regression switch Generation::M77 (the hidden arena levels normal-m77 / hard-m77): today it plays as the current
-// levels, and it plays exactly as the pre-batch bots (main at c54c47c), pinned by that baseline's per-game hashes.
+// contact) counted on hand-built roster positions by the functions the arena uses, and the --per-game line unchanged.
+// (D-085, M85: the regression switch Generation::M77, the hidden arena levels normal-m77 / hard-m77, and its test against
+// the pre-batch bots' per-game hashes went with it.)
 
 #include <gtest/gtest.h>
 
@@ -15,7 +15,6 @@
 #include "core/engine/events.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
-#include "generation.hpp"
 #include "support/monster_fixtures.hpp"
 #include "test_helpers.hpp"
 
@@ -25,12 +24,7 @@ namespace mf = wh40k::test::monsters;
 
 namespace {
 
-BotConfig level(BotLevel l, Generation g = Generation::Current) {
-    BotConfig c;
-    c.level = l;
-    c.generation = g;
-    return c;
-}
+BotConfig normal_bot() { return BotConfig{}; }
 
 GameState scenario(const char* file) {
     const auto root = wh40k::test::repo_root();
@@ -254,13 +248,13 @@ TEST(M78_Arena, ContactCountsUnitsNeverWithin12AndTheFirstEngagementRound) {
 TEST(M78_Arena, StatisticsDoNotChangeThePerGameLine) {
     // bot_20_termagants Normal vs Normal, seed 1: the pre-batch baseline's line (main at c54c47c), a game with fights.
     const GameState s = scenario("bot_20_termagants.json");
-    const PerGameReport r = run_per_game(s, 1, 1, level(BotLevel::Normal), level(BotLevel::Normal));
+    const PerGameReport r = run_per_game(s, 1, 1, normal_bot(), normal_bot());
     EXPECT_EQ(first_line(r.text),
               "game 1: finished 1 winner A round 2 steps 69 surviving 5/0 wounds lost 1/20 coherency 0/0 fight steps "
               "2/3 fight moves 2/3 rejected 0 reverted 0 fallbacks 0 actions 04bfbe00cd6674d0 state d55512b94297d01b "
               "trace 65802985f119abbe");
     // The same game's record has its teamwork statistics (they are only in the summary).
-    const GameRecord g = play_bot_game(s, 1, level(BotLevel::Normal), level(BotLevel::Normal));
+    const GameRecord g = play_bot_game(s, 1, normal_bot(), normal_bot());
     EXPECT_EQ(g.teamwork.units[0], 1);
     EXPECT_EQ(g.teamwork.units[1], 1);
     EXPECT_GE(g.teamwork.first_engagement_round[0], 1);
@@ -268,56 +262,7 @@ TEST(M78_Arena, StatisticsDoNotChangeThePerGameLine) {
     EXPECT_EQ(g.teamwork.gang_ups[0] + g.teamwork.gang_ups[1], 0);  // one unit a side: never a gang-up
     EXPECT_GT(g.teamwork.lone_engagements[0] + g.teamwork.lone_engagements[1], 0);
     EXPECT_GT(g.teamwork.shoots[0], 0);
-    const ArenaResult a = run_arena(s, 1, 1, level(BotLevel::Normal), level(BotLevel::Normal));
+    const ArenaResult a = run_arena(s, 1, 1, normal_bot(), normal_bot());
     EXPECT_NE(format_arena(a, s).find("teamwork (M78), per game: gang-ups A 0.00 / B 0.00"), std::string::npos);
 }
 
-// ---- The regression switch: Generation::M77 ----
-
-// M78_Regression.TheM77LevelsPlayAsTheCurrentOnes (Strike and rosters games gave the same per-game lines at the
-// current and the m77 levels) held until M80, which changes play on purpose: replaced by
-// M80_Regression.TheCurrentLevelsDifferFromM77OnTheRosters (m80_test.cpp).
-
-TEST(M78_Regression, TheM77LevelsMatchThePreBatchHashes) {
-    // The pre-batch baseline (Release arena of main at c54c47c, --per-game 1): normal-m77 and hard-m77 must keep playing
-    // these games exactly, through every Teamwork milestone (M79-M83).
-    struct Pinned {
-        const char* file;
-        BotConfig a;
-        BotConfig b;
-        const char* line;
-    };
-    const BotConfig normal = level(BotLevel::Normal, Generation::M77);
-    const BotConfig hard = level(BotLevel::Hard, Generation::M77);
-    const BotConfig easy = level(BotLevel::Easy);
-    const std::vector<Pinned> pinned = {
-        {"strike_44x60.json", normal, normal,
-         "game 2: finished 1 winner A round 3 steps 150 surviving 14/0 wounds lost 2/40 coherency 0/0 fight steps 0/0 "
-         "fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions 63999db34ef636fe state ddfa9bced92df194 trace "
-         "a5e0f1ce80c2892d"},
-        {"strike_44x60.json", normal, normal,
-         "game 3: finished 1 winner A round 3 steps 131 surviving 14/0 wounds lost 2/40 coherency 0/0 fight steps 0/0 "
-         "fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions ec81ebe1de7ea547 state 7cc47a0514665e04 trace "
-         "617a5d6a6a796371"},
-        {"rosters_44x60.json", normal, normal,
-         "game 11: finished 1 winner B round 5 steps 511 surviving 22/35 wounds lost 39/20 coherency 0/0 fight steps 0/0 "
-         "fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions 7d2ef56c1b4e958f state ff32fb959326fd51 trace "
-         "fe489cc69574f8e6"},
-        {"rosters_44x60.json", normal, normal,
-         "game 63: finished 1 winner A round 5 steps 498 surviving 28/34 wounds lost 27/43 coherency 0/0 fight steps 0/0 "
-         "fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions a5946d7612812c6b state 073752c5d52faec7 trace "
-         "8e134a32b7a1925c"},
-        // Easy vs Hard: Hard's Tyranids (9 units: they move as Normal, D-078; Hard's charges, casualties and
-        // consolidations).
-        {"rosters_44x60.json", easy, hard,
-         "game 5: finished 1 winner B round 5 steps 574 surviving 0/32 wounds lost 90/22 coherency 0/0 fight steps 6/0 "
-         "fight moves 6/0 rejected 0 reverted 0 fallbacks 0 actions 3d57069a2ee97fd7 state b8d9c09cb86bc2c0 trace "
-         "24ff1254f7062519"},
-    };
-    for (const Pinned& p : pinned) {
-        const std::string line = p.line;
-        const std::uint64_t seed = std::stoull(line.substr(5, line.find(':') - 5));
-        const PerGameReport r = run_per_game(scenario(p.file), 1, seed, p.a, p.b);
-        EXPECT_EQ(first_line(r.text), line) << p.file;
-    }
-}

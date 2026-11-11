@@ -12,8 +12,6 @@ add_executable(wh40k_ai_tests
     m48_test.cpp
     m54_test.cpp
     m56_test.cpp
-    m57_test.cpp
-    m58_test.cpp
     m60_test.cpp
     m61_test.cpp
     m62_test.cpp
@@ -22,8 +20,6 @@ add_executable(wh40k_ai_tests
     m66_test.cpp
     m67_test.cpp
     m68_test.cpp
-    m69_test.cpp
-    m70_test.cpp
     m72_test.cpp
     m73_test.cpp
     m74_test.cpp
@@ -33,7 +29,6 @@ add_executable(wh40k_ai_tests
     m79_test.cpp
     m80_test.cpp
     m81_test.cpp
-    m82_test.cpp
     m83_test.cpp)
 
 target_link_libraries(wh40k_ai_tests PRIVATE wh40k_ai GTest::gtest_main)

@@ -175,13 +175,8 @@ void StartScreen::draw_options(AppSettings& s, const StartContext& /*ctx*/) {
     ImGui::SetItemTooltip("Random: each new game gets a random seed. Fixed: every new game uses this seed.");
 
     ImGui::SeparatorText("Bot");
-    constexpr BotLevel kLevels[] = {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard};
+    // D-085 (M85): one bot, so no level to choose.
     constexpr BotSpeed kSpeeds[] = {BotSpeed::Slow, BotSpeed::Normal, BotSpeed::Fast, BotSpeed::Instant};
-    ImGui::SetNextItemWidth(field);
-    enum_combo("Level", s.bot_level, kLevels, &bot_level_name);
-    ImGui::SetItemTooltip(
-        "Easy: the baseline. Normal: plans its shooting, charges, fights and moves from the odds. Hard: Normal's "
-        "plans, weighed with the chances of winning, drawing or losing the game and a look ahead (D-054).");
     ImGui::SetNextItemWidth(field);
     enum_combo("Speed", s.bot_speed, kSpeeds, &bot_speed_name);
     ImGui::SetItemTooltip("How long the bot pauses between its actions, so you can follow them.");

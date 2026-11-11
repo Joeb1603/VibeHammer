@@ -1,6 +1,7 @@
 // M83 (D-083 part 5): tuning. A unit that follows no group closes in on its closest enemy unit beyond the line's
 // horizon (MoveWeights::approach_alone), unless that unit outreaches it; within the horizon, and for an outreached
-// unit, the score is as before. The follow gate is 0.1 (was 0.2). Hard ranks its moves without the lone approach.
+// unit, the score is as before (the score with no plan: normal::no_plan, as the pre-batch Normal read). The follow gate
+// is 0.1 (was 0.2). (D-085, M85: Hard's test, ranking its moves without the lone approach, went with Hard.)
 // Hand-built roster positions (the M79/M80 fixtures' units).
 
 #include <gtest/gtest.h>
@@ -20,8 +21,6 @@
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
-#include "generation.hpp"
-#include "hard/weights.hpp"
 #include "normal/army_plan.hpp"
 #include "normal/move_score.hpp"
 #include "normal/movement.hpp"
@@ -76,16 +75,12 @@ float gap_in(const GameState& gs, UnitId a, UnitId b) {
     return mm_to_inches(unit_distance(*gs.find_unit(a), *gs.find_unit(b)).value_or(-1.0f));
 }
 
-BotConfig normal_at(Generation g) {
-    BotConfig c;
-    c.level = BotLevel::Normal;
-    c.generation = g;
-    return c;
-}
-
-// The side to move's whole Movement phase, played by Normal at `g` (each StartMove's reason in `reasons`).
-GameState play_movement(GameState gs, Generation g, std::vector<std::string>* reasons = nullptr) {
-    Bot bot(normal_at(g));
+// The side to move's whole Movement phase, played by the bot with these move weights (each StartMove's reason in
+// `reasons`).
+GameState play_movement(GameState gs, const MoveWeights& weights, std::vector<std::string>* reasons = nullptr) {
+    BotConfig config;
+    config.move = weights;
+    Bot bot(config);
     const Side side = gs.pending.value().side;
     for (int i = 0; i < 400 && gs.pending && gs.pending->side == side &&
                     (std::holds_alternative<decision::MoveUnits>(gs.pending->kind) ||
@@ -118,8 +113,8 @@ TEST(M83_Normal, AUnitWithoutAGroupClosesInBeyondTheHorizon) {
     // The boltgun Legionaries 50" from a Termagants unit and the Chaos Lord about 50" from the Tyrant Guard, beyond
     // their next turn's reach even after an Advance: every move scores about the same on the line there. Neither has
     // a group, and neither is outreached by its closest enemy unit (the Legionaries reach 6" + 24" against the
-    // Termagants' 6" + 18"; the Lord 6" + its 12" pistol against the Guard's 6" + 7"), so both now close in. Before
-    // (M77) the Lord drifted.
+    // Termagants' 6" + 18"; the Lord 6" + its 12" pistol against the Guard's 6" + 7"), so both now close in. Without the
+    // term (approach_alone 0, so as the pre-batch Normal moved them: no group) the Lord drifts.
     const GameState gs = far_apart(50.0f);
     OddsCache cache;
     const ArmyPlan plan = army_plan(cache, gs, Side::A);
@@ -129,29 +124,32 @@ TEST(M83_Normal, AUnitWithoutAGroupClosesInBeyondTheHorizon) {
         Simulator sim(gs, 0);
         wh40k::core::ScriptedDice dice{4};
         ASSERT_TRUE(sim.step(Side::A, action::StartMove{id, MoveType::Normal, std::nullopt}, dice).ok());
-        const MoveScoreContext ctx(cache, sim.state(), id, MoveWeights{}, Generation::Current, &plan);
+        const MoveScoreContext ctx(cache, sim.state(), id, MoveWeights{}, &plan);
         ASSERT_NE(ctx.team(), nullptr);
         EXPECT_TRUE(ctx.team()->alone);
         EXPECT_EQ(ctx.team()->focus, closest);
         EXPECT_FALSE(ctx.team()->line);
         EXPECT_TRUE(ctx.team()->partners.empty());
         EXPECT_FALSE(ctx.supported());
-        const MoveScoreContext before(cache, sim.state(), id, MoveWeights{}, Generation::M77, nullptr);
+        const ArmyPlan none = no_plan(sim.state(), Side::A);
+        const MoveScoreContext before(cache, sim.state(), id, MoveWeights{}, &none);
         EXPECT_EQ(before.team(), nullptr);
         MoveWeights off;
         off.approach_alone = 0.0;
-        const MoveScoreContext zero(cache, sim.state(), id, off, Generation::Current, &plan);
+        const MoveScoreContext zero(cache, sim.state(), id, off, &plan);
         EXPECT_EQ(zero.team(), nullptr);
-        const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state(), Generation::Current);
+        const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state());
         ASSERT_TRUE(now);
         EXPECT_GT(now->score.approach, 0.0);
     }
     std::vector<std::string> reasons;
-    const GameState now = play_movement(gs, Generation::Current, &reasons);
-    const GameState then = play_movement(gs, Generation::M77);
+    const GameState now = play_movement(gs, MoveWeights{}, &reasons);
+    MoveWeights no_approach;
+    no_approach.approach_alone = 0.0;
+    const GameState then = play_movement(gs, no_approach);
     const float lord_start = gap_in(gs, kLord, kGuard);
     EXPECT_LT(gap_in(now, kLord, kGuard), lord_start - 5.0f);
-    EXPECT_GT(gap_in(then, kLord, kGuard), lord_start - 1.0f) << "M77: the Lord drifts";
+    EXPECT_GT(gap_in(then, kLord, kGuard), lord_start - 1.0f) << "without the term the Lord drifts";
     EXPECT_LT(gap_in(now, kBoltguns, kTermagants), 50.0f - 5.0f);
     const bool named = std::any_of(reasons.begin(), reasons.end(), [](const std::string& r) {
         return r.find("Chaos Lord") != std::string::npos && r.find(" alone") != std::string::npos;
@@ -161,7 +159,7 @@ TEST(M83_Normal, AUnitWithoutAGroupClosesInBeyondTheHorizon) {
 
 TEST(M83_Normal, AnOutreachedUnitKeepsItsMove) {
     // A Termagants unit 45" from the Havocs: beyond its reach (24"), but the Havocs' lascannons outreach it (Move 6" +
-    // 48"), so it gets no approach term and its move is the pre-batch move.
+    // 48"), so it gets no approach term and its move is the one it makes with no plan (the pre-batch move).
     GameState gs = rosters_with({kLord, kHavocs, kTermagants, kGuard});
     mf::place_rank(unit(gs, kHavocs), 15.0f, 4.0f);
     mf::place_rank(unit(gs, kLord), 42.0f, 2.0f);
@@ -176,10 +174,11 @@ TEST(M83_Normal, AnOutreachedUnitKeepsItsMove) {
         Simulator sim(gs, 0);
         wh40k::core::ScriptedDice dice{4};
         ASSERT_TRUE(sim.step(Side::B, action::StartMove{kTermagants, type, std::nullopt}, dice).ok());
-        const MoveScoreContext ctx(cache, sim.state(), kTermagants, MoveWeights{}, Generation::Current, &plan);
+        const MoveScoreContext ctx(cache, sim.state(), kTermagants, MoveWeights{}, &plan);
         EXPECT_EQ(ctx.team(), nullptr);
-        const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state(), Generation::Current);
-        const std::optional<PlannedMove> before = plan_unit_move(cache, sim.state(), Generation::M77);
+        const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state());
+        const ArmyPlan none = no_plan(sim.state(), Side::B);
+        const std::optional<PlannedMove> before = plan_unit_move(cache, sim.state(), &none);
         ASSERT_TRUE(now && before);
         EXPECT_EQ(now->candidate.ends, before->candidate.ends);
         EXPECT_EQ(now->candidate.label, before->candidate.label);
@@ -202,7 +201,7 @@ TEST(M83_Normal, WithinTheHorizonTheScoreIsAsBefore) {
     Simulator sim(gs, 0);
     wh40k::core::ScriptedDice dice{4};
     ASSERT_TRUE(sim.step(Side::A, action::StartMove{kHavocs, MoveType::Normal, std::nullopt}, dice).ok());
-    const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state(), Generation::Current);
+    const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state());
     ASSERT_TRUE(now);
     EXPECT_DOUBLE_EQ(now->score.approach, 0.0);
     EXPECT_DOUBLE_EQ(now->score.cohesion, 0.0);
@@ -217,22 +216,6 @@ TEST(M83_Normal, OneUnitASideHasNoApproach) {
     wh40k::core::ScriptedDice dice{4};
     ASSERT_TRUE(sim.step(u.side, action::StartMove{u.id, MoveType::Normal, std::nullopt}, dice).ok());
     OddsCache cache;
-    const MoveScoreContext ctx(cache, sim.state(), u.id, MoveWeights{}, Generation::Current, nullptr);
+    const MoveScoreContext ctx(cache, sim.state(), u.id, MoveWeights{}, nullptr);
     EXPECT_EQ(ctx.team(), nullptr);
-}
-
-TEST(M83_Hard, RanksItsMovesWithoutTheLoneApproach) {
-    // Hard's move score is Normal's except for the approach of a unit without a group (D-083 part 5: Hard's own search
-    // decides those moves; the term measured worse for it). The follow gate and every other weight are Normal's.
-    const hard::BotWeights w{};
-    const MoveWeights n{};
-    EXPECT_DOUBLE_EQ(w.move.approach_alone, 0.0);
-    EXPECT_GT(n.approach_alone, 0.0);
-    EXPECT_DOUBLE_EQ(w.move.follow, n.follow);
-    EXPECT_DOUBLE_EQ(w.move.approach, n.approach);
-    EXPECT_DOUBLE_EQ(w.move.cohesion, n.cohesion);
-    EXPECT_DOUBLE_EQ(w.move.delay, n.delay);
-    EXPECT_DOUBLE_EQ(w.move.survival, n.survival);
-    EXPECT_DOUBLE_EQ(w.move.edge, n.edge);
-    EXPECT_DOUBLE_EQ(w.move.coherency, n.coherency);
 }

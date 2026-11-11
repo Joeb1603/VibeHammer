@@ -21,7 +21,6 @@ namespace {
 AppSettings changed_settings() {
     AppSettings s;
     s.human_side = Side::B;
-    s.bot_level = BotLevel::Easy;
     s.bot_speed = BotSpeed::Instant;
     s.scenario = "data/scenarios/other.json";
     s.fixed_seed = true;
@@ -59,7 +58,6 @@ private:
 TEST(M38_Settings, DefaultsMatchThePlan) {
     const AppSettings s;
     EXPECT_EQ(s.human_side, Side::A);
-    EXPECT_EQ(s.bot_level, BotLevel::Hard);
     EXPECT_EQ(s.bot_speed, BotSpeed::Normal);
     EXPECT_EQ(s.scenario, "data/scenarios/v1_skirmish.json");
     EXPECT_FALSE(s.fixed_seed);
@@ -102,11 +100,22 @@ TEST(M38_Settings, CorruptFileGivesDefaults) {
 }
 
 TEST(M38_Settings, MissingKeysKeepTheirDefaults) {
-    const AppSettings s = settings_from_json(nlohmann::json{{"show_dice", false}, {"bot_level", "normal"}});
+    const AppSettings s = settings_from_json(nlohmann::json{{"show_dice", false}, {"bot_speed", "fast"}});
     AppSettings expected;
     expected.show_dice = false;
-    expected.bot_level = BotLevel::Normal;
+    expected.bot_speed = BotSpeed::Fast;
     EXPECT_EQ(s, expected);
+}
+
+TEST(M38_Settings, AnOldFileWithABotLevelLoadsAndIgnoresIt) {
+    // D-085 (M85): one bot. A settings file written before M85 names a level ("easy", "normal" or "hard"): it loads with
+    // every other setting, and saving it drops the key.
+    for (const char* level : {"easy", "normal", "hard", "impossible"}) {
+        nlohmann::json old = settings_to_json(changed_settings());
+        old["bot_level"] = level;
+        EXPECT_EQ(settings_from_json(old), changed_settings()) << level;
+        EXPECT_FALSE(settings_to_json(settings_from_json(old)).contains("bot_level")) << level;
+    }
 }
 
 TEST(M38_Settings, UnknownKeysAreIgnored) {
@@ -119,7 +128,6 @@ TEST(M38_Settings, UnknownKeysAreIgnored) {
 TEST(M38_Settings, WrongTypedOrUnknownValuesGiveTheDefaultForThatKeyOnly) {
     nlohmann::json j = settings_to_json(changed_settings());
     j["show_dice"] = "no";           // a string, not a bool
-    j["bot_level"] = "impossible";   // not a level
     j["bot_speed"] = 3;              // a number, not a name
     j["human_side"] = "C";           // not a side
     j["seed"] = -5;                  // negative
@@ -129,7 +137,6 @@ TEST(M38_Settings, WrongTypedOrUnknownValuesGiveTheDefaultForThatKeyOnly) {
     AppSettings expected = changed_settings();
     const AppSettings defaults;
     expected.show_dice = defaults.show_dice;
-    expected.bot_level = defaults.bot_level;
     expected.bot_speed = defaults.bot_speed;
     expected.human_side = defaults.human_side;
     expected.seed = defaults.seed;

@@ -1,9 +1,10 @@
-// M74 (D-081): the bots in the deployment step. Easy sets its lowest-id unit waiting up at the engine's proposal (or
-// declares it not set up when the engine finds no legal spot), before any level's own policy, so a hand-deployed Easy
-// army ends exactly where Auto-place puts it and plays on as the auto-placed game does. state_hash covers the units
-// waiting to be set up only when there are some.
-// M77 (planned, D-081 "Bot deployment"): Normal and Hard now deploy by a heuristic (m77_test.cpp). The tests below that
-// pinned "every level at the proposal" pin it for Easy and check the heuristic's properties for Normal and Hard.
+// M74 (D-081): the bots in the deployment step. M74's policy (deploy_policy) sets the lowest-id unit waiting up at the
+// engine's proposal (or declares it not set up when the engine finds no legal spot), so an army hand-deployed by it ends
+// exactly where Auto-place puts it and plays on as the auto-placed game does. state_hash covers the units waiting to be
+// set up only when there are some.
+// M77 (D-081 "Bot deployment"): the bot deploys by a heuristic (m77_test.cpp); M74's policy is its answer when the
+// heuristic has none, and the fallback's. D-085 (M85): M74's policy was level Easy's; with one bot the tests below call
+// it directly, and check the heuristic's properties for the bot.
 
 #include <gtest/gtest.h>
 
@@ -263,10 +264,11 @@ GameState stock_battle(Side first, DeploymentMode mode) {
                                       wh40k::test::stock_army(wh40k::test::tyranids()), first, mode);
 }
 
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
+// M74's policy (once level Easy's) as a player: its answer to every set-up.
+BotChoice m74_choice(const GameState& gs, Side side) {
+    const std::optional<PolicyResult> r = deploy_policy(gs, side, legal_actions(gs, side));
+    EXPECT_TRUE(r.has_value());
+    return r ? BotChoice{r->action, r->reason} : BotChoice{};
 }
 
 // D-081: a 12" x 24" battlefield whose south zone (2.5" deep) holds two lines of 10 Termagants but not a third (side A,
@@ -335,20 +337,20 @@ TEST(M74_StateHash, UnitsWaitingToBeSetUpChangeTheHash) {
     EXPECT_NE(state_hash(after), h);
 }
 
-// M77 (planned change, D-081 "Bot deployment"): this test pinned "every level sets up the lowest-id unit at its
-// proposal" (EveryLevelSetsUpTheLowestIdUnitAtItsProposal) while M74's policy was every level's. It now pins that for
-// Easy, the level that keeps the policy, and for Normal and Hard checks the heuristic's properties at each decision
-// (m77_test.cpp has the rest): a legal set-up of the first unit of deploy_order, no fallback, no chain table.
-TEST(M74_Bots, EasySetsUpTheLowestIdUnitAtItsProposal) {
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
+// M77 (D-081 "Bot deployment"): this test pinned "every level sets up the lowest-id unit at its proposal" while M74's
+// policy was every level's. It pins that for M74's policy (D-085, M85: once level Easy's, now called directly), and for
+// the bot checks the heuristic's properties at each decision (m77_test.cpp has the rest): a legal set-up of the first unit
+// of deploy_order, no fallback.
+TEST(M74_Bots, M74sPolicySetsUpTheLowestIdUnitAtItsProposal) {
+    for (const bool policy : {true, false}) {
         GameState gs = stock_battle(Side::A, DeploymentMode::Hand);
         start_game(gs);
-        Bot bot(level(l));
+        Bot bot(BotConfig{});
         int decisions = 0;
         while (gs.flow.stage == Stage::Deploy) {
             const Side side = decider(gs);
             const std::vector<GameAction> legal = legal_actions(gs, side);
-            const BotChoice choice = bot.decide(gs, side);
+            const BotChoice choice = policy ? m74_choice(gs, side) : bot.decide(gs, side);
             ASSERT_FALSE(choice.stopped);
             UnitId lowest{0};
             for (const Unit& u : gs.undeployed) {
@@ -357,7 +359,7 @@ TEST(M74_Bots, EasySetsUpTheLowestIdUnitAtItsProposal) {
                     break;
                 }
             }
-            if (l == BotLevel::Easy) {
+            if (policy) {
                 ASSERT_EQ(choice.action, GameAction{*propose_set_up(gs, lowest)});
                 EXPECT_EQ(choice.action, legal.front());
                 EXPECT_TRUE(wh40k::test::starts_with(choice.reason, "D-081: set up ")) << choice.reason;
@@ -373,8 +375,7 @@ TEST(M74_Bots, EasySetsUpTheLowestIdUnitAtItsProposal) {
         }
         EXPECT_EQ(decisions, 14);
         EXPECT_EQ(bot.fallbacks(), 0u);
-        EXPECT_EQ(bot.chain_tables_built(), 0u);  // Hard built nothing from a half-deployed army
-        if (l == BotLevel::Easy) {
+        if (policy) {
             EXPECT_EQ(gs, [] {
                 GameState p = stock_battle(Side::A, DeploymentMode::Auto);
                 start_game(p);
@@ -384,20 +385,20 @@ TEST(M74_Bots, EasySetsUpTheLowestIdUnitAtItsProposal) {
     }
 }
 
-// M77 (planned change, D-081 "Bot deployment"): this test ran a Normal bot and required the fallback to give the same
-// answer, which held while every level answered with M74's policy. The fallback keeps M74's policy, so that requirement
-// is now made of Easy; every level must still set up both lines and declare only the third not set up.
+// M77 (D-081 "Bot deployment"): this test ran a Normal bot and required the fallback to give the same answer, which held
+// while every level answered with M74's policy. The fallback keeps M74's policy, so that requirement is M74's policy's
+// (D-085: called directly); the bot and the policy must both set up both lines and declare only the third not set up.
 TEST(M74_Bots, ABotDeclaresAUnitNotSetUpOnlyWhenNothingFits) {
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
+    for (const bool policy : {true, false}) {
         GameState gs = narrow_zone();
         start_game(gs);
-        Bot bot(level(l));
+        Bot bot(BotConfig{});
         std::vector<GameAction> taken;
         while (gs.flow.stage == Stage::Deploy) {
             const Side side = decider(gs);
-            const BotChoice choice = bot.decide(gs, side);
+            const BotChoice choice = policy ? m74_choice(gs, side) : bot.decide(gs, side);
             ASSERT_FALSE(choice.stopped);
-            if (l == BotLevel::Easy) {
+            if (policy) {
                 // The fallback gives the same answer.
                 const FallbackResult fb = fallback_action(gs, side);
                 ASSERT_TRUE(fb.action.has_value());
@@ -412,65 +413,51 @@ TEST(M74_Bots, ABotDeclaresAUnitNotSetUpOnlyWhenNothingFits) {
         EXPECT_TRUE(std::holds_alternative<action::DeployUnit>(taken[2]));  // the second, behind it
         EXPECT_EQ(taken[3], GameAction{(action::CannotSetUp{UnitId{3}})});  // no room for the third
         EXPECT_EQ(bot.fallbacks(), 0u);
-        EXPECT_EQ(bot.chain_tables_built(), 0u);
     }
 }
 
-// M77 (planned change, D-081 "Bot deployment"): this test also ran Normal, whose hand deployment ended where Auto-place
-// puts its units while it used M74's policy. Normal now nudges its units (m77_test.cpp:
-// M77_BotDeploy.HandDeployedGamesAtNormalAndHardFinishClean checks its hand-deployed games), so the equality is Easy's.
-TEST(M74_Bots, HandDeployedEasyGamesEndWhereAutoPlacedOnesDo) {
-    // --deploy hand against --deploy auto: once the bots have set everything up, the state is the auto-placed game's,
-    // so the rest of the game, decided from state hashes, plays the same (D-054) to the same final state.
-    for (const BotLevel l : {BotLevel::Easy}) {
-        for (std::uint64_t seed = 1; seed <= 3; ++seed) {
-            const Side first = seed % 2 == 0 ? Side::B : Side::A;
-            const GameState hand = wh40k::test::random_armies_battle(seed, DeploymentMode::Hand, first);
-            const GameState autos = wh40k::test::random_armies_battle(seed, DeploymentMode::Auto, first);
-            wh40k::client::GameSession h = wh40k::client::GameSession::new_game(hand, seed);
-            wh40k::client::GameSession a = wh40k::client::GameSession::new_game(autos, seed);
-            Bot ba(level(l));
-            Bot bb(level(l));
-            std::size_t set_ups = 0;
-            while (h.state().flow.stage == Stage::Deploy) {
-                const Side side = h.state().pending->side;
-                const BotChoice c = (side == Side::A ? ba : bb).decide(h.state(), side);
-                ASSERT_TRUE(h.submit(c.action).ok());
-                ++set_ups;
-            }
-            EXPECT_EQ(set_ups, hand.undeployed.size());
-            EXPECT_EQ(h.state(), a.state()) << "seed " << seed;
-            // Easy to the end; Normal (slow in Debug) for 120 actions after the deployment, in both games.
-            const std::size_t cap = l == BotLevel::Easy ? 5000 : 120;
-            const GameRecord rh = play_bot_session(h, level(l), level(l), cap + set_ups);
-            const GameRecord ra = play_bot_session(a, level(l), level(l), cap);
-            EXPECT_EQ(rh.rejected + rh.reverted + rh.fallbacks, 0u);
-            EXPECT_EQ(h.history().size(), a.history().size() + set_ups);
-            EXPECT_EQ(h.state(), a.state()) << "seed " << seed;
-            if (l == BotLevel::Easy) {
-                EXPECT_TRUE(rh.finished);
-                EXPECT_EQ(rh.winner, ra.winner);
-                EXPECT_EQ(rh.wounds_lost, ra.wounds_lost);
-            }
+// M77 (D-081 "Bot deployment"): the bot nudges its units (m77_test.cpp: M77_BotDeploy.HandDeployedGamesFinishClean
+// checks its hand-deployed games), so the equality is M74's policy's (D-085, M85: once level Easy's, which also played
+// the games to the end; the bot plays 120 actions after the deployment, slow in Debug).
+TEST(M74_Bots, GamesHandDeployedByM74sPolicyPlayOnAsAutoPlacedOnesDo) {
+    // --deploy hand against --deploy auto: once M74's policy has set everything up, the state is the auto-placed game's,
+    // so the rest of the game, decided from state hashes, plays the same (D-054) to the same state.
+    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        const Side first = seed % 2 == 0 ? Side::B : Side::A;
+        const GameState hand = wh40k::test::random_armies_battle(seed, DeploymentMode::Hand, first);
+        const GameState autos = wh40k::test::random_armies_battle(seed, DeploymentMode::Auto, first);
+        wh40k::client::GameSession h = wh40k::client::GameSession::new_game(hand, seed);
+        wh40k::client::GameSession a = wh40k::client::GameSession::new_game(autos, seed);
+        std::size_t set_ups = 0;
+        while (h.state().flow.stage == Stage::Deploy) {
+            const Side side = h.state().pending->side;
+            const BotChoice c = m74_choice(h.state(), side);
+            ASSERT_TRUE(h.submit(c.action).ok());
+            ++set_ups;
         }
+        EXPECT_EQ(set_ups, hand.undeployed.size());
+        EXPECT_EQ(h.state(), a.state()) << "seed " << seed;
+        const std::size_t cap = 120;
+        const GameRecord rh = play_bot_session(h, BotConfig{}, BotConfig{}, cap + set_ups);
+        const GameRecord ra = play_bot_session(a, BotConfig{}, BotConfig{}, cap);
+        EXPECT_EQ(rh.rejected + rh.reverted + rh.fallbacks, 0u);
+        EXPECT_EQ(ra.rejected + ra.reverted + ra.fallbacks, 0u);
+        EXPECT_EQ(h.history().size(), a.history().size() + set_ups);
+        EXPECT_EQ(h.state(), a.state()) << "seed " << seed;
     }
 }
 
 TEST(M74_Bots, ABotGameWithHandDeploymentFromTheStartFinishesClean) {
-    // play_bot_game from the hand-deployment state itself (the bots set up too): it finishes as the auto game does, and
-    // the arena counts the starting wounds of the units waiting to be set up.
+    // play_bot_game from the hand-deployment state itself (the bots set up too): it finishes clean, and the arena counts
+    // the starting wounds of the units waiting to be set up. (D-085, M85: with level Easy, which set up where Auto-place
+    // does, it also ended as the auto-placed game; the bot's heuristic sets up elsewhere.)
     const GameState hand = wh40k::test::random_armies_battle(7, DeploymentMode::Hand);
-    const GameState autos = wh40k::test::random_armies_battle(7, DeploymentMode::Auto);
-    const GameRecord rh = play_bot_game(hand, 7, level(BotLevel::Easy), level(BotLevel::Easy));
-    const GameRecord ra = play_bot_game(autos, 7, level(BotLevel::Easy), level(BotLevel::Easy));
+    const GameRecord rh = play_bot_game(hand, 7, BotConfig{}, BotConfig{});
     EXPECT_TRUE(rh.finished);
     EXPECT_EQ(rh.rejected + rh.reverted + rh.fallbacks, 0u);
-    EXPECT_EQ(rh.steps, ra.steps + hand.undeployed.size());
-    EXPECT_EQ(rh.winner, ra.winner);
-    EXPECT_EQ(rh.wounds_lost, ra.wounds_lost);
-    EXPECT_EQ(rh.surviving_models, ra.surviving_models);
     EXPECT_GE(rh.wounds_lost[0], 0);
     EXPECT_GE(rh.wounds_lost[1], 0);
+    EXPECT_GT(rh.wounds_lost[0] + rh.wounds_lost[1], 0);
 }
 
 TEST(M74_Bots, TheDriverPacesASetUpLikeAUnitsActivation) {

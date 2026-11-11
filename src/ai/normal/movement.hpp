@@ -30,7 +30,6 @@
 #include "bot.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
-#include "generation.hpp"
 #include "normal/move_score.hpp"
 
 namespace wh40k::ai::normal {
@@ -78,25 +77,15 @@ struct PlannedMove {
 // D-083 part 2 (M80): `plan`, the army plan of the unit's side (MoveScoreContext's; nullptr: computed there);
 // `weights`, the score's (Normal plays MoveWeights{}; the tests vary them).
 [[nodiscard]] std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const core::GameState& origin,
-                                                        Generation generation = Generation::Current,
                                                         const ArmyPlan* plan = nullptr,
                                                         const MoveWeights& weights = MoveWeights{});
 
-// M44's seam (the Hard level): the candidates of the move just started in `origin` that stand when simulated in full,
-// in the cheap score's order (with `weights`), up to `count` of them after at most `attempts` simulations. Each
-// keeps its cheap score (not refined). A pure function of its arguments; Normal's plan_unit_move doesn't use it.
-// D-083 (M78): `generation` is the score's (MoveScoreContext's); Hard passes its own (Current or M77).
+// The candidates of the move just started in `origin` that stand when simulated in full, in the cheap score's order
+// (with `weights`), up to `count` of them after at most `attempts` simulations. Each keeps its cheap score (not
+// refined). A pure function of its arguments; the Desperate Escape guard (escape_stands, D-077) uses it.
 [[nodiscard]] std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const core::GameState& origin,
                                                       const MoveWeights& weights, std::size_t count,
-                                                      std::size_t attempts,
-                                                      Generation generation = Generation::Current,
-                                                      const ArmyPlan* plan = nullptr);
-
-// D-067 (M57, the Hard level's army path): the candidate of the move just started in `origin` whose end is furthest
-// from the closest enemy model (the most edge-to-edge room left to every enemy unit; a tie to the earlier
-// candidate), simulated in full as standing_moves simulates (nullopt if it doesn't stand). Its score is not set.
-// A pure function of `origin`; Normal doesn't use it.
-[[nodiscard]] std::optional<PlannedMove> furthest_standing_move(const core::GameState& origin);
+                                                      std::size_t attempts);
 
 // The value of each move type for `unit` at `side`'s MoveUnits decision (for tests and reasons): nullopt where the
 // type isn't offered. Advance is the mean over the six advance results.
@@ -110,10 +99,9 @@ struct MoveTypeValues {
 // D-066 (M56): which of the units offered a StartMove at MoveUnits moves next: the one closest to an enemy unit
 // (edge to edge, 01.04; so an engaged unit, which chooses between holding and falling back, goes first): its move
 // matters most, and the units further back then move round where it ended. A tie keeps the engine's (unit)
-// order. M55: the first unit offered. nullopt if none is offered.
+// order. nullopt if none is offered.
 [[nodiscard]] std::optional<core::UnitId> unit_to_move(const core::GameState& state,
-                                                       const std::vector<core::GameAction>& legal,
-                                                       Generation generation = Generation::Current);
+                                                       const std::vector<core::GameAction>& legal);
 
 // MoveUnits: the move type and (for moves without dice) the whole planned move, for unit_to_move's unit. nullopt:
 // no answer of its own. D-083 part 2 (M80): `plan`, `side`'s army plan in `state` (nullptr: computed here, once);
@@ -121,14 +109,12 @@ struct MoveTypeValues {
 [[nodiscard]] std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const core::GameState& state,
                                                             core::Side side, const std::vector<core::GameAction>& legal,
                                                             std::uint64_t seed, MoveTypeValues* values = nullptr,
-                                                            Generation generation = Generation::Current,
                                                             const ArmyPlan* plan = nullptr,
                                                             const MoveWeights& weights = MoveWeights{});
 
 // MoveModels of a Normal, Advance or Fall-back move: the rest of plan_unit_move planned from the move's start.
 [[nodiscard]] std::optional<PolicyResult> continue_unit_move(analysis::OddsCache& cache, const core::GameState& state,
                                                              core::Side side,
-                                                             Generation generation = Generation::Current,
                                                              const MoveWeights& weights = MoveWeights{});
 
 }  // namespace wh40k::ai::normal

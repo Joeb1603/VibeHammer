@@ -45,8 +45,7 @@ using wh40k::test::in;
 
 namespace {
 
-BotConfig normal_level() { return BotConfig{BotLevel::Normal}; }
-BotConfig easy_level() { return BotConfig{BotLevel::Easy}; }
+BotConfig normal_level() { return BotConfig{}; }
 
 constexpr std::size_t kMarines = 0;
 constexpr std::size_t kGants = 1;
@@ -165,7 +164,7 @@ PlayedMove play_move(GameState gs, Bot& bot, std::size_t fresh_checks = 2) {
         const BotChoice c = bot.decide(gs, Side::A);
         out.reasons.push_back(c.reason);
         // D-054: a fresh bot (no memo) gives the same answer from any state along the plan.
-        if (bot.config().level == BotLevel::Normal && decisions++ < fresh_checks) {
+        if (decisions++ < fresh_checks) {
             const BotChoice fresh = Bot(bot.config()).decide(gs, Side::A);
             EXPECT_EQ(fresh.action, c.action) << c.reason << " / " << fresh.reason;
             if (fresh.action != c.action) ++out.fresh_mismatches;
@@ -416,8 +415,8 @@ TEST(M43_Legal, AcrossAGridNoPlannedMoveEndsEngagedOrIsRevertedAndAFreshBotGives
 TEST(M43_NeverPeeksAtDice, MovementDecisionsAreTheSameWhateverTheDiceAndFromAnyStateOfThePlan) {
     std::size_t checked = 0;
     std::set<MoveType> types;
-    for (const auto& [a, b] : {std::pair{easy_level(), normal_level()}, std::pair{normal_level(), easy_level()}}) {
-        for (std::uint64_t seed = 1; seed <= 2; ++seed) {
+    for (const auto& [a, b] : {std::pair{normal_level(), normal_level()}}) {
+        for (std::uint64_t seed = 1; seed <= 4; ++seed) {
             client::GameSession s = client::GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
             std::array<Bot, 2> bots{Bot(a), Bot(b)};
             client::AutoSettings autos;
@@ -434,11 +433,10 @@ TEST(M43_NeverPeeksAtDice, MovementDecisionsAreTheSameWhateverTheDiceAndFromAnyS
                     (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
                      (gs.flow.move->type == MoveType::Normal || gs.flow.move->type == MoveType::Advance ||
                       gs.flow.move->type == MoveType::FallBack));
-                const BotLevel level = side == Side::A ? a.level : b.level;
                 // Every MoveUnits decision, and the MoveModels steps of each move's start and every third one after
                 // (a fresh bot replans the whole move each time).
                 const std::size_t done = gs.flow.move ? gs.flow.move->paths.size() : 0;
-                if (movement && level == BotLevel::Normal && done % 3 == 0) {
+                if (movement && done % 3 == 0) {
                     GameState other = gs;
                     other.dice.seed ^= 0x9E3779B97F4A7C15ull;
                     other.dice.position += 13;
@@ -457,20 +455,14 @@ TEST(M43_NeverPeeksAtDice, MovementDecisionsAreTheSameWhateverTheDiceAndFromAnyS
     EXPECT_GE(types.size(), 2u);
 }
 
-TEST(M43_Arena, NormalMovementWinsSoonerAsSpaceMarinesAndLastsLongerAsTyranids) {
-    // 12 seeds per seat (the Release arena's 200 are recorded in PLAN.md, M43); only the robust directions.
+TEST(M43_Arena, NormalMovementPlaysCleanGamesThatTheSpaceMarinesWin) {
+    // 12 seeds (the Release arena's 200 are recorded in PLAN.md, M43). D-085 (M85): the comparisons with level Easy
+    // (games won sooner as Space Marines, lasting longer as Tyranids) went with Easy.
     const GameState scenario = wh40k::test::load_v1_scenario();
-    const ArenaResult base = run_arena(scenario, 12, 1, easy_level(), easy_level());
-    const ArenaResult as_a = run_arena(scenario, 12, 1, normal_level(), easy_level());
-    const ArenaResult as_b = run_arena(scenario, 12, 1, easy_level(), normal_level());
-    for (const ArenaResult* r : {&as_a, &as_b}) {
-        EXPECT_TRUE(r->clean()) << format_arena(*r, scenario);
-        EXPECT_EQ(r->fallbacks, 0u) << format_arena(*r, scenario);
-    }
-    EXPECT_GE(as_a.wins[0], 12);  // every game (>= 95% in the Release arena)
-    EXPECT_LT(as_a.mean_end_round, base.mean_end_round) << format_arena(as_a, scenario);
-    EXPECT_GT(as_b.mean_end_round, base.mean_end_round) << format_arena(as_b, scenario);
-    EXPECT_GE(as_b.wins[1] + as_b.draws, base.wins[1] + base.draws);
+    const ArenaResult r = run_arena(scenario, 12, 1, normal_level(), normal_level());
+    EXPECT_TRUE(r.clean()) << format_arena(r, scenario);
+    EXPECT_EQ(r.fallbacks, 0u) << format_arena(r, scenario);
+    EXPECT_GE(r.wins[0], 12);  // every game (the Release arena: all 200, M44)
 }
 
 // ==== Diagnostics (run on purpose): the ranked candidates of a position ====

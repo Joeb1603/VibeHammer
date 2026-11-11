@@ -29,7 +29,6 @@
 #include "bot.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
-#include "generation.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -55,9 +54,8 @@ struct MeleeChoice {
 
 // The standing position after a consolidation, for `side` (see the file comment). D-066 (M56): an unengaged unit of
 // ours counts its best shot at any enemy unit it may shoot, less the shooting of every enemy unit free to shoot it
-// (M55, and with one enemy unit: the closest enemy unit's, both ways).
-[[nodiscard]] double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                                         Generation generation = Generation::Current);
+// (with one enemy unit: the closest enemy unit's, both ways).
+[[nodiscard]] double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side);
 
 // The model positions and paths of the move in progress put back to its start (a copy, for planning only): the
 // state just after the move was started, so a plan is a function of that state (D-054). Precondition: a move is
@@ -93,8 +91,7 @@ struct FightMovePlan {
 [[nodiscard]] std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache,
                                                                const core::GameState& state, core::Side side,
                                                                const std::vector<core::GameAction>& legal,
-                                                               std::uint64_t seed,
-                                                               Generation generation = Generation::Current);
+                                                               std::uint64_t seed);
 // A pile-in or consolidation in progress (MoveModels): the rest of the auto_fight_move arrangement planned from
 // the move's start, so a replan (after a load or undo, or a fresh bot) gives the same steps as the memo.
 [[nodiscard]] std::optional<PolicyResult> continue_fight_move(const core::GameState& state, core::Side side,

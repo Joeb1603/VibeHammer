@@ -266,8 +266,8 @@ const core::Unit* followed_focus(const ArmyPlan& plan, const core::GameState& or
 // ---- the context ----
 
 MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                                   MoveWeights weights, Generation generation, const ArmyPlan* plan)
-    : cache_(cache), origin_(origin), weights_(weights), generation_(generation) {
+                                   MoveWeights weights, const ArmyPlan* plan)
+    : cache_(cache), origin_(origin), weights_(weights) {
     const core::Unit* u = origin.find_unit(unit);
     if (u == nullptr) throw std::logic_error("MoveScoreContext: unknown unit");
     us_ = *u;
@@ -289,32 +289,30 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
     our_ranges_ = ranged_ranges(us_);
     turns_ = turns_left(origin);
     start_engaged_ = core::is_engaged(origin, us_);
-    // D-083 part 2 (M80): the group the unit follows, from the army plan (pre-teamwork generations read none).
+    // D-083 part 2 (M80): the group the unit follows, from the army plan.
     std::optional<ArmyPlan> own_plan;
     const core::Unit* focus = nullptr;
     bool line_focus = false;
-    if (!pre_teamwork(generation_)) {
-        if (plan == nullptr) {
-            own_plan = army_plan(cache_, origin, us_.side, generation_);
-            plan = &*own_plan;
-        }
-        focus = followed_focus(*plan, origin, us_, weights_.follow);
-        if (focus != nullptr && !points_rule_) {
-            // Under D-007 a unit that loses its exchange with the focus (as lean_ measures it: its best attacks against
-            // the focus's, at half range and in melee) plays for the draw (D-066) and keeps its own line.
-            const double ours = ranged_share(cache_, origin, us_, *focus, us_threat_.max_range_mm * 0.5f) +
-                                melee_share(cache_, origin, us_, *focus);
-            const analysis::ThreatRanges fth = analysis::threat_ranges(*focus);
-            const double theirs = ranged_share(cache_, origin, *focus, us_, fth.max_range_mm * 0.5f) +
-                                  melee_share(cache_, origin, *focus, us_);
-            if (ours < theirs) focus = nullptr;
-        }
-        // The line follows the focus while some partner reaches it by our next turn (its arrival in the plan); until
-        // then the unit keeps its closest enemy unit's line and only approaches the focus.
-        if (focus != nullptr) {
-            for (const PlanMember& m : plan->group_of(unit)->members) {
-                line_focus = line_focus || (m.unit != unit && m.arrival <= 1);
-            }
+    if (plan == nullptr) {
+        own_plan = army_plan(cache_, origin, us_.side);
+        plan = &*own_plan;
+    }
+    focus = followed_focus(*plan, origin, us_, weights_.follow);
+    if (focus != nullptr && !points_rule_) {
+        // Under D-007 a unit that loses its exchange with the focus (as lean_ measures it: its best attacks against
+        // the focus's, at half range and in melee) plays for the draw (D-066) and keeps its own line.
+        const double ours = ranged_share(cache_, origin, us_, *focus, us_threat_.max_range_mm * 0.5f) +
+                            melee_share(cache_, origin, us_, *focus);
+        const analysis::ThreatRanges fth = analysis::threat_ranges(*focus);
+        const double theirs = ranged_share(cache_, origin, *focus, us_, fth.max_range_mm * 0.5f) +
+                              melee_share(cache_, origin, *focus, us_);
+        if (ours < theirs) focus = nullptr;
+    }
+    // The line follows the focus while some partner reaches it by our next turn (its arrival in the plan); until
+    // then the unit keeps its closest enemy unit's line and only approaches the focus.
+    if (focus != nullptr) {
+        for (const PlanMember& m : plan->group_of(unit)->members) {
+            line_focus = line_focus || (m.unit != unit && m.arrival <= 1);
         }
     }
     const core::Unit* e = line_focus ? focus : closest_enemy(origin, us_);
@@ -370,39 +368,37 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 survival_weight_ = 0.0;
             }
         }
-        // D-066 (M56): every other enemy unit, in unit order (M55: none).
-        if (generation_ != Generation::M55) {
-            for (const core::Unit* o : enemy_units(origin, us_.side)) {
-                if (o->id == e->id) continue;
-                Other x;
-                x.unit = *o;
-                x.models = core::posed_models(*o);
-                x.round = all_round(x.models);
-                x.snap = analysis::snapshot_of(*o);
-                x.threat = analysis::threat_ranges(*o);
-                x.ranges = ranged_ranges(*o);
-                x.engaged = core::is_engaged(origin, *o);
-                x.locked = x.engaged && std::find(with_us.begin(), with_us.end(), o->id) == with_us.end();
-                x.other_target_mm = kFar;
-                for (const core::Unit& f : origin.units) {
-                    if (f.side != us_.side || f.id == us_.id || f.models.empty()) continue;
-                    x.other_target_mm = std::min(x.other_target_mm, core::unit_distance(f, *o).value_or(kFar));
-                }
-                x.mv = monster_or_vehicle(*o);
-                x.rate_us = hazard_rate(origin, us_, *o);
-                x.rate_them = hazard_rate(origin, *o, us_);
-                x.melee = melee_share(cache_, origin, *o, us_);
-                x.cq = ranged_share(cache_, origin, *o, us_, 0.0f, true);
-                if (!us_.models.empty()) {
-                    const analysis::Volley mv = analysis::unit_melee_volley(cache_, *o, us_, x.rate_them);
-                    x.melee_wipe = analysis::expected_outcome(cache_, mv, analysis::snapshot_of(us_)).p_wipe();
-                }
-                others_.push_back(std::move(x));
+        // D-066 (M56): every other enemy unit, in unit order.
+        for (const core::Unit* o : enemy_units(origin, us_.side)) {
+            if (o->id == e->id) continue;
+            Other x;
+            x.unit = *o;
+            x.models = core::posed_models(*o);
+            x.round = all_round(x.models);
+            x.snap = analysis::snapshot_of(*o);
+            x.threat = analysis::threat_ranges(*o);
+            x.ranges = ranged_ranges(*o);
+            x.engaged = core::is_engaged(origin, *o);
+            x.locked = x.engaged && std::find(with_us.begin(), with_us.end(), o->id) == with_us.end();
+            x.other_target_mm = kFar;
+            for (const core::Unit& f : origin.units) {
+                if (f.side != us_.side || f.id == us_.id || f.models.empty()) continue;
+                x.other_target_mm = std::min(x.other_target_mm, core::unit_distance(f, *o).value_or(kFar));
             }
+            x.mv = monster_or_vehicle(*o);
+            x.rate_us = hazard_rate(origin, us_, *o);
+            x.rate_them = hazard_rate(origin, *o, us_);
+            x.melee = melee_share(cache_, origin, *o, us_);
+            x.cq = ranged_share(cache_, origin, *o, us_, 0.0f, true);
+            if (!us_.models.empty()) {
+                const analysis::Volley mv = analysis::unit_melee_volley(cache_, *o, us_, x.rate_them);
+                x.melee_wipe = analysis::expected_outcome(cache_, mv, analysis::snapshot_of(us_)).p_wipe();
+            }
+            others_.push_back(std::move(x));
         }
         if (focus != nullptr) {
             make_team(*plan, *focus, line_focus);
-        } else if (!pre_teamwork(generation_) && plan != nullptr && plan->active && weights_.approach_alone > 0.0 &&
+        } else if (plan != nullptr && plan->active && weights_.approach_alone > 0.0 &&
                    !start_engaged_) {
             make_lone_approach(*e);
         }
@@ -1258,10 +1254,9 @@ MoveScore refine_move_score(MoveScoreContext& ctx, const PlannedEnd& plan, const
     if (with_charge_prospect && may_charge) {
         if (shoot.other) {
             prospect = charge_prospect(ctx.cache(), after, ctx.unit().id, seed, shoot.other->models_destroyed,
-                                       ctx.other(shoot.other->index).id, ctx.generation());
+                                       ctx.other(shoot.other->index).id);
         } else {
-            prospect = charge_prospect(ctx.cache(), after, ctx.unit().id, seed, shoot.models_destroyed, std::nullopt,
-                                       ctx.generation());
+            prospect = charge_prospect(ctx.cache(), after, ctx.unit().id, seed, shoot.models_destroyed);
         }
     }
     MoveScore s = score_impl(ctx, plan, shoot, prospect ? &*prospect : nullptr);

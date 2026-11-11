@@ -30,7 +30,7 @@ using wh40k::test::in;
 
 namespace {
 
-// The M39 baseline (level Easy's charge move): the unit translated towards the target's centre, 1" short of it;
+// The M39 baseline (level Easy's charge move, since M85 the bot's default charge move, D-085): the unit translated towards the target's centre, 1" short of it;
 // models furthest along first (D-027), a refused proposal leaves that model where it is. Its score if the move
 // could end, else nullopt.
 std::optional<ChargeArrangementScore> baseline_translation(GameState gs) {

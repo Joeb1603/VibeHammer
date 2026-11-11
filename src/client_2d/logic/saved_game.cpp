@@ -14,9 +14,7 @@ constexpr const char* kSideKeys[2] = {"A", "B"};
 }  // namespace
 
 nlohmann::json players_to_json(const SavePlayers& players) {
-    return nlohmann::json{{"A", players.bots[0] ? "bot" : "human"},
-                          {"B", players.bots[1] ? "bot" : "human"},
-                          {"bot_level", bot_level_key(players.bot_level)}};
+    return nlohmann::json{{"A", players.bots[0] ? "bot" : "human"}, {"B", players.bots[1] ? "bot" : "human"}};
 }
 
 SavePlayers players_from_save_json(const nlohmann::json& save) {
@@ -31,9 +29,6 @@ SavePlayers players_from_save_json(const nlohmann::json& save) {
         const std::string v = side->get<std::string>();
         if (v != "bot" && v != "human") return out;
         read.bots[i] = v == "bot";
-    }
-    if (const auto level = it->find("bot_level"); level != it->end() && level->is_string()) {
-        if (const auto l = bot_level_from_key(level->get<std::string>())) read.bot_level = *l;
     }
     return read;
 }

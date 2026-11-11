@@ -1,6 +1,6 @@
 // M41: level Normal's shooting, defensive and fight decisions (D-054): profiles from the analysis, overkill
 // avoidance, batch order, casualty order (coherency, front models), coherency removal, pile-ins and
-// consolidations, and whole games (dice independence, the arena against Easy).
+// consolidations, and whole games (dice independence, clean arena games).
 
 #include <gtest/gtest.h>
 
@@ -41,8 +41,7 @@ using wh40k::test::in;
 
 namespace {
 
-BotConfig normal_level() { return BotConfig{BotLevel::Normal}; }
-BotConfig easy_level() { return BotConfig{BotLevel::Easy}; }
+BotConfig normal_level() { return BotConfig{}; }
 
 constexpr std::size_t kMarines = 0;
 constexpr std::size_t kGants = 1;
@@ -504,15 +503,12 @@ TEST(M41_NeverPeeksAtDice, NormalGivesTheSameAnswerWhateverTheDiceAndFromAnyStat
     EXPECT_GE(kinds.size(), 6u);
 }
 
-TEST(M41_Arena, NormalPlaysCleanGamesAndDoesAtLeastAsWellAsEasyInBothSeats) {
-    // 20 seeds per seat (the Release arena's 200 per seat are recorded in PLAN.md, M41). Only the robust
-    // direction is asserted: Normal never wins less than Easy, never loses a model to coherency, and plays every
-    // game with no rejected action, no reverted move and no fallback.
+TEST(M41_Arena, NormalPlaysCleanGames) {
+    // 20 seeds (the Release arena's 200 per seat are recorded in PLAN.md, M41): every game with no rejected action, no
+    // reverted move and no fallback. D-085 (M85): the comparison with level Easy went with Easy.
     const GameState scenario = wh40k::test::load_v1_scenario();
-    const ArenaResult base = run_arena(scenario, 20, 1, easy_level(), easy_level());
-    const ArenaResult as_a = run_arena(scenario, 20, 1, normal_level(), easy_level());
-    const ArenaResult as_b = run_arena(scenario, 20, 1, easy_level(), normal_level());
-    for (const ArenaResult* r : {&as_a, &as_b}) {
+    const ArenaResult both = run_arena(scenario, 20, 1, normal_level(), normal_level());
+    for (const ArenaResult* r : {&both}) {
         EXPECT_TRUE(r->clean()) << format_arena(*r, scenario);
         EXPECT_EQ(r->fallbacks, 0u) << format_arena(*r, scenario);
         for (const GameRecord& g : r->games) {
@@ -522,8 +518,4 @@ TEST(M41_Arena, NormalPlaysCleanGamesAndDoesAtLeastAsWellAsEasyInBothSeats) {
             EXPECT_EQ(g.fallbacks, 0u) << "seed " << g.seed;
         }
     }
-    EXPECT_GE(as_a.wins[0], base.wins[0]);
-    EXPECT_GE(as_b.wins[1] + as_b.draws, base.wins[1] + base.draws);
-    EXPECT_LE(as_a.coherency_removed[0], base.coherency_removed[0]);
-    EXPECT_LE(as_b.coherency_removed[1], base.coherency_removed[1]);
 }

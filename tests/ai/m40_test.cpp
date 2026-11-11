@@ -68,12 +68,12 @@ AttackProfile shooting_profile(const std::string& name, bool heavy) {
     return make_attack_profile(profile_named(name), c);
 }
 
-// Plays a seeded Easy-vs-Easy game (as the M39 tests do) and returns the first state, at a bot's decision, that
+// Plays a seeded bot-vs-bot game (as the M39 tests do) and returns the first state, at a bot's decision, that
 // satisfies `pred`.
 template <typename Pred>
 std::optional<GameState> first_state(std::uint64_t seed, Pred pred) {
     client::GameSession s = client::GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
-    std::array<Bot, 2> bots{Bot(BotConfig{BotLevel::Easy}), Bot(BotConfig{BotLevel::Easy})};
+    std::array<Bot, 2> bots{Bot(BotConfig{}), Bot(BotConfig{})};
     client::AutoSettings autos;
     autos.bot_controlled = {true, true};
     while (s.pending() && s.history().size() < 5000) {

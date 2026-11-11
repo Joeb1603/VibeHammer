@@ -12,6 +12,7 @@
 #include "analysis/odds.hpp"
 #include "arena.hpp"
 #include "bot.hpp"
+#include "default_choice.hpp"
 #include "core/engine/engine.hpp"
 #include "core/rules/shooting.hpp"
 #include "support/engine_helpers.hpp"
@@ -24,12 +25,6 @@ using namespace wh40k::ai::analysis;
 namespace mf = wh40k::test::monsters;
 
 namespace {
-
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
-}
 
 std::vector<ShotDeclaration> lascannons_at(const GameState& gs, std::size_t target) {
     std::vector<ShotDeclaration> out;
@@ -96,31 +91,28 @@ TEST(M63_Odds, TheCapIsInTheOddsToo) {
                      expected_outcome(cache, volley_of(batches, -1), tyrant).damage);
 }
 
-TEST(M63_Bots, EveryLevelShootsLegallyAtTheEngagedTyrant) {
+TEST(M63_Bots, TheBotAndItsDefaultsShootLegallyAtTheEngagedTyrant) {
     const GameState gs = mf::at_side_a_shooting();
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-        Bot bot(level(l));
-        const BotChoice c = bot.decide(gs, Side::A);
-        ASSERT_FALSE(c.stopped) << static_cast<int>(l);
-        EXPECT_TRUE(validate_action(gs, Side::A, c.action).ok()) << static_cast<int>(l);
+    for (const bool defaults : {false, true}) {
+        const BotChoice c = defaults ? wh40k::test::default_choice(gs, Side::A) : Bot(BotConfig{}).decide(gs, Side::A);
+        ASSERT_FALSE(c.stopped) << defaults;
+        EXPECT_TRUE(validate_action(gs, Side::A, c.action).ok()) << defaults;
     }
 }
 
 namespace {
 
-// Plays each pairing on the monster fixture: no rejected action, no reverted move, no fallback.
+// Plays each game on the monster fixture, the bot on both sides: no rejected action, no reverted move, no fallback.
 struct Pairing {
     bool engaged;
     Side first;
-    BotLevel a;
-    BotLevel b;
     std::uint64_t seed;
 };
 
 void expect_clean_games(std::initializer_list<Pairing> pairings) {
     for (const Pairing& p : pairings) {
         const GameState scenario = mf::fixture(p.engaged, p.first);
-        const GameRecord g = play_bot_game(scenario, p.seed, level(p.a), level(p.b), 8000);
+        const GameRecord g = play_bot_game(scenario, p.seed, BotConfig{}, BotConfig{}, 8000);
         EXPECT_TRUE(g.finished) << "seed " << p.seed << (g.problems.empty() ? "" : ": " + g.problems.front());
         EXPECT_EQ(g.rejected, 0u) << "seed " << p.seed;
         EXPECT_EQ(g.reverted, 0u) << "seed " << p.seed;
@@ -131,19 +123,7 @@ void expect_clean_games(std::initializer_list<Pairing> pairings) {
 }  // namespace
 
 TEST(M63_Bots, GamesOnTheMonsterFixtureAreClean) {
-    // Apart and engaged, either side first, Easy and Normal.
-    expect_clean_games({Pairing{false, Side::B, BotLevel::Easy, BotLevel::Easy, 31},
-                        Pairing{true, Side::A, BotLevel::Easy, BotLevel::Easy, 32},
-                        Pairing{false, Side::B, BotLevel::Normal, BotLevel::Normal, 33},
-                        Pairing{true, Side::A, BotLevel::Normal, BotLevel::Normal, 34},
-                        Pairing{true, Side::B, BotLevel::Easy, BotLevel::Normal, 38},
-                        Pairing{false, Side::A, BotLevel::Normal, BotLevel::Easy, 39}});
-}
-
-// Hard on the six-unit fixture takes 10-40 s a game even in Release (Hard for the roster units is M69's), so it is run
-// by hand:  wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M63_Bots.DISABLED_*
-TEST(M63_Bots, DISABLED_HardGamesOnTheMonsterFixtureAreClean) {
-    expect_clean_games({Pairing{false, Side::B, BotLevel::Hard, BotLevel::Hard, 35},
-                        Pairing{true, Side::A, BotLevel::Hard, BotLevel::Normal, 36},
-                        Pairing{true, Side::B, BotLevel::Easy, BotLevel::Hard, 37}});
+    // Apart and engaged, either side first (D-085, M85: the seeds of the old Easy and Normal pairings).
+    expect_clean_games({Pairing{false, Side::B, 31}, Pairing{true, Side::A, 32}, Pairing{false, Side::B, 33},
+                        Pairing{true, Side::A, 34}, Pairing{true, Side::B, 38}, Pairing{false, Side::A, 39}});
 }

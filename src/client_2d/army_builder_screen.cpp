@@ -500,16 +500,6 @@ void ArmyBuilderScreen::draw_battle_options(ArmyBuilder& b, AppSettings& s, Buil
     ImGui::SetItemTooltip("The sides take turns setting up one unit at a time, the side taking the second turn first; "
                           "once one side is done, the other sets up the rest (D-081). Drag each unit into place in "
                           "your deployment zone, or auto-place it.");
-    ImGui::SameLine(0.0f, gap);
-    ImGui::TextUnformatted("Bot level:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(em * 7.0f);
-    if (ImGui::BeginCombo("##level", bot_level_name(s.bot_level))) {
-        for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-            if (ImGui::Selectable(bot_level_name(l), l == s.bot_level)) s.bot_level = l;
-        }
-        ImGui::EndCombo();
-    }
 
     // Row 2: how it is played, then Back and Start.
     ImGui::AlignTextToFramePadding();

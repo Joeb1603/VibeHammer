@@ -62,9 +62,6 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
                 else if (value == "none") o.bots = {false, false};
                 else throw std::invalid_argument("not A, B, both or none");
                 o.bots_given = true;
-            } else if (key == "--bot-level") {
-                o.bot_level = bot_level_from_key(value);
-                if (!o.bot_level) throw std::invalid_argument("not easy, normal or hard");
             } else if (key == "--bot-speed") {
                 o.bot_speed = bot_speed_from_key(value);
                 if (!o.bot_speed) throw std::invalid_argument("not slow, normal, fast or instant");
@@ -272,7 +269,6 @@ LoadedGame load_launch_save(const std::string& file, const std::filesystem::path
 SavePlayers launch_players(const SavePlayers& saved, const LaunchOptions& options) {
     SavePlayers out = saved;
     if (options.bots_given) out.bots = options.bots;
-    if (options.bot_level) out.bot_level = *options.bot_level;
     return out;
 }
 

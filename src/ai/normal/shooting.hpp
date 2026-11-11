@@ -11,8 +11,7 @@
 //   within half range).
 // - The next attack batch (04.03): the order of a target's remaining batches with the most expected value (so
 //   D2 attacks go before D1 attacks against W2 models), derived from the exact outcome, not a fixed rule.
-// - D-083 part 3 (M81), focus fire (not under Generation::M55 / M77, and only with several units on a side, so one unit
-//   a side shoots as before): a declaration's value adds, for each target, a finishing bonus (its reply in one of its
+// - D-083 part 3 (M81), focus fire (only with several units on a side, so one unit a side shoots as before): a declaration's value adds, for each target, a finishing bonus (its reply in one of its
 //   turns, the worst for us as the move score values a reply, x the enemy's turns left (at most kFinishTurns) x the
 //   expected share of its models destroyed: a wounded model finished takes its attacks with it, wounds alone don't) and
 //   a small bonus for the army plan's group targets (the focus). A unit splits its weapons over several targets only when that beats its best concentrated
@@ -29,7 +28,6 @@
 #include "analysis/odds.hpp"
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
-#include "generation.hpp"
 #include "normal/army_plan.hpp"
 
 namespace wh40k::ai::normal {
@@ -40,15 +38,13 @@ inline constexpr double kFocusWeight = 0.1;   // x the share destroyed of a targ
 inline constexpr double kSplitMargin = 0.02;  // a split declaration must beat the best concentrated one by this
 
 // D-083 part 3 (M81): what focus fire knows about the shooting side's targets, for one Shoot decision. Inactive (every
-// value as before M81) under a pre-teamwork generation and with one unit a side.
+// value as before M81) with one unit a side.
 class ShootingAim {
 public:
     ShootingAim() = default;
     // The aim of `side` (the side shooting) in `state` (the army plan's group targets are its focus targets). `cache`
-    // and `state` must outlive it. D-083 part 4 (M82): `plan`, `side`'s army plan to read (Hard's rollouts: the root's)
-    // instead of working it out in `state` (nullptr, or another side's: worked out).
-    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side, Generation generation,
-                const ArmyPlan* plan = nullptr);
+    // and `state` must outlive it.
+    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side);
     [[nodiscard]] bool active() const noexcept { return active_; }
     // The bonus of a declaration with these outcomes (unit shares; 0 when inactive).
     [[nodiscard]] double bonus(std::span<const analysis::TargetOutcome> outcomes) const;
@@ -88,11 +84,8 @@ struct ShootingChoice {
 // From the Shoot decision's legal actions: the unit, type and declaration worth the most, or nullopt when no
 // offered Shoot is worth anything (end the step). D-083 part 3 (M81): with focus fire active (ShootingAim), the values
 // with its bonus, and a unit shooting at a focus target first.
-// D-083 part 4 (M82): `plan`, the shooting side's army plan to read (nullptr, or another side's: worked out here, as M81).
 [[nodiscard]] std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
-                                                            const std::vector<core::GameAction>& legal,
-                                                            Generation generation = Generation::Current,
-                                                            const ArmyPlan* plan = nullptr);
+                                                            const std::vector<core::GameAction>& legal);
 
 // The value of `volley` resolved in `order` (indices into it) against `target`, in model equivalents.
 [[nodiscard]] double order_value(analysis::OddsCache& cache, std::span<const analysis::VolleyBatch> volley,

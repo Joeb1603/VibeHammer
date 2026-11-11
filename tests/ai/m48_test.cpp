@@ -21,7 +21,7 @@ namespace {
 
 // The time at which a synchronous driver first hands over the action, ticking every 10 ms from 0.
 double first_delivery(BotSpeed speed, const GameState& gs) {
-    BotDriver d(BotConfig{BotLevel::Easy}, speed, BotDriver::Threading::Synchronous);
+    BotDriver d(BotConfig{}, speed, BotDriver::Threading::Synchronous);
     DriverInputs in;
     in.state = &gs;
     in.bot_sides = std::array<bool, 2>{true, true};
@@ -51,7 +51,7 @@ TEST(M48_Pacing, SlowIsThreeTimesNormal) {
 TEST(M48_Pacing, ASlowBotHandsOverItsActivationAfter2Point4Seconds) {
     const client::GameSession s(wh40k::test::load_v1_scenario());  // Side A selects a unit to move
     const GameState& gs = s.state();
-    const BotChoice expected = Bot(BotConfig{BotLevel::Easy}).decide(gs, gs.pending->side);
+    const BotChoice expected = Bot(BotConfig{}).decide(gs, gs.pending->side);
     ASSERT_TRUE(std::holds_alternative<action::StartMove>(expected.action));
     EXPECT_NEAR(first_delivery(BotSpeed::Slow, gs), 2.4, 0.011);
     EXPECT_NEAR(first_delivery(BotSpeed::Normal, gs), 0.8, 0.011);

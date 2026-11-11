@@ -620,13 +620,14 @@ const PlanGroup* ArmyPlan::group_of(core::UnitId unit) const {
     return u != nullptr && u->group && *u->group < groups.size() ? &groups[*u->group] : nullptr;
 }
 
-ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side, Generation generation) {
+ArmyPlan no_plan(const core::GameState& state, core::Side side) { return noop_plan(state, side); }
+
+ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side) {
     const PlanInput in(state);
     const core::GameState& gs = *in.state;
     ArmyPlan plan = noop_plan(gs, side);
-    // D-083 part 1: no plan for a pre-batch generation, before the battle, with fewer than two of our units, or with
-    // no turn left.
-    if (pre_teamwork(generation) || plan.units.size() < 2) return plan;
+    // D-083 part 1: no plan before the battle, with fewer than two of our units, or with no turn left.
+    if (plan.units.size() < 2) return plan;
     if (gs.flow.stage == core::Stage::NotStarted || gs.flow.stage == core::Stage::Deploy) return plan;
     Planner p(cache, gs, side);
     if (p.turns() <= 0 || p.theirs().empty()) return plan;

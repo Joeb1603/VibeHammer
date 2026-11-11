@@ -5,7 +5,7 @@
 // Usage: wh40k_client_2d [--replay <file>] [--frame <n>] [--zoom <px per mm>] [--screenshot <file.png>]
 //                        [--steps <n>] [--select <unit id>] [--select-model <model id>] [--seed <n>]
 //                        [--scenario <file>] [--dice <n>] [--menu <0|1>] [--bot A|B|both|none]
-//                        [--bot-level easy|normal|hard] [--bot-speed slow|normal|fast|instant] [--bot-steps <n>]
+//                        [--bot-speed slow|normal|fast|instant] [--bot-steps <n>]
 //                        [--load <save.json>] [--pick-dice <i,j,...>]
 //   M38 (D-055): with no flags the exe opens on the start screen and uses the settings saved next to it. Any flag
 //   skips the start screen and runs with the default settings (nothing is read or saved), so scripted runs are
@@ -15,13 +15,13 @@
 //   --scenario file: the scenario for new games (default data/scenarios/v1_skirmish.json).
 //   --dice n: 1 keeps the dice pop-ups the --steps rolls made (otherwise dropped), 2 also shows the first
 //             card's faces (M20, for screenshots).
-//   M39 (D-054): --bot: the sides the bot plays in the first game (default none: hotseat); --bot-level and
-//   --bot-speed set its level and pacing; --bot-steps n: after --steps, run up to n bot decisions at once
+//   M39 (D-054): --bot: the sides the bot plays in the first game (default none: hotseat); --bot-speed sets its
+//   pacing (D-085, M85: one bot, so no --bot-level); --bot-steps n: after --steps, run up to n bot decisions at once
 //   before the first frame (it stops at a human's decision; their dice pop-ups are dropped unless --dice).
 //   M45: --bot-steps prints "bot-steps: <taken> of <n> bot actions taken" to stdout (package.ps1 checks it).
 //   M61: --load <save.json>: start on a saved game (the sidebar's Save / Load format), for screenshots of decisions
-//   --steps can't reach. Not with --scenario, --replay or --seed. The save's players unless --bot / --bot-level
-//   are given. A missing or unreadable file, or one that fails to load, exits with code 2.
+//   --steps can't reach. Not with --scenario, --replay or --seed. The save's players unless --bot is
+//   given. A missing or unreadable file, or one that fails to load, exits with code 2.
 //   M61: --pick-dice <i,j,...>: pick those wound dice (0-based) in the first re-roll pop-up, as clicks would (for
 //   screenshots); it submits nothing.
 //   M63: --click-units <id,id,...>: click those units on the board in the first decision it handles, as clicks would
@@ -245,7 +245,6 @@ public:
             // M13: the dice seed is chosen at game start (shown and editable in the panel). D-038: a new
             // random one each game unless "Fixed seed" is ticked.
             if (!settings_.fixed_seed) settings_.seed = random_seed();
-            game_bot_level_ = settings_.bot_level;  // M39: the level this game is played at (saved with it)
             if (custom_setup_ && builder_) {
                 // M75 (D-082): a custom battle is rebuilt from its setup (the two lists, first turn, deployment).
                 const core::GameState initial =
@@ -271,17 +270,12 @@ public:
         return scenario_override_ ? *scenario_override_ : resolve_data_path(kRepoRoot, settings_.scenario);
     }
 
-    // M38 / M39: who plays which side, and the bot's level.
+    // M38 / M39: who plays which side.
     std::string players_text() const {
         if (!bot_sides_[0] && !bot_sides_[1]) return "Hotseat: each side acts when the panel names it.";
-        std::string level = bot_level_name(game_bot_level_);
-        const ai::BotLevel played = ai::effective_level(game_bot_level_);
-        if (played != game_bot_level_) {
-            level += std::string(" (not built yet: it plays as ") + bot_level_name(played) + ")";
-        }
-        if (bot_sides_[0] && bot_sides_[1]) return "Bot vs bot, level " + level + ".";
+        if (bot_sides_[0] && bot_sides_[1]) return "Bot vs bot.";
         const core::Side bot = bot_sides_[0] ? core::Side::A : core::Side::B;
-        return "The bot plays " + side_name(bot) + ", level " + level + ".";
+        return "The bot plays " + side_name(bot) + ".";
     }
 
     // ---- M75 (D-082): the army builder ----
@@ -425,8 +419,8 @@ public:
         undo_groups_.clear();  // D-039
         victory_pending_ = false;  // D-038: only a game that ends while it is played shows the pop-up
         end_warning_.reset();
-        // M39 (D-054): the bot starts afresh on the new game, at this game's level.
-        driver_.set_config(ai::BotConfig{game_bot_level_});
+        // M39 (D-054): the bot starts afresh on the new game.
+        driver_.set_config(ai::BotConfig{});
         driver_.invalidate();
         watch_.reset();  // M45
         bot_reason_.clear();
@@ -442,7 +436,7 @@ public:
     void save_game() {
         if (!session_) return;
         try {
-            save_game_file(save_path_, *session_, SavePlayers{bot_sides_, game_bot_level_});  // M39: and its players
+            save_game_file(save_path_, *session_, SavePlayers{bot_sides_});  // M39: and its players
             status_ = std::string("Saved to ") + save_path_;
         } catch (const std::exception& e) {
             status_ = std::string("Could not save: ") + e.what();
@@ -461,7 +455,6 @@ public:
     void start_loaded(LoadedGame loaded, const std::string& from) {
         custom_setup_.reset();  // M75: "New game" after a load starts the scenario, as before
         bot_sides_ = loaded.players.bots;
-        game_bot_level_ = loaded.players.bot_level;
         start_session(std::move(loaded.session));
         status_ = "Loaded " + from + " (seed " + std::to_string(session_->seed()) + "). " + players_text();
     }
@@ -2542,8 +2535,7 @@ private:
     void draw_watch_bar() {
         draw_watch_buttons();
         ImGui::SameLine();
-        const std::string tag = std::string("Watching bot vs bot (") + bot_level_name(game_bot_level_) + ")";
-        chip(tag.c_str(), ImVec4(0.30f, 0.33f, 0.40f, 1.0f));
+        chip("Watching bot vs bot", ImVec4(0.30f, 0.33f, 0.40f, 1.0f));
         ImGui::SameLine();
         const std::string status =
             session_->state().result ? std::string("Game over") : watch_status(watch_, settings_.bot_speed);
@@ -2555,7 +2547,7 @@ private:
         ImGui::Separator();
     }
 
-    // M45: a bot reason, short (the action, the main reason, Hard's odds), with the full reason as its tooltip.
+    // M45: a bot reason, short (the action and the main reason), with the full reason as its tooltip.
     static void bot_reason_text(const char* prefix, const std::string& reason) {
         const std::string text = std::string(prefix) + ai::short_reason(reason);
         ImGui::TextWrapped("%s", text.c_str());
@@ -2971,7 +2963,6 @@ private:
     bool persist_ = false;        // false in a scripted (CLI) run: the settings file is never touched
     std::optional<fs::path> scenario_override_;  // --scenario
     BotSides bot_sides_{false, false};  // M38: which sides the bot plays (client state, not GameState; D-054)
-    BotLevel game_bot_level_ = BotLevel::Easy;  // M39: this game's bot level (from the settings, or the save)
     ai::BotDriver driver_;              // M39 (D-054): paces the bot's decisions
     WatchControls watch_;               // M45: Pause, Step and the speed; M48: Pause is in the sidebar
     std::string bot_reason_;            // why the bot did its last action
@@ -3070,7 +3061,6 @@ int main(int argc, char** argv) {
         settings.fixed_seed = true;  // D-038: --seed fixes it
         settings.seed = *options.seed;
     }
-    if (options.bot_level) settings.bot_level = *options.bot_level;  // M39
     if (options.bot_speed) settings.bot_speed = *options.bot_speed;
     App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots, std::move(loaded),
             std::move(custom));

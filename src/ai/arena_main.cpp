@@ -1,18 +1,14 @@
 // wh40k_bot_arena (M39, D-054): bot vs bot games, headless. Run it in Release for strength numbers.
 //
-// Usage: wh40k_bot_arena [--games N] [--a easy|normal|hard] [--b easy|normal|hard] [--scenario <file>]
-//   (--a / --b also take the hidden regression levels easy-m55 and normal-m55, D-066: Easy and Normal as at M55, and
-//   normal-m77 and hard-m77, D-083 (M78): Normal and Hard as before the Teamwork batch, main at c54c47c)
-//                        [--seed <first>] [--step-cap N] [--trace <seed>] [--weights key=value,...]
-//   Plays N games (default 200) with seeds first, first + 1, ... (default 1); side A is played at level --a,
-//   side B at --b (default easy). The scenario is relative to the repo root (default
+// Usage: wh40k_bot_arena [--games N] [--scenario <file>] [--seed <first>] [--step-cap N] [--trace <seed>]
+//                        [--weights key=value,...] [--weights-a key=value,...] [--weights-b key=value,...]
+//   Plays N games (default 200) with seeds first, first + 1, ... (default 1), the bot on both sides (D-085, M85: one
+//   bot; --a / --b and the levels are gone). The scenario is relative to the repo root (default
 //   data/scenarios/v1_skirmish.json). Exits 1 if any action was rejected, any move was reverted, or a game
 //   didn't finish within the step cap (default 5000); 2 for a bad flag. --trace plays the one game with that
-//   seed and prints every bot decision, its reason and (M44) its time instead. --weights (M44, for tuning) overrides the Hard
-//   level's weights (hard/weights.hpp) for both sides: tempo, material, share, plans, rollouts, rollout_actions,
-//   budget_actions, full_budget_units and table_workers (M69), static_plans, margin, move_search_units (M69),
-//   chain_budget_mib and chain_budget_tables (M73, D-080; 0: no limit), delay, survival, edge, coherency, and (M80,
-//   D-083 part 2) approach, cohesion and follow (Hard's own move scores; Normal keeps MoveWeights{}).
+//   seed and prints every bot decision, its reason and (M44) its time instead. --weights (for tuning) overrides the
+//   move score's weights (normal::MoveWeights, normal/move_score.hpp) for both sides, --weights-a / --weights-b for one
+//   side (applied in the order given): delay, survival, edge, coherency, approach, cohesion, follow, approach_alone.
 //   --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
 //   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
@@ -45,41 +41,9 @@ namespace {
 
 namespace fs = std::filesystem;
 using wh40k::ai::BotConfig;
-using wh40k::ai::BotLevel;
 
-// The level, and (D-066, M56) the hidden regression levels "easy-m55" and "normal-m55": Easy and Normal exactly as
-// they played at M55, for measuring the M56 changes in one binary. D-083 (M78): "normal-m77" and "hard-m77", Normal
-// and Hard as before the Teamwork batch (M78-M83). Arena and tests only; the client never offers them.
-void parse_level(const std::string& v, BotConfig& config) {
-    using wh40k::ai::Generation;
-    if (v == "easy") {
-        config.level = BotLevel::Easy;
-        config.generation = Generation::Current;
-    } else if (v == "normal") {
-        config.level = BotLevel::Normal;
-        config.generation = Generation::Current;
-    } else if (v == "hard") {
-        config.level = BotLevel::Hard;
-        config.generation = Generation::Current;
-    } else if (v == "easy-m55") {
-        config.level = BotLevel::Easy;
-        config.generation = Generation::M55;
-    } else if (v == "normal-m55") {
-        config.level = BotLevel::Normal;
-        config.generation = Generation::M55;
-    } else if (v == "normal-m77") {
-        config.level = BotLevel::Normal;
-        config.generation = Generation::M77;
-    } else if (v == "hard-m77") {
-        config.level = BotLevel::Hard;
-        config.generation = Generation::M77;
-    } else {
-        throw std::invalid_argument("not easy, normal or hard");
-    }
-}
-
-// "tempo=0.3,rollouts=8": Hard's weights (M44 tuning).
-void apply_weights(const std::string& text, wh40k::ai::hard::BotWeights& w) {
+// "delay=0.4,follow=0.2": the move score's weights (D-085, M85 tuning).
+void apply_weights(const std::string& text, wh40k::ai::normal::MoveWeights& w) {
     std::stringstream in(text);
     std::string item;
     while (std::getline(in, item, ',')) {
@@ -88,71 +52,30 @@ void apply_weights(const std::string& text, wh40k::ai::hard::BotWeights& w) {
         const std::string key = item.substr(0, eq);
         const std::string value = item.substr(eq + 1);
         const double d = std::stod(value);
-        const auto count = [&] {
-            if (d < 0.0) throw std::invalid_argument("negative");
-            return static_cast<std::size_t>(d);
-        };
-        if (key == "tempo") {
-            w.chain.tempo = d;
-        } else if (key == "material") {
-            w.chain.material = d;
-        } else if (key == "share") {
-            w.lookahead.share = d;
-        } else if (key == "plans") {
-            w.lookahead.plans = count();
-        } else if (key == "rollouts") {
-            w.lookahead.rollouts = count();
-        } else if (key == "rollout_actions") {
-            w.lookahead.rollout_actions = count();
-        } else if (key == "budget_actions") {
-            w.lookahead.budget_actions = count();
-        } else if (key == "full_budget_units") {
-            w.lookahead.full_budget_units = count();
-        } else if (key == "table_workers") {
-            w.lookahead.table_workers = count();
-        } else if (key == "static_plans") {
-            w.static_plans = count();
-        } else if (key == "margin") {
-            w.margin = d;
-        } else if (key == "move_search_units") {
-            w.move_search_units = count();
-        } else if (key == "chain_budget_mib") {
-            w.chain_budget_mib = count();
-        } else if (key == "chain_budget_tables") {
-            w.chain_budget_tables = count();
-        } else if (key == "delay") {
-            w.move.delay = d;
+        if (key == "delay") {
+            w.delay = d;
         } else if (key == "survival") {
-            w.move.survival = d;
+            w.survival = d;
         } else if (key == "edge") {
-            w.move.edge = d;
+            w.edge = d;
         } else if (key == "coherency") {
-            w.move.coherency = d;
+            w.coherency = d;
         } else if (key == "approach") {  // D-083 part 2 (M80)
-            w.move.approach = d;
+            w.approach = d;
         } else if (key == "cohesion") {
-            w.move.cohesion = d;
+            w.cohesion = d;
         } else if (key == "follow") {
-            w.move.follow = d;
+            w.follow = d;
         } else if (key == "approach_alone") {  // D-083 part 5 (M83)
-            w.move.approach_alone = d;
+            w.approach_alone = d;
         } else {
             throw std::invalid_argument("unknown weight");
         }
     }
 }
 
-std::string level_name(const BotConfig& c) {
-    std::string name = "?";
-    switch (c.level) {
-        case BotLevel::Easy: name = "easy"; break;
-        case BotLevel::Normal: name = "normal"; break;
-        case BotLevel::Hard: name = "hard"; break;
-    }
-    if (c.generation == wh40k::ai::Generation::M55) name += "-m55";
-    if (c.generation == wh40k::ai::Generation::M77) name += "-m77";
-    return name;
-}
+// For the header line: the weights given for a side, or "default".
+std::string weights_name(const std::string& text) { return text.empty() ? "default" : "weights " + text; }
 
 }  // namespace
 
@@ -164,7 +87,8 @@ int main(int argc, char** argv) {
     std::uint64_t seed = 1;
     std::size_t step_cap = 5000;
     std::optional<std::uint64_t> trace;
-    std::string weights_text;
+    std::string weights_a;  // as given, for the header line
+    std::string weights_b;
     bool per_game = false;
     bool scenario_given = false;
     std::optional<std::string> army_a;  // M72
@@ -183,10 +107,6 @@ int main(int argc, char** argv) {
             if (key == "--games") {
                 games = std::stoi(value);
                 if (games < 0) throw std::invalid_argument("negative");
-            } else if (key == "--a") {
-                parse_level(value, a);
-            } else if (key == "--b") {
-                parse_level(value, b);
             } else if (key == "--scenario") {
                 scenario = value;
                 scenario_given = true;
@@ -213,9 +133,16 @@ int main(int argc, char** argv) {
             } else if (key == "--per-game") {
                 per_game = std::stoi(value) != 0;
             } else if (key == "--weights") {
-                apply_weights(value, a.hard);
-                apply_weights(value, b.hard);
-                weights_text = value;
+                apply_weights(value, a.move);
+                apply_weights(value, b.move);
+                weights_a += (weights_a.empty() ? "" : ",") + value;
+                weights_b += (weights_b.empty() ? "" : ",") + value;
+            } else if (key == "--weights-a") {
+                apply_weights(value, a.move);
+                weights_a += (weights_a.empty() ? "" : ",") + value;
+            } else if (key == "--weights-b") {
+                apply_weights(value, b.move);
+                weights_b += (weights_b.empty() ? "" : ",") + value;
             } else {
                 throw std::invalid_argument("unknown flag");
             }
@@ -294,8 +221,8 @@ int main(int argc, char** argv) {
             for (const std::string& p : g.problems) std::printf("problem: %s\n", p.c_str());
             return 0;
         }
-        std::printf("arena: %d games, A %s vs B %s, %s, seeds %llu..%llu\n", games, level_name(a).c_str(),
-                    level_name(b).c_str(), scenario.c_str(), static_cast<unsigned long long>(seed),
+        std::printf("arena: %d games, A %s vs B %s, %s, seeds %llu..%llu\n", games, weights_name(weights_a).c_str(),
+                    weights_name(weights_b).c_str(), scenario.c_str(), static_cast<unsigned long long>(seed),
                     static_cast<unsigned long long>(seed + static_cast<std::uint64_t>(games > 0 ? games - 1 : 0)));
         if (per_game) {
             const wh40k::ai::PerGameReport r = wh40k::ai::run_per_game(scenario_for, games, seed, a, b, step_cap);

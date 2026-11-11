@@ -293,7 +293,7 @@ TEST(M61_Undo, TheAnswerIsItsOwnGroupAndUndoingItReRollsTheSameDice) {
 
 TEST(M61_Saves, ASaveMadeAtTheDecisionLoadsBackToIt) {
     const GameSession session = session_at_the_decision();
-    const SavePlayers players{{false, true}, BotLevel::Normal};
+    const SavePlayers players{{false, true}};
     const LoadedGame loaded = load_game_json(save_json(session, players));
     EXPECT_EQ(loaded.session.state(), session.state());
     ASSERT_TRUE(loaded.session.pending());
@@ -306,20 +306,22 @@ TEST(M61_Saves, ASaveMadeAtTheDecisionLoadsBackToIt) {
 
 TEST(M61_LaunchOptions, LoadParsesAndCombinesWithTheScreenshotFlags) {
     const LaunchOptions o = parse_launch_args({"--load", "saves/game.json", "--screenshot", "out.png", "--steps", "1",
-                                               "--bot", "B", "--bot-level", "hard", "--bot-steps", "3", "--dice", "2",
+                                               "--bot", "B", "--bot-steps", "3", "--dice", "2",
                                                "--zoom", "1.5", "--select", "2"});
     ASSERT_TRUE(o.load.has_value());
     EXPECT_EQ(*o.load, "saves/game.json");
     EXPECT_EQ(o.steps, 1);
     EXPECT_TRUE(o.bots_given);
     EXPECT_EQ(o.bots, (BotSides{false, true}));
-    EXPECT_EQ(o.bot_level, BotLevel::Hard);
     EXPECT_EQ(o.bot_steps, 3);
     EXPECT_EQ(o.dice, 2);
     EXPECT_EQ(o.select_unit, 2u);
-    // The save's players, unless --bot / --bot-level say otherwise.
-    const SavePlayers saved{{true, false}, BotLevel::Easy};
-    EXPECT_EQ(launch_players(saved, o), (SavePlayers{{false, true}, BotLevel::Hard}));
+    // The save's players, unless --bot says otherwise.
+    const SavePlayers saved{{true, false}};
+    EXPECT_EQ(launch_players(saved, o), (SavePlayers{{false, true}}));
+    // D-085 (M85): one bot, so --bot-level is gone; like any unknown flag it is ignored.
+    const LaunchOptions old = parse_launch_args({"--load", "x.json", "--bot", "B", "--bot-level", "hard"});
+    EXPECT_EQ(launch_players(saved, old), (SavePlayers{{false, true}}));
     EXPECT_EQ(launch_players(saved, parse_launch_args({"--load", "x.json"})), saved);
     // The flags it can't be combined with, and an empty value.
     for (const char* other : {"--scenario", "--replay", "--seed"}) {

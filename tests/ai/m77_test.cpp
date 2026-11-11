@@ -1,10 +1,10 @@
-// M77 (D-081, bot deployment): Normal and Hard set their units up by a simple heuristic (src/ai/deploy_policy.*); Easy
-// keeps M74's policy (the lowest-id unit at Auto-place's spot, tested in m74_test.cpp).
+// M77 (D-081, bot deployment): the bot sets its units up by a simple heuristic (src/ai/deploy_policy.*); M74's policy
+// (the lowest-id unit at Auto-place's spot, tested in m74_test.cpp) answers when the heuristic has none.
 // - Order: long-range shooters first, melee-oriented units last, the rest between; ties by id.
 // - Spot: core's proposal, nudged within a small bounded set of translations toward the centre of the enemy units set up
 //   (melee nearer it, shooters further back while it stays in range), the first one core accepts; the proposal itself
 //   with no enemy set up yet.
-// - Hard deploys as Normal and builds no chain table; CannotSetUp only when the engine finds no legal spot.
+// - CannotSetUp only when the engine finds no legal spot. (D-085, M85: Hard, which deployed as Normal, is gone.)
 // - The replay: Normal vs Normal on two custom lists with hand deployment, to the result.
 
 #include <gtest/gtest.h>
@@ -43,11 +43,6 @@ using wh40k::test::repo_root;
 
 namespace {
 
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
-}
 
 ArmyList fixture_army(const std::string& file) { return load_army(repo_root() / "tests/data/armies" / file); }
 
@@ -90,7 +85,6 @@ struct Deployment {
     std::vector<BotSetUp> set_ups;
     GameState after;
     std::size_t fallbacks = 0;
-    std::size_t tables = 0;
 };
 
 UnitId unit_of(const GameAction& a) {
@@ -99,11 +93,11 @@ UnitId unit_of(const GameAction& a) {
     return UnitId{0};
 }
 
-// Both sides' deployment by bots of these levels (the state is not started).
-Deployment deploy(GameState gs, BotLevel a, BotLevel b) {
+// Both sides' deployment by the bot (the state is not started).
+Deployment deploy(GameState gs) {
     start_game(gs);
-    Bot ba(level(a));
-    Bot bb(level(b));
+    Bot ba(BotConfig{});
+    Bot bb(BotConfig{});
     Deployment out;
     while (gs.flow.stage == Stage::Deploy) {
         const Side side = decider(gs);
@@ -125,7 +119,6 @@ Deployment deploy(GameState gs, BotLevel a, BotLevel b) {
     }
     out.after = gs;
     out.fallbacks = ba.fallbacks() + bb.fallbacks();
-    out.tables = ba.chain_tables_built() + bb.chain_tables_built();
     return out;
 }
 
@@ -141,7 +134,7 @@ std::vector<GameState> battles() {
 const std::vector<Deployment>& normal_deployments() {
     static const std::vector<Deployment> d = [] {
         std::vector<Deployment> out;
-        for (const GameState& gs : battles()) out.push_back(deploy(gs, BotLevel::Normal, BotLevel::Normal));
+        for (const GameState& gs : battles()) out.push_back(deploy(gs));
         return out;
     }();
     return d;
@@ -330,15 +323,15 @@ TEST(M77_BotDeploy, CandidatesAreBoundedAndStartWithTheBestFacing) {
     }
 }
 
-// ---- Determinism, Hard, CannotSetUp ----
+// ---- Determinism, CannotSetUp ----
 
 TEST(M77_BotDeploy, DeterministicForFreshAndUsedBots) {
     const GameState gs = wh40k::test::random_armies_battle(5, DeploymentMode::Hand);
-    const Deployment first = deploy(gs, BotLevel::Normal, BotLevel::Normal);
-    const Deployment second = deploy(gs, BotLevel::Normal, BotLevel::Normal);
+    const Deployment first = deploy(gs);
+    const Deployment second = deploy(gs);
     EXPECT_EQ(first.after, second.after);
     // A bot that has already played answers every decision of the deployment the same.
-    Bot used(level(BotLevel::Normal));
+    Bot used(BotConfig{});
     for (const BotSetUp& s : first.set_ups) {
         EXPECT_EQ(used.decide(s.before, s.side).action, s.action);
     }
@@ -349,31 +342,10 @@ TEST(M77_BotDeploy, DeterministicForFreshAndUsedBots) {
               first.set_ups[3].action);
 }
 
-TEST(M77_BotDeploy, HardDeploysAsNormalAndBuildsNoTables) {
-    for (const GameState& gs : {stock_battle(Side::A), wh40k::test::random_armies_battle(8, DeploymentMode::Hand)}) {
-        const Deployment normal = deploy(gs, BotLevel::Normal, BotLevel::Normal);
-        const Deployment hard = deploy(gs, BotLevel::Hard, BotLevel::Hard);
-        EXPECT_EQ(hard.tables, 0u);  // no chain table from a half-deployed army
-        EXPECT_EQ(hard.fallbacks, 0u);
-        ASSERT_EQ(hard.set_ups.size(), normal.set_ups.size());
-        for (std::size_t i = 0; i < hard.set_ups.size(); ++i) {
-            EXPECT_EQ(hard.set_ups[i].action, normal.set_ups[i].action) << "set-up " << i;
-            EXPECT_EQ(hard.set_ups[i].reason, normal.set_ups[i].reason);
-        }
-        EXPECT_EQ(hard.after, normal.after);
-    }
-    // Normal as at M55 (D-066, arena only) keeps M74's policy, as Easy does.
-    BotConfig m55 = level(BotLevel::Normal);
-    m55.generation = Generation::M55;
-    EXPECT_FALSE(uses_deploy_heuristic(m55));
-    EXPECT_FALSE(uses_deploy_heuristic(level(BotLevel::Easy)));
-    EXPECT_TRUE(uses_deploy_heuristic(level(BotLevel::Normal)));
-    EXPECT_TRUE(uses_deploy_heuristic(level(BotLevel::Hard)));
-}
-
 TEST(M77_BotDeploy, NoCannotSetUpWhileTheEngineFindsASpot) {
     // In every deployment above a unit is declared not set up only when core lists CannotSetUp for it, and the nudges
-    // never leave one of the side's own units without a spot: no battle has a unit not set up (Easy has none either).
+    // never leave one of the side's own units without a spot: no battle has a unit not set up (M74's policy has none
+    // either).
     for (const Deployment& d : normal_deployments()) {
         for (const BotSetUp& s : d.set_ups) {
             const bool cannot = std::holds_alternative<action::CannotSetUp>(s.action);
@@ -382,11 +354,11 @@ TEST(M77_BotDeploy, NoCannotSetUpWhileTheEngineFindsASpot) {
         }
     }
     // At each decision of the stock deployment, CannotSetUp is answered exactly when core lists it for the unit chosen.
-    // (Where nothing fits, M74's narrow zone, m74_test.cpp checks every level: the third line of Termagants is declared
+    // (Where nothing fits, M74's narrow zone, m74_test.cpp checks the bot: the third line of Termagants is declared
     // not set up.)
     GameState gs = stock_battle(Side::A);
     start_game(gs);
-    Bot bot(level(BotLevel::Normal));
+    Bot bot(BotConfig{});
     while (gs.flow.stage == Stage::Deploy) {
         const Side side = decider(gs);
         const std::vector<GameAction> legal = legal_actions(gs, side);
@@ -401,18 +373,16 @@ TEST(M77_BotDeploy, NoCannotSetUpWhileTheEngineFindsASpot) {
     }
 }
 
-TEST(M77_BotDeploy, HandDeployedGamesAtNormalAndHardFinishClean) {
-    // The arena's random armies with --deploy hand (the acceptance's 200 seeds per pairing are run in Release): Normal vs
-    // Normal, and Hard vs Normal on seed 6 (small armies: Hard's tables are cheap in Debug).
+TEST(M77_BotDeploy, HandDeployedGamesFinishClean) {
+    // The arena's random armies with --deploy hand (the acceptance's 200 seeds are run in Release), the bot on both sides:
+    // seed 2, and seed 6 (small armies; D-085, M85: Hard vs Normal before).
     const ArmySource source = load_army_source(repo_root());
     const auto hand = [&](std::uint64_t seed) { return random_armies_battle(source, seed, Side::A, DeploymentMode::Hand); };
     struct Run {
-        BotLevel a;
-        BotLevel b;
         std::uint64_t first;
     };
-    for (const Run& run : {Run{BotLevel::Normal, BotLevel::Normal, 2}, Run{BotLevel::Hard, BotLevel::Normal, 6}}) {
-        const ArenaResult r = run_arena(hand, 1, run.first, level(run.a), level(run.b));
+    for (const Run& run : {Run{2}, Run{6}}) {
+        const ArenaResult r = run_arena(hand, 1, run.first, BotConfig{}, BotConfig{});
         EXPECT_TRUE(r.clean()) << format_arena(r, hand(run.first));
         EXPECT_EQ(r.fallbacks, 0u);
         for (const GameRecord& g : r.games) EXPECT_TRUE(g.finished) << "seed " << g.seed;
@@ -462,7 +432,7 @@ BotGame play_hand_deploy_bot_game(std::uint64_t seed = kReplaySeed) {
     g.replay.initial.scenario = kBattleScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
-    g.record = play_bot_session(session, level(BotLevel::Normal), level(BotLevel::Normal), 5000);
+    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;

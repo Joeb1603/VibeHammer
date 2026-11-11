@@ -2,7 +2,8 @@
 // focus's, the partners' expected volleys on it are credited (ScoreLine::allies_hit), its reply is shared among the
 // group's members it can reach, a unit with no partner able to reach the focus by our next turn keeps its own line and
 // only approaches its focus, and the move reason names the focus and the partners. A unit without partners moves as
-// before (Generation::M77's plan). Hand-built roster positions (the M79 fixtures' units).
+// it does with no plan at all (normal::no_plan, what Generation::M77 read; D-085, M85: the switch itself went, and with
+// it the comparisons with the whole pre-batch Movement phase). Hand-built roster positions (the M79 fixtures' units).
 
 #include <gtest/gtest.h>
 
@@ -24,7 +25,7 @@
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
-#include "generation.hpp"
+#include "state_fixture.hpp"
 #include "normal/army_plan.hpp"
 #include "normal/move_score.hpp"
 #include "normal/movement.hpp"
@@ -87,16 +88,9 @@ float gap_in(const GameState& gs, UnitId a, UnitId b) {
     return mm_to_inches(unit_distance(*gs.find_unit(a), *gs.find_unit(b)).value_or(-1.0f));
 }
 
-BotConfig normal_at(Generation g) {
-    BotConfig c;
-    c.level = BotLevel::Normal;
-    c.generation = g;
-    return c;
-}
-
-// The side to move's whole Movement phase, played by Normal at `g` (each StartMove's reason in `reasons`).
-GameState play_movement(GameState gs, Generation g, std::vector<std::string>* reasons = nullptr) {
-    Bot bot(normal_at(g));
+// The side to move's whole Movement phase, played by the bot (each StartMove's reason in `reasons`).
+GameState play_movement(GameState gs, std::vector<std::string>* reasons = nullptr) {
+    Bot bot(BotConfig{});
     const Side side = gs.pending.value().side;
     for (int i = 0; i < 400 && gs.pending && gs.pending->side == side &&
                     (std::holds_alternative<decision::MoveUnits>(gs.pending->kind) ||
@@ -127,9 +121,9 @@ GameState play_movement_with(GameState gs, const MoveWeights& weights) {
             OddsCache cache;
             std::optional<PolicyResult> r =
                 std::holds_alternative<decision::MoveUnits>(gs.pending->kind)
-                    ? decide_move_units(cache, gs, side, legal_actions(gs, side), decision_seed(gs), nullptr,
-                                        Generation::Current, nullptr, weights)
-                    : continue_unit_move(cache, gs, side, Generation::Current, weights);
+                    ? decide_move_units(cache, gs, side, legal_actions(gs, side), decision_seed(gs), nullptr, nullptr,
+                                        weights)
+                    : continue_unit_move(cache, gs, side, weights);
             if (!r) {
                 ADD_FAILURE() << "no move";
                 return gs;
@@ -179,7 +173,7 @@ GameState tyrant_pair(float gap, float tyrant_gap = -1.0f) {
 TEST(M80_Normal, TwoLegionariesUnitsAdvanceTogetherOnAScreamerKiller) {
     // Both Legionaries units 22" from a Screamer-killer: alone each loses (M79), together they win, so the plan pairs
     // them. Following the group, both close in and end within 6" of each other; before the batch (M77) the chainswords
-    // fell back.
+    // fell back, and with the shipped weights they still do (below).
     const GameState gs = side_by_side(22.0f);
     OddsCache cache;
     const ArmyPlan plan = army_plan(cache, gs, Side::A);
@@ -195,17 +189,14 @@ TEST(M80_Normal, TwoLegionariesUnitsAdvanceTogetherOnAScreamerKiller) {
     EXPECT_LT(gap_in(together, kBoltguns, kScreamer), 22.0f);
     EXPECT_LE(gap_in(together, kChainswords, kBoltguns), 6.0f);
 
-    const GameState before = play_movement(gs, Generation::M77);
-    EXPECT_GT(gap_in(before, kChainswords, kScreamer), 22.0f) << "M77: the chainswords keep away alone";
-    EXPECT_GT(gap_in(before, kChainswords, kBoltguns), 6.0f);
-
     // D-083 part 2: Normal follows a group only when its gain is at least a fifth of its risk (MoveWeights::follow,
     // measured). Two 180-point Legionaries units put 2.55 at risk for this +0.13, so today's Normal keeps their
-    // pre-batch moves here (an open item for M81's focus fire and joint charges).
+    // pre-batch moves here (an open item for M81's focus fire and joint charges): the chainswords keep away alone.
+    // (D-085, M85: this compared the moves with the pre-batch Normal's, Generation::M77, which played them the same.)
     EXPECT_LT(group.gain, MoveWeights{}.follow * group.risk);
-    const GameState now = play_movement(gs, Generation::Current);
-    EXPECT_FLOAT_EQ(gap_in(now, kChainswords, kScreamer), gap_in(before, kChainswords, kScreamer));
-    EXPECT_FLOAT_EQ(gap_in(now, kBoltguns, kScreamer), gap_in(before, kBoltguns, kScreamer));
+    const GameState now = play_movement(gs);
+    EXPECT_GT(gap_in(now, kChainswords, kScreamer), 22.0f);
+    EXPECT_GT(gap_in(now, kChainswords, kBoltguns), 6.0f);
 }
 
 TEST(M80_Normal, ALoneUnitWaitsOutsideTheMonstersChargeReach) {
@@ -223,7 +214,7 @@ TEST(M80_Normal, ALoneUnitWaitsOutsideTheMonstersChargeReach) {
     OddsCache cache;
     EXPECT_TRUE(army_plan(cache, gs, Side::A).groups.empty());
     const analysis::ThreatRanges screamer = analysis::threat_ranges(*gs.find_unit(kScreamer));
-    const GameState after = play_movement(gs, Generation::Current);
+    const GameState after = play_movement(gs);
     EXPECT_LT(screamer.p_charge_after_move(in(gap_in(after, kChainswords, kScreamer))), 0.05);
 
     // Even handed the pair's group (as the plan forms it side by side), the partner 20" back is out of the Screamer-killer's
@@ -238,8 +229,9 @@ TEST(M80_Normal, ALoneUnitWaitsOutsideTheMonstersChargeReach) {
         }
         Simulator sim(gs, 0);
         ASSERT_TRUE(sim.step(Side::A, action::StartMove{kChainswords, MoveType::Normal, std::nullopt}).ok());
-        const std::optional<PlannedMove> together = plan_unit_move(cache, sim.state(), Generation::Current, &group);
-        const std::optional<PlannedMove> alone = plan_unit_move(cache, sim.state(), Generation::M77);
+        const std::optional<PlannedMove> together = plan_unit_move(cache, sim.state(), &group);
+        const ArmyPlan none = no_plan(sim.state(), Side::A);
+        const std::optional<PlannedMove> alone = plan_unit_move(cache, sim.state(), &none);
         ASSERT_TRUE(together && alone);
         EXPECT_EQ(together->candidate.ends, alone->candidate.ends) << together->candidate.label;
         EXPECT_LT(screamer.p_charge_after_move(in(gap_in(together->after, kChainswords, kScreamer))), 0.1);
@@ -249,23 +241,21 @@ TEST(M80_Normal, ALoneUnitWaitsOutsideTheMonstersChargeReach) {
 TEST(M80_Normal, FarUnitsCloseInRatherThanDrift) {
     // A Hive Tyrant at 3 wounds and the Genestealers 38" from a lone Legionaries unit: the plan pairs them (M79), each
     // beyond the reach of its next turn's charge. Every move scores about 0 on the line there; the approach term brings
-    // both closer. Before the batch (M77) the Genestealers drifted back.
+    // both closer. Before the batch (M77) the Genestealers drifted back (D-085, M85: that comparison went with M77).
     const GameState gs = tyrant_pair(38.0f);
     OddsCache cache;
     const ArmyPlan plan = army_plan(cache, gs, Side::B);
     ASSERT_EQ(plan.groups.size(), 1u) << describe(gs, plan);
     for (const PlanMember& m : plan.groups.front().members) EXPECT_GE(m.arrival, 2);  // beyond the horizon
 
-    const GameState now = play_movement(gs, Generation::Current);
+    const GameState now = play_movement(gs);
     EXPECT_LT(gap_in(now, kGenestealers, kChainswords), 38.0f - 6.0f);
     EXPECT_LT(gap_in(now, kTyrant, kChainswords), 38.0f - 6.0f);
-    const GameState before = play_movement(gs, Generation::M77);
-    EXPECT_GE(gap_in(before, kGenestealers, kChainswords), 38.0f) << "M77: the Genestealers drift";
 }
 
 TEST(M80_Normal, AUnitWithoutPartnersMovesAsBefore) {
     // The Legionaries pair on the Screamer-killer, and the Chaos Lord far south-east without partners: its move is the
-    // pre-batch move (the plan is active, but nothing in it is the Lord's).
+    // move it makes with no plan at all (the plan is active, but nothing in it is the Lord's).
     const GameState gs = side_by_side(16.0f, /*with_lord=*/true);
     OddsCache cache;
     const ArmyPlan plan = army_plan(cache, gs, Side::A);
@@ -276,10 +266,11 @@ TEST(M80_Normal, AUnitWithoutPartnersMovesAsBefore) {
         Simulator sim(gs, 0);
         wh40k::core::ScriptedDice dice{4};
         ASSERT_TRUE(sim.step(Side::A, action::StartMove{kLord, type, std::nullopt}, dice).ok());
-        const MoveScoreContext ctx(cache, sim.state(), kLord, MoveWeights{}, Generation::Current, &plan);
+        const MoveScoreContext ctx(cache, sim.state(), kLord, MoveWeights{}, &plan);
         EXPECT_EQ(ctx.team(), nullptr);
-        const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state(), Generation::Current);
-        const std::optional<PlannedMove> before = plan_unit_move(cache, sim.state(), Generation::M77);
+        const std::optional<PlannedMove> now = plan_unit_move(cache, sim.state());
+        const ArmyPlan none = no_plan(sim.state(), Side::A);
+        const std::optional<PlannedMove> before = plan_unit_move(cache, sim.state(), &none);
         ASSERT_TRUE(now && before);
         EXPECT_EQ(now->candidate.ends, before->candidate.ends);
         EXPECT_EQ(now->candidate.label, before->candidate.label);
@@ -293,7 +284,7 @@ TEST(M80_Normal, TheReasonNamesTheFocusAndPartners) {
     // names the group's focus and its partner ("Hive Tyrant 2: Normal move 8\" towards Legionaries 1 with Genestealers 1
     // - 6.6\" from Legionaries 1, ...").
     std::vector<std::string> reasons;
-    (void)play_movement(tyrant_pair(22.0f, 14.0f), Generation::Current, &reasons);
+    (void)play_movement(tyrant_pair(22.0f, 14.0f), &reasons);
     ASSERT_EQ(reasons.size(), 2u);
     EXPECT_EQ(reasons.front().rfind("Hive Tyrant 2: ", 0), 0u) << reasons.front();
     EXPECT_NE(reasons.front().find(" Legionaries 1 with Genestealers 1"), std::string::npos) << reasons.front();
@@ -301,43 +292,33 @@ TEST(M80_Normal, TheReasonNamesTheFocusAndPartners) {
     for (const std::string& r : reasons) {
         if (r.find(" with ") != std::string::npos) EXPECT_NE(r.find(" Legionaries 1 with "), std::string::npos) << r;
     }
-    // Without partners (M77) the reasons are as before.
-    std::vector<std::string> old;
-    (void)play_movement(tyrant_pair(22.0f, 14.0f), Generation::M77, &old);
-    for (const std::string& r : old) EXPECT_EQ(r.find(" with "), std::string::npos) << r;
+    // Without partners (no plan) the reasons name no partner. (D-085, M85: this played the pre-batch Normal's moves.)
+    const GameState gs = tyrant_pair(22.0f, 14.0f);
+    OddsCache cache;
+    const ArmyPlan none = no_plan(gs, Side::B);
+    const std::optional<PolicyResult> alone =
+        decide_move_units(cache, gs, Side::B, legal_actions(gs, Side::B), decision_seed(gs), nullptr, &none);
+    ASSERT_TRUE(alone.has_value());
+    EXPECT_EQ(alone->reason.find(" with "), std::string::npos) << alone->reason;
 }
 
 TEST(M80_Normal, TheDesperateEscapeGuardStillHolds) {
     // M68_Movement.ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatStands's position (rosters, Normal vs
     // Normal, seed 193, battle round 5: the battle-shocked Chaos Terminators engaged with the Hive Tyrant against the
-    // south edge), reached by the pre-batch Normal (the current one plays the game differently): the current Normal
-    // doesn't make the escape either (D-077's guard).
-    wh40k::client::GameSession session = wh40k::client::GameSession::new_game(wh40k::test::load_rosters_scenario(), 193);
-    std::array<Bot, 2> bots{Bot(normal_at(Generation::M77)), Bot(normal_at(Generation::M77))};
-    wh40k::client::AutoSettings autos;  // as the arena plays a bot game
-    autos.skip_empty_steps = true;
-    autos.auto_allocate = false;
-    autos.bot_controlled = {true, true};
+    // south edge), reached by the pre-batch Normal (the current one plays the game differently; D-085, M85: kept as the
+    // fixture tests/data/states/m68_desperate_escape.json): the current Normal doesn't make the escape either (D-077's
+    // guard).
+    const GameState gs = wh40k::test::load_state_fixture("m68_desperate_escape.json");
     const UnitId terminators{3};
     const GameAction escape = action::StartMove{terminators, MoveType::FallBack, FallBackMode::DesperateEscape};
-    bool reached = false;
-    for (int i = 0; i < 4000 && session.pending(); ++i) {
-        (void)wh40k::client::run_auto_actions(session, autos);
-        if (!session.pending()) break;
-        const GameState& gs = session.state();
-        const Side side = gs.pending->side;
-        const std::vector<GameAction> legal = legal_actions(gs, side);
-        if (gs.flow.battle_round == 5 && std::find(legal.begin(), legal.end(), escape) != legal.end()) {
-            reached = true;
-            Bot bot(normal_at(Generation::Current));
-            const BotChoice c = bot.decide(gs, side);
-            EXPECT_NE(c.action, escape) << c.reason;
-            EXPECT_TRUE(validate_action(gs, side, c.action).ok());
-            break;
-        }
-        ASSERT_TRUE(session.submit(bots[side_index(side)].decide(gs, side).action).ok());
-    }
-    EXPECT_TRUE(reached);
+    ASSERT_TRUE(gs.pending.has_value());
+    const Side side = gs.pending->side;
+    const std::vector<GameAction> legal = legal_actions(gs, side);
+    ASSERT_NE(std::find(legal.begin(), legal.end(), escape), legal.end());
+    Bot bot(BotConfig{});
+    const BotChoice c = bot.decide(gs, side);
+    EXPECT_NE(c.action, escape) << c.reason;
+    EXPECT_TRUE(validate_action(gs, side, c.action).ok());
 }
 
 // ---- The score's pieces ----
@@ -364,7 +345,7 @@ TEST(M80_MoveScore, TheGroupsLineFollowsTheFocus) {
     ASSERT_EQ(plan.groups.size(), 1u) << describe(gs, plan);
     Simulator sim(gs, 0);
     ASSERT_TRUE(sim.step(Side::B, action::StartMove{kGenestealers, MoveType::Normal, std::nullopt}).ok());
-    const MoveScoreContext ctx(cache, sim.state(), kGenestealers, MoveWeights{}, Generation::Current, &plan);
+    const MoveScoreContext ctx(cache, sim.state(), kGenestealers, MoveWeights{}, &plan);
     ASSERT_NE(ctx.team(), nullptr);
     ASSERT_NE(ctx.enemy(), nullptr);
     EXPECT_EQ(ctx.enemy()->id, kChainswords);
@@ -382,8 +363,9 @@ TEST(M80_MoveScore, TheGroupsLineFollowsTheFocus) {
     const MoveScoreContext own(cache, sim.state(), kGenestealers);
     ASSERT_NE(own.team(), nullptr);
     EXPECT_EQ(own.team()->support_next, ctx.team()->support_next);
-    // Without the plan (M77) the line is the closest enemy unit's and there is no team.
-    const MoveScoreContext old(cache, sim.state(), kGenestealers, MoveWeights{}, Generation::M77);
+    // Without the plan (no_plan, as M77 read) the line is the closest enemy unit's and there is no team.
+    const ArmyPlan none = no_plan(sim.state(), Side::B);
+    const MoveScoreContext old(cache, sim.state(), kGenestealers, MoveWeights{}, &none);
     EXPECT_EQ(old.team(), nullptr);
 }
 
@@ -409,27 +391,4 @@ TEST(M80_MoveScore, AUnitWhosePartnersCannotArriveKeepsItsOwnLine) {
     }
     EXPECT_DOUBLE_EQ(ctx.approach_term(start), 0.0);
     EXPECT_GT(ctx.approach_term(closer), 0.0);
-}
-
-// ---- Regression ----
-
-TEST(M80_Regression, TheCurrentLevelsDifferFromM77OnTheRosters) {
-    // From M80 the current Normal plays the rosters differently from the pre-batch Normal (normal-m77 keeps the
-    // pre-batch play: M78_Regression.TheM77LevelsMatchThePreBatchHashes), and one unit a side plays the same.
-    const auto root = wh40k::test::repo_root();
-    const GameState rosters = load_scenario(root / "data/scenarios/rosters_44x60.json", root);
-    const PerGameReport now = run_per_game(rosters, 1, 1, normal_at(Generation::Current), normal_at(Generation::Current), 200);
-    const PerGameReport before = run_per_game(rosters, 1, 1, normal_at(Generation::M77), normal_at(Generation::M77), 200);
-    EXPECT_NE(now.text.substr(0, now.text.find('\n')), before.text.substr(0, before.text.find('\n')));
-    const GameState v1 = load_scenario(root / "data/scenarios/v1_skirmish.json", root);
-    const PerGameReport v1_now = run_per_game(v1, 1, 1, normal_at(Generation::Current), normal_at(Generation::Current));
-    const PerGameReport v1_before = run_per_game(v1, 1, 1, normal_at(Generation::M77), normal_at(Generation::M77));
-    EXPECT_EQ(v1_now.text.substr(0, v1_now.text.find('\n')), v1_before.text.substr(0, v1_before.text.find('\n')));
-    EXPECT_TRUE(pre_teamwork(Generation::M77));
-    EXPECT_TRUE(pre_teamwork(Generation::M55));
-    EXPECT_FALSE(pre_teamwork(Generation::Current));
-    // Hard ignores M55 (D-066) and takes M77.
-    EXPECT_EQ(hard_generation(Generation::M55), Generation::Current);
-    EXPECT_EQ(hard_generation(Generation::M77), Generation::M77);
-    EXPECT_EQ(hard_generation(Generation::Current), Generation::Current);
 }

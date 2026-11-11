@@ -1,4 +1,4 @@
-// M39: the bot framework (D-054): the state hash, the simulator, the baseline bot (level Easy), the fallback
+// M39: the bot framework (D-054): the state hash, the simulator, the bot (D-085: the one level since M85), the fallback
 // and loop guard, the driver's pacing, and the arena.
 
 #include <gtest/gtest.h>
@@ -34,14 +34,14 @@ using namespace wh40k::ai;
 
 namespace {
 
-BotConfig easy() { return BotConfig{BotLevel::Easy}; }
+BotConfig bot_config() { return BotConfig{}; }
 
 // Plays a bot game through GameSession (as the arena and the client do) and calls `visit` with the state and
 // the deciding side before every bot decision, and the choice made.
 template <typename Visit>
 client::GameSession play(std::uint64_t seed, Visit visit, std::size_t cap = 5000) {
     client::GameSession s = client::GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
-    std::array<Bot, 2> bots{Bot(easy()), Bot(easy())};
+    std::array<Bot, 2> bots{Bot(bot_config()), Bot(bot_config())};
     client::AutoSettings autos;
     autos.bot_controlled = {true, true};
     while (s.pending() && s.history().size() < cap) {
@@ -68,16 +68,16 @@ std::optional<GameState> first_state(std::uint64_t seed, Pred pred) {
 
 }  // namespace
 
-// ==== Acceptance: 40 seeded Easy-vs-Easy games, no rejections, no reverts ====
+// ==== Acceptance: 40 seeded bot-vs-bot games, no rejections, no reverts ====
 
-TEST(M39_Arena, FortySeededEasyGamesFinishWithNoRejectedActionsAndNoRevertedMoves) {
-    const ArenaResult r = run_arena(wh40k::test::load_v1_scenario(), 40, 1, easy(), easy());
+TEST(M39_Arena, FortySeededGamesFinishWithNoRejectedActionsAndNoRevertedMoves) {
+    const ArenaResult r = run_arena(wh40k::test::load_v1_scenario(), 40, 1, bot_config(), bot_config());
     ASSERT_EQ(r.games.size(), 40u);
     for (const GameRecord& g : r.games) {
         EXPECT_TRUE(g.finished) << "seed " << g.seed << ": " << (g.problems.empty() ? "" : g.problems.front());
         EXPECT_EQ(g.rejected, 0u) << "seed " << g.seed;
         EXPECT_EQ(g.reverted, 0u) << "seed " << g.seed;
-        EXPECT_EQ(g.fallbacks, 0u) << "seed " << g.seed;  // Easy always has its own legal answer
+        EXPECT_EQ(g.fallbacks, 0u) << "seed " << g.seed;  // the bot always has its own legal answer
         EXPECT_GT(g.end_round, 0);
     }
     EXPECT_EQ(r.rejected, 0u);
@@ -88,11 +88,11 @@ TEST(M39_Arena, FortySeededEasyGamesFinishWithNoRejectedActionsAndNoRevertedMove
     EXPECT_NE(format_arena(r, wh40k::test::load_v1_scenario()).find("UnitMoveReverted 0"), std::string::npos);
 }
 
-TEST(M39_Arena, EasyGamesUseTheBoardTheEditorsAndTheMemo) {
+TEST(M39_Arena, GamesUseTheBoardTheEditorsAndTheMemo) {
     std::map<std::string, int> kinds;
     std::size_t memo_hits = 0;
     client::GameSession s = client::GameSession::new_game(wh40k::test::load_v1_scenario(), 3);
-    std::array<Bot, 2> bots{Bot(easy()), Bot(easy())};
+    std::array<Bot, 2> bots{Bot(bot_config()), Bot(bot_config())};
     client::AutoSettings autos;
     autos.bot_controlled = {true, true};
     while (s.pending()) {
@@ -127,8 +127,8 @@ TEST(M39_NeverPeeksAtDice, ChangingOnlyTheDiceNeverChangesADecision) {
             other.dice.position += 37;
             EXPECT_EQ(state_hash(gs), state_hash(other));
             // Fresh bots (no memo) on both, and the playing bot (with its memo): all the same action.
-            const BotChoice a = Bot(easy()).decide(gs, side);
-            const BotChoice b = Bot(easy()).decide(other, side);
+            const BotChoice a = Bot(bot_config()).decide(gs, side);
+            const BotChoice b = Bot(bot_config()).decide(other, side);
             EXPECT_EQ(a.action, b.action) << "seed " << seed << ": " << action_name(a.action);
             EXPECT_EQ(a.action, played.action) << "seed " << seed << ": the memo differs from a fresh plan";
             kinds.insert(gs.pending->kind.index());
@@ -256,7 +256,7 @@ TEST(M39_Fallback, MovesThatWouldNotStandAreResetNotCommitted) {
     const FallbackResult fb = fallback_action(s.state(), s.deciding_side());
     ASSERT_TRUE(fb.action.has_value());
     EXPECT_TRUE(std::holds_alternative<action::ResetUnitMove>(*fb.action));
-    const BotChoice c = Bot(easy()).decide(s.state(), s.deciding_side());
+    const BotChoice c = Bot(bot_config()).decide(s.state(), s.deciding_side());
     EXPECT_FALSE(c.stopped);
     EXPECT_FALSE(std::holds_alternative<action::CommitUnitMove>(c.action)) << c.reason;
     EXPECT_TRUE(validate_action(s.state(), s.deciding_side(), c.action).ok());
@@ -264,7 +264,7 @@ TEST(M39_Fallback, MovesThatWouldNotStandAreResetNotCommitted) {
 
 TEST(M39_LoopGuard, TheSameStateAThirdTimeGetsTheFallback) {
     const client::GameSession s(wh40k::test::load_v1_scenario());
-    Bot bot(easy());
+    Bot bot(bot_config());
     const Side side = s.deciding_side();
     const BotChoice first = bot.decide(s.state(), side);
     EXPECT_EQ(first.reason.rfind("Loop guard", 0), std::string::npos);
@@ -283,7 +283,7 @@ TEST(M39_LoopGuard, ABotThatKeepsSeeingTheSameStateStillTerminates) {
     // A driver loop that never applies the bot's actions sees the same state forever: the bot never throws or
     // hangs, and once the loop guard trips every answer is the (legal) fallback.
     const client::GameSession s(wh40k::test::load_v1_scenario());
-    Bot bot(easy());
+    Bot bot(bot_config());
     for (int i = 0; i < 50; ++i) {
         const BotChoice c = bot.decide(s.state(), s.deciding_side());
         ASSERT_FALSE(c.stopped);
@@ -293,28 +293,12 @@ TEST(M39_LoopGuard, ABotThatKeepsSeeingTheSameStateStillTerminates) {
 
 TEST(M39_LoopGuard, TheBotStopsWithReasonsWhenItHasNoDecision) {
     const client::GameSession s(wh40k::test::load_v1_scenario());
-    const BotChoice c = Bot(easy()).decide(s.state(), opponent(s.deciding_side()));
+    const BotChoice c = Bot(bot_config()).decide(s.state(), opponent(s.deciding_side()));
     EXPECT_TRUE(c.stopped);
     EXPECT_FALSE(c.problems.empty());
     const FallbackResult fb = fallback_action(s.state(), opponent(s.deciding_side()));
     EXPECT_FALSE(fb.action.has_value());
     EXPECT_FALSE(fb.problems.empty());
-}
-
-TEST(M39_Levels, EveryLevelIsBuiltAndHardIsItsOwnLevel) {
-    // M39 mapped Normal and Hard to Easy; M41 built Normal (Hard played as Normal until M44). Since M44 Hard is its
-    // own level: it decides a move with the evaluator and the lookahead (M44_Levels checks what it does).
-    EXPECT_EQ(effective_level(BotLevel::Easy), BotLevel::Easy);
-    EXPECT_EQ(effective_level(BotLevel::Normal), BotLevel::Normal);
-    EXPECT_EQ(effective_level(BotLevel::Hard), BotLevel::Hard);
-    const std::optional<GameState> move = first_state(1, [](const GameState& gs) {
-        return gs.pending->side == Side::A && std::holds_alternative<decision::MoveUnits>(gs.pending->kind);
-    });
-    ASSERT_TRUE(move.has_value());
-    const BotChoice hard = Bot(BotConfig{BotLevel::Hard}).decide(*move, Side::A);
-    const BotChoice normal = Bot(BotConfig{BotLevel::Normal}).decide(*move, Side::A);
-    EXPECT_NE(hard.reason.find("Hard: win"), std::string::npos) << hard.reason;
-    EXPECT_EQ(normal.reason.find("Hard:"), std::string::npos) << normal.reason;
 }
 
 // ==== Driver: pacing, pop-ups, stale results ====
@@ -330,7 +314,7 @@ DriverInputs inputs_for(const GameState& gs, std::array<bool, 2> bots = {true, t
 
 // The time at which a synchronous driver first hands over the action, ticking every 10 ms from 0.
 double first_delivery(BotSpeed speed, DriverInputs in) {
-    BotDriver d(easy(), speed, BotDriver::Threading::Synchronous);
+    BotDriver d(bot_config(), speed, BotDriver::Threading::Synchronous);
     for (int i = 0; i <= 1000; ++i) {
         const double t = i * 0.01;
         if (d.tick(t, in)) return t;
@@ -360,7 +344,7 @@ TEST(M39_Driver, PausesFollowTheActionKindAndTheSpeed) {
 TEST(M39_Driver, TheActionIsHandedOverOnceItsPauseHasPassed) {
     const client::GameSession s(wh40k::test::load_v1_scenario());  // Side A selects a unit to move
     const GameState& gs = s.state();
-    const BotChoice expected = Bot(easy()).decide(gs, gs.pending->side);
+    const BotChoice expected = Bot(bot_config()).decide(gs, gs.pending->side);
     const double normal = pause_seconds(expected.action, BotSpeed::Normal);
     ASSERT_GT(normal, 0.0);
     EXPECT_NEAR(first_delivery(BotSpeed::Normal, inputs_for(gs)), normal, 0.011);
@@ -368,7 +352,7 @@ TEST(M39_Driver, TheActionIsHandedOverOnceItsPauseHasPassed) {
     EXPECT_NEAR(first_delivery(BotSpeed::Fast, inputs_for(gs)), 0.4 * normal, 0.011);
     EXPECT_DOUBLE_EQ(first_delivery(BotSpeed::Instant, inputs_for(gs)), 0.0);  // Instant: no pause
 
-    BotDriver d(easy(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
+    BotDriver d(bot_config(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
     EXPECT_FALSE(d.tick(0.0, inputs_for(gs)).has_value());
     ASSERT_TRUE(d.pending_reason().has_value());  // decided, waiting out the pause
     const std::optional<BotChoice> c = d.tick(normal + 0.001, inputs_for(gs));
@@ -380,7 +364,7 @@ TEST(M39_Driver, TheActionIsHandedOverOnceItsPauseHasPassed) {
 TEST(M39_Driver, NothingForAHumansDecision) {
     const client::GameSession s(wh40k::test::load_v1_scenario());
     const GameState& gs = s.state();
-    BotDriver d(easy(), BotSpeed::Instant, BotDriver::Threading::Synchronous);
+    BotDriver d(bot_config(), BotSpeed::Instant, BotDriver::Threading::Synchronous);
     std::array<bool, 2> bots{true, true};
     bots[side_index(gs.pending->side)] = false;
     EXPECT_FALSE(d.tick(0.0, inputs_for(gs, bots)).has_value());
@@ -390,15 +374,15 @@ TEST(M39_Driver, NothingForAHumansDecision) {
 TEST(M39_Driver, NeverActsWhileAPopUpIsOpenAndThePauseStartsWhenItCloses) {
     const client::GameSession s(wh40k::test::load_v1_scenario());
     const GameState& gs = s.state();
-    BotDriver d(easy(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
+    BotDriver d(bot_config(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
     DriverInputs open = inputs_for(gs);
     open.popup_open = true;
     for (int i = 0; i <= 100; ++i) EXPECT_FALSE(d.tick(i * 0.1, open).has_value());  // 10 s of dice
-    const double pause = pause_seconds(Bot(easy()).decide(gs, gs.pending->side).action, BotSpeed::Normal);
+    const double pause = pause_seconds(Bot(bot_config()).decide(gs, gs.pending->side).action, BotSpeed::Normal);
     EXPECT_FALSE(d.tick(10.0 + pause * 0.5, inputs_for(gs)).has_value());
     EXPECT_TRUE(d.tick(10.0 + pause + 0.001, inputs_for(gs)).has_value());
     // Instant speed too: never while a pop-up is open.
-    BotDriver fast(easy(), BotSpeed::Instant, BotDriver::Threading::Synchronous);
+    BotDriver fast(bot_config(), BotSpeed::Instant, BotDriver::Threading::Synchronous);
     EXPECT_FALSE(fast.tick(0.0, open).has_value());
     EXPECT_TRUE(fast.tick(0.0, inputs_for(gs)).has_value());
 }
@@ -406,7 +390,7 @@ TEST(M39_Driver, NeverActsWhileAPopUpIsOpenAndThePauseStartsWhenItCloses) {
 TEST(M39_Driver, PauseHoldsAndStepHandsOverAtOnce) {
     const client::GameSession s(wh40k::test::load_v1_scenario());
     const GameState& gs = s.state();
-    BotDriver d(easy(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
+    BotDriver d(bot_config(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
     DriverInputs paused = inputs_for(gs);
     paused.paused = true;
     for (int i = 0; i <= 50; ++i) EXPECT_FALSE(d.tick(i * 0.1, paused).has_value());
@@ -418,7 +402,7 @@ TEST(M39_Driver, PauseHoldsAndStepHandsOverAtOnce) {
 TEST(M39_Driver, AStaleResultIsDroppedAfterAnInvalidate) {
     const client::GameSession s(wh40k::test::load_v1_scenario());
     const GameState& gs = s.state();
-    BotDriver d(easy(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
+    BotDriver d(bot_config(), BotSpeed::Normal, BotDriver::Threading::Synchronous);
     EXPECT_FALSE(d.tick(0.0, inputs_for(gs)).has_value());  // decided at 0, due at 0.8
     const std::uint64_t gen = d.generation();
     d.invalidate();  // an undo
@@ -433,18 +417,18 @@ TEST(M39_Driver, AWorkerResultForAnOlderStateIsDropped) {
     // Worker thread: decide for state 1, then the game moves on (state 2) before it is handed over.
     client::GameSession s(wh40k::test::load_v1_scenario());
     const GameState first = s.state();
-    BotDriver d(easy(), BotSpeed::Normal, BotDriver::Threading::Worker);
+    BotDriver d(bot_config(), BotSpeed::Normal, BotDriver::Threading::Worker);
     EXPECT_FALSE(d.tick(0.0, inputs_for(first)).has_value());
     for (int i = 0; i < 5000 && !d.pending_reason(); ++i) {  // wait for the worker
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         (void)d.tick(0.01, inputs_for(first));
     }
     ASSERT_TRUE(d.pending_reason().has_value());
-    const BotChoice c1 = Bot(easy()).decide(first, first.pending->side);
+    const BotChoice c1 = Bot(bot_config()).decide(first, first.pending->side);
     ASSERT_TRUE(s.submit(c1.action).ok());  // e.g. a human's input elsewhere moved the game on
     const GameState second = s.state();
     ASSERT_NE(state_hash(first), state_hash(second));
-    const BotChoice c2 = Bot(easy()).decide(second, second.pending->side);
+    const BotChoice c2 = Bot(bot_config()).decide(second, second.pending->side);
     std::optional<BotChoice> got;
     for (int i = 0; i < 5000 && !got; ++i) {
         got = d.tick(10.0 + i * 0.01, inputs_for(second));
@@ -458,7 +442,7 @@ TEST(M39_Driver, AWorkerResultForAnOlderStateIsDropped) {
 TEST(M39_Driver, AWorkerDrivesAWholeGameWithTheSameActionsAsTheSynchronousBot) {
     // The driver on a worker thread, through a session, matches the synchronous bot step for step.
     client::GameSession live = client::GameSession::new_game(wh40k::test::load_v1_scenario(), 6);
-    BotDriver d(easy(), BotSpeed::Instant, BotDriver::Threading::Worker);
+    BotDriver d(bot_config(), BotSpeed::Instant, BotDriver::Threading::Worker);
     client::AutoSettings autos;
     autos.bot_controlled = {true, true};
     double t = 0.0;
@@ -479,7 +463,7 @@ TEST(M39_Driver, AWorkerDrivesAWholeGameWithTheSameActionsAsTheSynchronousBot) {
         ASSERT_TRUE(live.submit(c->action).ok()) << action_name(c->action);
     }
     ASSERT_TRUE(live.state().result.has_value());
-    const GameRecord sync = play_bot_game(wh40k::test::load_v1_scenario(), 6, easy(), easy());
+    const GameRecord sync = play_bot_game(wh40k::test::load_v1_scenario(), 6, bot_config(), bot_config());
     EXPECT_EQ(live.history().size(), sync.steps);
     EXPECT_EQ(live.state().result->winner, sync.winner);
 }

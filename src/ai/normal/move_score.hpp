@@ -1,8 +1,8 @@
 #pragma once
 
-// M43 (D-054): the Normal level's whole-turn score for a Movement-phase move (09.04-09.07). This is the seam the
-// M44 evaluator replaces or wraps: `score_move_plan` (cheap, for every candidate) and `refine_move_score` (from the
-// state the engine leaves after the simulated move, for the few best). Both return the components separately.
+// M43 (D-054): the Normal level's whole-turn score for a Movement-phase move (09.04-09.07): `score_move_plan` (cheap,
+// for every candidate) and `refine_move_score` (from the state the engine leaves after the simulated move, for the few
+// best). Both return the components separately.
 //
 // Value unit: shares of a unit's starting strength (value.hpp), our side positive. A ScoreLine follows both units'
 // losses through a short horizon (this turn, the enemy's next turn, our next turn), cut at the game's end
@@ -80,7 +80,6 @@
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/state/game_state.hpp"
-#include "generation.hpp"
 #include "normal/army_plan.hpp"
 #include "normal/value.hpp"
 
@@ -231,13 +230,12 @@ class MoveScoreContext {
 public:
     // `origin`: the state before the move (MoveUnits pending, or the move just started with no model moved). The
     // enemy is the enemy unit closest to `unit` there. `origin` must outlive the context. D-066: the other enemy
-    // units are weighed too, unless `generation` is M55 (the regression switch).
-    // D-083 part 2 (M80): `plan`, the army plan of `unit`'s side in `origin` (army_plan(cache, origin, side,
-    // generation): a caller that has it passes it, so it is computed once per decision); nullptr: computed here. A unit
-    // with partners in it follows its focus instead (see the file comment). Pre-teamwork generations read no plan.
+    // units are weighed too.
+    // D-083 part 2 (M80): `plan`, the army plan of `unit`'s side in `origin` (army_plan(cache, origin, side): a caller
+    // that has it passes it, so it is computed once per decision); nullptr: computed here. A unit with partners in it
+    // follows its focus instead (see the file comment).
     MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                     MoveWeights weights = {}, Generation generation = Generation::Current,
-                     const ArmyPlan* plan = nullptr);
+                     MoveWeights weights = {}, const ArmyPlan* plan = nullptr);
 
     [[nodiscard]] const core::GameState& origin() const noexcept { return origin_; }
     [[nodiscard]] const core::Unit& unit() const noexcept { return us_; }
@@ -246,7 +244,6 @@ public:
     [[nodiscard]] const core::Unit* enemy() const noexcept { return enemy_ ? &*enemy_ : nullptr; }
     [[nodiscard]] analysis::OddsCache& cache() noexcept { return cache_; }
     [[nodiscard]] const MoveWeights& weights() const noexcept { return weights_; }
-    [[nodiscard]] Generation generation() const noexcept { return generation_; }
     [[nodiscard]] int turns() const noexcept { return turns_; }
     [[nodiscard]] bool start_engaged() const noexcept { return start_engaged_; }
     [[nodiscard]] const analysis::ThreatRanges& our_threat() const noexcept { return us_threat_; }
@@ -306,7 +303,7 @@ public:
     // side losing the exchange without the tiebreak: D-066's closest-target rule for the other units' replies).
     [[nodiscard]] bool points_rule() const noexcept { return points_rule_; }
     [[nodiscard]] bool plays_for_draw() const noexcept { return !points_rule_ && lean_ < 0.0; }
-    // D-083 part 2 (M80): the unit's group (nullptr: it has no partners, or the generation reads no plan).
+    // D-083 part 2 (M80): the unit's group (nullptr: it has no partners).
     [[nodiscard]] const MoveTeam* team() const noexcept { return team_ ? &*team_ : nullptr; }
     // The terms of a unit with partners (0 without): approach and cohesion, and whether the focus's reply counts on
     // the unit at `positions` (its gap to the focus `gap_mm`).
@@ -345,7 +342,6 @@ private:
     analysis::OddsCache& cache_;
     const core::GameState& origin_;
     MoveWeights weights_;
-    Generation generation_ = Generation::Current;
     bool points_rule_ = false;  // D-077: the points tiebreak (D-076)
     double rate_us_ = 0.0;      // D-077: hazard_rate of our unit against enemy(), and of enemy() against us
     double rate_them_ = 0.0;

@@ -338,8 +338,7 @@ double melee_exchange(analysis::OddsCache& cache, const core::GameState& state, 
     return m.ours - m.theirs;
 }
 
-double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                           Generation gen) {
+double consolidation_score(analysis::OddsCache& cache, const core::GameState& state, core::Side side) {
     double score = 0.0;
     // 12.08 Engaging Consolidation: each enemy unit engaged that hasn't fought must now fight us.
     for (const core::UnitId id : state.flow.forced_fights) {
@@ -362,7 +361,7 @@ double consolidation_score(analysis::OddsCache& cache, const core::GameState& st
             }
             continue;
         }
-        if (gen == Generation::M55 || enemy_units(state, side).size() <= 1) {
+        if (enemy_units(state, side).size() <= 1) {
             if (const core::Unit* e = closest_enemy(state, u)) {
                 const float gap = core::unit_distance(u, *e).value_or(0.0f);
                 score += ranged_share(cache, state, u, *e, gap) - ranged_share(cache, state, *e, u, gap);
@@ -525,8 +524,8 @@ std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, c
 
 std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, const core::GameState& state,
                                                  core::Side side, const std::vector<core::GameAction>& legal,
-                                                 std::uint64_t seed, Generation gen) {
-    const double base = consolidation_score(cache, state, side, gen);
+                                                 std::uint64_t seed) {
+    const double base = consolidation_score(cache, state, side);
     FightMoveCand best;  // not moving
     for (const core::GameAction& a : legal) {
         const auto* s = std::get_if<core::action::StartConsolidation>(&a);
@@ -535,7 +534,7 @@ std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, con
         FightMoveCand c;
         c.plan = simulate_fight_move(state, side, a, seed, head);
         if (!c.plan) continue;
-        c.gain = consolidation_score(cache, c.plan->after, side, gen) - base;
+        c.gain = consolidation_score(cache, c.plan->after, side) - base;
         c.change = move_change(state, c.plan->after, s->unit, s->targets);
         c.reason = fight_move_reason(head, c);
         if (beats(c, best)) best = std::move(c);

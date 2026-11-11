@@ -2,9 +2,9 @@
 
 A deterministic C++20 rules engine for Warhammer 40k 11th Edition, with a 2D top-down Windows client.
 V1 (M0–M13): Intercessor Squad vs Termagants, hotseat on a 24"x24" board, following the real core rules.
-Since then: bots at three levels (Easy/Normal/Hard, D-054), the 60"x44" Strike scenario (D-064), the 44"x60"
+Since then: a bot opponent (D-054; one level since M85, D-085), the 60"x44" Strike scenario (D-064), the 44"x60"
 rosters scenario with oval bases and a points result (D-074, D-076), custom battles with an army builder and
-hand deployment (D-079, D-081, D-082), and army-level teamwork for Normal and Hard (D-083). The finished
+hand deployment (D-079, D-081, D-082), and army-level teamwork for the bot (D-083). The finished
 milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
@@ -40,7 +40,7 @@ tests/                    wh40k_tests: GoogleTest for wh40k_core, run via CTest
   ai/                     wh40k_ai_tests: GoogleTest for wh40k_ai
   replays/*.json          saved replays; each must replay cleanly (regression tests, D-014)
   data/scenarios/*.json   test-only fixture scenarios (roster units on smaller boards, custom battles; not in the client's list)
-  data/armies/*.json      test-only army lists (custom battles of the M73 and M77 replays, Hard's worst cases)
+  data/armies/*.json      test-only army lists (custom battles of the M73 and M77 replays)
 ```
 
 ## Build and test (Windows, VS 2026 Community, CMake 4.x)
@@ -166,8 +166,8 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests
   (`wh40k_client_tests`) and screenshots under `xvfb-run`; the client's flags are in `docs/dev/client_flags.md`.
   A full game by mouse still needs a manual run on Windows.
-- Bot strength is measured with the Release `wh40k_bot_arena`. Its flags, the bot scenarios, the hidden levels and
-  the "identity set" that bot changes must keep (proved with `--per-game`) are in `docs/dev/bot_arena.md`.
+- Bot strength is measured with the Release `wh40k_bot_arena`. Its flags, the bot scenarios and the "identity set"
+  that bot changes must keep (proved with `--per-game`) are in `docs/dev/bot_arena.md`.
 - Don't add dependencies beyond those listed without asking.
 - Don't edit `data/units/*.json` by hand. Re-run the fetch tool, or put overrides in the scenario file.
 - Never commit the PDF or `rules-summary.txt`. They are gitignored on purpose (Games Workshop copyright).

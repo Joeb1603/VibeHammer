@@ -21,7 +21,7 @@ page, unzip the whole folder and run `VibeHammer.exe`. If SmartScreen warns you,
 "Run anyway". The start screen offers these modes:
 
 - **Play hotseat:** two players share the computer.
-- **Play vs bot:** you choose your side. The bot plays at Easy, Normal or Hard.
+- **Play vs bot:** you choose your side.
 - **Watch bot vs bot**, with Pause (key P), Step (key N) and the bot speed.
 - **Custom battle...:** the army builder (below). Each side builds an army, then you play hotseat, against
   the bot or bot vs bot.
@@ -48,10 +48,8 @@ behind each step.
 - **Monsters and vehicles:** they can move through enemy infantry. They can also shoot, and be shot at,
   while in Engagement Range.
 - **The bot** (`src/ai`) plays only through the same validated actions a human uses, and it never sees the
-  game's future dice.
-  - **Easy:** a baseline.
-  - **Normal:** plans from the odds.
-  - **Hard:** adds a game-aware evaluator and a lookahead.
+  game's future dice. It plans its shooting, charges, fights and moves from the odds. (Until M85 there were three
+  levels, Easy, Normal and Hard; the one bot is Normal. The others are in git under the tag `bots-three-levels`.)
 - **Custom battles:** an army builder for Chaos Space Marines against Tyranids at Incursion size (1000
   points) on the 44" x 60" battlefield. Points by unit size and wargear, unit sizes, wargear options and
   their limits, and copy limits come from BSData and are enforced; every army needs a CHARACTER. Options
@@ -60,20 +58,18 @@ behind each step.
 - **Deployment:** "Auto-place" sets both armies up in their zones. "Place by hand" has the sides take turns
   setting up one unit at a time (the side taking the second turn first), each set-up checked against the
   core rules (in the zone, coherent, not on another model, out of Engagement Range). Drag a unit to place it,
-  Shift-drag one model, and turn an oval with Q / E. The bot sets its own units up: Easy where Auto-place
-  would put them, Normal and Hard long-range shooters first and back, melee units last and forward.
+  Shift-drag one model, and turn an oval with Q / E. The bot sets its own units up: long-range shooters first
+  and back, melee units last and forward.
 - **Replays and saves:** a replay is the starting state plus every action, and it reproduces the game
   exactly. The saved replays in `tests/replays/` double as regression tests.
 
-- **Several units per side:** every phase handles any number of units, and all three bot levels plan across
-  their whole army. On the Incursion scenario Normal and Hard weigh units by their points and play for the
-  points result. Hard's first decision of a game there takes a second or two, and it uses about 0.6 GB of memory.
-  - **Teamwork:** Normal and Hard fight as an army. Each turn an army plan looks for enemy units that two or three
+- **Several units per side:** every phase handles any number of units, and the bot plans across its whole army.
+  On the Incursion scenario it weighs units by their points and plays for the points result.
+  - **Teamwork:** the bot fights as an army. Each turn an army plan looks for enemy units that two or three
     of its units beat together where each alone would lose, and puts them in a group on that target. The group
     moves up together, waiting at the edge of the target's reach for its slower members. Its units shoot the
     group's target first and finish off wounded units rather than spread their fire, and a unit charges in where a
-    partner is already fighting. Hard's evaluator counts the group's target falling at the group's combined pace.
-    With one unit a side nothing changes, and Easy still plays on its own.
+    partner is already fighting. With one unit a side nothing changes.
 
 **Not yet:** terrain, objectives and missions, stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.

@@ -44,7 +44,7 @@ std::optional<PolicyResult> deploy_policy(const core::GameState& state, core::Si
     return std::nullopt;
 }
 
-// ---- M77: the Normal and Hard heuristic ----
+// ---- M77: the heuristic ----
 
 namespace {
 
@@ -284,15 +284,6 @@ std::vector<core::action::DeployUnit> deploy_candidates(const core::GameState& s
         out.push_back(std::move(a));
     }
     return out;
-}
-
-bool uses_deploy_heuristic(const BotConfig& config) {
-    switch (effective_level(config.level)) {
-        case BotLevel::Easy: return false;
-        case BotLevel::Normal: return config.generation != Generation::M55;  // D-083 (M78): M77 deploys as Current
-        case BotLevel::Hard: return true;  // Hard (hard-m77 too, D-083) deploys as Normal does (D-066)
-    }
-    return false;
 }
 
 std::optional<PolicyResult> heuristic_deploy_policy(const core::GameState& state, core::Side side,

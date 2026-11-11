@@ -19,8 +19,8 @@
 // - Greedy: each enemy unit's best paying group (gain per risk, the smallest size unless a bigger one adds
 //   kMinPlanGain), the best of them first, until no group pays. Unassigned units keep their closest enemy unit, with no
 //   partners; an engaged unit is a member of any group on the unit it is engaged with.
-// - No-op (every unit: its closest enemy unit, no partners): Generation::M55 / M77, fewer than two of our units with
-//   models, no turn left, before the battle.
+// - No-op (every unit: its closest enemy unit, no partners): fewer than two of our units with models, no turn left,
+//   before the battle.
 
 #include <cstddef>
 #include <cstdint>
@@ -32,7 +32,6 @@
 #include "analysis/odds.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/game_state.hpp"
-#include "generation.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -92,8 +91,12 @@ struct ArmyPlan {
     friend bool operator==(const ArmyPlan&, const ArmyPlan&) = default;
 };
 
-[[nodiscard]] ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                                 Generation generation = Generation::Current);
+[[nodiscard]] ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side);
+
+// The no-op plan (army_plan's answer before the battle or with fewer than two units): every unit of `side` with its
+// closest enemy unit and no partners, inactive. D-085 (M85): what the pre-batch generation (Generation::M77) read, so the
+// tests compare a unit's play with and without partners through it.
+[[nodiscard]] ArmyPlan no_plan(const core::GameState& state, core::Side side);
 
 // ---- the pieces, for tests and trace reasons ----
 

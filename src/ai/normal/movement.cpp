@@ -661,7 +661,7 @@ struct Option {
 // An Advance before its roll (D-054): each of the six results on a scratch state with that roll scripted, the best
 // move for it; the candidates are made once for the largest roll and filtered per roll.
 std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState& gs, core::Side side,
-                                     core::UnitId unit, Generation gen, const ArmyPlan* plan,
+                                     core::UnitId unit, const ArmyPlan* plan,
                                      const MoveWeights& weights) {
     const GameAction start = core::action::StartMove{unit, core::MoveType::Advance, std::nullopt};
     std::array<std::optional<GameState>, 7> states;
@@ -680,7 +680,7 @@ std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState
             widest = f;
         }
     }
-    MoveScoreContext ctx(cache, *states[widest], unit, weights, gen, plan);
+    MoveScoreContext ctx(cache, *states[widest], unit, weights, plan);
     const std::vector<MoveCandidate> cands = move_candidates(*states[widest], ctx.team());
     const std::vector<Ranked> ranked = rank(ctx, core::MoveType::Advance, cands);
     Option opt;
@@ -723,7 +723,7 @@ double hazard_wounds_per_model(const core::Unit& unit) {
 // 03.03) and the move would have to be reset (a UnitMoveReverted): Hard's escape_stands (D-067), for Normal. Failing and
 // passing faces come from make_hazard_rolls itself.
 bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side side, const GameAction& escape,
-                   const core::Unit& unit, Generation gen) {
+                   const core::Unit& unit) {
     std::optional<int> fail;
     std::optional<int> pass;
     for (int face = 1; face <= 6; ++face) {
@@ -747,14 +747,12 @@ bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side s
                             std::holds_alternative<core::decision::OrderCasualties>(sim.state().pending->kind);
              ++guard) {
             const auto& d = std::get<core::decision::OrderCasualties>(sim.state().pending->kind);
-            const std::optional<CasualtyOrder> o = casualty_order(cache, sim.state(), gen);
+            const std::optional<CasualtyOrder> o = casualty_order(cache, sim.state());
             if (!o || !sim.step(side, core::action::OrderCasualties{d.target, o->priority}).ok()) return false;
         }
         const GameState& after = sim.state();
         if (!after.pending || !std::holds_alternative<core::decision::MoveModels>(after.pending->kind)) continue;
-        // D-083 (M78): the score of `gen`, except M55's (which kept the current score here, as before M78).
-        const Generation score_gen = gen == Generation::M55 ? Generation::Current : gen;
-        if (standing_moves(cache, after, MoveWeights{}, 1, kMaxSimulatedMoves, score_gen).empty()) return false;
+        if (standing_moves(cache, after, MoveWeights{}, 1, kMaxSimulatedMoves).empty()) return false;
     }
     return true;
 }
@@ -911,24 +909,24 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_moves(const Game
     return slot_proposals(*geo, ends);
 }
 
-std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const GameState& origin, Generation gen,
-                                          const ArmyPlan* plan, const MoveWeights& weights) {
+std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const GameState& origin, const ArmyPlan* plan,
+                                          const MoveWeights& weights) {
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
-    MoveScoreContext ctx(cache, origin, u->id, weights, gen, plan);
+    MoveScoreContext ctx(cache, origin, u->id, weights, plan);
     const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     return choose(ctx, origin, u->side, cands, ranked, decision_seed(origin), true);
 }
 
 std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameState& origin, const MoveWeights& weights,
-                                        std::size_t count, std::size_t attempts, Generation gen, const ArmyPlan* plan) {
+                                        std::size_t count, std::size_t attempts) {
     std::vector<PlannedMove> out;
     if (!origin.flow.move || !origin.flow.move->paths.empty()) return out;
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return out;
-    MoveScoreContext ctx(cache, origin, u->id, weights, gen, plan);
+    MoveScoreContext ctx(cache, origin, u->id, weights);
     const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     const std::uint64_t seed = decision_seed(origin);
@@ -945,43 +943,7 @@ std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameSt
     return out;
 }
 
-std::optional<PlannedMove> furthest_standing_move(const GameState& origin) {
-    if (!origin.flow.move || !origin.flow.move->paths.empty()) return std::nullopt;
-    const core::Unit* u = origin.find_unit(origin.flow.move->unit);
-    if (u == nullptr || u->models.empty()) return std::nullopt;
-    const std::vector<core::PosedModel> enemies = core::posed_enemy_models(origin, u->side);
-    if (enemies.empty()) return std::nullopt;
-    const std::vector<MoveCandidate> cands = move_candidates(origin);
-    // Each candidate's closest approach to an enemy model, edge to edge; the furthest first (stable: ties keep the
-    // candidates' order).
-    std::vector<std::pair<float, std::size_t>> order;
-    order.reserve(cands.size());
-    for (std::size_t i = 0; i < cands.size(); ++i) {
-        float closest = std::numeric_limits<float>::max();
-        for (std::size_t k = 0; k < cands[i].ends.size() && k < u->models.size(); ++k) {
-            const core::BasePose at{cands[i].ends[k], u->models[k].base, u->models[k].facing_deg};  // D-074 part 3
-            for (const core::PosedModel& e : enemies) {
-                const float d = core::base_distance(at, e.pose());
-                closest = std::min(closest, d);
-            }
-        }
-        order.emplace_back(closest, i);
-    }
-    std::stable_sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-    const std::uint64_t seed = decision_seed(origin);
-    std::size_t tried = 0;
-    for (const auto& [gap, i] : order) {
-        if (tried >= kMaxSimulatedMoves) break;
-        if (!fits(origin, cands[i])) continue;
-        ++tried;
-        std::optional<Simulated> sim = simulate(origin, u->side, cands[i], seed);
-        if (!sim) continue;
-        return PlannedMove{cands[i], MoveScore{}, std::move(sim->steps), std::move(sim->after)};
-    }
-    return std::nullopt;
-}
-
-std::optional<core::UnitId> unit_to_move(const GameState& gs, const std::vector<GameAction>& legal, Generation gen) {
+std::optional<core::UnitId> unit_to_move(const GameState& gs, const std::vector<GameAction>& legal) {
     std::vector<core::UnitId> offered_units;
     for (const GameAction& a : legal) {
         if (const auto* m = std::get_if<core::action::StartMove>(&a)) {
@@ -991,7 +953,7 @@ std::optional<core::UnitId> unit_to_move(const GameState& gs, const std::vector<
         }
     }
     if (offered_units.empty()) return std::nullopt;
-    if (gen == Generation::M55 || offered_units.size() == 1) return offered_units.front();
+    if (offered_units.size() == 1) return offered_units.front();
     // D-066 (M56): the unit closest to an enemy unit first (an engaged unit is always closer than an unengaged one);
     // a tie keeps the engine's order.
     std::optional<core::UnitId> best;
@@ -1011,20 +973,20 @@ std::optional<core::UnitId> unit_to_move(const GameState& gs, const std::vector<
 
 std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const GameState& gs, core::Side side,
                                               const std::vector<GameAction>& legal, std::uint64_t seed,
-                                              MoveTypeValues* values, Generation gen, const ArmyPlan* plan,
+                                              MoveTypeValues* values, const ArmyPlan* plan,
                                               const MoveWeights& weights) {
-    const std::optional<core::UnitId> unit = unit_to_move(gs, legal, gen);
+    const std::optional<core::UnitId> unit = unit_to_move(gs, legal);
     if (!unit) return std::nullopt;
     const core::Unit& u = *gs.find_unit(*unit);
     std::vector<Option> options;
     // D-083 part 2 (M80): the army plan, once per decision (the same for the move's start: the moving unit counts as
     // not moved, D-083 part 1).
     std::optional<ArmyPlan> own_plan;
-    if (plan == nullptr && !pre_teamwork(gen)) {
-        own_plan = army_plan(cache, gs, side, gen);
+    if (plan == nullptr) {
+        own_plan = army_plan(cache, gs, side);
         plan = &*own_plan;
     }
-    MoveScoreContext ctx(cache, gs, *unit, weights, gen, plan);
+    MoveScoreContext ctx(cache, gs, *unit, weights, plan);
 
     // Remain Stationary (09.04).
     const GameAction stay = core::action::StartMove{*unit, core::MoveType::RemainStationary, std::nullopt};
@@ -1048,7 +1010,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     const auto planned = [&](const GameAction& start, double cost) -> std::optional<Option> {
         Simulator sim(gs, seed);
         if (!sim.step(side, start).ok()) return std::nullopt;
-        std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen, plan, weights);
+        std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), plan, weights);
         if (!pm) return std::nullopt;
         const auto& m = std::get<core::action::StartMove>(start);
         if (pm->candidate.proposals.empty() && m.move_type == core::MoveType::Normal) return std::nullopt;  // = stay
@@ -1070,7 +1032,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     }
     const GameAction advance = core::action::StartMove{*unit, core::MoveType::Advance, std::nullopt};
     if (offered(legal, advance)) {
-        if (std::optional<Option> o = advance_option(cache, gs, side, *unit, gen, plan, weights)) {
+        if (std::optional<Option> o = advance_option(cache, gs, side, *unit, plan, weights)) {
             if (values != nullptr) values->advance = o->value;
             options.push_back(std::move(*o));
         }
@@ -1089,7 +1051,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
         Simulator sim(gs, seed);
         core::ScriptedDice sixes(std::vector<int>(u.models.size(), 6));
         if (sim.step(side, escape, sixes).ok()) {
-            if (std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), gen, plan, weights)) {
+            if (std::optional<PlannedMove> pm = plan_unit_move(cache, sim.state(), plan, weights)) {
                 const double lost = escape_losses(u);
                 Option o;
                 o.start = escape;
@@ -1116,7 +1078,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     // (escape_stands); otherwise the next best option. Checked only for the escape that would be made, so every other
     // decision (and its reason) is as before.
     std::optional<std::size_t> vetoed;
-    if (options[best].start == escape && options.size() > 1 && !escape_stands(cache, gs, side, escape, u, gen)) {
+    if (options[best].start == escape && options.size() > 1 && !escape_stands(cache, gs, side, escape, u)) {
         vetoed = best;
         best = *best_of(best);
     }
@@ -1136,7 +1098,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
 }
 
 std::optional<PolicyResult> continue_unit_move(analysis::OddsCache& cache, const GameState& gs, core::Side side,
-                                               Generation gen, const MoveWeights& weights) {
+                                               const MoveWeights& weights) {
     if (!gs.flow.move) return std::nullopt;
     const core::MoveInProgress& mv = *gs.flow.move;
     if (mv.type != core::MoveType::Normal && mv.type != core::MoveType::Advance &&
@@ -1145,7 +1107,7 @@ std::optional<PolicyResult> continue_unit_move(analysis::OddsCache& cache, const
     }
     const std::string who = name_of(gs, mv.unit);
     const GameState origin = move_origin(gs);
-    if (std::optional<PlannedMove> pm = plan_unit_move(cache, origin, gen, nullptr, weights)) {
+    if (std::optional<PlannedMove> pm = plan_unit_move(cache, origin, nullptr, weights)) {
         std::string text = move_type_text(mv.type, mv.mode);
         if (mv.type == core::MoveType::Advance) {
             const core::Unit* u = gs.find_unit(mv.unit);

@@ -156,12 +156,12 @@ std::filesystem::path temp_save(const std::string& name) {
 TEST(M39_SavePlayers, ASaveWithAPlayersBlockReloadsWithItsPlayers) {
     GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 11);
     for (int i = 0; i < 5; ++i) ASSERT_TRUE(s.submit(simple_choice(s)).ok());
-    const SavePlayers players{BotSides{false, true}, BotLevel::Normal};
+    const SavePlayers players{BotSides{false, true}};
     const nlohmann::json j = save_json(s, players);
     ASSERT_TRUE(j.contains("players"));
     EXPECT_EQ(j["players"]["A"], "human");
     EXPECT_EQ(j["players"]["B"], "bot");
-    EXPECT_EQ(j["players"]["bot_level"], "normal");
+    EXPECT_FALSE(j["players"].contains("bot_level"));  // D-085 (M85): one bot, no level
     const auto path = temp_save("players.json");
     save_game_file(path, s, players);
     const LoadedGame loaded = load_game_file(path);
@@ -187,24 +187,23 @@ TEST(M39_SavePlayers, AnOldSaveLoadsAsHotseat) {
 
 TEST(M39_SavePlayers, AnUnreadablePlayersBlockIsHotseat) {
     GameSession s(wh40k::test::load_v1_scenario());
-    nlohmann::json j = save_json(s, SavePlayers{BotSides{true, true}, BotLevel::Hard});
+    nlohmann::json j = save_json(s, SavePlayers{BotSides{true, true}});
     j["players"]["A"] = 3;
     EXPECT_EQ(players_from_save_json(j), SavePlayers{});
     j["players"] = "bot";
     EXPECT_EQ(players_from_save_json(j), SavePlayers{});
-    j["players"] = nlohmann::json{{"A", "bot"}, {"B", "human"}, {"bot_level", "impossible"}};
-    const SavePlayers p = players_from_save_json(j);  // an unknown level keeps the default
-    EXPECT_EQ(p.bots, (BotSides{true, false}));
-    EXPECT_EQ(p.bot_level, BotLevel::Easy);
+    // D-085 (M85): a save written before M85 names the level it was played at; it loads with its players, the level
+    // ignored, whatever it says.
+    for (const char* level : {"easy", "normal", "hard", "impossible"}) {
+        j["players"] = nlohmann::json{{"A", "bot"}, {"B", "human"}, {"bot_level", level}};
+        EXPECT_EQ(players_from_save_json(j).bots, (BotSides{true, false})) << level;
+    }
 }
 
-TEST(M39_Settings, BotLevelAndSpeedKeys) {
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-        EXPECT_EQ(bot_level_from_key(bot_level_key(l)), l);
-    }
+TEST(M39_Settings, BotSpeedKeys) {
+    // D-085 (M85): the level keys went with the levels.
     for (const BotSpeed sp : {BotSpeed::Slow, BotSpeed::Normal, BotSpeed::Fast, BotSpeed::Instant}) {
         EXPECT_EQ(bot_speed_from_key(bot_speed_key(sp)), sp);
     }
-    EXPECT_FALSE(bot_level_from_key("Easy").has_value());
     EXPECT_FALSE(bot_speed_from_key("quick").has_value());
 }

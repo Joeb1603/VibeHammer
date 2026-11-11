@@ -13,6 +13,7 @@
 
 #include "arena.hpp"
 #include "bot.hpp"
+#include "default_choice.hpp"
 #include "bounds.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
@@ -30,12 +31,6 @@ using wh40k::test::in;
 namespace tf = wh40k::test::tyrannofex;
 
 namespace {
-
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
-}
 
 const Base kOval = tf::kOval;
 
@@ -170,43 +165,33 @@ std::vector<std::pair<std::string, GameState>> tyrannofex_decisions() {
     return states;
 }
 
-void expect_legal_decisions(std::initializer_list<BotLevel> levels) {
+}  // namespace
+
+TEST(M66_Bots, TheBotAndItsDefaultsDecideLegallyAtTheTyrannofexsDecisions) {
+    // D-085 (M85): the bot (Normal) and its defaults (once level Easy).
     for (const auto& [name, gs] : tyrannofex_decisions()) {
         ASSERT_TRUE(gs.pending) << name;
-        for (const BotLevel l : levels) {
-            Bot bot(level(l));
-            const BotChoice c = bot.decide(gs, gs.pending->side);
-            ASSERT_FALSE(c.stopped) << name << " level " << static_cast<int>(l);
+        for (const bool defaults : {false, true}) {
+            Bot bot(BotConfig{});
+            const BotChoice c = defaults ? wh40k::test::default_choice(gs, gs.pending->side) : bot.decide(gs, gs.pending->side);
+            ASSERT_FALSE(c.stopped) << name << " defaults " << defaults;
             const ValidationResult r = validate_action(gs, gs.pending->side, c.action);
-            EXPECT_TRUE(r.ok()) << name << " level " << static_cast<int>(l) << ": "
+            EXPECT_TRUE(r.ok()) << name << " defaults " << defaults << ": "
                                 << (r.reasons.empty() ? std::string() : r.reasons.front());
-            EXPECT_EQ(bot.fallbacks(), 0u) << name << " level " << static_cast<int>(l);
+            EXPECT_EQ(bot.fallbacks(), 0u) << name;
         }
     }
 }
 
-}  // namespace
-
-TEST(M66_Bots, EasyAndNormalDecideLegallyAtTheTyrannofexsDecisions) {
-    expect_legal_decisions({BotLevel::Easy, BotLevel::Normal});
-}
-
-TEST(M66_Bots, HardDecidesLegallyAtTheTyrannofexsDecisions) { expect_legal_decisions({BotLevel::Hard}); }
-
 namespace {
 
-struct Pairing {
-    BotLevel a;
-    BotLevel b;
-    std::uint64_t seed;
-};
-
-// Each game from `scenario`: finished, no rejected action, no reverted move, no fallback.
-void expect_clean_games(const GameState& scenario, std::initializer_list<Pairing> pairings) {
-    for (const Pairing& p : pairings) {
-        const GameRecord g = play_bot_game(scenario, p.seed, level(p.a), level(p.b), 8000);
-        const std::string label = "seed " + std::to_string(p.seed) + " " + std::to_string(static_cast<int>(p.a)) +
-                                  " vs " + std::to_string(static_cast<int>(p.b));
+// `games` games from `scenario` with seeds from `first_seed`, the bot on both sides: finished, no rejected action, no
+// reverted move, no fallback.
+void expect_clean_games(const GameState& scenario, int games, std::uint64_t first_seed) {
+    for (int i = 0; i < games; ++i) {
+        const std::uint64_t seed = first_seed + static_cast<std::uint64_t>(i);
+        const GameRecord g = play_bot_game(scenario, seed, BotConfig{}, BotConfig{}, 8000);
+        const std::string label = "seed " + std::to_string(seed);
         EXPECT_TRUE(g.finished) << label << (g.problems.empty() ? "" : ": " + g.problems.front());
         EXPECT_EQ(g.rejected, 0u) << label;
         EXPECT_EQ(g.reverted, 0u) << label;
@@ -214,48 +199,20 @@ void expect_clean_games(const GameState& scenario, std::initializer_list<Pairing
     }
 }
 
-void expect_clean_pairings(const GameState& scenario, int games, std::uint64_t first_seed,
-                           std::initializer_list<std::pair<BotLevel, BotLevel>> levels) {
-    for (const auto& [a, b] : levels) {
-        for (int i = 0; i < games; ++i) {
-            expect_clean_games(scenario, {Pairing{a, b, first_seed + static_cast<std::uint64_t>(i)}});
-        }
-    }
-}
-
 }  // namespace
 
-TEST(M66_Bots, EasyAndNormalPlayTheTyrannofexClean) {
+TEST(M66_Bots, TheBotPlaysTheTyrannofexClean) {
     // The hand-placed fixture (five units, the Tyrannofex among them), either side first, and the 14-unit roster
-    // fixture with the Tyrannofex once each way. The 30-game pairings on the roster fixture are the disabled test
-    // below and the arena (M66 Results).
+    // fixture with the Tyrannofex, the seeds of the old Easy and Normal pairings (D-085, M85). The 30-game runs on the
+    // roster fixture are the disabled test below and the arena (M66 Results).
     for (const Side first : {Side::A, Side::B}) {
-        expect_clean_pairings(tf::fixture(first), 2, 660 + static_cast<std::uint64_t>(first == Side::A ? 0 : 10),
-                              {{BotLevel::Easy, BotLevel::Easy},
-                               {BotLevel::Normal, BotLevel::Normal},
-                               {BotLevel::Easy, BotLevel::Normal},
-                               {BotLevel::Normal, BotLevel::Easy}});
+        expect_clean_games(tf::fixture(first), 2, 660 + static_cast<std::uint64_t>(first == Side::A ? 0 : 10));
     }
-    const GameState roster = wh40k::test::load_tyrannofex_fixture();
-    expect_clean_games(roster, {Pairing{BotLevel::Easy, BotLevel::Easy, 1}, Pairing{BotLevel::Normal, BotLevel::Easy, 2}});
+    expect_clean_games(wh40k::test::load_tyrannofex_fixture(), 2, 1);
 }
 
-// 30 games each pairing of Easy and Normal on the roster fixture with the Tyrannofex: a few minutes in Release, so run by
-// hand:  wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M66_Bots.DISABLED_*
-TEST(M66_Bots, DISABLED_EasyAndNormalThirtyGamesEachPairingOnTheRosterFixture) {
-    expect_clean_pairings(wh40k::test::load_tyrannofex_fixture(), 30, 1,
-                          {{BotLevel::Easy, BotLevel::Easy},
-                           {BotLevel::Normal, BotLevel::Normal},
-                           {BotLevel::Easy, BotLevel::Normal},
-                           {BotLevel::Normal, BotLevel::Easy}});
-}
-
-// Hard with the Tyrannofex takes minutes a game even in Release (Hard for the roster units is M69's), so by hand too:
-// four games on the hand-placed fixture, either side first. Hard on the 14-unit roster fixture is the arena's
-// (wh40k_bot_arena --a hard --b hard --scenario tests/data/scenarios/rosters_tyrannofex_44x60.json; M66 Results).
-TEST(M66_Bots, DISABLED_HardPlaysTheTyrannofexClean) {
-    expect_clean_games(tf::fixture(Side::B), {Pairing{BotLevel::Hard, BotLevel::Hard, 661},
-                                              Pairing{BotLevel::Hard, BotLevel::Normal, 662}});
-    expect_clean_games(tf::fixture(Side::A), {Pairing{BotLevel::Easy, BotLevel::Hard, 663},
-                                              Pairing{BotLevel::Hard, BotLevel::Hard, 664}});
+// 30 games on the roster fixture with the Tyrannofex: a few minutes in Release, so run by hand:
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M66_Bots.DISABLED_*
+TEST(M66_Bots, DISABLED_ThirtyGamesOnTheRosterFixture) {
+    expect_clean_games(wh40k::test::load_tyrannofex_fixture(), 30, 1);
 }

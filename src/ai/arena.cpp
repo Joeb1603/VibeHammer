@@ -195,8 +195,6 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     rec.seed = session.seed();
     const std::array<int, 2> wounds_at_start = wounds_left(session.state());
     std::array<Bot, 2> bots{Bot(a), Bot(b)};
-    // D-078 (M69): one chain cache for the game when both sides are Hard (a cache never changes a decision).
-    if (a.level == BotLevel::Hard && b.level == BotLevel::Hard) bots[1].share_chain_cache(bots[0]);
     // As the client runs a bot game: skip steps with nothing to do, never auto-allocate for a bot (D-054).
     client::AutoSettings autos;
     autos.skip_empty_steps = true;

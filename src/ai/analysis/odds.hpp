@@ -137,10 +137,6 @@ struct AttackOutcome {
     // W2 model at 1 wound counts half. The unit of "value" for M41-M44.
     double model_equivalents = 0.0;
     std::vector<double> models_destroyed_pmf;  // [k] = P(exactly k models destroyed)
-    // M44: [j] = P(the target is left with exactly j wounds in total), j = 0..its wounds before the volley. With
-    // the wounded model first (05.04) this fixes what is left of a unit whose models share one W, which is the
-    // state of M44's chain.
-    std::vector<double> wounds_left_pmf;
     [[nodiscard]] double p_wipe() const noexcept {
         return models_destroyed_pmf.empty() ? 0.0 : models_destroyed_pmf.back();
     }

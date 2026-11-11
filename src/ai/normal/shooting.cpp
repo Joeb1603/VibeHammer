@@ -295,20 +295,17 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
 }
 
 std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
-                                              const std::vector<core::GameAction>& legal, Generation generation,
-                                              const ArmyPlan* plan) {
+                                              const std::vector<core::GameAction>& legal) {
     // D-083 part 3 (M81): focus fire, for the side shooting.
     std::optional<ShootingAim> aim;
-    if (!pre_teamwork(generation)) {
-        for (const core::GameAction& a : legal) {
-            const auto* shoot = std::get_if<core::action::Shoot>(&a);
-            const core::Unit* u = shoot != nullptr ? state.find_unit(shoot->unit) : nullptr;
-            if (u == nullptr) continue;
-            aim.emplace(cache, state, u->side, generation, plan);
-            break;
-        }
-        if (aim && !aim->active()) aim.reset();
+    for (const core::GameAction& a : legal) {
+        const auto* shoot = std::get_if<core::action::Shoot>(&a);
+        const core::Unit* u = shoot != nullptr ? state.find_unit(shoot->unit) : nullptr;
+        if (u == nullptr) continue;
+        aim.emplace(cache, state, u->side);
+        break;
     }
+    if (aim && !aim->active()) aim.reset();
     const ShootingAim* use = aim ? &*aim : nullptr;
     const auto at_focus = [&](const ShootingChoice& c) {
         return use != nullptr && std::any_of(c.shots.begin(), c.shots.end(),
@@ -334,10 +331,8 @@ std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const 
 
 // ---- D-083 part 3 (M81): focus fire ----
 
-ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                         Generation generation, const ArmyPlan* given)
+ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side)
     : cache_(&cache), state_(&state), side_(side) {
-    if (pre_teamwork(generation)) return;
     std::array<int, 2> units{};
     for (const core::Unit& u : state.units) {
         if (!u.models.empty()) ++units[core::side_index(u.side)];
@@ -348,9 +343,7 @@ ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& stat
     // at most kFinishTurns.
     const int turns = std::max(0, state.battle_rounds - state.flow.battle_round + (state.flow.turn_in_round == 0 ? 1 : 0));
     finish_turns_ = static_cast<double>(std::min(kFinishTurns, turns));
-    std::optional<ArmyPlan> own;
-    if (given == nullptr || given->side != side) own = army_plan(cache, state, side, generation);
-    const ArmyPlan& plan = own ? *own : *given;
+    const ArmyPlan plan = army_plan(cache, state, side);
     for (const PlanGroup& g : plan.groups) {
         if (std::find(focus_.begin(), focus_.end(), g.target) == focus_.end()) focus_.push_back(g.target);
     }

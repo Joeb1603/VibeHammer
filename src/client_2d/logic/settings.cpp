@@ -12,7 +12,6 @@ namespace {
 namespace fs = std::filesystem;
 using nlohmann::json;
 
-constexpr std::array<const char*, 3> kLevelKeys{"easy", "normal", "hard"};
 constexpr std::array<const char*, 4> kSpeedKeys{"slow", "normal", "fast", "instant"};
 constexpr std::array<const char*, 3> kModeKeys{"hotseat", "vs_bot", "bot_vs_bot"};
 constexpr std::array<const char*, 2> kDeploymentKeys{"auto", "hand"};
@@ -78,7 +77,6 @@ CustomBattleSettings custom_battle_from_json(const json& j) {
 json settings_to_json(const AppSettings& s) {
     json j{
         {"human_side", s.human_side == core::Side::A ? "A" : "B"},
-        {"bot_level", kLevelKeys[static_cast<std::size_t>(s.bot_level)]},
         {"bot_speed", kSpeedKeys[static_cast<std::size_t>(s.bot_speed)]},
         {"scenario", s.scenario},
         {"fixed_seed", s.fixed_seed},
@@ -103,7 +101,7 @@ AppSettings settings_from_json(const json& j) {
         if (side == "A") s.human_side = core::Side::A;
         if (side == "B") s.human_side = core::Side::B;
     }
-    read_enum(j, "bot_level", kLevelKeys, s.bot_level);
+    // D-085 (M85): "bot_level" (the removed level setting; one bot) in an older file is ignored.
     read_enum(j, "bot_speed", kSpeedKeys, s.bot_speed);
     // M51 (D-062): "bot_auto_dice" (the removed auto-dice setting) in an older file is ignored.
     read_string(j, "scenario", s.scenario);
@@ -150,15 +148,6 @@ bool save_settings(const fs::path& path, const AppSettings& s) {
     }
 }
 
-const char* bot_level_name(BotLevel level) {
-    switch (level) {
-        case BotLevel::Easy: return "Easy";
-        case BotLevel::Normal: return "Normal";
-        case BotLevel::Hard: return "Hard";
-    }
-    return "?";
-}
-
 const char* bot_speed_name(BotSpeed speed) {
     switch (speed) {
         case BotSpeed::Slow: return "Slow";
@@ -169,15 +158,7 @@ const char* bot_speed_name(BotSpeed speed) {
     return "?";
 }
 
-const char* bot_level_key(BotLevel level) { return kLevelKeys[static_cast<std::size_t>(level)]; }
 const char* bot_speed_key(BotSpeed speed) { return kSpeedKeys[static_cast<std::size_t>(speed)]; }
-
-std::optional<BotLevel> bot_level_from_key(std::string_view key) {
-    for (std::size_t i = 0; i < kLevelKeys.size(); ++i) {
-        if (key == kLevelKeys[i]) return static_cast<BotLevel>(i);
-    }
-    return std::nullopt;
-}
 
 std::optional<BotSpeed> bot_speed_from_key(std::string_view key) {
     for (std::size_t i = 0; i < kSpeedKeys.size(); ++i) {

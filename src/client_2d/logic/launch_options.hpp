@@ -83,7 +83,6 @@ struct LaunchOptions {
     bool menu = false;  // --menu 1: show the start screen even with other flags (M38)
     BotSides bots{false, false};        // --bot (M39)
     bool bots_given = false;            // --bot was given (it overrides a --load save's players)
-    std::optional<BotLevel> bot_level;  // --bot-level
     std::optional<BotSpeed> bot_speed;  // --bot-speed
     int bot_steps = 0;                  // --bot-steps
     std::optional<std::string> load;    // --load (M61)
@@ -118,7 +117,7 @@ struct LaunchOptions {
 // std::invalid_argument naming the flag (main exits with code 2).
 void apply_launch_armies(const LaunchOptions& options, ArmyBuilder& builder);
 
-// The players a --load game starts with: the save's, with --bot and --bot-level overriding them when given.
+// The players a --load game starts with: the save's, with --bot overriding them when given.
 [[nodiscard]] SavePlayers launch_players(const SavePlayers& saved, const LaunchOptions& options);
 
 }  // namespace wh40k::client

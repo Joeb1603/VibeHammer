@@ -24,7 +24,7 @@ TEST(M51_BotDice, ABotsCardIsPacedExactlyWhenTheBotsArentPaused) {
 
 TEST(M51_BotDice, AnOldSettingsFileWithTheRemovedKeyStillLoads) {
     AppSettings expected;
-    expected.bot_level = BotLevel::Easy;
+    expected.bot_speed = BotSpeed::Fast;
     expected.show_dice = false;
     json old = settings_to_json(expected);
     old["bot_auto_dice"] = false;  // written by M38-M50

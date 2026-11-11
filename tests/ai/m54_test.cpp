@@ -90,8 +90,8 @@ TEST(M54_Driver, InstantOnTheWorkerHandsOverTheSynchronousBotsActions) {
     for (const std::uint64_t seed : {3u, 4u}) {
         client::GameSession live = client::GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
         client::GameSession mirror = client::GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
-        BotDriver d(BotConfig{BotLevel::Normal}, BotSpeed::Instant, BotDriver::Threading::Worker);
-        std::array<Bot, 2> sync{Bot(BotConfig{BotLevel::Normal}), Bot(BotConfig{BotLevel::Normal})};
+        BotDriver d(BotConfig{}, BotSpeed::Instant, BotDriver::Threading::Worker);
+        std::array<Bot, 2> sync{Bot(BotConfig{}), Bot(BotConfig{})};
         client::AutoSettings autos;
         autos.bot_controlled = {true, true};
         autos.auto_allocate = false;
@@ -127,8 +127,8 @@ TEST(M54_Driver, InstantOnTheWorkerHandsOverTheSynchronousBotsActions) {
 TEST(M54_Arena, ThePerGameReportIsAFunctionOfTheGames) {
     // Two runs give the same lines (only the timing line differs), one per game, each with its hashes.
     const GameState v1 = wh40k::test::load_v1_scenario();
-    const PerGameReport first = run_per_game(v1, 3, 5, BotConfig{BotLevel::Easy}, BotConfig{BotLevel::Normal});
-    const PerGameReport second = run_per_game(v1, 3, 5, BotConfig{BotLevel::Easy}, BotConfig{BotLevel::Normal});
+    const PerGameReport first = run_per_game(v1, 3, 5, BotConfig{}, BotConfig{});
+    const PerGameReport second = run_per_game(v1, 3, 5, BotConfig{}, BotConfig{});
     EXPECT_TRUE(first.clean);
     const std::string games = games_only(first.text);
     EXPECT_EQ(games, games_only(second.text));
@@ -139,6 +139,6 @@ TEST(M54_Arena, ThePerGameReportIsAFunctionOfTheGames) {
     EXPECT_NE(games.find(" trace "), std::string::npos);
     EXPECT_NE(first.text.find("decisions "), std::string::npos);
     // Other seeds play other games.
-    const PerGameReport other = run_per_game(v1, 3, 6, BotConfig{BotLevel::Easy}, BotConfig{BotLevel::Normal});
+    const PerGameReport other = run_per_game(v1, 3, 6, BotConfig{}, BotConfig{});
     EXPECT_NE(games_only(other.text), games);
 }

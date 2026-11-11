@@ -2,7 +2,8 @@
 // engine batches), [EXTRA ATTACKS] in every melee estimate, the cost of [HAZARDOUS] (checked against the engine's hazard
 // rolls and mortal wounds), 10.06's and 17.03's -1s in hypothetical volleys, engaged MONSTERS still shooting in the
 // charge planner, a MONSTER's Normal move through enemy infantry (17.01), material weighted by points, the points
-// tiebreak in the move score's objective, and clean games of every Easy / Normal pairing on the roster scenario.
+// tiebreak in the move score's objective, and clean games on the roster scenario. (D-085, M85: one bot; Easy's checks are
+// its defaults'.)
 
 #include <gtest/gtest.h>
 
@@ -29,6 +30,7 @@
 #include "core/serialization/json.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
+#include "default_choice.hpp"
 #include "normal/charge.hpp"
 #include "normal/move_score.hpp"
 #include "normal/movement.hpp"
@@ -36,6 +38,7 @@
 #include "normal/value.hpp"
 #include "reach_area.hpp"
 #include "session.hpp"
+#include "state_fixture.hpp"
 #include "simulator.hpp"
 #include "support/engine_helpers.hpp"
 #include "support/monster_fixtures.hpp"
@@ -62,12 +65,7 @@ constexpr std::size_t kGenestealers = 6;
 constexpr std::size_t kGuard = 8;
 constexpr std::size_t kTyrant = 9;
 
-BotConfig level(BotLevel l, Generation g = Generation::Current) {
-    BotConfig c;
-    c.level = l;
-    c.generation = g;
-    return c;
-}
+BotConfig normal_bot() { return BotConfig{}; }
 
 // Plays a started game, every unit remaining stationary and every step ended, until `side` has a decision of `Kind`.
 template <typename Kind>
@@ -331,9 +329,8 @@ TEST(M68_Hazard, NormalSuperchargesOnlyWhenItIsWorthIt) {
         ASSERT_EQ(c->shots.size(), 1u);
         EXPECT_EQ(c->shots.front().profile_index, worth_it ? 1u : 0u) << gap;
         EXPECT_NEAR(c->value, value_of(cache, gs, worth_it ? supercharge : standard, true), 1e-12);
-        // Easy keeps the M60 default plan (D-071), never a [HAZARDOUS] profile.
-        Bot easy(level(BotLevel::Easy));
-        const BotChoice e = easy.decide(gs, Side::A);
+        // The defaults (once level Easy) keep the M60 default plan (D-071), never a [HAZARDOUS] profile.
+        const BotChoice e = wh40k::test::default_choice(gs, Side::A);
         const auto* shoot = std::get_if<action::Shoot>(&e.action);
         ASSERT_NE(shoot, nullptr);
         for (const ShotDeclaration& d : shoot->shots) {
@@ -527,45 +524,29 @@ TEST(M68_Movement, ADesperateEscapeIsMadeOnlyWhenTheLikelyLossesLeaveAMoveThatSt
     // (Desperate Escape their only fall-back mode, 09.07) are engaged with the Hive Tyrant standing among them against the
     // south edge, a Screamer-killer 2.7" north. Planned with no failed hazard roll (D-054) a fall-back move stands; after
     // the likely losses none does, and M68's first build had to reset the move (a UnitMoveReverted). Now Normal, like
-    // Hard (D-067's escape_stands), keeps them in the fight (D-077).
-    // D-083 part 2 (M80): the current Normal plays this game differently (it never reaches the position), so the game
-    // and the decision are the pre-batch Normal's (Generation::M77), assertions unchanged;
-    // M80_Normal.TheDesperateEscapeGuardStillHolds checks the current Normal's choice at the same position.
-    const GameState scenario = wh40k::test::load_rosters_scenario();
-    wh40k::client::GameSession session = wh40k::client::GameSession::new_game(scenario, 193);
-    std::array<Bot, 2> bots{Bot(level(BotLevel::Normal, Generation::M77)), Bot(level(BotLevel::Normal, Generation::M77))};
-    wh40k::client::AutoSettings autos;  // as the arena plays a bot game
-    autos.skip_empty_steps = true;
-    autos.auto_allocate = false;
-    autos.bot_controlled = {true, true};
+    // Hard did (D-067's escape_stands), keeps them in the fight (D-077).
+    // D-083 part 2 (M80): the current Normal plays that game differently (it never reaches the position), so the game was
+    // the pre-batch Normal's (Generation::M77). D-085 (M85): that switch is gone; the position it reached is kept as a
+    // fixture, and the bot's choice there is checked (as M80_Normal.TheDesperateEscapeGuardStillHolds did).
+    const GameState gs = wh40k::test::load_state_fixture("m68_desperate_escape.json");
     const UnitId terminators{3};
     const GameAction escape = action::StartMove{terminators, MoveType::FallBack, FallBackMode::DesperateEscape};
-    bool reached = false;
-    for (int i = 0; i < 4000 && session.pending(); ++i) {
-        (void)wh40k::client::run_auto_actions(session, autos);
-        if (!session.pending()) break;
-        const GameState& gs = session.state();
-        const Side side = gs.pending->side;
-        const std::vector<GameAction> legal = legal_actions(gs, side);
-        if (gs.flow.battle_round == 5 && std::find(legal.begin(), legal.end(), escape) != legal.end()) {
-            reached = true;
-            // Without failed rolls a fall-back move stands ...
-            Simulator sixes(gs, 0);
-            ScriptedDice six(std::vector<int>(gs.find_unit(terminators)->models.size(), 6));
-            ASSERT_TRUE(sixes.step(side, escape, six).ok());
-            OddsCache cache;
-            EXPECT_FALSE(normal::standing_moves(cache, sixes.state(), normal::MoveWeights{}, 1, normal::kMaxSimulatedMoves).empty());
-            // ... and Normal doesn't make the escape.
-            Bot bot(level(BotLevel::Normal, Generation::M77));
-            const BotChoice c = bot.decide(gs, side);
-            EXPECT_NE(c.action, escape) << c.reason;
-            EXPECT_TRUE(validate_action(gs, side, c.action).ok());
-            break;
-        }
-        const BotChoice c = bots[side_index(side)].decide(gs, side);
-        ASSERT_TRUE(session.submit(c.action).ok());
-    }
-    EXPECT_TRUE(reached);
+    ASSERT_TRUE(gs.pending.has_value());
+    const Side side = gs.pending->side;
+    const std::vector<GameAction> legal = legal_actions(gs, side);
+    ASSERT_EQ(gs.flow.battle_round, 5);
+    ASSERT_NE(std::find(legal.begin(), legal.end(), escape), legal.end());
+    // Without failed rolls a fall-back move stands ...
+    Simulator sixes(gs, 0);
+    ScriptedDice six(std::vector<int>(gs.find_unit(terminators)->models.size(), 6));
+    ASSERT_TRUE(sixes.step(side, escape, six).ok());
+    OddsCache cache;
+    EXPECT_FALSE(normal::standing_moves(cache, sixes.state(), normal::MoveWeights{}, 1, normal::kMaxSimulatedMoves).empty());
+    // ... and the bot doesn't make the escape.
+    Bot bot(normal_bot());
+    const BotChoice c = bot.decide(gs, side);
+    EXPECT_NE(c.action, escape) << c.reason;
+    EXPECT_TRUE(validate_action(gs, side, c.action).ok());
 }
 
 // ---- 7. Material weighted by points ----
@@ -683,9 +664,9 @@ TEST(M68_Tiebreak, ThePointsRuleReplacesTheDrawInTheMoveScore) {
 
 namespace {
 
-void expect_clean(BotLevel a, BotLevel b, std::uint64_t seed) {
+void expect_clean(std::uint64_t seed) {
     const GameState scenario = wh40k::test::load_rosters_scenario();
-    const GameRecord g = play_bot_game(scenario, seed, level(a), level(b), 5000);
+    const GameRecord g = play_bot_game(scenario, seed, normal_bot(), normal_bot(), 5000);
     EXPECT_TRUE(g.finished) << "seed " << seed << (g.problems.empty() ? "" : ": " + g.problems.front());
     EXPECT_EQ(g.rejected, 0u) << "seed " << seed;
     EXPECT_EQ(g.reverted, 0u) << "seed " << seed;
@@ -695,25 +676,16 @@ void expect_clean(BotLevel a, BotLevel b, std::uint64_t seed) {
 
 }  // namespace
 
-TEST(M68_Games, EveryEasyAndNormalPairingPlaysTheRostersClean) {
-    // Two games of each pairing (about 22 s in Debug); the arena plays 200 of each (PLAN.md, M68).
-    for (const std::uint64_t seed : {1u, 5u}) {
-        expect_clean(BotLevel::Easy, BotLevel::Easy, seed);
-        expect_clean(BotLevel::Normal, BotLevel::Normal, seed + 1);
-        expect_clean(BotLevel::Normal, BotLevel::Easy, seed + 2);
-        expect_clean(BotLevel::Easy, BotLevel::Normal, seed + 3);
-    }
+TEST(M68_Games, TheBotPlaysTheRostersClean) {
+    // Four games (D-085, M85: eight of Easy and Normal pairings before; the bot's roster games take about half a
+    // minute each in Debug); the arena plays 200 (PLAN.md, M68).
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) expect_clean(seed);
 }
 
-// The bigger run (ten games of each pairing; about a minute in Release), run by hand:
+// The bigger run (forty games; about a minute in Release), run by hand:
 //   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M68_Games.DISABLED_*
-TEST(M68_Games, DISABLED_TenGamesOfEveryPairingPlayTheRostersClean) {
-    for (std::uint64_t seed = 101; seed <= 110; ++seed) {
-        expect_clean(BotLevel::Easy, BotLevel::Easy, seed);
-        expect_clean(BotLevel::Normal, BotLevel::Normal, seed);
-        expect_clean(BotLevel::Normal, BotLevel::Easy, seed);
-        expect_clean(BotLevel::Easy, BotLevel::Normal, seed);
-    }
+TEST(M68_Games, DISABLED_FortyGamesPlayTheRostersClean) {
+    for (std::uint64_t seed = 101; seed <= 140; ++seed) expect_clean(seed);
 }
 
 // ---- The bot-game replay ----
@@ -734,9 +706,8 @@ struct BotGame {
 };
 
 // Played through GameSession (every action validated, the client's automatic skips included, nothing auto-allocated
-// for a bot), its history a scenario-form replay, as M45 and M58 do. Replaying it needs only core.
-// D-083 part 2 (M80): `generation` M77 plays the pre-batch Normal (normal-m77).
-BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed, Generation generation = Generation::Current) {
+// for a bot), its history a scenario-form replay, as M45 and M58 did. Replaying it needs only core.
+BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed) {
     BotGame g;
     g.replay.description =
         "M68: a whole game played by the bot on both sides, level Normal vs Normal, from the 44\"x60\" portrait roster "
@@ -747,7 +718,7 @@ BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed, Generation gene
     g.replay.initial.scenario = wh40k::test::kRostersScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
-    g.record = play_bot_session(session, level(BotLevel::Normal, generation), level(BotLevel::Normal, generation), 5000);
+    g.record = play_bot_session(session, normal_bot(), normal_bot(), 5000);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -774,29 +745,6 @@ TEST(M68_Replay, TheRostersBotGameReplaysToItsResultWithCoreOnly) {
     // seed) makes no [HAZARDOUS] shot; the pre-batch game's supercharged plasma shot is checked by
     // ThePreBatchGameShootsSuperchargedAndFightsOnBothSides.
     const auto has = [&](auto pred) { return std::any_of(saved.steps.begin(), saved.steps.end(), pred); };
-    for (const Side side : {Side::A, Side::B}) {
-        EXPECT_TRUE(has([&](const ReplayStep& s) { return s.side == side && std::holds_alternative<action::Fight>(s.action); }));
-    }
-}
-
-TEST(M68_Replay, ThePreBatchGameShootsSuperchargedAndFightsOnBothSides) {
-    // The pre-batch Normal (Generation::M77) with the replay's seed, replayed through the engine alone, with the
-    // assertions the saved file was checked with before M80: a supercharged plasma shot, and both armies in melee.
-    const BotGame g = play_rosters_bot_game(kRostersSeed, Generation::M77);
-    ASSERT_TRUE(g.record.finished);
-    const ReplayResult r = run_replay(g.replay, repo_root());
-    ASSERT_TRUE(r.ok());
-    const auto has = [&](auto pred) { return std::any_of(g.replay.steps.begin(), g.replay.steps.end(), pred); };
-    GameState gs = replay_initial_state(g.replay, repo_root());
-    EXPECT_TRUE(has([&](const ReplayStep& s) {
-        const auto* shoot = std::get_if<action::Shoot>(&s.action);
-        if (shoot == nullptr) return false;
-        for (const ShotDeclaration& d : shoot->shots) {
-            const Model* m = find_model(gs, d.model);
-            if (m != nullptr && m->weapons[d.weapon_index].profiles[d.profile_index].has<ability::Hazardous>()) return true;
-        }
-        return false;
-    }));
     for (const Side side : {Side::A, Side::B}) {
         EXPECT_TRUE(has([&](const ReplayStep& s) { return s.side == side && std::holds_alternative<action::Fight>(s.action); }));
     }

@@ -19,7 +19,7 @@ using namespace wh40k::ai;
 
 namespace {
 
-BotConfig easy() { return BotConfig{BotLevel::Easy}; }
+BotConfig bot_config() { return BotConfig{}; }
 
 // The per-game lines without the last one (decision times and the wall time).
 std::string game_lines(const std::string& text) {
@@ -37,8 +37,8 @@ const ArmySource& source() {
 TEST(M72_Arena, AScenarioForEverySeedPlaysAsTheFixedScenario) {
     // The arena's games now come from a scenario per seed; a fixed scenario gives the same games, line for line.
     const GameState v1 = wh40k::test::load_v1_scenario();
-    const PerGameReport fixed = run_per_game(v1, 3, 1, easy(), easy());
-    const PerGameReport per_seed = run_per_game([&v1](std::uint64_t) { return v1; }, 3, 1, easy(), easy());
+    const PerGameReport fixed = run_per_game(v1, 3, 1, bot_config(), bot_config());
+    const PerGameReport per_seed = run_per_game([&v1](std::uint64_t) { return v1; }, 3, 1, bot_config(), bot_config());
     EXPECT_EQ(game_lines(fixed.text), game_lines(per_seed.text));
     EXPECT_FALSE(game_lines(fixed.text).empty());
 }
@@ -55,9 +55,9 @@ TEST(M72_Arena, RandomArmiesAreTheTestsRandomArmies) {
     EXPECT_NE(random_armies_battle(source(), 1, Side::A), random_armies_battle(source(), 2, Side::A));
 }
 
-TEST(M72_Arena, RandomArmiesGamesFinishCleanAtEasy) {
+TEST(M72_Arena, RandomArmiesGamesFinishClean) {
     const ArenaResult r =
-        run_arena([](std::uint64_t seed) { return random_armies_battle(source(), seed, Side::A); }, 3, 1, easy(), easy());
+        run_arena([](std::uint64_t seed) { return random_armies_battle(source(), seed, Side::A); }, 3, 1, bot_config(), bot_config());
     EXPECT_TRUE(r.clean()) << format_arena(r, r.games.empty() ? GameState{} : random_armies_battle(source(), 1, Side::A));
     EXPECT_EQ(r.fallbacks, 0u);
 }

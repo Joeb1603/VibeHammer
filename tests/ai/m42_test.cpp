@@ -24,6 +24,7 @@
 #include "core/geometry/engagement.hpp"
 #include "core/state/queries.hpp"
 #include "normal/charge.hpp"
+#include "normal/defaults.hpp"
 #include "session.hpp"
 #include "state_hash.hpp"
 #include "support/charge_fixtures.hpp"
@@ -39,8 +40,7 @@ using wh40k::test::in;
 
 namespace {
 
-BotConfig normal_level() { return BotConfig{BotLevel::Normal}; }
-BotConfig easy_level() { return BotConfig{BotLevel::Easy}; }
+BotConfig normal_level() { return BotConfig{}; }
 
 UnitId charger_id(const GameState& gs, Charger c) { return gs.units[wh40k::test::charger_index(c)].id; }
 UnitId target_id(const GameState& gs, Charger c) { return gs.units[wh40k::test::target_index(c)].id; }
@@ -68,7 +68,8 @@ struct Played {
 
 // Answers side A's decisions with `bot` (applying each with the engine) while they are the charge's
 // SelectChargeTargets or MoveModels: from the roll to the charge's resolution.
-Played play_charge(GameState gs, Bot& bot, UnitId unit) {
+template <typename Decide>  // GameAction(const GameState&): side A's answer
+Played play_charge(GameState gs, Decide decide, UnitId unit) {
     Played out;
     for (int guard = 0; guard < 64 && gs.pending && gs.pending->side == Side::A; ++guard) {
         const auto& kind = gs.pending->kind;
@@ -76,12 +77,12 @@ Played play_charge(GameState gs, Bot& bot, UnitId unit) {
                                  (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
                                   gs.flow.move->type == MoveType::Charge);
         if (!charge_step) break;
-        const BotChoice c = bot.decide(gs, Side::A);
-        if (!validate_action(gs, Side::A, c.action).ok()) {
+        const GameAction a = decide(gs);
+        if (!validate_action(gs, Side::A, a).ok()) {
             ++out.rejected;
             break;
         }
-        for (const GameEvent& e : apply_action(gs, Side::A, c.action)) {
+        for (const GameEvent& e : apply_action(gs, Side::A, a)) {
             if (std::holds_alternative<event::UnitMoveReverted>(e)) ++out.reverted;
         }
     }
@@ -151,9 +152,11 @@ TEST(M42_ChargeMove, AcrossAGridEveryPlannedChargeCommitsWithoutARevertAndEngage
                     std::vector<std::string> problems;
                     const auto plan = normal::plan_charge_move(*gs, Side::A, unit, {target_id(*gs, c)},
                                                                decision_seed(*gs), "test", &problems);
-                    // The M39 baseline: level Easy's charge move, played out.
-                    Bot easy(easy_level());
-                    const Played base = play_charge(*gs, easy, unit);
+                    // The M39 baseline: the bot's default charge move (once level Easy's; D-085), played out.
+                    const auto defaults = [](const GameState& g) {
+                        return normal::default_answer(g, Side::A, legal_actions(g, Side::A), decision_seed(g)).action;
+                    };
+                    const Played base = play_charge(*gs, defaults, unit);
                     EXPECT_EQ(base.reverted, 0) << where;
                     if (base.charged) {
                         ++baseline_charges;
@@ -299,26 +302,6 @@ TEST(M42_Declare, NoRollWithAStandingMoveMeansNoCharge) {
 
 // ==== The charge targets after the roll ====
 
-TEST(M42_ChargeTargets, ChargesBothUnitsWhenTheTargetAloneCannotBeEngaged) {
-    // The ringed Termagant can't be charged alone (every spot near it is within 2" of the ring, 11.04 After
-    // Moving), but both units together can: the bot picks that target set, and the move stands.
-    // D-066 (M56): M42's value summed the targets, each from the charger's full strength, which made the two-target
-    // set worth the most here; that is the M55 generation. With the strength shared (the current Normal) the ring
-    // alone is worth slightly more: M56_Charge.TheRingedTermagantIsChargedForTheMostValue.
-    const GameState gs = ringed_target(12);
-    const UnitId unit = charger_id(gs, Charger::Intercessors);
-    Bot bot(BotConfig{BotLevel::Normal, {}, Generation::M55});
-    const BotChoice c = bot.decide(gs, Side::A);
-    const auto* start = std::get_if<action::StartChargeMove>(&c.action);
-    ASSERT_NE(start, nullptr) << c.reason;
-    EXPECT_EQ(start->targets.size(), 2u);
-    const Played p = play_charge(gs, bot, unit);
-    EXPECT_TRUE(p.charged);
-    EXPECT_EQ(p.reverted, 0);
-    EXPECT_EQ(p.rejected, 0);
-    EXPECT_EQ(engaged_enemy_units(p.after, *p.after.find_unit(unit)).size(), 2u);
-}
-
 TEST(M42_ChargeTargets, NoChargeMoveWhenHoldingIsWorthMore) {
     GameState gs = intercessors_locked_in_combat();
     ASSERT_TRUE(wh40k::test::declare_with_roll(gs, Charger::Termagants, 12));
@@ -377,8 +360,8 @@ TEST(M42_ChargeProspect, FromTheShootStepItIsTheChargeStepsAndCasualtiesLengthen
 TEST(M42_NeverPeeksAtDice, ChargeDecisionsAreTheSameWhateverTheDiceAndFromAnyStateOfThePlan) {
     std::size_t checked = 0;
     std::set<std::size_t> kinds;
-    for (const auto& [a, b] : {std::pair{normal_level(), normal_level()}, std::pair{easy_level(), normal_level()}}) {
-        for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+    for (const auto& [a, b] : {std::pair{normal_level(), normal_level()}}) {
+        for (std::uint64_t seed = 1; seed <= 8; ++seed) {
             client::GameSession s = client::GameSession::new_game(wh40k::test::load_v1_scenario(), seed);
             std::array<Bot, 2> bots{Bot(a), Bot(b)};
             client::AutoSettings autos;
@@ -394,8 +377,7 @@ TEST(M42_NeverPeeksAtDice, ChargeDecisionsAreTheSameWhateverTheDiceAndFromAnySta
                                              std::holds_alternative<decision::SelectChargeTargets>(kind) ||
                                              (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
                                               gs.flow.move->type == MoveType::Charge);
-                const BotLevel level = side == Side::A ? a.level : b.level;
-                if (charge_decision && level == BotLevel::Normal) {
+                if (charge_decision) {
                     GameState other = gs;
                     other.dice.seed ^= 0x9E3779B97F4A7C15ull;
                     other.dice.position += 11;
@@ -418,9 +400,8 @@ TEST(M42_NeverPeeksAtDice, ChargeDecisionsAreTheSameWhateverTheDiceAndFromAnySta
 TEST(M42_Arena, NormalChargesWithNoRejectionsRevertsOrFallbacks) {
     const GameState scenario = wh40k::test::load_v1_scenario();
     std::size_t charge_moves = 0;
-    for (const auto& [a, b] : {std::pair{normal_level(), easy_level()}, std::pair{easy_level(), normal_level()},
-                               std::pair{normal_level(), normal_level()}}) {
-        for (std::uint64_t seed = 1; seed <= 8; ++seed) {
+    for (const auto& [a, b] : {std::pair{normal_level(), normal_level()}}) {
+        for (std::uint64_t seed = 1; seed <= 24; ++seed) {
             std::vector<std::string> trace;
             const GameRecord g = play_bot_game(scenario, seed, a, b, 5000, nullptr, &trace);
             EXPECT_TRUE(g.finished) << "seed " << seed;

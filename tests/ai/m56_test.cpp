@@ -1,8 +1,8 @@
 // M56: Easy and Normal across several units (D-066). 01.04 (closest unit, D-010), 09.02, 10.02, 11.02, 11.04,
-// 12.02-12.08. Easy aims at the closest enemy unit and walks its full Move while it is far away; Normal moves its
-// units closest first, weighs every enemy unit's shooting and charge threat in its moves, values a charge with
-// several targets from one shared strength, and measures casualty worth against the attacker. Seeded games on the
-// 44"x60" scenario are clean, and the M55 regression switch plays exactly as M55 did.
+// 12.02-12.08. The bot's defaults (once level Easy) aim at the closest enemy unit and walk the full Move while it is far
+// away; Normal moves its units closest first, weighs every enemy unit's shooting and charge threat in its moves, values
+// a charge with several targets from one shared strength, and measures casualty worth against the attacker. Seeded
+// games on the 44"x60" scenario are clean. (D-085, M85: the comparisons with the M55 regression switch went with it.)
 
 #include <gtest/gtest.h>
 
@@ -24,12 +24,14 @@
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/state/queries.hpp"
+#include "default_choice.hpp"
 #include "normal/charge.hpp"
 #include "normal/defense.hpp"
 #include "normal/move_score.hpp"
 #include "normal/movement.hpp"
 #include "normal/value.hpp"
 #include "session.hpp"
+#include "state_hash.hpp"
 #include "support/charge_fixtures.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
@@ -51,12 +53,11 @@ constexpr std::size_t kGants2 = 4;
 constexpr std::size_t kGants3 = 5;
 constexpr std::size_t kGants4 = 6;
 
-BotConfig level(BotLevel l, Generation g = Generation::Current) {
-    BotConfig c;
-    c.level = l;
-    c.generation = g;
-    return c;
-}
+BotConfig normal_bot() { return BotConfig{}; }
+
+// D-085 (M85): where the M55 Normal ended Termagants 2's move in M56_Normal.AThreatFromAnotherEnemyUnitChangesTheMove,
+// inches from Intercessor Squad 1's centre (measured at M56; the M55 switch went at M85).
+constexpr float kM55EndFromSquad1 = 17.6f;
 
 GameState strike_scenario() {
     const auto root = wh40k::test::repo_root();
@@ -111,8 +112,8 @@ float dot_towards(const Position& from, const Position& moved_to, const Position
 }
 
 // Answers `side`'s decisions with `bot` (the engine applies them, the state's own dice) while `going` holds.
-template <typename Pred>
-std::vector<std::string> play_while(GameState& gs, Bot& bot, Side side, Pred going) {
+template <typename Player, typename Pred>  // Player: Bot, or the defaults (default_choice.hpp)
+std::vector<std::string> play_while(GameState& gs, Player& bot, Side side, Pred going) {
     std::vector<std::string> reasons;
     for (int guard = 0; guard < 120 && gs.pending && gs.pending->side == side && going(gs); ++guard) {
         const BotChoice c = bot.decide(gs, side);
@@ -134,8 +135,8 @@ struct MoveResult {
     std::string reason;
 };
 
-MoveResult first_move(GameState gs, BotConfig config) {
-    Bot bot(config);
+template <typename Player>
+MoveResult first_move_by(GameState gs, Player& bot) {
     const BotChoice c = bot.decide(gs, Side::A);
     const auto* start = std::get_if<action::StartMove>(&c.action);
     EXPECT_NE(start, nullptr) << c.reason;
@@ -189,11 +190,11 @@ GameState two_target_charge_step(float near_in) {
 
 }  // namespace
 
-// ---- Easy ----
+// ---- The defaults (once level Easy) ----
 
-TEST(M56_Easy, AimsAtTheClosestEnemyUnitNotTheFirst) {
+TEST(M56_Defaults, AimAtTheClosestEnemyUnitNotTheFirst) {
     // D-010 / D-066: Termagants 2 is brought within 15" of Intercessor Squad 1 while Termagants 1 (the first enemy
-    // unit by id) stays 20" away. Easy's 2" step goes at Termagants 2; the M55 Easy walked at Termagants 1.
+    // unit by id) stays 20" away. The defaults' 2" step goes at Termagants 2 (the M55 Easy walked at Termagants 1).
     GameState gs = side_a_move_units();
     shift(gs.units[kGants2], 0.0f, -6.0f);
     const float to_first = *unit_distance(gs.units[kSquad1], gs.units[kGants1]);
@@ -201,46 +202,48 @@ TEST(M56_Easy, AimsAtTheClosestEnemyUnitNotTheFirst) {
     ASSERT_LT(to_closest, to_first);
     ASSERT_LT(to_closest, in(18.0f));  // within 12" + M: the old 2" step
     ASSERT_GT(to_closest, in(8.0f));
-    const MoveResult now = first_move(gs, level(BotLevel::Easy));
+    wh40k::test::DefaultsPlayer defaults;
+    const MoveResult now = first_move_by(gs, defaults);
     EXPECT_EQ(now.unit, gs.units[kSquad1].id);
     EXPECT_NE(now.reason.find("Termagants 2"), std::string::npos) << now.reason;
     EXPECT_NEAR(centre_distance(now.before, now.after), in(2.0f), 0.05f);
     EXPECT_GT(dot_towards(now.before, now.after, centroid(gs.units[kGants2])), 0.999f);
-    const MoveResult m55 = first_move(gs, level(BotLevel::Easy, Generation::M55));
-    EXPECT_NE(m55.reason.find("Termagants 1"), std::string::npos) << m55.reason;
-    EXPECT_GT(dot_towards(m55.before, m55.after, centroid(gs.units[kGants1])), 0.999f);
 }
 
-TEST(M56_Easy, WalksItsFullMoveWhileTheClosestEnemyIsFarAway) {
+TEST(M56_Defaults, WalkTheFullMoveWhileTheClosestEnemyIsFarAway) {
     // D-066: at the start of the strike scenario the closest Termagants are 20" away (more than 12" + its 6" Move):
-    // Easy walks the full 6" at them; M55 Easy stepped 2".
+    // the defaults walk the full 6" at them (M55 Easy stepped 2").
     const GameState gs = side_a_move_units();
     ASSERT_GT(*unit_distance(gs.units[kSquad1], gs.units[kGants1]), in(18.0f));
-    const MoveResult now = first_move(gs, level(BotLevel::Easy));
+    wh40k::test::DefaultsPlayer defaults;
+    const MoveResult now = first_move_by(gs, defaults);
     EXPECT_NEAR(centre_distance(now.before, now.after), in(6.0f), 0.05f) << now.reason;
     EXPECT_NE(now.reason.find("Normal move 6\""), std::string::npos) << now.reason;
     EXPECT_GT(dot_towards(now.before, now.after, centroid(gs.units[kGants1])), 0.999f);
-    const MoveResult m55 = first_move(gs, level(BotLevel::Easy, Generation::M55));
-    EXPECT_NEAR(centre_distance(m55.before, m55.after), in(2.0f), 0.05f) << m55.reason;
 }
 
-TEST(M56_Easy, AFreshBotReplansTheFullMoveTheSame) {
-    // D-054: from every state along Easy's full Move, a fresh bot (no memo) gives the played answer.
+TEST(M56_Defaults, ReplanTheFullMoveTheSameFromEveryStateAlongIt) {
+    // D-054: the defaults plan the full Move at its start (the action and the rest of the plan); from every state along
+    // it, planning again gives the plan's next step.
     GameState gs = side_a_move_units();
-    Bot bot(level(BotLevel::Easy));
-    for (int i = 0; i < 12 && gs.pending && gs.pending->side == Side::A; ++i) {
-        const BotChoice c = bot.decide(gs, Side::A);
-        const BotChoice fresh = Bot(level(BotLevel::Easy)).decide(gs, Side::A);
-        EXPECT_EQ(c.action, fresh.action) << c.reason << " / " << fresh.reason;
-        (void)apply_action(gs, Side::A, c.action);
-        if (std::holds_alternative<action::CommitUnitMove>(c.action)) break;
+    const PolicyResult plan = normal::default_answer(gs, Side::A, legal_actions(gs, Side::A), decision_seed(gs));
+    ASSERT_TRUE(std::holds_alternative<action::StartMove>(plan.action)) << plan.reason;
+    ASSERT_FALSE(plan.rest.empty());
+    (void)apply_action(gs, Side::A, plan.action);
+    for (const PlannedStep& step : plan.rest) {
+        ASSERT_TRUE(gs.pending && gs.pending->side == Side::A);
+        EXPECT_EQ(state_hash(gs), step.expect_hash);
+        const BotChoice fresh = wh40k::test::default_choice(gs, Side::A);
+        EXPECT_EQ(fresh.action, step.action) << step.reason << " / " << fresh.reason;
+        (void)apply_action(gs, Side::A, step.action);
     }
+    EXPECT_FALSE(gs.flow.move.has_value());  // committed
 }
 
-TEST(M56_Easy, TheChargeMoveGoesAtItsTarget) {
+TEST(M56_Defaults, TheChargeMoveGoesAtItsTarget) {
     // 11.04 / D-066: a roll of 6 makes only Termagants 2 (5" north) a charge target; Termagants 1 (the first enemy
-    // unit by id, about 10" west) is not one. Easy's charge move goes at Termagants 2 and ends engaged with it only.
-    // The M55 Easy translated the unit towards Termagants 1 and found no move that stands (SkipChargeMove).
+    // unit by id, about 10" west) is not one. The defaults' charge move goes at Termagants 2 and ends engaged with it
+    // only (the M55 Easy translated the unit towards Termagants 1 and found no move that stands).
     GameState gs = two_target_charge_step(5.0f);
     const UnitId us = gs.units[kSquad1].id;
     const UnitId target = gs.units[kGants2].id;
@@ -250,11 +253,7 @@ TEST(M56_Easy, TheChargeMoveGoesAtItsTarget) {
     ScriptedDice dice{3, 3};
     (void)apply_action(gs, Side::A, action::DeclareCharge{us}, dice);
     ASSERT_TRUE(std::holds_alternative<decision::SelectChargeTargets>(gs.pending->kind));
-    {
-        const BotChoice m55 = Bot(level(BotLevel::Easy, Generation::M55)).decide(gs, Side::A);
-        EXPECT_TRUE(std::holds_alternative<action::SkipChargeMove>(m55.action)) << m55.reason;
-    }
-    Bot bot(level(BotLevel::Easy));
+    wh40k::test::DefaultsPlayer bot;
     const BotChoice c = bot.decide(gs, Side::A);
     ASSERT_EQ(c.action, (GameAction{action::StartChargeMove{us, {target}}})) << c.reason;
     (void)apply_action(gs, Side::A, c.action);
@@ -268,20 +267,16 @@ TEST(M56_Easy, TheChargeMoveGoesAtItsTarget) {
 // ---- Normal: activation order ----
 
 TEST(M56_Normal, TheUnitClosestToTheEnemyMovesFirst) {
-    // D-066: Intercessor Squad 3 stands 4" ahead of the others; Normal moves it first (M55: Squad 1, id order).
+    // D-066: Intercessor Squad 3 stands 4" ahead of the others; Normal moves it first (M55 moved Squad 1, id order).
     GameState gs = side_a_move_units();
     shift(gs.units[kSquad3], 0.0f, 4.0f);
     gs.pending = compute_decision(gs);
     const std::vector<GameAction> legal = legal_actions(gs, Side::A);
     EXPECT_EQ(normal::unit_to_move(gs, legal), gs.units[kSquad3].id);
-    EXPECT_EQ(normal::unit_to_move(gs, legal, Generation::M55), gs.units[kSquad1].id);
-    const BotChoice c = Bot(level(BotLevel::Normal)).decide(gs, Side::A);
+    const BotChoice c = Bot(normal_bot()).decide(gs, Side::A);
     const auto* start = std::get_if<action::StartMove>(&c.action);
     ASSERT_NE(start, nullptr) << c.reason;
     EXPECT_EQ(start->unit, gs.units[kSquad3].id) << c.reason;
-    const BotChoice m55 = Bot(level(BotLevel::Normal, Generation::M55)).decide(gs, Side::A);
-    ASSERT_TRUE(std::holds_alternative<action::StartMove>(m55.action));
-    EXPECT_EQ(std::get<action::StartMove>(m55.action).unit, gs.units[kSquad1].id);
     // With the squads level again, the tie keeps unit order.
     const GameState level_start = side_a_move_units();
     const float g1 = *unit_distance(level_start.units[kSquad1], level_start.units[kGants1]);
@@ -296,9 +291,9 @@ TEST(M56_Normal, TheUnitClosestToTheEnemyMovesFirst) {
 
 TEST(M56_Charge, TwoTargetsShareTheChargersStrength) {
     // D-066: Intercessor Squad 1 charged into two Termagant units (models of both in base contact). M55 valued each
-    // target from the Squad's full strength and summed them: exactly the two single-target values added up. Now the
-    // Squad's models are split between the targets and its losses add up, so the two-target value is less than
-    // that sum, and no more than the sum of the two single-target values (which each use the full strength).
+    // target from the Squad's full strength and summed them: exactly the two single-target values added up (a single
+    // target with no other enemy unit free to act was valued as now, M42's value). Now the Squad's models are split
+    // between the targets and its losses add up, so the two-target value is less than that sum.
     GameState gs = two_target_charge_step(1.0f);
     Unit& us = gs.units[kSquad1];
     Unit& a = gs.units[kGants1];
@@ -326,18 +321,10 @@ TEST(M56_Charge, TwoTargetsShareTheChargersStrength) {
     const std::vector<UnitId> both{a.id, b.id};
     const std::vector<UnitId> only_a{a.id};
     const std::vector<UnitId> only_b{b.id};
-    const double old_both = normal::charged_value(cache, gs, us.id, both, 2, Generation::M55);
-    const double old_a = normal::charged_value(cache, gs, us.id, only_a, 2, Generation::M55);
-    const double old_b = normal::charged_value(cache, gs, us.id, only_b, 2, Generation::M55);
-    EXPECT_DOUBLE_EQ(old_both, old_a + old_b);  // M55: the double count
     const double now_both = normal::charged_value(cache, gs, us.id, both, 2);
     const double now_a = normal::charged_value(cache, gs, us.id, only_a, 2);
     const double now_b = normal::charged_value(cache, gs, us.id, only_b, 2);
-    EXPECT_LT(now_both, old_both - 0.05);
-    EXPECT_LE(now_both, now_a + now_b + 1e-9);
-    // A single target with no other enemy unit free to act is M42's value.
-    EXPECT_DOUBLE_EQ(now_a, old_a);
-    EXPECT_DOUBLE_EQ(now_b, old_b);
+    EXPECT_LT(now_both, now_a + now_b - 0.05);  // M55's double count was exactly now_a + now_b
 }
 
 TEST(M56_Charge, TheRingedTermagantIsChargedForTheMostValue) {
@@ -345,7 +332,7 @@ TEST(M56_Charge, TheRingedTermagantIsChargedForTheMostValue) {
     // Termagant ringed by six of another unit, which can't be charged alone (11.04). With the Squad's strength
     // shared between targets (D-066) the ring alone is worth slightly more than both units (its models fight the
     // ring either way): the bot charges the ring, and the move stands. Charging both still stands, valued less
-    // here, and less than M55's summed value.
+    // here.
     using wh40k::test::Charger;
     GameState gs = wh40k::test::charge_fixture(Charger::Intercessors, wh40k::test::ChargeLayout{4.0f, 0.0f, 0});
     const UnitId ring = wh40k::test::add_unit_copy(gs, wh40k::test::kM42Gants);
@@ -364,7 +351,7 @@ TEST(M56_Charge, TheRingedTermagantIsChargedForTheMostValue) {
     ASSERT_TRUE(wh40k::test::declare_with_roll(gs, Charger::Intercessors, 12));
     const UnitId unit = gs.units[wh40k::test::kM42Marines].id;
     const UnitId lone_id = gs.units[wh40k::test::kM42Gants].id;
-    Bot bot(level(BotLevel::Normal));
+    Bot bot(normal_bot());
     const BotChoice choice = bot.decide(gs, Side::A);
     ASSERT_EQ(choice.action, (GameAction{action::StartChargeMove{unit, {ring}}})) << choice.reason;
     analysis::OddsCache cache;
@@ -377,7 +364,6 @@ TEST(M56_Charge, TheRingedTermagantIsChargedForTheMostValue) {
     const double v_both = normal::charged_value(cache, plan_both->after, unit, both, turns);
     const double v_ring = normal::charged_value(cache, plan_ring->after, unit, std::vector<UnitId>{ring}, turns);
     EXPECT_LE(v_both, v_ring + 1e-9);
-    EXPECT_GT(normal::charged_value(cache, plan_both->after, unit, both, turns, Generation::M55), v_both);
     (void)apply_action(gs, Side::A, choice.action);
     (void)play_while(gs, bot, Side::A,
                      [](const GameState& s) { return std::holds_alternative<decision::MoveModels>(s.pending->kind); });
@@ -388,7 +374,8 @@ TEST(M56_Charge, TheRingedTermagantIsChargedForTheMostValue) {
 
 TEST(M56_Casualties, WorthIsMeasuredAgainstTheAttacker) {
     // D-066: Intercessor Squad 1 is under attack from Termagants 2 while the closest enemy unit (Termagants 1) is
-    // made an Intercessor Squad: the models' worth is measured against the attacker (M55: the closest unit).
+    // made an Intercessor Squad: the models' worth is measured against the attacker (M55 measured it against the
+    // closest unit).
     GameState gs = side_a_move_units();
     Unit& closest = gs.units[kGants1];
     {
@@ -414,46 +401,37 @@ TEST(M56_Casualties, WorthIsMeasuredAgainstTheAttacker) {
     const auto against_closest = normal::model_worth(cache, us, closest);
     ASSERT_NE(against_attacker, against_closest);
     EXPECT_EQ(normal::casualty_worth(cache, gs, us), against_attacker);
-    EXPECT_EQ(normal::casualty_worth(cache, gs, us, Generation::M55), against_closest);
     EXPECT_EQ(normal::attacking_enemy(gs, us)->id, gs.units[kGants2].id);
     gs.flow.attack.reset();
     EXPECT_EQ(normal::casualty_worth(cache, gs, us), against_closest);  // no attack: the closest enemy unit
 }
 
-// ---- seeded games and the regression switch ----
+// ---- seeded games ----
 
 TEST(M56_StrikeGames, SeededGamesAreClean) {
     // D-054 acceptance on the 44"x60" scenario: whole games finish with no rejected action, no reverted move and no
-    // fallback, in every pairing of Easy and Normal.
+    // fallback (D-085, M85: the seeds of the old Easy and Normal pairings, the bot on both sides).
     const GameState scenario = strike_scenario();
-    struct Pairing {
-        BotLevel a;
-        BotLevel b;
-        std::uint64_t seed;
-    };
-    for (const Pairing& p : {Pairing{BotLevel::Easy, BotLevel::Easy, 1}, Pairing{BotLevel::Easy, BotLevel::Easy, 2},
-                             Pairing{BotLevel::Normal, BotLevel::Easy, 3}, Pairing{BotLevel::Easy, BotLevel::Normal, 4},
-                             Pairing{BotLevel::Normal, BotLevel::Normal, 5}}) {
-        const GameRecord g = play_bot_game(scenario, p.seed, level(p.a), level(p.b));
-        EXPECT_TRUE(g.finished) << "seed " << p.seed;
-        EXPECT_EQ(g.rejected, 0u) << "seed " << p.seed;
-        EXPECT_EQ(g.reverted, 0u) << "seed " << p.seed;
-        EXPECT_EQ(g.fallbacks, 0u) << "seed " << p.seed;
+    for (const std::uint64_t seed : {1, 2, 3, 4, 5}) {
+        const GameRecord g = play_bot_game(scenario, seed, normal_bot(), normal_bot());
+        EXPECT_TRUE(g.finished) << "seed " << seed;
+        EXPECT_EQ(g.rejected, 0u) << "seed " << seed;
+        EXPECT_EQ(g.reverted, 0u) << "seed " << seed;
+        EXPECT_EQ(g.fallbacks, 0u) << "seed " << seed;
     }
 }
 
 TEST(M56_StrikeGames, AFreshBotGivesThePlayedAnswer) {
     // D-054: every plan is a pure function of the state it starts from, so at every decision of a Strike game a fresh
-    // bot (no memo) answers as the playing bot does: Normal against Normal (seed 6, two battle rounds) and Easy against
-    // Easy (seed 7, whole game), through the client's own automatic steps.
+    // bot (no memo) answers as the playing bot does: seeds 6 and 7, two battle rounds each (D-085, M85: seed 7 was a
+    // whole Easy-vs-Easy game), through the client's own automatic steps.
     struct Case {
-        BotLevel level;
         std::uint64_t seed;
         int last_round;
     };
-    for (const Case& k : {Case{BotLevel::Normal, 6, 2}, Case{BotLevel::Easy, 7, 5}}) {
+    for (const Case& k : {Case{6, 2}, Case{7, 2}}) {
         client::GameSession session = client::GameSession::new_game(strike_scenario(), k.seed);
-        std::array<Bot, 2> bots{Bot(level(k.level)), Bot(level(k.level))};
+        std::array<Bot, 2> bots{Bot(normal_bot()), Bot(normal_bot())};
         client::AutoSettings autos;
         autos.bot_controlled = {true, true};
         autos.auto_allocate = false;
@@ -464,46 +442,13 @@ TEST(M56_StrikeGames, AFreshBotGivesThePlayedAnswer) {
             if (!session.pending() || session.state().flow.battle_round > k.last_round) break;
             const Side side = session.pending()->side;
             const BotChoice played = bots[side_index(side)].decide(session.state(), side);
-            const BotChoice fresh = Bot(level(k.level)).decide(session.state(), side);
+            const BotChoice fresh = Bot(normal_bot()).decide(session.state(), side);
             ASSERT_EQ(played.action, fresh.action) << "seed " << k.seed << ", decision " << decisions << ": "
                                                    << played.reason << " / " << fresh.reason;
             ASSERT_TRUE(session.submit(played.action).ok()) << played.reason;
             ++decisions;
         }
         EXPECT_GT(decisions, 50);
-    }
-}
-
-TEST(M56_Regression, TheM55SwitchPlaysAsM55) {
-    // D-066: the arena's hidden levels normal-m55 and easy-m55 reproduce M55 (commit d76e51b) exactly. The lines
-    // below are a Release build of that commit's `--per-game 1` report for the same games (result, counts, and
-    // hashes of the accepted actions, the final state and the decision trace with every reason). The arena matrix
-    // (D-066) compares all 200 seeds of each pairing; these four keep it in ctest.
-    const GameState scenario = strike_scenario();
-    const std::vector<std::pair<std::pair<BotLevel, BotLevel>, std::string>> expected = {
-        {{BotLevel::Normal, BotLevel::Normal},
-         "game 1: finished 1 winner A round 4 steps 185 surviving 14/0 wounds lost 2/40 coherency 0/0 fight steps 0/0 "
-         "fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions 77419e4eb340174a state 2d4ff6980bf2a2b0 trace "
-         "7a62856c18e099e5"},
-        {{BotLevel::Normal, BotLevel::Easy},
-         "game 3: finished 1 winner A round 2 steps 140 surviving 14/0 wounds lost 3/40 coherency 0/0 fight steps 2/0 "
-         "fight moves 2/0 rejected 0 reverted 0 fallbacks 0 actions a66ccf3450bd3a2e state 83405fdf2658b212 trace "
-         "3bb184deed5c9c51"},
-        {{BotLevel::Easy, BotLevel::Easy},
-         "game 1: finished 1 winner A round 5 steps 258 surviving 14/0 wounds lost 3/40 coherency 0/0 fight steps 0/0 "
-         "fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions f3c71837a2617f03 state 5d8dba3f53944c87 trace "
-         "302d529261c9bf5d"},
-        {{BotLevel::Easy, BotLevel::Normal},
-         "game 4: finished 1 winner none round 5 steps 277 surviving 14/10 wounds lost 2/30 coherency 0/0 fight steps "
-         "0/0 fight moves 0/0 rejected 0 reverted 0 fallbacks 0 actions ef7d498398016b04 state 50a2080b654d5f34 trace "
-         "847882f6eacca278"},
-    };
-    ASSERT_FALSE(expected.empty());
-    for (const auto& [levels, line] : expected) {
-        const std::uint64_t seed = std::stoull(line.substr(5, line.find(':') - 5));
-        const PerGameReport r = run_per_game(scenario, 1, seed, level(levels.first, Generation::M55),
-                                             level(levels.second, Generation::M55));
-        EXPECT_EQ(r.text.substr(0, r.text.find('\n')), line);
     }
 }
 
@@ -556,27 +501,21 @@ TEST(M56_Normal, AThreatFromAnotherEnemyUnitChangesTheMove) {
     // D-066: Termagants 2 (side B's only unit left) stands about 7" from Intercessor Squad 2 (the closest enemy unit,
     // east) and about 14" from Intercessor Squad 1 (south-west), which has no other target. M55 weighed only Squad 2
     // and ended its move within Squad 1's reach (about 17.6" from its centre); weighing Squad 1's shooting and
-    // charge threat too, Normal ends it at least 2" further from Squad 1.
+    // charge threat too, Normal ends it at least 2" further from Squad 1 (D-085, M85: M55's end, measured before the
+    // switch went, is kept as a number).
     const GameState gs = threat_fixture(at(30, 34), at(24, 18), at(44, 30));
     const Unit& mover = gs.units[kGants2];
     ASSERT_EQ(normal::closest_enemy(gs, mover)->id, gs.units[kSquad2].id);
     const Position other = centroid(gs.units[kSquad1]);
-    const MoveResult now = first_move_b(gs, level(BotLevel::Normal));
-    const MoveResult old = first_move_b(gs, level(BotLevel::Normal, Generation::M55));
+    const MoveResult now = first_move_b(gs, normal_bot());
     ASSERT_EQ(now.unit, mover.id);
-    ASSERT_EQ(old.unit, mover.id);
-    EXPECT_GT(centre_distance(now.after, other), centre_distance(old.after, other) + in(2.0f))
-        << now.reason << "\n" << old.reason;
-    // The score itself: at M55's end the new context counts Squad 1's reply (a loss), the M55 one doesn't see it.
+    EXPECT_GT(centre_distance(now.after, other), in(kM55EndFromSquad1 + 2.0f)) << now.reason;
+    // The score itself: at the start (within Squad 1's reach) the context counts Squad 1's reply (a loss).
     analysis::OddsCache cache;
     const GameState& origin = gs;
     normal::MoveScoreContext ctx(cache, origin, mover.id);
-    normal::MoveScoreContext ctx55(cache, origin, mover.id, normal::MoveWeights{}, Generation::M55);
     EXPECT_EQ(ctx.other_count(), 1u);
-    EXPECT_EQ(ctx55.other_count(), 0u);
     std::vector<Position> ends;
-    const float dx = old.after.x - old.before.x;
-    const float dy = old.after.y - old.before.y;
-    for (const Model& m : mover.models) ends.push_back(Position{m.position.x + dx, m.position.y + dy, 0.0f});
+    for (const Model& m : mover.models) ends.push_back(m.position);
     EXPECT_GT(ctx.other_threat(ends, std::nullopt).unengaged, 0.0);
 }

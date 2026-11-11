@@ -4,12 +4,10 @@
 // notes live next to the session's log (keyed by its entry index) and are never part of GameState, saves or
 // replays. raylib-free so the shortening and the grouping are tested (ai tests M45_BotLog).
 //
-// A reason (BotChoice::reason) is accurate but long, especially Hard's ("... (Hard: win 100%, draw 0%, loss 0%,
-// value +1.22; lookahead ...)"). The log shows a short form, the action and the main reason plus, for Hard, the
-// chosen option's win / draw / loss odds; the full reason goes in the line's tooltip.
+// A reason (BotChoice::reason) is accurate but long. The log shows a short form, the action and the main reason; the
+// full reason goes in the line's tooltip. (D-085: level Hard's "(Hard: ...)" block and its odds went with Hard.)
 
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,28 +17,17 @@
 
 namespace wh40k::ai {
 
-// Hard's odds for the option it chose, in whole percent (as the reason prints them).
-struct WinDrawLoss {
-    int win = 0;
-    int draw = 0;
-    int loss = 0;
-    friend bool operator==(const WinDrawLoss&, const WinDrawLoss&) = default;
-};
-
 struct ReasonSummary {
-    std::string text;                 // the action and its main reason
-    std::optional<WinDrawLoss> odds;  // Hard's odds, when the reason has them
+    std::string text;  // the action and its main reason
 };
 
 // The short form of a bot reason:
-// - Hard's "(Hard: ...)" block is dropped, and its first "win W%, draw D%, loss L%" kept as `odds` (the first
-//   odds in a Hard block are always the chosen option's); a rule number before it stays ("(03.03)");
-// - "(Normal's plan)" and a trailing score block ("(+0.82; Remain Stationary +0.57)") are dropped;
+// - a trailing score block ("(+0.82; Remain Stationary +0.57)") is dropped;
 // - inside any other parentheses only the first clause is kept (up to "; ");
 // - after " - " (where the move ends) only the first clause is kept (up to ", ").
 [[nodiscard]] ReasonSummary summarize_reason(std::string_view reason);
 
-// The summary as one string: its text, then " | win W% / draw D% / loss L%" when there are odds.
+// The summary as one string.
 [[nodiscard]] std::string short_reason(std::string_view reason);
 
 // The log line: "Bot (Tyranids): " + short_reason(reason).

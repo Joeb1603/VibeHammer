@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <variant>
 
 namespace wh40k::ai {
@@ -39,51 +38,6 @@ std::size_t enclosing_open(const std::string& s, std::size_t pos) {
         }
     }
     return npos;
-}
-
-// Reads "<int>" at `at` followed by `then`; advances `at` past both.
-bool read_int(std::string_view s, std::size_t& at, std::string_view then, int& out) {
-    const auto [p, ec] = std::from_chars(s.data() + at, s.data() + s.size(), out);
-    if (ec != std::errc{}) return false;
-    at = static_cast<std::size_t>(p - s.data());
-    if (s.substr(at, then.size()) != then) return false;
-    at += then.size();
-    return true;
-}
-
-// The first "win W%, draw D%, loss L%" in `s`.
-std::optional<WinDrawLoss> parse_odds(std::string_view s) {
-    for (std::size_t from = s.find("win "); from != npos; from = s.find("win ", from + 1)) {
-        WinDrawLoss o;
-        std::size_t at = from + 4;
-        if (read_int(s, at, "%, draw ", o.win) && read_int(s, at, "%, loss ", o.draw) && read_int(s, at, "%", o.loss)) {
-            return o;
-        }
-    }
-    return std::nullopt;
-}
-
-void erase_all(std::string& s, std::string_view what) {
-    for (std::size_t at = s.find(what); at != npos; at = s.find(what, at)) s.erase(at, what.size());
-}
-
-// Drops Hard's block, keeping its odds. "(03.03; Hard: ...)" keeps "(03.03)".
-std::string drop_hard_block(std::string s, std::optional<WinDrawLoss>& odds) {
-    const std::size_t hard = s.find("Hard: ");
-    if (hard == npos) return s;
-    const std::size_t open = enclosing_open(s, hard);
-    const std::size_t close = open == npos ? npos : matching_close(s, open);
-    if (open == npos || close == npos) {
-        odds = parse_odds(std::string_view(s).substr(hard));
-        return trim(s.substr(0, hard));
-    }
-    odds = parse_odds(std::string_view(s).substr(hard, close - hard));
-    std::string before = trim(s.substr(open + 1, hard - open - 1));
-    while (!before.empty() && (before.back() == ';' || before.back() == ',')) before.pop_back();
-    before = trim(before);
-    std::string out = trim(s.substr(0, open));
-    if (!before.empty()) out += " (" + before + ")";
-    return out + s.substr(close + 1);
 }
 
 // Drops a trailing score block, "(+0.82; ...)" or "(-1.20 ...)".
@@ -132,9 +86,7 @@ bool continues_a_plan(const core::GameAction& a) {
 
 ReasonSummary summarize_reason(std::string_view reason) {
     ReasonSummary out;
-    std::string s = drop_hard_block(std::string(reason), out.odds);
-    erase_all(s, " (Normal's plan)");
-    s = drop_trailing_score(std::move(s));
+    std::string s = drop_trailing_score(std::string(reason));
     s = first_clauses_in_parentheses(std::move(s));
     s = first_clause_after_dash(std::move(s));
     out.text = trim(std::move(s));
@@ -142,13 +94,7 @@ ReasonSummary summarize_reason(std::string_view reason) {
 }
 
 std::string short_reason(std::string_view reason) {
-    const ReasonSummary sum = summarize_reason(reason);
-    std::string out = sum.text;
-    if (sum.odds) {
-        out += " | win " + std::to_string(sum.odds->win) + "% / draw " + std::to_string(sum.odds->draw) +
-               "% / loss " + std::to_string(sum.odds->loss) + "%";
-    }
-    return out;
+    return summarize_reason(reason).text;
 }
 
 std::string bot_log_line(std::string_view army, std::string_view reason) {

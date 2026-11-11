@@ -343,10 +343,8 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
     AttackOutcome out;
     const std::size_t slots = target.slots.size();
     out.models_destroyed_pmf.assign(slots + 1, 0.0);
-    out.wounds_left_pmf.assign(static_cast<std::size_t>(std::max(0, target.wounds_left())) + 1, 0.0);
     if (slots == 0) {
         out.models_destroyed_pmf[0] = 1.0;
-        out.wounds_left_pmf[0] = 1.0;
         return out;
     }
     int max_w = 0;
@@ -497,10 +495,6 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
             if (p == 0.0) continue;
             out.models_destroyed_pmf[s] += p;
             out.models_destroyed += p * static_cast<double>(s);
-            const int left = static_cast<int>(w) + (s < slots ? wounds_behind[s] : 0);
-            if (left >= 0 && static_cast<std::size_t>(left) < out.wounds_left_pmf.size()) {
-                out.wounds_left_pmf[static_cast<std::size_t>(left)] += p;
-            }
             remaining += p * (static_cast<double>(w) + (s < slots ? wounds_behind[s] : 0));
             equivalents += p * (static_cast<double>(s) + front_fraction(s, w));
         }

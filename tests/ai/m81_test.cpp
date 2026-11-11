@@ -2,7 +2,9 @@
 // its models destroyed), a small bonus for the army plan's group targets, a split only when it beats concentrating, and a
 // unit shooting at a focus target first. Charges: a partner already engaged with the target is credited (its fight, the
 // target's fight back split), a plan partner that may still charge it at its charge odds, and the best-odds charger of a
-// target goes first. Each checked against Generation::M77 (the pre-batch choice). Hand-built roster positions.
+// target goes first. The shooting checked against the choice without focus fire (no ShootingAim: the pre-batch choice).
+// (D-085, M85: the charges' comparisons with the pre-batch Normal, Generation::M77, went with the switch.) Hand-built
+// roster positions.
 
 #include <gtest/gtest.h>
 
@@ -20,7 +22,6 @@
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
-#include "generation.hpp"
 #include "normal/army_plan.hpp"
 #include "normal/charge.hpp"
 #include "normal/shooting.hpp"
@@ -64,13 +65,6 @@ Unit& unit(GameState& gs, UnitId id) {
     Unit* u = gs.find_unit(id);
     if (u == nullptr) throw std::logic_error("no such unit");
     return *u;
-}
-
-BotConfig normal_at(Generation g) {
-    BotConfig c;
-    c.level = BotLevel::Normal;
-    c.generation = g;
-    return c;
 }
 
 template <typename Kind>
@@ -220,11 +214,10 @@ TEST(M81_Shooting, TheHavocsPutEveryLascannonOnOneMonster) {
     start_game(gs);
     advance_to<decision::Shoot>(gs, Side::A);
     OddsCache cache;
-    const ShootingAim off(cache, gs, Side::A, Generation::M77);
-    const std::optional<ShootingChoice> before = plan_shooting(cache, gs, kHavocs, ShootingType::Normal, &off);
+    const std::optional<ShootingChoice> before = plan_shooting(cache, gs, kHavocs, ShootingType::Normal);  // no aim
     ASSERT_TRUE(before.has_value());
     EXPECT_EQ(lascannon_targets(gs, before->shots).size(), 3u) << describe_shooting(gs, *before);
-    const ShootingAim aim(cache, gs, Side::A, Generation::Current);
+    const ShootingAim aim(cache, gs, Side::A);
     const std::optional<ShootingChoice> now = plan_shooting(cache, gs, kHavocs, ShootingType::Normal, &aim);
     ASSERT_TRUE(now.has_value());
     EXPECT_EQ(lascannon_targets(gs, now->shots), std::vector<UnitId>{kTyrant}) << describe_shooting(gs, *now);
@@ -243,17 +236,11 @@ TEST(M81_Shooting, AUnitFinishesAWoundedTarget) {
     OddsCache cache;
     {
         const GameState gs = finish_fixture(1);
-        const ShootingAim before(cache, gs, Side::A, Generation::M77);
-        EXPECT_FALSE(before.active());
-        const std::optional<ShootingChoice> m77 = plan_shooting(cache, gs, kHavocs, ShootingType::Normal, &before);
+        const std::optional<ShootingChoice> m77 = plan_shooting(cache, gs, kHavocs, ShootingType::Normal);  // no aim
         ASSERT_TRUE(m77.has_value());
         EXPECT_EQ(targets_of(m77->shots), std::vector<UnitId>{kTyrant}) << describe_shooting(gs, *m77);
-        const std::optional<ShootingChoice> plain = plan_shooting(cache, gs, kHavocs, ShootingType::Normal);
-        ASSERT_TRUE(plain.has_value());
-        EXPECT_EQ(m77->shots, plain->shots) << "M77: as without an aim";
-        EXPECT_DOUBLE_EQ(m77->value, plain->value);
 
-        const ShootingAim aim(cache, gs, Side::A, Generation::Current);
+        const ShootingAim aim(cache, gs, Side::A);
         ASSERT_TRUE(aim.active());
         EXPECT_GT(aim.reply(kScreamer), 0.3);  // its scream and its charge, on the unit of ours it hurts most
         EXPECT_GT(aim.reply(kTyrant), 0.3);
@@ -272,7 +259,7 @@ TEST(M81_Shooting, AUnitFinishesAWoundedTarget) {
     }
     {
         const GameState gs = finish_fixture(10);
-        const ShootingAim aim(cache, gs, Side::A, Generation::Current);
+        const ShootingAim aim(cache, gs, Side::A);
         const std::optional<ShootingChoice> now = plan_shooting(cache, gs, kHavocs, ShootingType::Normal, &aim);
         ASSERT_TRUE(now.has_value());
         EXPECT_EQ(lascannon_targets(gs, now->shots), std::vector<UnitId>{kTyrant}) << describe_shooting(gs, *now);
@@ -290,15 +277,21 @@ TEST(M81_Shooting, ShootingAtTheFocusGoesFirst) {
     const ArmyPlan plan = army_plan(cache, gs, Side::A);
     ASSERT_EQ(plan.groups.size(), 1u) << describe(gs, plan);
     EXPECT_EQ(plan.groups.front().target, kScreamer);
-    const std::optional<ShootingChoice> before = choose_shooting(cache, gs, legal, Generation::M77);
+    // Without the aim (the pre-batch choice) the Havocs' declaration, at the Guard, is worth the most of those offered.
+    const std::optional<ShootingChoice> before = plan_shooting(cache, gs, kHavocs, ShootingType::Normal);
     ASSERT_TRUE(before.has_value());
-    EXPECT_EQ(before->unit, kHavocs);
     EXPECT_EQ(targets_of(before->shots), std::vector<UnitId>{kGuard});
-    const ShootingAim aim(cache, gs, Side::A, Generation::Current);
+    for (const GameAction& a : legal) {
+        const auto* shoot = std::get_if<action::Shoot>(&a);
+        if (shoot == nullptr || shoot->unit == kHavocs) continue;
+        const std::optional<ShootingChoice> other = plan_shooting(cache, gs, shoot->unit, shoot->type);
+        if (other) EXPECT_LT(other->value, before->value) << describe_shooting(gs, *other);
+    }
+    const ShootingAim aim(cache, gs, Side::A);
     EXPECT_TRUE(aim.focus(kScreamer));
     EXPECT_FALSE(aim.focus(kGuard));
     const std::optional<ShootingChoice> havocs = plan_shooting(cache, gs, kHavocs, ShootingType::Normal, &aim);
-    const std::optional<ShootingChoice> now = choose_shooting(cache, gs, legal, Generation::Current);
+    const std::optional<ShootingChoice> now = choose_shooting(cache, gs, legal);
     ASSERT_TRUE(now.has_value());
     ASSERT_TRUE(havocs.has_value());
     EXPECT_EQ(now->unit, kBoltguns) << describe_shooting(gs, *now);
@@ -314,16 +307,15 @@ TEST(M81_Shooting, OneUnitASideShootsAsBefore) {
     start_game(gs);
     advance_to<decision::Shoot>(gs, gs.first_turn);
     OddsCache cache;
-    const ShootingAim aim(cache, gs, gs.first_turn, Generation::Current);
+    const ShootingAim aim(cache, gs, gs.first_turn);
     EXPECT_FALSE(aim.active());
     const std::vector<GameAction> legal = legal_actions(gs, gs.first_turn);
-    const std::optional<ShootingChoice> now = choose_shooting(cache, gs, legal, Generation::Current);
-    const std::optional<ShootingChoice> m77 = choose_shooting(cache, gs, legal, Generation::M77);
+    const std::optional<ShootingChoice> now = choose_shooting(cache, gs, legal);
     ASSERT_TRUE(now.has_value());
-    ASSERT_TRUE(m77.has_value());
-    EXPECT_EQ(now->unit, m77->unit);
-    EXPECT_EQ(now->shots, m77->shots);
-    EXPECT_DOUBLE_EQ(now->value, m77->value);
+    const std::optional<ShootingChoice> plain = plan_shooting(cache, gs, now->unit, now->type);  // no aim
+    ASSERT_TRUE(plain.has_value());
+    EXPECT_EQ(now->shots, plain->shots);
+    EXPECT_DOUBLE_EQ(now->value, plain->value);
     EXPECT_TRUE(now->notes.empty());
 }
 
@@ -331,21 +323,14 @@ TEST(M81_Shooting, OneUnitASideShootsAsBefore) {
 
 TEST(M81_Charge, ASecondUnitJoinsAFightAPartnerIsIn) {
     // The chainsword Legionaries are engaged with a Screamer-killer; the boltgun Legionaries are 7.5" from it. Alone the
-    // boltguns lose the fight (a charge move -1.06 against holding +0.01): the pre-batch Normal ends the Charge step. Now
+    // boltguns lose the fight (a charge move -1.06 against holding +0.01): the pre-batch Normal ended the Charge step. Now
     // the chainswords' fight counts too, and the Screamer-killer's fight back is split between them: the boltguns declare.
+    // (D-085, M85: the pre-batch Normal's choice, Generation::M77, went with the switch.)
     const GameState gs = charge_fixture(true, 0.0f, 3.0f);
     ASSERT_TRUE(is_engaged(gs, *gs.find_unit(kChainswords)));
     const std::vector<GameAction> legal = legal_actions(gs, Side::A);
     OddsCache cache;
-    const std::optional<PolicyResult> before = decide_charge(cache, gs, Side::A, legal, decision_seed(gs), Generation::M77);
-    ASSERT_TRUE(before.has_value());
-    EXPECT_EQ(before->action, (GameAction{action::EndChargeStep{}})) << before->reason;
-    const std::optional<ChargeProspect> alone =
-        charge_prospect(cache, gs, kBoltguns, decision_seed(gs), 0.0, std::nullopt, Generation::M77);
-    ASSERT_TRUE(alone.has_value());
-    EXPECT_LT(alone->success_mean, alone->hold);
-
-    const std::optional<PolicyResult> now = decide_charge(cache, gs, Side::A, legal, decision_seed(gs), Generation::Current);
+    const std::optional<PolicyResult> now = decide_charge(cache, gs, Side::A, legal, decision_seed(gs));
     ASSERT_TRUE(now.has_value());
     EXPECT_EQ(now->action, (GameAction{action::DeclareCharge{kBoltguns}})) << now->reason;
     EXPECT_NE(now->reason.find("; joins Legionaries 1 against Screamer-killer 1"), std::string::npos) << now->reason;
@@ -354,19 +339,18 @@ TEST(M81_Charge, ASecondUnitJoinsAFightAPartnerIsIn) {
     EXPECT_GT(joint->success_mean, joint->hold);
     ASSERT_EQ(joint->partners.size(), 1u);
     EXPECT_EQ(joint->partners.front(), (ChargePartner{kChainswords, 1.0, true, true}));
-    const std::optional<ChargeCredit> credit = charge_credit(gs, kBoltguns, kScreamer, nullptr, Generation::Current);
+    const std::optional<ChargeCredit> credit = charge_credit(gs, kBoltguns, kScreamer, nullptr);
     ASSERT_TRUE(credit.has_value());
-    EXPECT_FALSE(charge_credit(gs, kBoltguns, kScreamer, nullptr, Generation::M77).has_value());
 
     // Alone (the chainswords 20" back, not engaged) the boltguns still don't charge.
     const GameState far = charge_fixture(false, 20.0f, 3.0f);
     const std::optional<ChargeProspect> lone =
-        charge_prospect(cache, far, kBoltguns, decision_seed(far), 0.0, std::nullopt, Generation::Current);
+        charge_prospect(cache, far, kBoltguns, decision_seed(far), 0.0, std::nullopt);
     ASSERT_TRUE(lone.has_value());
     EXPECT_DOUBLE_EQ(lone->gain, 0.0);
     EXPECT_TRUE(lone->partners.empty());
     const std::optional<PolicyResult> lone_decision =
-        decide_charge(cache, far, Side::A, legal_actions(far, Side::A), decision_seed(far), Generation::Current);
+        decide_charge(cache, far, Side::A, legal_actions(far, Side::A), decision_seed(far));
     ASSERT_TRUE(lone_decision.has_value());
     EXPECT_NE(lone_decision->action, (GameAction{action::DeclareCharge{kBoltguns}})) << lone_decision->reason;
 }
@@ -375,8 +359,8 @@ TEST(M81_Charge, TheBestOddsChargerGoesFirst) {
     // Both Legionaries units within charge range of a Screamer-killer, a group in the army plan: the chainswords 2" south
     // of it (97% to make it in), the boltguns 3" north (92%). Each is credited with the other following at its odds, and
     // the boltguns (worse alone) gain the more; but the chainswords have the better odds, so they declare first, and the
-    // boltguns can follow them in (or hold if they fail). The pre-batch Normal declares the chainswords too, alone: the
-    // boltguns would lose alone.
+    // boltguns can follow them in (or hold if they fail). (The pre-batch Normal declared the chainswords too, alone: the
+    // boltguns would lose alone. D-085, M85: that comparison went with Generation::M77.)
     const GameState gs = charge_fixture(false, 2.0f, -3.0f);
     const std::vector<GameAction> legal = legal_actions(gs, Side::A);
     OddsCache cache;
@@ -384,9 +368,9 @@ TEST(M81_Charge, TheBestOddsChargerGoesFirst) {
     ASSERT_NE(plan.group_of(kChainswords), nullptr) << describe(gs, plan);
     EXPECT_EQ(plan.group_of(kChainswords), plan.group_of(kBoltguns));
     const std::optional<ChargeProspect> chains =
-        charge_prospect(cache, gs, kChainswords, decision_seed(gs), 0.0, std::nullopt, Generation::Current, &plan);
+        charge_prospect(cache, gs, kChainswords, decision_seed(gs), 0.0, std::nullopt, &plan);
     const std::optional<ChargeProspect> bolts =
-        charge_prospect(cache, gs, kBoltguns, decision_seed(gs), 0.0, std::nullopt, Generation::Current, &plan);
+        charge_prospect(cache, gs, kBoltguns, decision_seed(gs), 0.0, std::nullopt, &plan);
     ASSERT_TRUE(chains.has_value());
     ASSERT_TRUE(bolts.has_value());
     EXPECT_GT(chains->p_success, bolts->p_success);
@@ -396,21 +380,12 @@ TEST(M81_Charge, TheBestOddsChargerGoesFirst) {
     EXPECT_EQ(chains->partners.front().unit, kBoltguns);
     EXPECT_FALSE(chains->partners.front().engaged);
     EXPECT_NEAR(chains->partners.front().weight, 0.92, 0.01);
-    const std::optional<PolicyResult> now = decide_charge(cache, gs, Side::A, legal, decision_seed(gs), Generation::Current);
+    const std::optional<PolicyResult> now = decide_charge(cache, gs, Side::A, legal, decision_seed(gs));
     ASSERT_TRUE(now.has_value());
     EXPECT_EQ(now->action, (GameAction{action::DeclareCharge{kChainswords}})) << now->reason;
     EXPECT_NE(now->reason.find("Legionaries 2 may follow (92% charge odds); the best odds of the units charging "
                                "Screamer-killer 1, ahead of Legionaries 2"),
               std::string::npos)
         << now->reason;
-    const std::optional<PolicyResult> before = decide_charge(cache, gs, Side::A, legal, decision_seed(gs), Generation::M77);
-    ASSERT_TRUE(before.has_value());
-    EXPECT_EQ(before->action, (GameAction{action::DeclareCharge{kChainswords}})) << before->reason;
-    EXPECT_EQ(before->reason.find("may follow"), std::string::npos) << before->reason;
-    const std::optional<ChargeProspect> bolts_before =
-        charge_prospect(cache, gs, kBoltguns, decision_seed(gs), 0.0, std::nullopt, Generation::M77);
-    ASSERT_TRUE(bolts_before.has_value());
-    EXPECT_DOUBLE_EQ(bolts_before->gain, 0.0);
-    EXPECT_TRUE(bolts_before->partners.empty());
 }
 

@@ -1,12 +1,11 @@
 #pragma once
 
-// D-081 (M74, M77): how a bot sets its units up in the deployment step (DeployUnits), before any level's own policy runs
-// (so Hard never builds chain tables from a half-deployed army).
+// D-081 (M74, M77): how the bot sets its units up in the deployment step (DeployUnits), before its policy runs.
 //
-// - deploy_policy (M74; level Easy, Normal as at M55, and the fallback): the lowest-id unit waiting to be set up, at
-//   the engine's proposal (Auto-place's spot, core::propose_set_up), or CannotSetUp when the engine finds no legal spot
-//   for it. A hand-deployed Easy army so ends exactly where Auto-place puts it.
-// - heuristic_deploy_policy (M77; levels Normal and Hard, Hard using Normal's): a simple, deterministic heuristic.
+// - deploy_policy (M74; once level Easy's, now the heuristic's and the fallback's answer when it has none, D-085): the
+//   lowest-id unit waiting to be set up, at the engine's proposal (Auto-place's spot, core::propose_set_up), or
+//   CannotSetUp when the engine finds no legal spot for it.
+// - heuristic_deploy_policy (M77): a simple, deterministic heuristic.
 //   - Order: long-range shooters first, melee-oriented units last (so they can answer the enemy's placement), the rest
 //     between; ties by id. A unit's role comes from its weapons and the existing odds helpers (deploy_assessment).
 //   - Spot: core's proposal, nudged. A small, bounded set of translations of the proposed formation (x within +/-6" in
@@ -35,7 +34,7 @@ namespace wh40k::ai {
 [[nodiscard]] std::optional<PolicyResult> deploy_policy(const core::GameState& state, core::Side side,
                                                         const std::vector<core::GameAction>& legal);
 
-// ---- M77: the Normal and Hard heuristic ----
+// ---- M77: the heuristic ----
 
 // The heuristic's roles, in set-up order.
 enum class DeployRole : std::uint8_t { LongRangeShooter, Other, Melee };
@@ -91,9 +90,5 @@ struct DeployAssessment {
 // (legal_actions); nullopt for any other decision.
 [[nodiscard]] std::optional<PolicyResult> heuristic_deploy_policy(const core::GameState& state, core::Side side,
                                                                   const std::vector<core::GameAction>& legal);
-
-// Whether a bot of this configuration deploys by the heuristic: levels Normal and Hard (Normal as at M55, D-066,
-// keeps M74's policy).
-[[nodiscard]] bool uses_deploy_heuristic(const BotConfig& config);
 
 }  // namespace wh40k::ai

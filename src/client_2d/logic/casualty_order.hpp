@@ -1,9 +1,9 @@
 #pragma once
 
 // D-058 (M47): the default casualty order, "furthest from the action first, keeping coherency". It is the order
-// CasualtyPlan starts in (so "Allocate damage automatically", "Use default order", level Easy and the bots'
-// fallback use it), the order CasualtyPicks fills the rest with, and the model Easy and the fallback remove to
-// regain coherency. Read-only core queries and geometry only (D-024): the engine still decides 05.04, 06.02 and
+// CasualtyPlan starts in (so "Allocate damage automatically", "Use default order", the bot's defaults and its
+// fallback use it), the order CasualtyPicks fills the rest with, and the model the bot's defaults and the fallback
+// remove to regain coherency. Read-only core queries and geometry only (D-024): the engine still decides 05.04, 06.02 and
 // 03.03; this only ranks the models.
 //
 // Keys, for each candidate m of the models not yet ordered (S); the first difference decides:

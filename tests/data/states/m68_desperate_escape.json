@@ -1,0 +1,4028 @@
+{
+ "battle_rounds": 5,
+ "battlefield": {
+  "depth_mm": 1524.0,
+  "width_mm": 1117.5999755859375
+ },
+ "command_points": [
+  9,
+  9
+ ],
+ "dice": {
+  "position": 707,
+  "seed": 193
+ },
+ "first_turn": "A",
+ "flow": {
+  "activation": null,
+  "attack": null,
+  "battle_round": 5,
+  "charge": null,
+  "fight": null,
+  "fight_sequence": null,
+  "forced_fights": [],
+  "move": null,
+  "stage": "MoveUnits",
+  "step_done": [
+   true,
+   true
+  ],
+  "turn_in_round": 0
+ },
+ "pending": {
+  "kind": "MoveUnits",
+  "side": "A"
+ },
+ "result": null,
+ "result_rule": "points_destroyed",
+ "scenario_name": "Incursion - Chaos Space Marines vs Tyranids (44x60 portrait)",
+ "sides": [
+  {
+   "deployment_zone": {
+    "depth_mm": 304.79998779296875,
+    "edge": "south"
+   },
+   "name": "Chaos Space Marines"
+  },
+  {
+   "deployment_zone": {
+    "depth_mm": 304.79998779296875,
+    "edge": "north"
+   },
+   "name": "Tyranids"
+  }
+ ],
+ "units": [
+  {
+   "abilities": [
+    {
+     "name": "Veterans of the Long War",
+     "text": "Each time a model in this unit targets an enemy unit with a melee attack, re-roll a Wound roll of 1. If that enemy unit is within range of an objective marker, you can re-roll the Wound roll instead."
+    },
+    {
+     "name": "Dark Pacts",
+     "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+    }
+   ],
+   "battle_shocked": true,
+   "faction_keywords": [
+    "Heretic Astartes"
+   ],
+   "id": 1,
+   "keywords": [
+    "Infantry",
+    "Battleline",
+    "Chaos",
+    "Grenades"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 1,
+     "position": {
+      "x": 30.993236541748047,
+      "y": 51.12364196777344,
+      "z": 0.0
+     },
+     "type_name": "Aspiring Champion",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Astartes chainsword",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Astartes chainsword",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 7,
+     "position": {
+      "x": 58.90354919433594,
+      "y": 22.389415740966797,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ chainsword",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Astartes chainsword",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Astartes chainsword",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 9,
+     "position": {
+      "x": 121.27359771728516,
+      "y": 26.93311309814453,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ chainsword",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Astartes chainsword",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Astartes chainsword",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    }
+   ],
+   "name": "Legionaries",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 180,
+   "side": "A",
+   "starting_strength": 10,
+   "starting_wounds": 20,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Leader",
+     "text": "This model can be attached to the following units: CHOSEN, LEGIONARIES, NEMESIS CLAW, RED CORSAIRS RAIDERS"
+    },
+    {
+     "name": "Chance for Glory",
+     "text": "Once per battle, at the start of the Fight phase, this model can use this ability. If it does, until the end of the phase, improve the Strength, Attacks, Armour Penetration and Damage characteristics of melee weapons equipped by this model by 1."
+    },
+    {
+     "name": "Dark Pacts",
+     "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+    },
+    {
+     "name": "Leader",
+     "text": "Before the battle, in the Muster Armies step, for each leader and support unit in your army, you can select one friendly bodyguard unit that unit can lead. That unit will then lead that bodyguard unit for the battle and form an attached unit with it. Unless otherwise stated, each bodyguard unit can only have one leader unit and one support unit attached to it."
+    },
+    {
+     "name": "Lord of Chaos",
+     "text": "Once per battle round, one unit from your army with this ability can use it when its unit is targeted with a Stratagem. If it does, reduce the CP cost of that use of that Stratagem by 1CP."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Heretic Astartes"
+   ],
+   "id": 2,
+   "keywords": [
+    "Infantry",
+    "Character",
+    "Grenades",
+    "Chaos",
+    "Leader"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 40.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 1,
+      "Sv": 3,
+      "T": 5,
+      "W": 5
+     },
+     "id": 11,
+     "position": {
+      "x": 923.7976684570313,
+      "y": 20.05316925048828,
+      "z": 0.0
+     },
+     "type_name": "Chaos Lord",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Plasma pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -2,
+         "D": 1,
+         "S": 7,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Plasma pistol - standard",
+         "range_mm": 304.79998779296875,
+         "skill": 2
+        },
+        {
+         "A": 1,
+         "AP": -3,
+         "D": 2,
+         "S": 8,
+         "abilities": [
+          {
+           "kind": "Hazardous"
+          },
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Plasma pistol - supercharge",
+         "range_mm": 304.79998779296875,
+         "skill": 2
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Astartes chainblade",
+       "profiles": [
+        {
+         "A": 7,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Astartes chainblade",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 5
+    }
+   ],
+   "name": "Chaos Lord",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 95,
+   "side": "A",
+   "starting_strength": 1,
+   "starting_wounds": 5,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Despoilers",
+     "text": "Each time this unit makes a Dark Pact, until the end of the phase, each time a model in this unit makes an attack, you can re-roll the Hit roll."
+    },
+    {
+     "name": "Dark Pacts",
+     "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+    },
+    {
+     "name": "Deep Strike",
+     "text": "Each time this unit makes an **ingress move** (20.04), if every model in this unit has this ability, it can be set up anywhere on the battlefield that is more than 8\" horizontally from all enemy units, even if that is within your opponent’s deployment zone."
+    }
+   ],
+   "battle_shocked": true,
+   "faction_keywords": [
+    "Heretic Astartes"
+   ],
+   "id": 3,
+   "keywords": [
+    "Infantry",
+    "Chaos",
+    "Terminator"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 40.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 6,
+      "M_mm": 127.0,
+      "OC": 1,
+      "Sv": 2,
+      "T": 6,
+      "W": 3
+     },
+     "id": 13,
+     "position": {
+      "x": 787.2608032226563,
+      "y": 100.03301239013672,
+      "z": 0.0
+     },
+     "type_name": "Accursed weapon and combi-bolter",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Combi-bolter",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "RapidFire",
+           "x": 2
+          }
+         ],
+         "kind": "ranged",
+         "name": "Combi-bolter",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Accursed weapon",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Accursed weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 3
+    },
+    {
+     "base": {
+      "diameter_mm": 40.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 6,
+      "M_mm": 127.0,
+      "OC": 1,
+      "Sv": 2,
+      "T": 6,
+      "W": 3
+     },
+     "id": 14,
+     "position": {
+      "x": 827.8709106445313,
+      "y": 107.00637817382813,
+      "z": 0.0
+     },
+     "type_name": "Accursed weapon and combi-bolter",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Combi-bolter",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "RapidFire",
+           "x": 2
+          }
+         ],
+         "kind": "ranged",
+         "name": "Combi-bolter",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Accursed weapon",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Accursed weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 3
+    },
+    {
+     "base": {
+      "diameter_mm": 40.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 6,
+      "M_mm": 127.0,
+      "OC": 1,
+      "Sv": 2,
+      "T": 6,
+      "W": 3
+     },
+     "id": 15,
+     "position": {
+      "x": 848.9990844726563,
+      "y": 142.0048065185547,
+      "z": 0.0
+     },
+     "type_name": "Accursed weapon and combi-bolter",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Combi-bolter",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "RapidFire",
+           "x": 2
+          }
+         ],
+         "kind": "ranged",
+         "name": "Combi-bolter",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Accursed weapon",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Accursed weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 3
+    },
+    {
+     "base": {
+      "diameter_mm": 40.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 6,
+      "M_mm": 127.0,
+      "OC": 1,
+      "Sv": 2,
+      "T": 6,
+      "W": 3
+     },
+     "id": 17,
+     "position": {
+      "x": 755.06689453125,
+      "y": 125.44203186035156,
+      "z": 0.0
+     },
+     "type_name": "Accursed weapon and combi-bolter",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Combi-bolter",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "RapidFire",
+           "x": 2
+          }
+         ],
+         "kind": "ranged",
+         "name": "Combi-bolter",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Accursed weapon",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Accursed weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 3
+    },
+    {
+     "base": {
+      "diameter_mm": 40.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 6,
+      "M_mm": 127.0,
+      "OC": 1,
+      "Sv": 2,
+      "T": 6,
+      "W": 3
+     },
+     "id": 20,
+     "position": {
+      "x": 873.7103271484375,
+      "y": 173.7514190673828,
+      "z": 0.0
+     },
+     "type_name": "Accursed weapon and combi-bolter",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Combi-bolter",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "RapidFire",
+           "x": 2
+          }
+         ],
+         "kind": "ranged",
+         "name": "Combi-bolter",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Accursed weapon",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Accursed weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 3
+    }
+   ],
+   "name": "Chaos Terminator Squad",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 370,
+   "side": "A",
+   "starting_strength": 10,
+   "starting_wounds": 30,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Stabilisation Talons",
+     "text": "Each time a model in this unit makes an attack with a ranged weapon, you can ignore any or all modifiers to the Hit roll and any or all modifiers to the Ballistic Skill characteristic of that weapon."
+    },
+    {
+     "name": "Dark Pacts",
+     "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Heretic Astartes"
+   ],
+   "id": 4,
+   "keywords": [
+    "Infantry",
+    "Chaos"
+   ],
+   "models": [],
+   "name": "Havocs",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 135,
+   "side": "A",
+   "starting_strength": 5,
+   "starting_wounds": 15,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Veterans of the Long War",
+     "text": "Each time a model in this unit targets an enemy unit with a melee attack, re-roll a Wound roll of 1. If that enemy unit is within range of an objective marker, you can re-roll the Wound roll instead."
+    },
+    {
+     "name": "Dark Pacts",
+     "text": "If your Army Faction is ^^**Heretic Astartes**^^, each time a unit with this ability is selected to shoot or fight, it can make a Dark Pact. If it does, it must first take a Leadership test before any effects of the Dark Pact are resolved; if that test is failed, that unit suffers D3 mortal wounds. Then, select one of the following abilities for that unit’s weapons to gain until the end of the phase:\n■ [LETHAL HITS]\n■ [SUSTAINED HITS 1]"
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Heretic Astartes"
+   ],
+   "id": 5,
+   "keywords": [
+    "Infantry",
+    "Battleline",
+    "Chaos",
+    "Grenades"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 30,
+     "position": {
+      "x": 1046.1802978515625,
+      "y": 103.81564331054688,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ boltgun",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Boltgun",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "ranged",
+         "name": "Boltgun",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 31,
+     "position": {
+      "x": 1101.5699462890625,
+      "y": 137.83018493652344,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ boltgun",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Boltgun",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "ranged",
+         "name": "Boltgun",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 34,
+     "position": {
+      "x": 990.7906494140625,
+      "y": 69.80110168457031,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ boltgun",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Boltgun",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "ranged",
+         "name": "Boltgun",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 35,
+     "position": {
+      "x": 1018.4854736328125,
+      "y": 86.80838012695313,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ boltgun",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Boltgun",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "ranged",
+         "name": "Boltgun",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 6,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 3,
+      "T": 5,
+      "W": 2
+     },
+     "id": 36,
+     "position": {
+      "x": 1073.8751220703125,
+      "y": 120.82290649414063,
+      "z": 0.0
+     },
+     "type_name": "Legionary w/ boltgun",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Boltgun",
+       "profiles": [
+        {
+         "A": 2,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "ranged",
+         "name": "Boltgun",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Bolt pistol",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "CloseQuarters"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bolt pistol",
+         "range_mm": 304.79998779296875,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Close combat weapon",
+       "profiles": [
+        {
+         "A": 3,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Close combat weapon",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    }
+   ],
+   "name": "Legionaries",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 180,
+   "side": "A",
+   "starting_strength": 10,
+   "starting_wounds": 20,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Skulking Horrors",
+     "text": "In your opponent's Movement phase, if an enemy unit ends a move within 8\" of this unit, if this unit is not within Engagement Range of one or more enemy units, this unit can make a Normal move of up to D6\"."
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 6,
+   "keywords": [
+    "Battleline",
+    "Infantry",
+    "Great Devourer",
+    "Endless Multitude"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 37,
+     "position": {
+      "x": 131.60824584960938,
+      "y": 1337.8170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 38,
+     "position": {
+      "x": 160.10824584960938,
+      "y": 1337.8170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 39,
+     "position": {
+      "x": 188.60824584960938,
+      "y": 1337.8170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 40,
+     "position": {
+      "x": 217.10824584960938,
+      "y": 1337.8170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 41,
+     "position": {
+      "x": 245.60824584960938,
+      "y": 1337.8170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 42,
+     "position": {
+      "x": 131.60824584960938,
+      "y": 1366.3170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 43,
+     "position": {
+      "x": 160.10824584960938,
+      "y": 1366.3170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 44,
+     "position": {
+      "x": 188.60824584960938,
+      "y": 1366.3170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 45,
+     "position": {
+      "x": 217.10824584960938,
+      "y": 1366.3170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 46,
+     "position": {
+      "x": 245.60824584960938,
+      "y": 1366.3170166015625,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    }
+   ],
+   "name": "Termagants",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 55,
+   "side": "B",
+   "starting_strength": 10,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Vanguard Predator",
+     "text": "Each time a model in this unit makes an attack, re-roll a Hit roll of 1. If the target is within range of one or more objective markers, re-roll a Wound roll 1 as well."
+    },
+    {
+     "name": "Scouts",
+     "text": "This ability always takes the form **Scouts X\"**. In the Resolve Pre-battle Abilities step, if every model in a unit has this ability, you can do one of the following: \n- If that unit is in **strategic reserves**, you can set up that unit anywhere that is wholly within your deployment zone. \n- If that unit is wholly within your deployment zone, it can make a **scout move**. \n- If that unit is embarked within a **DEDICATED TRANSPORT** that is wholly within your deployment zone, and if every model embarked within that **DEDICATED TRANSPORT** has the Scouts ability, that **DEDICATED TRANSPORT** can make a **scout move**."
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    },
+    {
+     "name": "Stealth",
+     "text": "If every model in a unit has this ability, each time a ranged attack targets that unit, that unit has the **benefit of cover** against that attack (13.08)."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 7,
+   "keywords": [
+    "Infantry",
+    "Great Devourer",
+    "Vanguard Invader"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 47,
+     "position": {
+      "x": 76.094482421875,
+      "y": 1476.006591796875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 48,
+     "position": {
+      "x": 108.094482421875,
+      "y": 1476.006591796875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 49,
+     "position": {
+      "x": 140.094482421875,
+      "y": 1476.006591796875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 50,
+     "position": {
+      "x": 172.094482421875,
+      "y": 1476.006591796875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 51,
+     "position": {
+      "x": 204.094482421875,
+      "y": 1476.006591796875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    }
+   ],
+   "name": "Genestealers",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 75,
+   "side": "B",
+   "starting_strength": 5,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Death Scream",
+     "text": "In your Shooting phase, after this model has shot, select one unit hit by one or more of those attacks. That unit must take a Battle-shock test, subtracting 1 from that test."
+    },
+    {
+     "name": "Deadly Demise",
+     "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 8,
+   "keywords": [
+    "Monster",
+    "Great Devourer"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 90.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 203.1999969482422,
+      "OC": 3,
+      "Sv": 2,
+      "T": 9,
+      "W": 10
+     },
+     "id": 52,
+     "position": {
+      "x": 86.28254699707031,
+      "y": 76.90547180175781,
+      "z": 0.0
+     },
+     "type_name": "Screamer-killer",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Bio-plasmic scream",
+       "profiles": [
+        {
+         "A": "D6+3",
+         "AP": -2,
+         "D": 1,
+         "S": 8,
+         "abilities": [
+          {
+           "kind": "Assault"
+          },
+          {
+           "kind": "Blast",
+           "x": 1
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bio-plasmic scream",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Screamer-killer talons",
+       "profiles": [
+        {
+         "A": 10,
+         "AP": -2,
+         "D": 3,
+         "S": 10,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Screamer-killer talons",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 6
+    }
+   ],
+   "name": "Screamer-killer",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 125,
+   "side": "B",
+   "starting_strength": 1,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Guardian Organism",
+     "text": "While a **^^Character^^** model is leading this unit, that **^^Character^^** has the Feel No Pain 5+ ability."
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 9,
+   "keywords": [
+    "Infantry",
+    "Great Devourer"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 50.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 1,
+      "Sv": 3,
+      "T": 8,
+      "W": 4
+     },
+     "id": 53,
+     "position": {
+      "x": 245.13909912109375,
+      "y": 1143.806396484375,
+      "z": 0.0
+     },
+     "type_name": "Tyrant Guard",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Scything talons and rending claws",
+       "profiles": [
+        {
+         "A": 5,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Scything talons and rending claws",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 4
+    },
+    {
+     "base": {
+      "diameter_mm": 50.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 1,
+      "Sv": 3,
+      "T": 8,
+      "W": 4
+     },
+     "id": 54,
+     "position": {
+      "x": 295.1390686035156,
+      "y": 1143.806396484375,
+      "z": 0.0
+     },
+     "type_name": "Tyrant Guard",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Scything talons and rending claws",
+       "profiles": [
+        {
+         "A": 5,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Scything talons and rending claws",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 4
+    },
+    {
+     "base": {
+      "diameter_mm": 50.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 1,
+      "Sv": 3,
+      "T": 8,
+      "W": 4
+     },
+     "id": 55,
+     "position": {
+      "x": 345.1390686035156,
+      "y": 1143.806396484375,
+      "z": 0.0
+     },
+     "type_name": "Tyrant Guard",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Scything talons and rending claws",
+       "profiles": [
+        {
+         "A": 5,
+         "AP": -1,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Scything talons and rending claws",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 4
+    }
+   ],
+   "name": "Tyrant Guard",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 80,
+   "side": "B",
+   "starting_strength": 3,
+   "starting_wounds": 12,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Onslaught (Aura, Psychic)",
+     "text": "While a friendly **TYRANIDS** unit is within 6\" of this model, ranged weapons equipped by models in that unit have the **[ASSAULT]** and **[LETHAL HITS]** abilities."
+    },
+    {
+     "name": "Leader",
+     "text": "This model can be attached to the following unit:\n- **^^Tyrant Guard^^**"
+    },
+    {
+     "name": "Deadly Demise",
+     "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+    },
+    {
+     "name": "Shadow in the Warp",
+     "text": "If your Army Faction is **TYRANIDS**, once per battle, in either player’s Command phase, if one or more units from your army with this ability are on the battlefield, you can unleash the Shadow in the Warp. When you do, each enemy unit on the battlefield must take a Battle‑shock test. Each time an enemy unit takes such a Battle‑shock test, if it is within 6\" of one or more **SYNAPSE** units from your army, subtract 1 from that test."
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    },
+    {
+     "name": "Will of the Hive Mind",
+     "text": "Once per battle round, one model from your army with this ability can use it when a friendly **TYRANIDS** unit within 12\" of that model is targeted with a Stratagem. If it does, reduce the CP cost of that use of that Stratagem by 1CP."
+    },
+    {
+     "name": "Leader",
+     "text": "Before the battle, in the Muster Armies step, for each leader and support unit in your army, you can select one friendly bodyguard unit that unit can lead. That unit will then lead that bodyguard unit for the battle and form an attached unit with it. Unless otherwise stated, each bodyguard unit can only have one leader unit and one support unit attached to it."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 10,
+   "keywords": [
+    "Monster",
+    "Character",
+    "Psyker",
+    "Great Devourer",
+    "Synapse",
+    "Leader"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 60.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 4,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 3,
+      "Sv": 2,
+      "T": 10,
+      "W": 10
+     },
+     "id": 56,
+     "position": {
+      "x": 799.421875,
+      "y": 148.53176879882813,
+      "z": 0.0
+     },
+     "type_name": "Hive Tyrant",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Monstrous bonesword and lash whip",
+       "profiles": [
+        {
+         "A": 6,
+         "AP": -2,
+         "D": 3,
+         "S": 9,
+         "abilities": [
+          {
+           "kind": "TwinLinked"
+          }
+         ],
+         "kind": "melee",
+         "name": "Monstrous bonesword and lash whip",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Monstrous scything talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 2,
+         "S": 7,
+         "abilities": [
+          {
+           "kind": "ExtraAttacks"
+          }
+         ],
+         "kind": "melee",
+         "name": "Monstrous scything talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 3
+    }
+   ],
+   "name": "Hive Tyrant",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 195,
+   "side": "B",
+   "starting_strength": 1,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Resilient Organism",
+     "text": "Once per battle, when an attack is allocated to this model, you can change the Damage characteristic of that attack to 0."
+    },
+    {
+     "name": "Damaged: 1-5 Wounds Remaining",
+     "text": "While this model has 1-5 wounds remaining, each time this model makes an attack, subtract 1 from the Hit roll."
+    },
+    {
+     "name": "Deadly Demise",
+     "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 11,
+   "keywords": [
+    "Monster",
+    "Great Devourer"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 92.0,
+      "length_mm": 120.0,
+      "shape": "oval"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 228.59999084472656,
+      "OC": 5,
+      "Sv": 2,
+      "T": 12,
+      "W": 16
+     },
+     "id": 57,
+     "position": {
+      "x": 686.3323974609375,
+      "y": 721.4113159179688,
+      "z": 0.0
+     },
+     "type_name": "Tyrannofex",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Powerful limbs",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": 0,
+         "D": 2,
+         "S": 8,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Powerful limbs",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Stinger salvoes",
+       "profiles": [
+        {
+         "A": 8,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [],
+         "kind": "ranged",
+         "name": "Stinger salvoes",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      },
+      {
+       "kind": "ranged",
+       "name": "Fleshborer hive",
+       "profiles": [
+        {
+         "A": 20,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Heavy"
+          },
+          {
+           "kind": "SustainedHits",
+           "x": 1
+          },
+          {
+           "kind": "TwinLinked"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer hive",
+         "range_mm": 609.5999755859375,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 16
+    }
+   ],
+   "name": "Tyrannofex",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 170,
+   "side": "B",
+   "starting_strength": 1,
+   "starting_wounds": 16,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Death Scream",
+     "text": "In your Shooting phase, after this model has shot, select one unit hit by one or more of those attacks. That unit must take a Battle-shock test, subtracting 1 from that test."
+    },
+    {
+     "name": "Deadly Demise",
+     "text": "This ability always takes the form **Deadly Demise X**. Each time a model in this unit is **destroyed**, after the units embarked within it (if any) have made their **emergency disembark moves**, roll one D6. On a 6, that model suffers a **deadly demise**; each unit within 6\" of that model suffers a number of **mortal wounds** denoted by **X** (if this is a random number, roll separately for each unit within 6\"). \n***Example:** An Impulsor with a unit of Intercessors embarked within it is **destroyed** by ranged attacks. First, any unresolved attacks made by the attacking unit are resolved. Then the Intercessors make an **emergency disembark move**. Then the roll is made for the **Deadly Demise** ability, and on a 6, that ability is resolved. Finally, the Impulsor is removed from the battlefield.*"
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    }
+   ],
+   "battle_shocked": true,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 12,
+   "keywords": [
+    "Monster",
+    "Great Devourer"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 90.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 203.1999969482422,
+      "OC": 3,
+      "Sv": 2,
+      "T": 9,
+      "W": 10
+     },
+     "id": 58,
+     "position": {
+      "x": 845.6473999023438,
+      "y": 304.893310546875,
+      "z": 0.0
+     },
+     "type_name": "Screamer-killer",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Bio-plasmic scream",
+       "profiles": [
+        {
+         "A": "D6+3",
+         "AP": -2,
+         "D": 1,
+         "S": 8,
+         "abilities": [
+          {
+           "kind": "Assault"
+          },
+          {
+           "kind": "Blast",
+           "x": 1
+          }
+         ],
+         "kind": "ranged",
+         "name": "Bio-plasmic scream",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Screamer-killer talons",
+       "profiles": [
+        {
+         "A": 10,
+         "AP": -2,
+         "D": 3,
+         "S": 10,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Screamer-killer talons",
+         "range_mm": null,
+         "skill": 3
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 4
+    }
+   ],
+   "name": "Screamer-killer",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 125,
+   "side": "B",
+   "starting_strength": 1,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Vanguard Predator",
+     "text": "Each time a model in this unit makes an attack, re-roll a Hit roll of 1. If the target is within range of one or more objective markers, re-roll a Wound roll 1 as well."
+    },
+    {
+     "name": "Scouts",
+     "text": "This ability always takes the form **Scouts X\"**. In the Resolve Pre-battle Abilities step, if every model in a unit has this ability, you can do one of the following: \n- If that unit is in **strategic reserves**, you can set up that unit anywhere that is wholly within your deployment zone. \n- If that unit is wholly within your deployment zone, it can make a **scout move**. \n- If that unit is embarked within a **DEDICATED TRANSPORT** that is wholly within your deployment zone, and if every model embarked within that **DEDICATED TRANSPORT** has the Scouts ability, that **DEDICATED TRANSPORT** can make a **scout move**."
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    },
+    {
+     "name": "Stealth",
+     "text": "If every model in a unit has this ability, each time a ranged attack targets that unit, that unit has the **benefit of cover** against that attack (13.08)."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 13,
+   "keywords": [
+    "Infantry",
+    "Great Devourer",
+    "Vanguard Invader"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 59,
+     "position": {
+      "x": 307.18701171875,
+      "y": 1341.3104248046875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 60,
+     "position": {
+      "x": 339.18701171875,
+      "y": 1341.3104248046875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 61,
+     "position": {
+      "x": 371.18701171875,
+      "y": 1341.3104248046875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 62,
+     "position": {
+      "x": 403.18701171875,
+      "y": 1341.3104248046875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    },
+    {
+     "base": {
+      "diameter_mm": 32.0,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": 5,
+      "Ld": 7,
+      "M_mm": 203.1999969482422,
+      "OC": 1,
+      "Sv": 5,
+      "T": 4,
+      "W": 2
+     },
+     "id": 63,
+     "position": {
+      "x": 435.18701171875,
+      "y": 1341.3104248046875,
+      "z": 0.0
+     },
+     "type_name": "Genestealer",
+     "weapons": [
+      {
+       "kind": "melee",
+       "name": "Genestealers claws and talons",
+       "profiles": [
+        {
+         "A": 4,
+         "AP": -2,
+         "D": 1,
+         "S": 4,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Genestealers claws and talons",
+         "range_mm": null,
+         "skill": 2
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 2
+    }
+   ],
+   "name": "Genestealers",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 75,
+   "side": "B",
+   "starting_strength": 5,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  },
+  {
+   "abilities": [
+    {
+     "name": "Skulking Horrors",
+     "text": "In your opponent's Movement phase, if an enemy unit ends a move within 8\" of this unit, if this unit is not within Engagement Range of one or more enemy units, this unit can make a Normal move of up to D6\"."
+    },
+    {
+     "name": "Synapse",
+     "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+    }
+   ],
+   "battle_shocked": false,
+   "faction_keywords": [
+    "Tyranids"
+   ],
+   "id": 14,
+   "keywords": [
+    "Battleline",
+    "Infantry",
+    "Great Devourer",
+    "Endless Multitude"
+   ],
+   "models": [
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 64,
+     "position": {
+      "x": 513.0694580078125,
+      "y": 1383.4739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 65,
+     "position": {
+      "x": 541.5694580078125,
+      "y": 1383.4739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 66,
+     "position": {
+      "x": 570.0694580078125,
+      "y": 1383.4739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 67,
+     "position": {
+      "x": 598.5694580078125,
+      "y": 1383.4739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 68,
+     "position": {
+      "x": 627.0694580078125,
+      "y": 1383.4739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 69,
+     "position": {
+      "x": 513.0694580078125,
+      "y": 1411.9739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 70,
+     "position": {
+      "x": 541.5694580078125,
+      "y": 1411.9739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 71,
+     "position": {
+      "x": 570.0694580078125,
+      "y": 1411.9739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 72,
+     "position": {
+      "x": 598.5694580078125,
+      "y": 1411.9739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    },
+    {
+     "base": {
+      "diameter_mm": 28.5,
+      "length_mm": 0.0,
+      "shape": "round"
+     },
+     "characteristics": {
+      "InSv": null,
+      "Ld": 8,
+      "M_mm": 152.39999389648438,
+      "OC": 2,
+      "Sv": 5,
+      "T": 3,
+      "W": 1
+     },
+     "id": 73,
+     "position": {
+      "x": 627.0694580078125,
+      "y": 1411.9739990234375,
+      "z": 0.0
+     },
+     "type_name": "Termagants",
+     "weapons": [
+      {
+       "kind": "ranged",
+       "name": "Fleshborer",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 5,
+         "abilities": [
+          {
+           "kind": "Assault"
+          }
+         ],
+         "kind": "ranged",
+         "name": "Fleshborer",
+         "range_mm": 457.1999816894531,
+         "skill": 4
+        }
+       ]
+      },
+      {
+       "kind": "melee",
+       "name": "Chitinous claws and teeth",
+       "profiles": [
+        {
+         "A": 1,
+         "AP": 0,
+         "D": 1,
+         "S": 3,
+         "abilities": [],
+         "kind": "melee",
+         "name": "Chitinous claws and teeth",
+         "range_mm": null,
+         "skill": 4
+        }
+       ]
+      }
+     ],
+     "wounds_remaining": 1
+    }
+   ],
+   "name": "Termagants",
+   "phase_flags": {
+    "advance_roll": null,
+    "charge_roll": null,
+    "consolidated": false,
+    "declared_charge": false,
+    "desperate_escape_hazards_made": false,
+    "eligible_to_fight_this_phase": false,
+    "engaged_at_fight_step_start": false,
+    "forced_to_fight": false,
+    "piled_in": false,
+    "selected_for_overrun": false,
+    "selected_to_fight": false,
+    "selected_to_move": false,
+    "selected_to_shoot": false
+   },
+   "points": 55,
+   "side": "B",
+   "starting_strength": 10,
+   "starting_wounds": 10,
+   "turn_flags": {
+    "advanced": false,
+    "fell_back": false,
+    "fights_first": false,
+    "made_charge_move": false,
+    "moved_over_3in": false
+   }
+  }
+ ]
+}

@@ -5,17 +5,14 @@ add_library(wh40k_ai STATIC
     analysis/odds.cpp
     analysis/threat.cpp
     arena.cpp
-    baseline_bot.cpp
     bot.cpp
     bot_driver.cpp
     bot_log.cpp
     deploy_policy.cpp
     fallback.cpp
-    hard/evaluator.cpp
-    hard/hard_bot.cpp
-    hard/lookahead.cpp
     normal/army_plan.cpp
     normal/charge.cpp
+    normal/defaults.cpp
     normal/defense.cpp
     normal/fight.cpp
     normal/move_score.cpp

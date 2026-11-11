@@ -1,8 +1,9 @@
 #pragma once
 
 // D-054 (M39): a save file with who played each side. The save (D-025) gets an optional block
-//   "players": {"A": "human" | "bot", "B": "human" | "bot", "bot_level": "easy" | "normal" | "hard"}
+//   "players": {"A": "human" | "bot", "B": "human" | "bot"}
 // next to its "initial", "steps" and "state". GameState is unchanged (which sides are bots is client state).
+// D-085 (M85): a "bot_level" in an older save's block (the removed levels; one bot) is ignored.
 // A save without the block (an old save, or a bare GameState) loads as hotseat; so does a block that can't be
 // read.
 
@@ -17,7 +18,6 @@ namespace wh40k::client {
 
 struct SavePlayers {
     BotSides bots{false, false};  // indexed by side_index
-    BotLevel bot_level = BotLevel::Easy;
     friend bool operator==(const SavePlayers&, const SavePlayers&) = default;
 };
 

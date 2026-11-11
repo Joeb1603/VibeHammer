@@ -12,15 +12,13 @@
 #include "analysis/odds.hpp"
 #include "arena.hpp"
 #include "bot.hpp"
+#include "default_choice.hpp"
 #include "bot_driver.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "fallback.hpp"
-#include "hard/evaluator.hpp"
-#include "hard/hard_bot.hpp"
-#include "hard/lookahead.hpp"
 #include "state_hash.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
@@ -32,12 +30,6 @@ using wh40k::test::repo_root;
 using wh40k::test::select;
 
 namespace {
-
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
-}
 
 // The V1 Shoot step with the Bolt Rifles [TWIN-LINKED] (a stand-in: no V1 weapon has it), one Intercessor firing on
 // Saturation (3 dice, 3+ to wound against the Termagants), the second wound roll failed: the re-roll decision.
@@ -63,16 +55,16 @@ AttackProfile saturation(const GameState& gs, bool twin_linked, int sustained = 
 
 }  // namespace
 
-TEST(M61_Bots, EveryLevelReRollsEveryFailedWoundRoll) {
+TEST(M61_Bots, TheBotAndItsDefaultsReRollEveryFailedWoundRoll) {
     const GameState gs = at_the_decision();
     const GameAction expected = action::RerollWoundRolls{{1, 2}};
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-        Bot bot(level(l));
-        const BotChoice c = bot.decide(gs, Side::A);
-        ASSERT_FALSE(c.stopped) << static_cast<int>(l);
-        EXPECT_EQ(c.action, expected) << static_cast<int>(l);
+    for (const bool defaults : {false, true}) {
+        Bot bot(BotConfig{});
+        const BotChoice c = defaults ? wh40k::test::default_choice(gs, Side::A) : bot.decide(gs, Side::A);
+        ASSERT_FALSE(c.stopped) << defaults;
+        EXPECT_EQ(c.action, expected) << defaults;
         EXPECT_TRUE(validate_action(gs, Side::A, c.action).ok());
-        EXPECT_EQ(bot.fallbacks(), 0u) << static_cast<int>(l);
+        EXPECT_EQ(bot.fallbacks(), 0u) << defaults;
         EXPECT_NE(c.reason.find("24.38"), std::string::npos) << c.reason;
     }
     // The always-legal fallback answers the same, and the driver paces it like the attacker's other choices.
@@ -94,25 +86,6 @@ TEST(M61_Bots, TheStateHashSeesThePendingReRollOnlyWhileItWaits) {
     GameState also_cleared = other;
     also_cleared.flow.attack->wound_rerolls.reset();
     EXPECT_EQ(state_hash(cleared), state_hash(also_cleared));
-}
-
-TEST(M61_Rollouts, TheLookaheadAnswersTheDecisionOnItsScratchCopies) {
-    // Hard's Monte Carlo rollouts start from a state at the decision: their first action is the same answer.
-    const GameState gs = at_the_decision();
-    hard::HardContext hc;
-    OddsCache cache;
-    const hard::Evaluator eval(cache, gs, Side::A, hc.weights.chain, &hc.chains);
-    ASSERT_TRUE(eval.ok());
-    hard::LookaheadWeights w;
-    w.rollouts = 3;
-    std::vector<hard::RolloutTrace> traces;
-    const hard::MonteCarloResult r = hard::monte_carlo(eval, cache, gs, Side::A, hard::rollout_seed(gs), w, {}, &traces);
-    EXPECT_EQ(r.rollouts, 3u);
-    ASSERT_EQ(traces.size(), 3u);
-    for (const hard::RolloutTrace& t : traces) {
-        ASSERT_FALSE(t.actions.empty());
-        EXPECT_EQ(t.actions.front(), GameAction{(action::RerollWoundRolls{{1, 2}})});
-    }
 }
 
 TEST(M61_Odds, TheTwinLinkedWoundChanceIsPPlusOneMinusPTimesP) {
@@ -174,22 +147,19 @@ TEST(M61_Odds, ProfileSupportedLetsTwinLinkedThrough) {
 
 TEST(M61_Bots, GamesWithTheTwinLinkedBoneswordAreClean) {
     // The Havocs vs Hive Tyrant fixture as it is (the Tyrant fights with its real bonesword, 24.11) and the roster
-    // fixture: no rejected action, no reverted move, no fallback, at every level. (Hard on the thirteen-unit fixture is
-    // M69's.)
+    // fixture: no rejected action, no reverted move, no fallback. (D-085, M85: the seeds of the old level pairings, the bot
+    // on both sides.)
     const GameState duel = load_scenario(repo_root() / wh40k::test::kHavocsVsTyrantFixture, repo_root());
     const GameState rosters = wh40k::test::load_rosters_fixture_closer(26.0f);
     struct Pairing {
         const GameState* scenario;
-        BotLevel a;
-        BotLevel b;
         std::uint64_t seed;
     };
     int rerolls = 0;
-    for (const Pairing& p : {Pairing{&duel, BotLevel::Easy, BotLevel::Easy, 11}, Pairing{&duel, BotLevel::Normal, BotLevel::Normal, 12},
-                             Pairing{&duel, BotLevel::Hard, BotLevel::Hard, 13}, Pairing{&rosters, BotLevel::Easy, BotLevel::Easy, 14},
-                             Pairing{&rosters, BotLevel::Normal, BotLevel::Normal, 15}}) {
+    for (const Pairing& p : {Pairing{&duel, 11}, Pairing{&duel, 12}, Pairing{&duel, 13}, Pairing{&rosters, 14},
+                             Pairing{&rosters, 15}}) {
         std::vector<std::string> trace;
-        const GameRecord g = play_bot_game(*p.scenario, p.seed, level(p.a), level(p.b), 8000, nullptr, &trace);
+        const GameRecord g = play_bot_game(*p.scenario, p.seed, BotConfig{}, BotConfig{}, 8000, nullptr, &trace);
         EXPECT_TRUE(g.finished) << "seed " << p.seed << (g.problems.empty() ? "" : ": " + g.problems.front());
         EXPECT_EQ(g.rejected, 0u) << "seed " << p.seed;
         EXPECT_EQ(g.reverted, 0u) << "seed " << p.seed;

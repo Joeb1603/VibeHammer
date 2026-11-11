@@ -3,11 +3,9 @@
 #include <utility>
 #include <variant>
 
-#include "baseline_bot.hpp"
 #include "core/engine/engine.hpp"
-#include "deploy_policy.hpp"
 #include "core/engine/movement.hpp"
-#include "hard/hard_bot.hpp"
+#include "deploy_policy.hpp"
 #include "normal/normal_bot.hpp"
 #include "state_hash.hpp"
 
@@ -29,15 +27,6 @@ std::optional<std::string> problem(const core::GameState& state, core::Side side
 
 }  // namespace
 
-BotLevel effective_level(BotLevel requested) {
-    switch (requested) {
-        case BotLevel::Easy: return BotLevel::Easy;
-        case BotLevel::Normal: return BotLevel::Normal;  // M41-M43
-        case BotLevel::Hard: return BotLevel::Hard;      // M44
-    }
-    return BotLevel::Easy;
-}
-
 std::uint64_t decision_seed(const core::GameState& state) {
     Fnv1a h;
     h.u64(state_hash(state));
@@ -45,54 +34,11 @@ std::uint64_t decision_seed(const core::GameState& state) {
     return h.value();
 }
 
-Bot::Bot(BotConfig config) : config_(config), hard_(std::make_unique<hard::HardContext>()) {
-    hard_->weights = config_.hard;
-    hard_->generation = hard_generation(config_.generation);
-}
-
-Bot::~Bot() = default;
-
-Bot::Bot(const Bot& other)
-    : config_(other.config_),
-      hard_(std::make_unique<hard::HardContext>()),
-      memo_(other.memo_),
-      guard_(other.guard_),
-      memo_hits_(other.memo_hits_),
-      fallbacks_(other.fallbacks_) {
-    hard_->weights = config_.hard;
-    hard_->generation = hard_generation(config_.generation);
-}
-
-Bot& Bot::operator=(const Bot& other) {
-    if (this != &other) {
-        Bot copy(other);
-        *this = std::move(copy);
-    }
-    return *this;
-}
-
-Bot::Bot(Bot&& other) noexcept = default;
-Bot& Bot::operator=(Bot&& other) noexcept = default;
+Bot::Bot(BotConfig config) : config_(config) {}
 
 void Bot::set_config(BotConfig config) {
     config_ = config;
-    if (!hard_) hard_ = std::make_unique<hard::HardContext>();
-    hard_->weights = config_.hard;
-    hard_->generation = hard_generation(config_.generation);
     forget();
-}
-
-std::size_t Bot::chain_tables_built() const noexcept { return hard_ ? hard_->chains.builds() : 0; }
-
-void Bot::share_chain_cache(Bot& other) {
-    for (Bot* b : {this, &other}) {
-        if (!b->hard_) {
-            b->hard_ = std::make_unique<hard::HardContext>();
-            b->hard_->weights = b->config_.hard;
-            b->hard_->generation = hard_generation(b->config_.generation);
-        }
-    }
-    hard_->chains.share_with(other.hard_->chains);
 }
 
 void Bot::forget() noexcept {
@@ -120,28 +66,14 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
             ++memo_hits_;
         } else {
             memo_.clear();
-            // D-081: the set-up step is answered before any level's policy (so Hard never builds chain tables from a
-            // half-deployed army): Easy at Auto-place's spots in id order (M74), Normal and Hard by the M77 heuristic.
-            std::optional<PolicyResult> deploy;
-            if (uses_deploy_heuristic(config_)) deploy = heuristic_deploy_policy(state, side, legal);
+            // D-081: the set-up step is answered before the policy, by the M77 heuristic (D-085: M74's Auto-place spots
+            // in id order when the heuristic has no answer).
+            std::optional<PolicyResult> deploy = heuristic_deploy_policy(state, side, legal);
             if (!deploy) deploy = deploy_policy(state, side, legal);
             if (deploy) {
                 chosen = std::move(deploy);
-            } else switch (effective_level(config_.level)) {
-                case BotLevel::Easy:
-                    chosen = easy_policy(state, side, legal, decision_seed(state), config_.generation);
-                    break;
-                case BotLevel::Normal:
-                    chosen = normal_policy(state, side, legal, decision_seed(state), config_.generation);
-                    break;
-                case BotLevel::Hard:
-                    if (!hard_) {
-                        hard_ = std::make_unique<hard::HardContext>();
-                        hard_->weights = config_.hard;
-                        hard_->generation = hard_generation(config_.generation);
-                    }
-                    chosen = hard::hard_policy(state, side, legal, decision_seed(state), *hard_);
-                    break;
+            } else {
+                chosen = normal_policy(state, side, legal, decision_seed(state), config_.move);
             }
             memo_ = std::move(chosen->rest);
             chosen->rest.clear();

@@ -1,5 +1,5 @@
 // M45: the bot's reasons in the combat log (short form and grouping, D-054 M45 notes), the watch controls with
-// the driver (speed changed live, Step), and the bot-game replay tests/replays/m45_bot_game.json.
+// the driver (speed changed live, Step), and a whole bot game replayed with core only.
 
 #include <gtest/gtest.h>
 
@@ -24,8 +24,8 @@ using namespace wh40k::ai;
 
 namespace {
 
-// The bot-game replay: Hard vs Hard on the V1 scenario, dice seed 9 (a game into battle round 2 in which the
-// Termagants advance away and shoot back; D-054 M45 notes).
+// The bot game: the bot on both sides on the V1 scenario, dice seed 9 (D-054 M45 notes; D-085, M85: it was Hard vs
+// Hard, saved as tests/replays/m45_bot_game.json, which went with Hard).
 constexpr std::uint64_t kBotGameSeed = 9;
 constexpr const char* kBotGameScenario = "data/scenarios/v1_skirmish.json";
 
@@ -40,12 +40,12 @@ struct BotGame {
 BotGame play_bot_game_replay() {
     BotGame g;
     g.replay.description =
-        "M45: a whole game played by the bot on both sides, level Hard vs Hard, from the V1 scenario with dice "
-        "seed 9 (D-054). Replaying it needs only the engine.";
+        "M45: a whole game played by the bot on both sides, from the V1 scenario with dice seed 9 (D-054). Replaying "
+        "it needs only the engine.";
     g.replay.initial.scenario = kBotGameScenario;
     g.replay.initial.seed = kBotGameSeed;
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{BotLevel::Hard}, BotConfig{BotLevel::Hard}, 5000, nullptr, &g.trace);
+    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000, nullptr, &g.trace);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -57,55 +57,6 @@ std::string trace_reason(const std::string& line) { return line.substr(line.find
 }  // namespace
 
 // ---- the short form ----
-
-TEST(M45_BotLog, HardMoveReasonKeepsTheMoveAndItsOdds) {
-    const std::string reason =
-        "Intercessor Squad: Normal move 6\" towards (Normal's plan) - 6.0\" from Termagants (Hard: win 100%, draw 0%, "
-        "loss 0%, value +1.22; lookahead +1.22 over 6 rollouts, as Normal; Remain Stationary +1.19, Advance +1.21)";
-    const ReasonSummary s = summarize_reason(reason);
-    EXPECT_EQ(s.text, "Intercessor Squad: Normal move 6\" towards - 6.0\" from Termagants");
-    ASSERT_TRUE(s.odds.has_value());
-    EXPECT_EQ(*s.odds, (WinDrawLoss{100, 0, 0}));
-    EXPECT_EQ(bot_log_line("Space Marines", reason),
-              "Bot (Space Marines): Intercessor Squad: Normal move 6\" towards - 6.0\" from Termagants | win 100% / "
-              "draw 0% / loss 0%");
-}
-
-TEST(M45_BotLog, HardAdvanceDropsTheScoreAndKeepsTheRoll) {
-    EXPECT_EQ(short_reason("Termagants: Advance (-1.20 on average over the advance roll) (Hard: win 0%, draw 3%, loss "
-                           "97%, value -1.20; lookahead -1.20 over 6 rollouts, as Normal; Remain Stationary -1.20)"),
-              "Termagants: Advance | win 0% / draw 3% / loss 97%");
-    EXPECT_EQ(short_reason("Termagants: Advance (roll 5) 9\" obliquely back - 11.1\" from Intercessor Squad (Hard: win "
-                           "0%, draw 0%, loss 100%, value -1.20; lookahead -1.20 over 6 rollouts, Normal's plan)"),
-              "Termagants: Advance (roll 5) 9\" obliquely back - 11.1\" from Intercessor Squad | win 0% / draw 0% / "
-              "loss 100%");
-}
-
-TEST(M45_BotLog, TheChosenOptionsOddsAreShownForACharge) {
-    // The chosen option's odds come first in every Hard reason (a declared charge: the fight's; no charge: holding).
-    EXPECT_EQ(short_reason("Intercessor Squad: declare a charge (Hard: 58% charge odds against Termagants; the fight "
-                           "+1.22 (win 100%, draw 0%, loss 0%), holding +1.20 (win 90%, draw 10%, loss 0%))"),
-              "Intercessor Squad: declare a charge | win 100% / draw 0% / loss 0%");
-    EXPECT_EQ(short_reason("Termagants: no charge (Hard: 3% charge odds against Intercessor Squad; holding -1.10 (win "
-                           "0%, draw 8%, loss 92%), the fight -1.30 (win 0%, draw 0%, loss 100%))"),
-              "Termagants: no charge | win 0% / draw 8% / loss 92%");
-    EXPECT_EQ(short_reason("Intercessor Squad: charge move (roll 9): 5 of 5 models engaged (Hard: +1.24, win 100%, "
-                           "draw 0%, loss 0%; holding +1.21)"),
-              "Intercessor Squad: charge move (roll 9): 5 of 5 models engaged | win 100% / draw 0% / loss 0%");
-    // No odds at all: just the action.
-    EXPECT_EQ(short_reason("Termagants: no charge move (Hard: holding -1.20 against -1.30 for the charge)"),
-              "Termagants: no charge move");
-}
-
-TEST(M45_BotLog, ARuleNumberBeforeHardsBlockStays) {
-    EXPECT_EQ(short_reason("Termagants: remove model 12 to regain coherency (03.03; Hard: -1.20, win 0%, draw 0%, "
-                           "loss 100%)"),
-              "Termagants: remove model 12 to regain coherency (03.03) | win 0% / draw 0% / loss 100%");
-    EXPECT_EQ(short_reason("Termagants: casualties front models first (Intercessor Squad may charge), keeping "
-                           "coherency (Hard: -1.22, win 0%, draw 0%, loss 100%)"),
-              "Termagants: casualties front models first (Intercessor Squad may charge), keeping coherency | win 0% / "
-              "draw 0% / loss 100%");
-}
 
 TEST(M45_BotLog, NormalReasonsLoseTheirScoresAndExtraClauses) {
     EXPECT_EQ(short_reason("Intercessor Squad: Normal move 6\" towards - 6\" from Termagants, 5 of 5 models within half "
@@ -119,7 +70,12 @@ TEST(M45_BotLog, NormalReasonsLoseTheirScoresAndExtraClauses) {
     EXPECT_EQ(short_reason("Intercessor Squad: charge move into Termagants (roll 9): 5 of 5 models engaged, 5 in base "
                            "contact (+0.30 against +0.26 for holding)"),
               "Intercessor Squad: charge move into Termagants (roll 9): 5 of 5 models engaged, 5 in base contact");
-    // Already short (Easy, the shooting and fight reasons): unchanged.
+    // An Advance: the score goes, the roll and the end stay (D-085: the Hard odds that followed went with Hard).
+    EXPECT_EQ(short_reason("Termagants: Advance (-1.20 on average over the advance roll)"), "Termagants: Advance");
+    EXPECT_EQ(short_reason("Termagants: Advance (roll 5) 9\" obliquely back - 11.1\" from Intercessor Squad, outside its "
+                           "half range"),
+              "Termagants: Advance (roll 5) 9\" obliquely back - 11.1\" from Intercessor Squad");
+    // Already short (the defaults', the shooting and fight reasons): unchanged.
     for (const char* kept : {"Intercessor Squad: 5x Bolt Rifle - Saturation at Termagants (expected 5.55 models)",
                              "Order casualties: Termagants (2) (default order)",
                              "Termagants: Normal move 2\" towards Intercessor Squad (more than 8\" away)"}) {
@@ -171,7 +127,7 @@ TEST(M45_Watch, SpeedChangesLiveAndStepHandsOverOneAction) {
     const GameState& gs = s.state();
     client::WatchControls watch;
     BotSpeed speed = BotSpeed::Slow;
-    BotDriver d(BotConfig{BotLevel::Easy}, speed, BotDriver::Threading::Synchronous);
+    BotDriver d(BotConfig{}, speed, BotDriver::Threading::Synchronous);
     const auto inputs = [&] {
         DriverInputs in;
         in.state = &gs;
@@ -196,7 +152,7 @@ TEST(M45_Watch, SpeedChangesLiveAndStepHandsOverOneAction) {
     EXPECT_TRUE(tick(0.51).has_value());
 
     // Paused: nothing, however long; Step hands over exactly one action and is used up.
-    BotDriver paused_driver(BotConfig{BotLevel::Easy}, BotSpeed::Instant, BotDriver::Threading::Synchronous);
+    BotDriver paused_driver(BotConfig{}, BotSpeed::Instant, BotDriver::Threading::Synchronous);
     watch.apply(client::WatchCommand::TogglePause, speed);
     DriverInputs in = inputs();
     for (int i = 0; i < 20; ++i) EXPECT_FALSE(paused_driver.tick(i * 1.0, in).has_value());
@@ -224,34 +180,17 @@ TEST(M45_Replay, TheBotGameIsDeterministicAndReplaysWithCoreOnly) {
     EXPECT_EQ(replay_expectation(r.final_state), first.replay.expect);
     EXPECT_TRUE(r.final_state.result.has_value());  // a whole game
 
-    // Every reason of the game has a short form, Hard's with its odds, and the log groups the plans' steps.
+    // Every reason of the game has a short form, and the log groups the plans' steps.
     BotLog log;
     for (std::size_t i = 0; i < first.trace.size(); ++i) {
         const std::string reason = trace_reason(first.trace[i]);
         const ReasonSummary sum = summarize_reason(reason);
         EXPECT_FALSE(sum.text.empty()) << reason;
         EXPECT_LE(sum.text.size(), reason.size()) << reason;
-        if (reason.find("Hard: ") != std::string::npos && reason.find("win ") != std::string::npos) {
-            EXPECT_TRUE(sum.odds.has_value()) << reason;
-        }
-        EXPECT_EQ(sum.text.find("Hard:"), std::string::npos) << sum.text;
         const bool placement = first.trace[i].find(" ProposeModelMove: ") != std::string::npos ||
                                first.trace[i].find(" CommitUnitMove: ") != std::string::npos;
         const GameAction a = placement ? GameAction{action::ProposeModelMove{}} : GameAction{action::EndShootStep{}};
         log.record(i, first.trace[i][3] == 'A' ? Side::A : Side::B, "army", BotChoice{a, reason});
     }
     EXPECT_LT(log.notes().size() * 2, first.trace.size());  // far fewer lines than actions
-}
-
-// Writes tests/replays/m45_bot_game.json. Run on purpose only:
-//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M45_Replay.DISABLED_RegenerateBotGameReplay
-TEST(M45_Replay, DISABLED_RegenerateBotGameReplay) {
-    const BotGame g = play_bot_game_replay();
-    ASSERT_TRUE(g.record.finished);
-    ASSERT_EQ(g.record.rejected, 0u);
-    ASSERT_EQ(g.record.reverted, 0u);
-    const ReplayResult r = run_replay(g.replay, wh40k::test::repo_root());
-    ASSERT_TRUE(r.ok()) << "step " << *r.failed_step << ": " << r.reasons.front();
-    if (::testing::Test::HasFailure()) return;  // never overwrite the committed replay with a broken game
-    save_replay(g.replay, std::filesystem::path(WH40K_REPLAY_DIR) / "m45_bot_game.json");
 }

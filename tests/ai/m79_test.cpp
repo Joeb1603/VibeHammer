@@ -25,7 +25,6 @@
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
-#include "generation.hpp"
 #include "normal/army_plan.hpp"
 #include "normal/value.hpp"
 #include "session.hpp"
@@ -320,8 +319,7 @@ TEST(M79_ArmyPlan, TheSameStateGivesTheSamePlan) {
                                   tyrant_fixture(3)};
     {
         client::GameSession session = client::GameSession::new_game(wh40k::test::load_rosters_scenario(), 3);
-        BotConfig normal;
-        normal.level = BotLevel::Normal;
+        const BotConfig normal{};
         std::array<Bot, 2> bots{Bot(normal), Bot(normal)};
         client::AutoSettings autos;
         autos.skip_empty_steps = true;
@@ -379,16 +377,11 @@ TEST(M79_ArmyPlan, OneUnitASideIsTheClosestWithNoPartners) {
     }
 }
 
-TEST(M79_ArmyPlan, TheM77SwitchGivesTheClosestWithNoPartners) {
-    // The position where the current plan forms a group: under Generation::M77 (and M55) there is none.
-    const GameState gs = screamer_fixture(16.0f);
-    OddsCache cache;
-    ASSERT_FALSE(army_plan(cache, gs, Side::A).groups.empty());
-    for (const Generation g : {Generation::M77, Generation::M55}) {
-        for (const Side side : {Side::A, Side::B}) expect_closest_no_partners(gs, army_plan(cache, gs, side, g), side);
-    }
-    // Before the battle (not started) there is no plan either.
+TEST(M79_ArmyPlan, BeforeTheBattleThereIsNoPlan) {
+    // Before the battle (not started) every unit has its closest enemy unit and no partners. (D-085, M85: this was part
+    // of TheM77SwitchGivesTheClosestWithNoPartners, whose Generation::M77 / M55 cases went with the switch.)
     const GameState not_started = wh40k::test::load_rosters_scenario();
+    OddsCache cache;
     expect_closest_no_partners(not_started, army_plan(cache, not_started, Side::A), Side::A);
 }
 

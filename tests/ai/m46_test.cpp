@@ -1,7 +1,7 @@
-// M46 (D-057): the bots pile in and consolidate when it costs nothing. Normal and Hard make a pile-in,
-// Overrun pile-in or consolidation whose gain ties with not moving if it leaves the unit tidier (closer to
-// the enemy, more in base contact, tighter coherency), and still refuse one that costs them. Easy makes every
-// one worth making, by Auto move (D-050). Plus the arena counts and the bot-game replay
+// M46 (D-057): the bots pile in and consolidate when it costs nothing. The bot (Normal; D-085, M85: Hard too until
+// then) makes a pile-in, Overrun pile-in or consolidation whose gain ties with not moving if it leaves the unit tidier
+// (closer to the enemy, more in base contact, tighter coherency), and still refuses one that costs it. Its defaults
+// (once level Easy) make every one worth making, by Auto move (D-050). Plus the arena counts and the bot-game replay
 // tests/replays/m46_bot_fight_moves.json.
 
 #include <gtest/gtest.h>
@@ -21,6 +21,7 @@
 #include "core/engine/replay.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
+#include "default_choice.hpp"
 #include "fight_move_skip.hpp"
 #include "normal/fight.hpp"
 #include "session.hpp"
@@ -54,6 +55,17 @@ client::FightMoveShape shape(const GameState& gs, std::size_t unit, std::size_t 
 }
 
 // Answers decisions with `bot` until the pending decision isn't `side`'s MoveModels any more.
+// Makes the MoveModels steps of `side`'s fight move in progress with the defaults (each replans from the move's start).
+void run_default_move(GameState& gs, Side side) {
+    for (int guard = 0; guard < 64 && gs.pending && gs.pending->side == side &&
+                        std::holds_alternative<decision::MoveModels>(gs.pending->kind);
+         ++guard) {
+        const BotChoice c = wh40k::test::default_choice(gs, side);
+        ASSERT_TRUE(validate_action(gs, side, c.action).ok()) << action_name(c.action);
+        (void)apply_action(gs, side, c.action);
+    }
+}
+
 void run_move(GameState& gs, Bot& bot, Side side) {
     for (int guard = 0; guard < 64 && gs.pending && gs.pending->side == side &&
                         std::holds_alternative<decision::MoveModels>(gs.pending->kind);
@@ -101,7 +113,7 @@ BotGame play_fight_move_game() {
     g.replay.initial.scenario = kFightMoveScenario;
     g.replay.initial.seed = kFightMoveSeed;
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{BotLevel::Normal}, BotConfig{BotLevel::Normal});
+    g.record = play_bot_session(session, BotConfig{}, BotConfig{});
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;
@@ -109,9 +121,9 @@ BotGame play_fight_move_game() {
 
 }  // namespace
 
-// ---- Normal and Hard: ties go to the tidier move ----
+// ---- The bot: ties go to the tidier move ----
 
-TEST(M46_PileIn, NormalAndHardPileIntoBaseContactWhenItCostsNothing) {
+TEST(M46_PileIn, NormalPilesIntoBaseContactWhenItCostsNothing) {
     // After the charge every Intercessor is engaged about 1" from the Termagants' front rank, and there is no
     // second rank to bring in: the pile-in changes nothing in the melee exchange, but closes the gap.
     GameState start = pile_in_step();
@@ -119,10 +131,10 @@ TEST(M46_PileIn, NormalAndHardPileIntoBaseContactWhenItCostsNothing) {
     const std::optional<double> gain = first_gain<action::StartPileIn>(start, Side::A, true);
     ASSERT_TRUE(gain.has_value());
     EXPECT_NEAR(*gain, 0.0, 1e-6);
-    for (const BotLevel level : {BotLevel::Normal, BotLevel::Hard}) {
+    {
         GameState gs = start;
         const client::FightMoveShape before = shape(gs, kMarines, kGants);
-        Bot bot(BotConfig{level});
+        Bot bot(BotConfig{});
         const BotChoice c = bot.decide(gs, Side::A);
         ASSERT_TRUE(std::holds_alternative<action::StartPileIn>(c.action)) << c.reason;
         EXPECT_NE(c.reason.find("more in base contact"), std::string::npos) << c.reason;
@@ -138,18 +150,18 @@ TEST(M46_PileIn, NormalAndHardPileIntoBaseContactWhenItCostsNothing) {
 
 TEST(M46_PileIn, APileInThatBringsMoreEnemyAttackersIsStillSkipped) {
     // With both Termagant ranks, the Intercessors closing in would engage the second rank too: more Termagant
-    // attacks and none more of their own, so Normal and Hard end their pile-ins.
+    // attacks and none more of their own, so the bot ends its pile-ins.
     const GameState gs = pile_in_step();
     const std::optional<double> gain = first_gain<action::StartPileIn>(gs, Side::A, true);
     ASSERT_TRUE(gain.has_value());
     EXPECT_LT(*gain, -1e-6);
-    for (const BotLevel level : {BotLevel::Normal, BotLevel::Hard}) {
-        const BotChoice c = Bot(BotConfig{level}).decide(gs, Side::A);
+    {
+        const BotChoice c = Bot(BotConfig{}).decide(gs, Side::A);
         EXPECT_TRUE(std::holds_alternative<action::EndPileIns>(c.action)) << c.reason;
     }
 }
 
-TEST(M46_Consolidate, NormalAndHardConsolidateWhenItCostsNothing) {
+TEST(M46_Consolidate, NormalConsolidatesWhenItCostsNothing) {
     // The Consolidate step after a fight in which every attack missed, with only the Termagants' front rank: an
     // Ongoing Consolidation (12.08) into base contact costs the Intercessors nothing.
     GameState start = wh40k::test::consolidate_step_state();
@@ -158,10 +170,10 @@ TEST(M46_Consolidate, NormalAndHardConsolidateWhenItCostsNothing) {
     const std::optional<double> gain = first_gain<action::StartConsolidation>(start, Side::A, false);
     ASSERT_TRUE(gain.has_value());
     EXPECT_NEAR(*gain, 0.0, 1e-6);
-    for (const BotLevel level : {BotLevel::Normal, BotLevel::Hard}) {
+    {
         GameState gs = start;
         const client::FightMoveShape before = shape(gs, kMarines, kGants);
-        Bot bot(BotConfig{level});
+        Bot bot(BotConfig{});
         const BotChoice c = bot.decide(gs, Side::A);
         ASSERT_TRUE(std::holds_alternative<action::StartConsolidation>(c.action)) << c.reason;
         (void)apply_action(gs, Side::A, c.action);
@@ -174,39 +186,37 @@ TEST(M46_Consolidate, NormalAndHardConsolidateWhenItCostsNothing) {
 
 TEST(M46_Consolidate, AConsolidationThatBringsMoreEnemyAttackersIsStillSkipped) {
     // Both ranks: consolidating closer would bring the second rank into the next fight (as M41's pointless
-    // consolidation), so the position gets worse and Normal and Hard end their consolidations.
+    // consolidation), so the position gets worse and the bot ends its consolidations.
     const GameState gs = wh40k::test::consolidate_step_state();
     const std::optional<double> gain = first_gain<action::StartConsolidation>(gs, Side::A, false);
     ASSERT_TRUE(gain.has_value());
     EXPECT_LT(*gain, -1e-6);
-    for (const BotLevel level : {BotLevel::Normal, BotLevel::Hard}) {
-        const BotChoice c = Bot(BotConfig{level}).decide(gs, Side::A);
+    {
+        const BotChoice c = Bot(BotConfig{}).decide(gs, Side::A);
         EXPECT_TRUE(std::holds_alternative<action::EndConsolidations>(c.action)) << c.reason;
     }
 }
 
-// ---- Easy: every move worth making, by Auto move ----
+// ---- The defaults (once level Easy): every move worth making, by Auto move ----
 
-TEST(M46_Easy, PilesInWithAutoMoveThenEndsAConsolidationWithNothingToDo) {
+TEST(M46_Defaults, PileInWithAutoMoveThenEndAConsolidationWithNothingToDo) {
     GameState gs = pile_in_step();
     const client::FightMoveShape before = shape(gs, kMarines, kGants);
-    Bot easy(BotConfig{BotLevel::Easy});
-    const BotChoice c = easy.decide(gs, Side::A);
+    const BotChoice c = wh40k::test::default_choice(gs, Side::A);
     ASSERT_TRUE(std::holds_alternative<action::StartPileIn>(c.action)) << c.reason;
     EXPECT_NE(c.reason.find("auto move"), std::string::npos) << c.reason;
     (void)apply_action(gs, Side::A, c.action);
-    run_move(gs, easy, Side::A);
+    run_default_move(gs, Side::A);
     ASSERT_TRUE(gs.units[kMarines].phase_flags.piled_in);
     const client::FightMoveShape after = shape(gs, kMarines, kGants);
     EXPECT_GT(after.in_contact, before.in_contact);
-    EXPECT_EQ(easy.fallbacks(), 0u);
 
-    // The Termagants (also Easy) pile in too, then both units fight and every attack misses.
+    // The Termagants (also by the defaults) pile in too, then both units fight and every attack misses.
     ASSERT_TRUE(gs.pending && std::holds_alternative<decision::PileIn>(gs.pending->kind));
     ASSERT_EQ(gs.pending->side, Side::B);
-    const BotChoice t = easy.decide(gs, Side::B);
+    const BotChoice t = wh40k::test::default_choice(gs, Side::B);
     (void)apply_action(gs, Side::B, t.action);
-    run_move(gs, easy, Side::B);
+    run_default_move(gs, Side::B);
     while (gs.flow.stage == Stage::PileIn) (void)apply_action(gs, gs.pending->side, action::EndPileIns{});
     for (const UnitId unit : {gs.units[kMarines].id, gs.units[kGants].id}) {
         (void)apply_action(gs, gs.pending->side, action::SelectToFight{unit, FightType::Normal});
@@ -216,13 +226,13 @@ TEST(M46_Easy, PilesInWithAutoMoveThenEndsAConsolidationWithNothingToDo) {
     ASSERT_EQ(gs.flow.stage, Stage::Consolidate);
     ASSERT_EQ(gs.pending->side, Side::A);
     // Every Intercessor is in base contact, so none can move in an Ongoing Consolidation (12.08): nothing is
-    // worth making and Easy ends its consolidations.
+    // worth making and the defaults end the consolidations.
     for (const GameAction& a : legal_actions(gs, Side::A)) {
         if (std::holds_alternative<action::StartConsolidation>(a)) {
             EXPECT_FALSE(client::fight_move_worthwhile(gs, Side::A, a));
         }
     }
-    const BotChoice e = easy.decide(gs, Side::A);
+    const BotChoice e = wh40k::test::default_choice(gs, Side::A);
     EXPECT_TRUE(std::holds_alternative<action::EndConsolidations>(e.action)) << e.reason;
 }
 
@@ -231,7 +241,7 @@ TEST(M46_Easy, PilesInWithAutoMoveThenEndsAConsolidationWithNothingToDo) {
 TEST(M46_BotLog, FightMoveReasonsKeepWhatTheMoveDoes) {
     GameState gs = pile_in_step();
     front_rank_only(gs);
-    const BotChoice c = Bot(BotConfig{BotLevel::Normal}).decide(gs, Side::A);
+    const BotChoice c = Bot(BotConfig{}).decide(gs, Side::A);
     ASSERT_TRUE(std::holds_alternative<action::StartPileIn>(c.action)) << c.reason;
     const std::string s = short_reason(c.reason);
     EXPECT_EQ(s.rfind("Intercessor Squad: pile in towards Termagants - ", 0), 0u) << s;
@@ -240,12 +250,12 @@ TEST(M46_BotLog, FightMoveReasonsKeepWhatTheMoveDoes) {
 }
 
 TEST(M46_Arena, BotsPileInAndConsolidateInCleanGames) {
-    // Two seeded games per level on the 20-Termagant scenario: clean, and the bots make fight moves (the
-    // Release arena's 200 seeds are recorded in PLAN.md, M46).
+    // Six seeded games on the 20-Termagant scenario: clean, and the bots make fight moves (the Release arena's 200
+    // seeds are recorded in PLAN.md, M46; D-085, M85: two per level before).
     const GameState scenario =
         load_scenario(wh40k::test::repo_root() / kFightMoveScenario, wh40k::test::repo_root());
-    for (const BotLevel level : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-        const ArenaResult r = run_arena(scenario, 2, 1, BotConfig{level}, BotConfig{level});
+    {
+        const ArenaResult r = run_arena(scenario, 6, 1, BotConfig{}, BotConfig{});
         EXPECT_TRUE(r.clean()) << format_arena(r, scenario);
         EXPECT_EQ(r.fallbacks, 0u) << format_arena(r, scenario);
         EXPECT_GT(r.fight_moves[0] + r.fight_moves[1], 0) << format_arena(r, scenario);
@@ -287,7 +297,7 @@ TEST(M46_Replay, DISABLED_PrintFightMoveCounts) {
     const GameState scenario =
         load_scenario(wh40k::test::repo_root() / kFightMoveScenario, wh40k::test::repo_root());
     for (std::uint64_t seed = 1; seed <= 12; ++seed) {
-        const GameRecord g = play_bot_game(scenario, seed, BotConfig{BotLevel::Normal}, BotConfig{BotLevel::Normal});
+        const GameRecord g = play_bot_game(scenario, seed, BotConfig{}, BotConfig{});
         std::printf("seed %llu: fight moves A %d B %d, round %d, steps %zu\n", static_cast<unsigned long long>(seed),
                     g.fight_moves[0], g.fight_moves[1], g.end_round, g.steps);
     }

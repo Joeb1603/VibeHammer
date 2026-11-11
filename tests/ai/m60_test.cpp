@@ -12,6 +12,7 @@
 #include "analysis/odds.hpp"
 #include "arena.hpp"
 #include "bot.hpp"
+#include "default_choice.hpp"
 #include "core/engine/engine.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/rules/attacks.hpp"
@@ -28,10 +29,9 @@ using wh40k::test::repo_root;
 
 namespace {
 
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
+// D-085 (M85): one bot. A decision is checked for the bot and for its defaults (once level Easy's answers).
+BotChoice answer(const GameState& gs, Side side, bool defaults) {
+    return defaults ? wh40k::test::default_choice(gs, side) : Bot(BotConfig{}).decide(gs, side);
 }
 
 GameState havocs_fixture() {
@@ -157,57 +157,53 @@ TEST(M60_Odds, BestMeleeDeclaresTheExtraAttacksWeaponToo) {
     EXPECT_TRUE(melee_problems(gs, gs.units[1], plan->declarations).empty());
 }
 
-TEST(M60_Bots, EveryLevelDeclaresTheExtraAttacksWeaponWithItsMainWeapon) {
+TEST(M60_Bots, TheBotAndItsDefaultsDeclareTheExtraAttacksWeaponWithTheMainWeapon) {
     for (const bool usable : {true, false}) {
         const GameState gs = tyrant_declaring(usable);
-        for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-            Bot bot(level(l));
-            const BotChoice c = bot.decide(gs, Side::B);
-            ASSERT_FALSE(c.stopped) << static_cast<int>(l);
+        for (const bool defaults : {false, true}) {
+            Bot bot(BotConfig{});
+            const BotChoice c = defaults ? wh40k::test::default_choice(gs, Side::B) : bot.decide(gs, Side::B);
+            ASSERT_FALSE(c.stopped) << defaults;
             const auto* f = std::get_if<action::Fight>(&c.action);
-            ASSERT_NE(f, nullptr) << static_cast<int>(l);
-            EXPECT_TRUE(validate_action(gs, Side::B, c.action).ok()) << static_cast<int>(l);
+            ASSERT_NE(f, nullptr) << defaults;
+            EXPECT_TRUE(validate_action(gs, Side::B, c.action).ok()) << defaults;
             const std::vector<std::string> expected =
                 usable ? std::vector<std::string>{"Monstrous bonesword and lash whip", "Monstrous scything talons"}
                        : std::vector<std::string>{"Monstrous scything talons"};
-            EXPECT_EQ(weapons_declared(gs, *f), expected) << static_cast<int>(l);
+            EXPECT_EQ(weapons_declared(gs, *f), expected) << defaults;
             EXPECT_EQ(bot.fallbacks(), 0u);
         }
     }
 }
 
-TEST(M60_Bots, NoLevelFiresAWeaponWithAnAbilityTheEngineRefuses) {
+TEST(M60_Bots, NeitherTheBotNorItsDefaultsFireAWeaponWithAnAbilityTheEngineRefuses) {
     // D-071: the Bolt Rifles get an ability the engine doesn't know; only the bolt pistols may fire.
     GameState gs = wh40k::test::shoot_step_state();
     for (Model& m : gs.units[0].models) {
         for (WeaponProfile& p : m.weapons[0].profiles) p.abilities.push_back(ability::Unknown{"Lethal Hits"});
     }
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-        Bot bot(level(l));
-        const BotChoice c = bot.decide(gs, Side::A);
+    for (const bool defaults : {false, true}) {
+        const BotChoice c = answer(gs, Side::A, defaults);
         ASSERT_FALSE(c.stopped);
         EXPECT_TRUE(validate_action(gs, Side::A, c.action).ok());
         if (const auto* s = std::get_if<action::Shoot>(&c.action)) {
-            for (const ShotDeclaration& d : s->shots) EXPECT_NE(d.weapon_index, 0u) << static_cast<int>(l);
+            for (const ShotDeclaration& d : s->shots) EXPECT_NE(d.weapon_index, 0u) << defaults;
         }
     }
 }
 
 TEST(M60_Bots, GamesOnTheFixturesAreClean) {
     // Whole games with Hazardous supercharge profiles, the Tyrant's talons and the mixed loadouts: no rejected action,
-    // no reverted move, no fallback. (Hard on the thirteen-unit fixture is M69's.)
+    // no reverted move, no fallback. (D-085, M85: the seeds of the old level pairings, the bot on both sides.)
     const GameState duel = havocs_fixture();
     const GameState rosters = wh40k::test::load_rosters_fixture_closer(26.0f);
     struct Pairing {
         const GameState* scenario;
-        BotLevel a;
-        BotLevel b;
         std::uint64_t seed;
     };
-    for (const Pairing& p : {Pairing{&duel, BotLevel::Easy, BotLevel::Easy, 1}, Pairing{&duel, BotLevel::Normal, BotLevel::Normal, 2},
-                             Pairing{&duel, BotLevel::Hard, BotLevel::Normal, 3}, Pairing{&rosters, BotLevel::Easy, BotLevel::Easy, 4},
-                             Pairing{&rosters, BotLevel::Normal, BotLevel::Easy, 5}}) {
-        const GameRecord g = play_bot_game(*p.scenario, p.seed, level(p.a), level(p.b), 8000);
+    for (const Pairing& p : {Pairing{&duel, 1}, Pairing{&duel, 2}, Pairing{&duel, 3}, Pairing{&rosters, 4},
+                             Pairing{&rosters, 5}}) {
+        const GameRecord g = play_bot_game(*p.scenario, p.seed, BotConfig{}, BotConfig{}, 8000);
         EXPECT_TRUE(g.finished) << "seed " << p.seed << (g.problems.empty() ? "" : ": " + g.problems.front());
         EXPECT_EQ(g.rejected, 0u) << "seed " << p.seed;
         EXPECT_EQ(g.reverted, 0u) << "seed " << p.seed;

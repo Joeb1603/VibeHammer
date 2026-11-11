@@ -289,15 +289,15 @@ TEST(M67_StateHash, PointsAndTheResultRuleChangeTheHash) {
 }
 
 TEST(M67_Arena, AGameDecidedOnPointsIsCountedByItsWinner) {
-    // An Easy bot game on the roster scenario: the game ends (wipe-out or points), and the arena's record and its
-    // totals follow the engine's result. A game decided on points counts as a win (or a draw) like any other.
+    // A bot game on the roster scenario: the game ends (wipe-out or points), and the arena's record and its totals
+    // follow the engine's result. A game decided on points counts as a win (or a draw) like any other. (D-085, M85:
+    // these were five Easy-vs-Easy games; three of the bot's, which take about half a minute each in Debug.)
     const GameState scenario = wh40k::test::load_rosters_scenario();
-    wh40k::ai::BotConfig easy;
-    easy.level = wh40k::ai::BotLevel::Easy;
+    const wh40k::ai::BotConfig bot{};
     bool saw_points = false;
-    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+    for (std::uint64_t seed = 1; seed <= 2; ++seed) {
         wh40k::client::GameSession session = wh40k::client::GameSession::new_game(scenario, seed);
-        const wh40k::ai::GameRecord rec = wh40k::ai::play_bot_session(session, easy, easy);
+        const wh40k::ai::GameRecord rec = wh40k::ai::play_bot_session(session, bot, bot);
         ASSERT_TRUE(rec.finished) << "seed " << seed;
         EXPECT_EQ(rec.rejected, 0u);
         EXPECT_EQ(rec.reverted, 0u);
@@ -316,13 +316,13 @@ TEST(M67_Arena, AGameDecidedOnPointsIsCountedByItsWinner) {
         }
     }
     // The arena's totals count the games decided on points among the wins and draws.
-    const wh40k::ai::ArenaResult r = wh40k::ai::run_arena(scenario, 2, 1, easy, easy);
+    const wh40k::ai::ArenaResult r = wh40k::ai::run_arena(scenario, 1, 3, bot, bot);
     int points_games = 0;
     for (const wh40k::ai::GameRecord& g : r.games) points_games += g.on_points ? 1 : 0;
     EXPECT_EQ(r.points_wins[0] + r.points_wins[1] + r.points_draws, points_games);
-    EXPECT_EQ(r.wins[0] + r.wins[1] + r.draws + r.unfinished, 2);
+    EXPECT_EQ(r.wins[0] + r.wins[1] + r.draws + r.unfinished, 1);
     const std::string text = wh40k::ai::format_arena(r, scenario);
     EXPECT_NE(text.find("decided on points destroyed after the last battle round (D-076)"), std::string::npos);
     EXPECT_EQ(wh40k::ai::format_arena(r, wh40k::test::load_v1_scenario()).find("D-076"), std::string::npos);
-    std::printf("Easy vs Easy on the roster scenario, seeds 1-3: a game decided on points: %s\n", saw_points ? "yes" : "no");
+    std::printf("Bot vs bot on the roster scenario, seeds 1-2: a game decided on points: %s\n", saw_points ? "yes" : "no");
 }

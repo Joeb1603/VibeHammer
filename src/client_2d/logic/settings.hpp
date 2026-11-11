@@ -18,7 +18,6 @@
 
 namespace wh40k::client {
 
-enum class BotLevel : std::uint8_t { Easy, Normal, Hard };
 enum class BotSpeed : std::uint8_t { Slow, Normal, Fast, Instant };
 
 inline constexpr float kMinUiScale = 0.75f;  // the "UI scale" slider's range (D-038)
@@ -43,7 +42,6 @@ struct CustomBattleSettings {
 // Everything the start screen and the sidebar toggles set. Saved to vibehammer_settings.json next to the exe.
 struct AppSettings {
     core::Side human_side = core::Side::A;  // "You play" in a game against the bot
-    BotLevel bot_level = BotLevel::Hard;
     BotSpeed bot_speed = BotSpeed::Normal;
     std::string scenario = "data/scenarios/v1_skirmish.json";  // relative to the data root
     bool fixed_seed = false;    // D-038
@@ -73,12 +71,9 @@ struct AppSettings {
 // False if the file couldn't be written. Never throws.
 bool save_settings(const std::filesystem::path& path, const AppSettings& s);
 
-[[nodiscard]] const char* bot_level_name(BotLevel level);
 [[nodiscard]] const char* bot_speed_name(BotSpeed speed);
-// The JSON and CLI spellings: "easy" / "normal" / "hard", "slow" / "normal" / "fast" / "instant" (M39).
-[[nodiscard]] const char* bot_level_key(BotLevel level);
+// The JSON and CLI spellings: "slow" / "normal" / "fast" / "instant" (M39).
 [[nodiscard]] const char* bot_speed_key(BotSpeed speed);
-[[nodiscard]] std::optional<BotLevel> bot_level_from_key(std::string_view key);
 [[nodiscard]] std::optional<BotSpeed> bot_speed_from_key(std::string_view key);
 // M75: "hotseat" / "vs_bot" / "bot_vs_bot".
 [[nodiscard]] const char* game_mode_key(GameMode mode);

@@ -16,6 +16,7 @@
 #include "analysis/odds.hpp"
 #include "arena.hpp"
 #include "bot.hpp"
+#include "default_choice.hpp"
 #include "core/data/datasheet.hpp"
 #include "core/engine/attack_flow.hpp"
 #include "core/engine/engine.hpp"
@@ -31,12 +32,6 @@ using wh40k::test::repo_root;
 using wh40k::test::select;
 
 namespace {
-
-BotConfig level(BotLevel l) {
-    BotConfig c;
-    c.level = l;
-    return c;
-}
 
 WeaponProfile weapon_profile(const char* unit, const char* weapon) {
     return load_datasheet(repo_root() / (std::string("data/units/") + unit + ".json")).find_weapon(weapon)->profiles.at(0);
@@ -206,46 +201,41 @@ TEST(M62_Bots, TheStateHashSeesAnUnrolledRandomAOnlyWhileItWaits) {
     EXPECT_NE(state_hash(gs), state_hash(other));
 }
 
-TEST(M62_Bots, EveryLevelFiresTheHavocLascannons) {
-    // D-069 makes them usable: the Havocs' Shoot step on the duel, every level's declaration includes them.
+TEST(M62_Bots, TheBotAndItsDefaultsFireTheHavocLascannons) {
+    // D-069 makes them usable: the Havocs' Shoot step on the duel, the bot's declaration and its defaults' (once level
+    // Easy's) include them.
     GameState gs = duel();
     start_game(gs);
     apply_action(gs, Side::A, action::StartMove{gs.units[0].id, MoveType::RemainStationary, std::nullopt});
     ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::Shoot{}}));
-    for (const BotLevel l : {BotLevel::Easy, BotLevel::Normal, BotLevel::Hard}) {
-        Bot bot(level(l));
-        const BotChoice c = bot.decide(gs, Side::A);
+    for (const bool defaults : {false, true}) {
+        const BotChoice c = defaults ? wh40k::test::default_choice(gs, Side::A) : Bot(BotConfig{}).decide(gs, Side::A);
         ASSERT_FALSE(c.stopped);
         EXPECT_TRUE(validate_action(gs, Side::A, c.action).ok());
         const auto* s = std::get_if<action::Shoot>(&c.action);
-        ASSERT_NE(s, nullptr) << static_cast<int>(l);
+        ASSERT_NE(s, nullptr) << defaults;
         int lascannons = 0;
         for (const ShotDeclaration& d : s->shots) {
             lascannons += find_model(gs, d.model)->weapons.at(d.weapon_index).name == "Havoc lascannon" ? 1 : 0;
         }
-        EXPECT_EQ(lascannons, 4) << static_cast<int>(l);
+        EXPECT_EQ(lascannons, 4) << defaults;
     }
 }
 
 TEST(M62_Bots, GamesWithRandomCharacteristicsAreClean) {
     // The duel (lascannons), the duel with the Tyrant's heavy venom cannon (a random A with [BLAST]) and the roster
-    // fixture (lascannons and bio-plasmic screams): no rejected action, no reverted move, no fallback. (Hard on the
-    // thirteen-unit fixture is M69's.)
+    // fixture (lascannons and bio-plasmic screams): no rejected action, no reverted move, no fallback. (D-085, M85: the
+    // seeds of the old level pairings, the bot on both sides.)
     const GameState plain = duel();
     const GameState cannon = duel_with_cannon();
     const GameState rosters = wh40k::test::load_rosters_fixture_closer(26.0f);
     struct Pairing {
         const GameState* scenario;
-        BotLevel a;
-        BotLevel b;
         std::uint64_t seed;
     };
-    for (const Pairing& p : {Pairing{&plain, BotLevel::Easy, BotLevel::Easy, 21}, Pairing{&plain, BotLevel::Normal, BotLevel::Normal, 22},
-                             Pairing{&plain, BotLevel::Hard, BotLevel::Hard, 23}, Pairing{&cannon, BotLevel::Easy, BotLevel::Normal, 24},
-                             Pairing{&cannon, BotLevel::Normal, BotLevel::Hard, 25}, Pairing{&cannon, BotLevel::Hard, BotLevel::Easy, 26},
-                             Pairing{&rosters, BotLevel::Easy, BotLevel::Easy, 27},
-                             Pairing{&rosters, BotLevel::Normal, BotLevel::Normal, 28}}) {
-        const GameRecord g = play_bot_game(*p.scenario, p.seed, level(p.a), level(p.b), 8000);
+    for (const Pairing& p : {Pairing{&plain, 21}, Pairing{&plain, 22}, Pairing{&plain, 23}, Pairing{&cannon, 24},
+                             Pairing{&cannon, 25}, Pairing{&cannon, 26}, Pairing{&rosters, 27}, Pairing{&rosters, 28}}) {
+        const GameRecord g = play_bot_game(*p.scenario, p.seed, BotConfig{}, BotConfig{}, 8000);
         EXPECT_TRUE(g.finished) << "seed " << p.seed << (g.problems.empty() ? "" : ": " + g.problems.front());
         EXPECT_EQ(g.rejected, 0u) << "seed " << p.seed;
         EXPECT_EQ(g.reverted, 0u) << "seed " << p.seed;
@@ -254,13 +244,13 @@ TEST(M62_Bots, GamesWithRandomCharacteristicsAreClean) {
 }
 
 // Normal's decision times on the two fixtures with the random weapons, for the M62 report (Release numbers come from the
-// arena: `wh40k_bot_arena --scenario tests/data/scenarios/... --a normal --b normal`):
+// arena: `wh40k_bot_arena --scenario tests/data/scenarios/...`):
 //   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M62_Timings.*
 TEST(M62_Timings, DISABLED_NormalDecisionsOnTheFixtures) {
     for (const bool rosters : {false, true}) {
         const GameState scenario = rosters ? wh40k::test::load_rosters_fixture() : duel_with_cannon();
         std::vector<double> ms;
-        const GameRecord g = play_bot_game(scenario, 1, level(BotLevel::Normal), level(BotLevel::Normal), 8000, &ms);
+        const GameRecord g = play_bot_game(scenario, 1, BotConfig{}, BotConfig{}, 8000, &ms);
         std::sort(ms.begin(), ms.end());
         std::printf("%s: finished %d, %zu decisions, p95 %.2f ms, max %.2f ms\n", rosters ? "rosters" : "duel",
                     g.finished ? 1 : 0, ms.size(), ms.empty() ? 0.0 : ms[ms.size() * 95 / 100], ms.empty() ? 0.0 : ms.back());

@@ -1,5 +1,6 @@
+#include "normal/defaults.hpp"
+
 #include "unit_style.hpp"
-#include "baseline_bot.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -29,7 +30,7 @@
 #include "simulator.hpp"
 #include "state_hash.hpp"
 
-namespace wh40k::ai {
+namespace wh40k::ai::normal {
 
 namespace {
 
@@ -39,25 +40,14 @@ using core::GameState;
 constexpr float kFarInches = 8.0f;          // the M12 policy's "far away"
 constexpr float kStepInches = 2.0f;         // how far a non-charge move goes
 constexpr float kChargeShortInches = 1.0f;  // a charge move stops this far short of the enemy
-// D-066 (M56): beyond 12" + its Move from the closest enemy unit, Easy walks its full Move (after it, the enemy is
-// still more than 12" away: outside any charge); nearer, the old 2" steps. V1's units start 12" apart and Easy only
+// D-066 (M56): beyond 12" + its Move from the closest enemy unit, the default walks its full Move (after it, the enemy is
+// still more than 12" away: outside any charge); nearer, the old 2" steps. V1's units start 12" apart and the default only
 // ever closes, so the V1 board doesn't reach it (checked over the arena's 1v1 games).
 constexpr float kWalkBeyondInches = 12.0f;
 
-// M55 (and the M12 test policy): the first enemy unit in unit order.
-const core::Unit* first_enemy(const GameState& gs, core::Side side) {
-    for (const core::Unit& o : gs.units) {
-        if (o.side != side && !o.models.empty()) return &o;
-    }
-    return nullptr;
-}
-
 // D-066 (M56): the enemy unit closest to `u` (D-010, edge to edge; a tie goes to the first in unit order, the
 // controlling player's choice). With one enemy unit it is the first one, so V1 play is unchanged.
-const core::Unit* enemy_of(const GameState& gs, const core::Unit& u, Generation gen) {
-    if (gen == Generation::M55) return first_enemy(gs, u.side);
-    return normal::closest_enemy(gs, u);
-}
+const core::Unit* enemy_of(const GameState& gs, const core::Unit& u) { return closest_enemy(gs, u); }
 
 struct Vec {
     float x = 0.0f;
@@ -87,10 +77,10 @@ core::Unit unit_at_starts(const GameState& gs) {
     return u;
 }
 
-// What the move in progress aims at: for a charge, the closest of its charge targets (D-066; M55: the first enemy
-// unit, whatever the targets); otherwise the closest enemy unit (M55: the first).
-const core::Unit* aim_of(const GameState& gs, const core::Unit& u, Generation gen) {
-    if (gen != Generation::M55 && gs.flow.move->type == core::MoveType::Charge) {
+// What the move in progress aims at: for a charge, the closest of its charge targets (D-066); otherwise the closest
+// enemy unit.
+const core::Unit* aim_of(const GameState& gs, const core::Unit& u) {
+    if (gs.flow.move->type == core::MoveType::Charge) {
         const core::Unit* best = nullptr;
         float best_gap = 0.0f;
         for (const core::UnitId id : gs.flow.move->targets) {
@@ -105,7 +95,7 @@ const core::Unit* aim_of(const GameState& gs, const core::Unit& u, Generation ge
         }
         return best;
     }
-    return enemy_of(gs, u, gen);
+    return enemy_of(gs, u);
 }
 
 // The unit's full Move for the move in progress (its slowest model's maximum).
@@ -118,18 +108,18 @@ float full_move_mm(const GameState& gs, const core::Unit& u) {
     return std::max(m, 0.0f);
 }
 
-// D-066: the closest enemy is far enough away for Easy to walk its full Move (more than 12" + M).
-bool walks_full_move(const GameState& gs, const core::Unit& u, const core::Unit& e, Generation gen) {
-    if (gen == Generation::M55 || gs.flow.move->type != core::MoveType::Normal) return false;
+// D-066: the closest enemy is far enough away to walk the full Move (more than 12" + M).
+bool walks_full_move(const GameState& gs, const core::Unit& u, const core::Unit& e) {
+    if (gs.flow.move->type != core::MoveType::Normal) return false;
     const float gap = core::unit_distance(u, e).value_or(0.0f);
     return core::more_than(gap, core::inches_to_mm(kWalkBeyondInches) + full_move_mm(gs, u));
 }
 
 // The M12 policy's "Move unit" handle for the move in progress: towards the aimed-at enemy unit's centre, 2" (D-066:
 // or its full Move while that unit is far away, `full`), or for a charge the gap to the target less 1".
-std::optional<Vec> easy_delta(const GameState& gs, Generation gen, bool full) {
+std::optional<Vec> easy_delta(const GameState& gs, bool full) {
     const core::Unit u = unit_at_starts(gs);
-    const core::Unit* e = aim_of(gs, u, gen);
+    const core::Unit* e = aim_of(gs, u);
     if (e == nullptr || u.models.empty()) return std::nullopt;
     const Vec a = centre(u);
     const Vec b = centre(*e);
@@ -188,13 +178,13 @@ bool add_proposals_and_commit(Simulator& sim, core::Side side, const std::option
 
 // D-066: walk the full Move? Only while the aimed-at unit is far away and the whole full move, made from the move's
 // start (a pure function of it, so a replan from any state along the move decides the same), stands.
-bool use_full_move(const GameState& in_move, core::Side side, std::uint64_t seed, Generation gen) {
+bool use_full_move(const GameState& in_move, core::Side side, std::uint64_t seed) {
     const core::Unit u = unit_at_starts(in_move);
-    const core::Unit* e = aim_of(in_move, u, gen);
-    if (e == nullptr || !walks_full_move(in_move, u, *e, gen)) return false;
-    Simulator sim(normal::move_origin(in_move), seed);
+    const core::Unit* e = aim_of(in_move, u);
+    if (e == nullptr || !walks_full_move(in_move, u, *e)) return false;
+    Simulator sim(move_origin(in_move), seed);
     std::vector<PlannedStep> scratch;
-    return add_proposals_and_commit(sim, side, easy_delta(sim.state(), gen, true), {}, scratch);
+    return add_proposals_and_commit(sim, side, easy_delta(sim.state(), true), {}, scratch);
 }
 
 // D-054: the whole move simulated before any of it is made. From `state` (with `start` first, unless the move
@@ -204,7 +194,7 @@ bool use_full_move(const GameState& in_move, core::Side side, std::uint64_t seed
 // is the full Move (D-066) rather than the 2" step.
 std::optional<std::vector<PlannedStep>> plan_move(const GameState& state, core::Side side,
                                                   const std::optional<GameAction>& start, std::uint64_t seed,
-                                                  const std::string& reason, Generation gen, bool* full = nullptr) {
+                                                  const std::string& reason, bool* full = nullptr) {
     Simulator sim(state, seed);
     std::vector<PlannedStep> steps;
     if (start) {
@@ -215,9 +205,9 @@ std::optional<std::vector<PlannedStep>> plan_move(const GameState& state, core::
         !std::holds_alternative<core::decision::MoveModels>(sim.state().pending->kind)) {
         return std::nullopt;
     }
-    const bool whole = use_full_move(sim.state(), side, seed, gen);
+    const bool whole = use_full_move(sim.state(), side, seed);
     if (full != nullptr) *full = whole;
-    if (!add_proposals_and_commit(sim, side, easy_delta(sim.state(), gen, whole), reason, steps)) return std::nullopt;
+    if (!add_proposals_and_commit(sim, side, easy_delta(sim.state(), whole), reason, steps)) return std::nullopt;
     return steps;
 }
 
@@ -238,23 +228,22 @@ std::string unit_name(const GameState& gs, core::UnitId id) {
 }
 
 // 09.02: a Normal move towards the enemy while it is more than 8" away, else Remain Stationary. D-066 (M56): towards
-// the closest enemy unit (M55: the first), and its full Move while that unit is more than 12" + M away.
-PolicyResult move_units(const GameState& gs, core::Side side, const client::DecisionView& view, std::uint64_t seed,
-                        Generation gen) {
+// the closest enemy unit, and its full Move while that unit is more than 12" + M away.
+PolicyResult move_units(const GameState& gs, core::Side side, const client::DecisionView& view, std::uint64_t seed) {
     for (const GameAction& b : view.buttons) {
         const auto* m = std::get_if<core::action::StartMove>(&b);
         if (m == nullptr || m->move_type != core::MoveType::Normal) continue;
         const core::Unit& u = *gs.find_unit(m->unit);
-        const core::Unit* e = enemy_of(gs, u, gen);
+        const core::Unit* e = enemy_of(gs, u);
         if (e == nullptr) break;
         const float gap = core::mm_to_inches(core::unit_distance(u, *e).value_or(0.0f));
         const core::action::StartMove stay{m->unit, core::MoveType::RemainStationary, std::nullopt};
         if (gap <= kFarInches) return single(gs, stay, client::unit_display_name(gs, e->id) + " within 8\"");
         const std::string reason = client::unit_display_name(gs, u.id) + ": Normal move 2\" towards " + client::unit_display_name(gs, e->id) + " (more than 8\" away)";
         bool full = false;
-        if (auto plan = plan_move(gs, side, b, seed, reason, gen, &full)) {
+        if (auto plan = plan_move(gs, side, b, seed, reason, &full)) {
             if (full) {
-                // D-066: the full Move; the reason says so (a 2" step keeps the M55 text).
+                // D-066: the full Move; the reason says so (a 2" step keeps the M12 text).
                 char buf[96];
                 std::snprintf(buf, sizeof buf, ": Normal move %.0f\" towards ",
                               static_cast<double>(core::mm_to_inches(analysis::threat_ranges(u).move_mm)));
@@ -306,30 +295,29 @@ std::optional<PolicyResult> reroll_failed_wound_rolls(const GameState& gs) {
                         {}};
 }
 
-PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
-                         std::uint64_t seed, Generation gen) {
+PolicyResult default_answer(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
+                            std::uint64_t seed) {
     using namespace core;
     const client::DecisionView view = client::make_decision_view(legal);
     const DecisionKind& kind = gs.pending->kind;
     if (std::holds_alternative<decision::RerollWoundRolls>(kind)) {
-        // 24.38 (M61, D-072): every level re-rolls every failed wound roll and no other (no critical-wound effect is in
-        // the game, so a re-rolled success can only fail). Normal and Hard, and the lookahead's rollouts, fall through
-        // to this answer.
+        // 24.38 (M61, D-072): every failed wound roll is re-rolled and no other (no critical-wound effect is in the
+        // game, so a re-rolled success can only fail).
         if (auto r = reroll_failed_wound_rolls(gs)) return std::move(*r);
     }
     if (std::holds_alternative<decision::MoveUnits>(kind) && !view.buttons.empty()) {
-        return move_units(gs, side, view, seed, gen);
+        return move_units(gs, side, view, seed);
     }
     if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
         (gs.flow.move->type == MoveType::PileIn || gs.flow.move->type == MoveType::Consolidation)) {
-        // D-057 (M46): Easy's pile-ins and consolidations are Auto move (D-050), replanned from the move's start.
-        if (auto r = normal::continue_fight_move(gs, side, seed)) return std::move(*r);
+        // D-057 (M46): pile-ins and consolidations are Auto move (D-050), replanned from the move's start.
+        if (auto r = continue_fight_move(gs, side, seed)) return std::move(*r);
     }
     if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move) {
         // Normally answered from the plan memo. From a state the plan didn't come from (a load, an undo), the
         // rest of the move is planned again from the move's start positions, so it comes out the same.
         const std::string reason = unit_name(gs, gs.flow.move->unit) + ": moving";
-        if (auto plan = plan_move(gs, side, std::nullopt, seed, reason, gen)) return from_plan(std::move(*plan));
+        if (auto plan = plan_move(gs, side, std::nullopt, seed, reason)) return from_plan(std::move(*plan));
         return PolicyResult{action::ResetUnitMove{}, "The move would not stand: reset it", {}};
     }
     if (const auto* d = std::get_if<decision::SelectChargeTargets>(&kind)) {
@@ -339,12 +327,12 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
         if (!view.buttons.empty() && std::holds_alternative<action::StartChargeMove>(view.buttons.front())) {
             charge = view.buttons.front();
         }
-        if (charge && gen != Generation::M55) {
+        if (charge) {
             if (const std::optional<GameAction> c = closest_target_charge(gs, d->unit, view)) charge = c;
         }
         if (charge) {
             const std::string reason = unit_name(gs, d->unit) + ": charge move";
-            if (auto plan = plan_move(gs, side, *charge, seed, reason, gen)) {
+            if (auto plan = plan_move(gs, side, *charge, seed, reason)) {
                 return from_plan(std::move(*plan));
             }
         }
@@ -355,7 +343,7 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
         for (const GameAction& a : legal) {
             if (!std::holds_alternative<action::StartPileIn>(a)) continue;
             const std::string reason = unit_name(gs, d->unit) + ": Overrun pile-in (auto move)";
-            if (auto plan = normal::simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
+            if (auto plan = simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
         }
         return single(gs, action::SkipPileIn{d->unit}, "no pile-in that stands");
     }
@@ -376,7 +364,7 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
             if (!unit || !client::fight_move_worthwhile(gs, side, a)) continue;
             const std::string reason =
                 unit_name(gs, *unit) + (pile_in ? ": pile in (auto move)" : ": consolidate (auto move)");
-            if (auto plan = normal::simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
+            if (auto plan = simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
         }
         if (end) return single(gs, *end, pile_in ? "no pile-in worth making" : "no consolidation worth making");
     }
@@ -417,4 +405,4 @@ PolicyResult easy_policy(const GameState& gs, core::Side side, const std::vector
     return PolicyResult{legal.front(), "No choice", {}};
 }
 
-}  // namespace wh40k::ai
+}  // namespace wh40k::ai::normal

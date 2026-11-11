@@ -26,7 +26,6 @@
 #include "core/engine/actions.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/state/game_state.hpp"
-#include "generation.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -44,14 +43,14 @@ struct StanceInfo {
     std::string why;
     // D-066 (M56): the enemy units "front" and "rear" are measured against (each model's gap to the closest of
     // them): the units it is engaged with (or falling back from); unengaged, the units that may charge it next turn,
-    // else the closest one. M55: always the closest enemy unit.
+    // else the closest one.
     std::vector<core::UnitId> front;
 };
 
 // D-066 (M56): unengaged, the stance avoids contact if any enemy unit that may charge us gains more from a combat
-// with us than we do (M55: the closest enemy unit only). One enemy unit: as M41.
+// with us than we do. One enemy unit: as M41.
 [[nodiscard]] StanceInfo casualty_stance(analysis::OddsCache& cache, const core::GameState& state,
-                                         const core::Unit& unit, Generation generation = Generation::Current);
+                                         const core::Unit& unit);
 
 // 03.03 Regaining Coherency, estimated: how many models would have to be removed from `models` for them to be
 // in coherency (greedy: each time the model whose removal leaves the fewest coherency problems). 0 if they are.
@@ -66,26 +65,22 @@ struct CasualtyOrder {
 
 // The pending OrderCasualties decision (05.04 / 06.02) answered for the unit losing models. nullopt if none is
 // pending or the preview refuses (the caller then uses the default order).
-// D-066 (M56): the models' worth is measured against the attacker (M55: the closest enemy unit).
-[[nodiscard]] std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const core::GameState& state,
-                                                          Generation generation = Generation::Current);
+// D-066 (M56): the models' worth is measured against the attacker.
+[[nodiscard]] std::optional<CasualtyOrder> casualty_order(analysis::OddsCache& cache, const core::GameState& state);
 
 // D-066 (M56): what each of `unit`'s models is worth for the casualty order (model_worth against the attacker of
 // the attack in progress, else the closest enemy unit). Exposed for tests.
 [[nodiscard]] std::map<core::ModelId, double> casualty_worth(analysis::OddsCache& cache, const core::GameState& state,
-                                                             const core::Unit& unit,
-                                                             Generation generation = Generation::Current);
+                                                             const core::Unit& unit);
 
 // 03.03 RestoreCoherency for `unit`: the model whose removal restores coherency with the fewest further
 // removals, then the least valuable by position and weapons. nullopt if the unit has no models.
 [[nodiscard]] std::optional<core::ModelId> coherency_removal(analysis::OddsCache& cache, const core::GameState& state,
-                                                             core::UnitId unit, std::string* reason = nullptr,
-                                                             Generation generation = Generation::Current);
+                                                             core::UnitId unit, std::string* reason = nullptr);
 
 // 05.03 DeclareAllocationOrder: of the legal orders (in `legal`), the one whose groups go from the least to the
 // most valuable models per wound (model_worth). The first legal order if nothing tells them apart.
 [[nodiscard]] std::optional<core::action::DeclareAllocationOrder> allocation_order(
-    analysis::OddsCache& cache, const core::GameState& state, const std::vector<core::GameAction>& legal,
-    Generation generation = Generation::Current);
+    analysis::OddsCache& cache, const core::GameState& state, const std::vector<core::GameAction>& legal);
 
 }  // namespace wh40k::ai::normal
