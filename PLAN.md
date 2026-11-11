@@ -5005,7 +5005,7 @@ exactly as before; Strike changes on purpose (Normal and Hard), as do the roster
 
 ---
 
-## M82: Hard on the army plan
+## M82: Hard on the army plan ✅ (done)
 **Effort:** `max` · **Plan mode:** design first (D-083 part 4) · **Rules:** none (bot only) · **Decision:** D-083 part 4 (amends D-067, D-078)
 
 > - **The army value:**
