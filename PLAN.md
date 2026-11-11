@@ -5022,6 +5022,107 @@ exactly as before; Strike changes on purpose (Normal and Hard), as do the roster
 - `hard-m77` matches the pre-batch baseline;
 - `M82_` tests for the queue order and the group's wipe turn.
 
+**Results (2026-11-10):** D-083 part 4 records the design (written first, then revised by the measurements), the probes,
+every variant measured and what was dropped. Bot only: no rule, core, `GameState` field, action, event or file format
+change. Normal and Easy play exactly as before (Normal's `choose_shooting` gained an optional plan that only Hard's
+rollouts pass); V1 and both bot scenarios play exactly as before; Hard changes on purpose wherever a side has several
+units.
+- **What changed** (`src/ai/hard/evaluator.{hpp,cpp}`, `hard_bot.{hpp,cpp}`, `lookahead.{hpp,cpp}`, `normal/shooting.*`):
+  - **The plan the army value reads:** the deciding side's `normal::army_plan`, worked out once per Hard decision at its
+    root (with the enemy's: `hard::ArmyPlans`) and given to every Evaluator of the decision (at Move Units ours is the plan
+    M80 passes to Normal's move scores). The Evaluator takes the generation: under `hard-m77` it reads no plan and is
+    D-067's to the bit. The enemy's units keep D-067's queues (each attacks the closest of ours first).
+  - **Queues:** a member of one of our groups leads its queue with the group's target (unless it is engaged with another
+    enemy unit), the rest by distance; every other queue as before. The attention timeline (the same arithmetic) pools
+    the members' volleys on the target, so it falls at the group's combined pace and the members start on their next
+    targets sooner.
+  - **Slices:** the members that start on the target and take wounds from it in the timeline fight it together: each
+    member's duel is with its slice of the target (the target's wounds x its share of what they take; the half-turn in
+    progress read as before), and the target's P(wiped) is the share-weighted P(each slice is wiped), in place of those
+    members' own duels with the whole target.
+  - **Rollouts:** their shooting reads the decision's plans instead of working one out at every Shoot decision.
+  - **Diagnostics:** `Evaluator::attention` (each queue with its start turns and wounds dealt, each unit's wipe turn, each
+    group's shares and P(wiped)); disabled probes in `tests/ai/m82_test.cpp`.
+- **Design first, then measured** (D-083 part 4): the design as first written read both sides' plans. It lost badly in
+  the Chaos Space Marine seat (73 and 79 of 200 against the M81 Hard's 139 and 131): the enemy's root plan made every unit
+  of ours its groups don't target look safe, and the search walked those units forward in battle rounds 1-2 (traced,
+  seed 1). The enemy re-plans at every decision, so it keeps D-067's model, and the value reads the plan the deciding side
+  will itself play. Of the variants (seeds 1-200, the Chaos Space Marine seat): both sides' plans, queues only 108; both
+  sides' at every valued state 113 (27% slower); ours only 147, queues only 142; ours with the rollouts reading the plans
+  151 (chosen: p95 274 ms against 351); Hard's own `follow` 0 125; the rollouts' moves at a group's target 148; and in the
+  Tyranid seat `move_search_units` 9 (Hard's 9-unit Tyranids searching their own moves) 88 of 200 against 138, p95 405 ms:
+  kept at 7.
+- **Measured first:** a probe on Hard vs Normal rosters games (rounds 1-3): every queue without a group is D-067's (196 of
+  196); a group's target falls sooner in the timeline and its P(wiped) rises from the independent duels' to the slices'
+  (the Chaos Terminators, Havocs and a Legionaries unit on the Tyrannofex: wipe turn 3 to 2, P(wiped) 0.22 to 0.35; the
+  Tyranids' three monsters on the Terminators: 0.02 to 0.29). The tests' fixture: two Legionaries units 12" from a
+  Screamer-killer wipe it out in turn 2 together, in turn 3 or never alone, P(wiped) 0.42 against 0.10. Calibration (V
+  against the result, Normal vs Normal, 60 games): rosters MSE 0.953 (D-067), 0.768 with both sides' plans, 0.977 with
+  one side's; random armies 0.368 and 0.323.
+- **Arena** (Release, the new Hard against the new Normal and against `hard-m77`; A = Chaos Space Marines (Space Marines on
+  Strike), B = Tyranids; in brackets the M81 Hard on the same seeds; the times are the new Hard's (B's where marked or
+  where Hard is B), 4 runs at once, so they are relative: the times paragraph below is the measure):
+
+  | Pairing (seeds) | Wins A / B | Points A / B | Gang-ups A / B | Lone engagements A / B | Targets per Shoot A / B | Never within 12" A / B | Hard p95 / max ms | RSS |
+  |---|---|---|---|---|---|---|---|---|
+  | rosters hard vs normal (1–200) | 151 / 49 (139 / 61) | 353 / 257 (354 / 270) | 0.04 / 0.10 | 0.27 / 0.25 | 1.37 / 1.01 | 3.49 / 7.36 | 251 / 2537 (385 / 5017) | 0.59 GB |
+  | rosters hard vs normal (201–400) | 135 / 65 (131 / 69) | 344 / 272 (337 / 267) | 0.01 / 0.20 | 0.34 / 0.30 | 1.34 / 1.01 | 3.37 / 7.29 | 321 / 5085 (384 / 5191) | 0.60 GB |
+  | rosters normal vs hard (1–200) | 62 / 138 (63 / 137) | 322 / 405 (325 / 402) | 0.11 / 0.19 | 0.58 / 0.69 | 1.14 / 1.02 | 2.02 / 6.54 | 16 / 2491 (17 / 3319) | 0.62 GB |
+  | rosters normal vs hard (201–400) | 65 / 135 (60 / 140) | 321 / 399 (321 / 394) | 0.14 / 0.20 | 0.55 / 0.60 | 1.13 / 1.03 | 1.85 / 6.46 | 17 / 4333 (18 / 3553) | 0.59 GB |
+  | rosters hard vs hard-m77 (1–200) | 154 / 46 (156 / 44) | 320 / 191 (321 / 199) | 0.00 / 0.01 | 0.07 / 0.09 | 1.51 / 1.07 | 4.22 / 8.07 | 326 / 3819 | 0.67 GB |
+  | rosters hard vs hard-m77 (201–400) | 153 / 47 | 330 / 202 | 0.00 / 0.00 | 0.08 / 0.09 | 1.48 / 1.06 | 4.12 / 7.92 | 358 / 6609 | 0.62 GB |
+  | rosters hard-m77 vs hard (1–200) | 136 / 64 (140 / 60) | 372 / 280 (373 / 279) | 0.03 / 0.19 | 0.38 / 0.30 | 1.68 / 1.01 | 3.12 / 7.10 | 14 / 1450 (B) | 0.62 GB |
+  | rosters hard-m77 vs hard (201–400) | 134 / 66 | 356 / 262 | 0.00 / 0.18 | 0.32 / 0.21 | 1.63 / 1.00 | 3.12 / 7.14 | 15 / 1287 (B) | 0.61 GB |
+  | random armies hard vs normal (1–100) | 20 / 80 (19 / 81) | 181 / 400 (176 / 405) | 0.05 / 0.14 | 0.57 / 0.59 | 1.33 / 1.08 | 3.10 / 4.04 | 348 / 5998 | 0.90 GB |
+  | random armies normal vs hard (1–100) | 23 / 77 (28 / 72) | 197 / 377 (199 / 361) | 0.00 / 0.11 | 0.39 / 0.23 | 1.33 / 1.09 | 3.03 / 4.01 | 221 / 2937 | 0.94 GB |
+  | strike hard vs normal (1–60) | 60 / 0 | – | 0.00 / 0.02 | 0.28 / 0.18 | 1.44 / 1.02 | 0.03 / 0.05 | 173 / 894 | 37 MB |
+  | strike normal vs hard (1–60) | 59 / 0, 1 draw | – | 0.00 / 0.07 | 0.15 / 0.12 | 1.41 / 1.02 | 0.07 / 0.07 | 171 / 716 | 36 MB |
+  | strike hard vs hard-m77 (1–60) | 60 / 0 | – | 0.00 / 0.03 | 0.18 / 0.13 | 1.44 / 1.07 | 0.02 / 0.07 | 166 / 916 | 37 MB |
+  | strike hard-m77 vs hard (1–60) | 60 / 0 | – | 0.00 / 0.00 | 0.23 / 0.20 | 1.77 / 1.03 | 0.08 / 0.07 | 156 / 791 (B) | 37 MB |
+
+  Over seeds 1–400 the new Hard beats the new Normal in 286 rosters games as the Chaos Space Marines (M81 270) and 273 as
+  the Tyranids (M81 277); against `hard-m77` it wins 307 as the Chaos Space Marines and 130 as the Tyranids (M81 on seeds
+  1–200: 156 and 60, the new 154 and 64). Random armies: as M81 (CSM 20 against 19, Tyranids 77 against 72 of 100) and at
+  Normal's own level (Normal vs Normal, M81: CSM 23%, Tyranids 77%). Strike: the Space Marines win every game in every
+  pairing, as before (mean end round 3.53–3.67). Every run was clean: 0 rejected actions, reverted moves, fallbacks or
+  unfinished games. The Tyranid seat moves as Normal (9 units, `move_search_units`), so only its charges, casualties,
+  coherency and consolidations read the new value: level there, as expected; the Chaos Space Marine seat, where Hard's
+  move search plays, gained 16 games in 400.
+- **Times and memory** (rosters, seeds 1–60, three runs at once and nothing else, as M81 measured; `/usr/bin/time -v`):
+  the new Hard as the Chaos Space Marines (42 / 18 against the new Normal) decision p95 270 ms, max 2.83 s, peak RSS
+  600 MB; as the Tyranids (41 / 19) p95 14 ms, max 2.59 s, 604 MB; the M81 Hard in the same run (36 / 24, as M81 reported)
+  p95 288 ms, max 2.84 s, 624 MB. The slowest decision is a game's first, which builds the 30 chain tables (D-078), the
+  same in both builds; the rollouts reading the decision's plans took the p95 down (in the 4-run arena rows above: 251 and
+  321 ms against M81's 385 and 384). Random armies peak at 0.90–0.96 GB, as the M81 Hard does (0.92–0.93 GB: more unit
+  types, D-080's budget); Hard vs `hard-m77` at 0.62–0.69 GB (two Hard bots, one chain cache).
+- **Tests** (6 new and 4 disabled diagnostics, `tests/ai/m82_test.cpp`): `M82_Evaluator.AUnitsQueueFollowsTheArmyPlan`,
+  `AGroupWipesItsTargetSooner`, `AUnitWithoutAGroupKeepsItsQueue`; `M82_Hard.TheMoveValuesReadTheArmyPlan`;
+  `M82_Rollouts.TheShootingReadsTheGivenPlan`; `M82_Regression.TheM77SwitchKeepsTheOldEvaluator`; and the disabled
+  diagnostics `M82_Diagnostics.DISABLED_ProbeQueuesAndWipeTurns`, `DISABLED_ScreamerFixture`,
+  `DISABLED_CalibrationAgainstResults`, `DISABLED_TimeTheDecisions` (the measurements of D-083 part 4). No existing test
+  changed: every one passes with the new value, so none needed `Generation::M77`.
+- **Replays:** every replay regenerates byte-identically, the Hard vs Hard games m58 (Strike) and m70 (rosters) included:
+  no Hard decision in them changes (the values in Hard's reasons do; the files hold actions, not reasons). With both
+  sides' plans (the first design) m70's game changed; with the chosen form it doesn't, so nothing was regenerated.
+- **Identity:** at the current levels V1, both bot scenarios and every Easy vs Easy file match the pre-batch baseline (20
+  of 30 files; Strike's and the rosters' five Normal and Hard files each differ on purpose, as at M81); against M81's own
+  identity run only the six Hard files differ (Strike and the rosters: easy.hard, hard.hard, hard.normal), so no Normal or
+  Easy game changed. At the m77 levels all 30 files match (4,740 games). `M78_Regression.TheM77LevelsMatchThePreBatchHashes`
+  passes unchanged.
+- **Acceptance:**
+  - The new Hard beats the new Normal in at least 50% of rosters games from each seat: met, and the margin widened in the
+    seat Hard's search plays: the Chaos Space Marines 286 of 400 (71.5%; seeds 1–200 151, 201–400 135; M81 270), the
+    Tyranids 273 of 400 (68.3%; 138 and 135; M81 277, level).
+  - Hard's max decision under 3 s: met as M81 measured it (three runs at once: 2.83 s, M81's 2.84 s in the same run).
+    Under heavier load it is not: with four runs at once (five for part of the batch) the slowest decision of a run was
+    up to 6.6 s in the new build and up to 5.2 s in M81's (a game's first decision, building the 30 tables, starved of
+    cores). Rosters RSS about 0.65 GB or less: met (0.59–0.62 GB against Normal; 0.62–0.69 GB for Hard vs `hard-m77`, two
+    Hard bots).
+  - `hard-m77` matches the pre-batch baseline: met (all 30 identity files at the m77 levels).
+  - `M82_` tests for the queue order and the group's wipe turn: met (`AUnitsQueueFollowsTheArmyPlan`,
+    `AGroupWipesItsTargetSooner`, `AUnitWithoutAGroupKeepsItsQueue`).
+  - Debug `ctest`: 1352 tests, all pass. Release builds.
+
 ---
 
 ## M83: Tuning, replays, docs, pull request

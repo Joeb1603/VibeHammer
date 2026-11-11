@@ -4915,7 +4915,7 @@ list queries (below). M76 adds part 2 (placing units by hand in the client).
     `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`. No replay: the flow's actions are M74's
     (`m74_hand_deployment.json` sets the Tyrannofex up by hand), and the editor itself makes no game state.
 
-## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group; part 3, M81: focus fire and joint charges)
+## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group; part 3, M81: focus fire and joint charges; part 4, M82: Hard on the army plan)
 **Decided:** 2026-11-10 (M78 of the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings are
 marked *conservative*). Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or
 JSON change. Later parts (M79–M83) are added below.
@@ -5448,3 +5448,176 @@ JSON change. Later parts (M79–M83) are added below.
     pre-batch games, assertions unchanged, as M80 did: `M58_Replay.ThePreBatchGameIsAWipeOutInBattleRoundThree` (the
     saved file's test now checks round 4) and `M73_Replay.ThePreBatchGameShootsAndFightsOnBothSides` (the saved file's
     test keeps the shooting check).
+- **Part 4 (M82): Hard on the army plan** (`src/ai/hard/evaluator.{hpp,cpp}`, `hard_bot.{hpp,cpp}`,
+  `lookahead.{hpp,cpp}`, and an optional plan for Normal's `choose_shooting`; design first, M82 being plan mode, measured
+  with the scratch probes in `tests/ai/m82_test.cpp` before it was settled). Bot only: no rule,
+  core, state, action, event or JSON change. Amends D-067 (the queues, and the fate of a group's target; its
+  approximation "a unit's queue follows distance, not value" is lifted for our groups), D-078 (part 11's
+  `move_search_units`, measured again and kept) and part 3 above (the rollouts' shooting reads the decision's plans).
+  Under `Generation::M77` (`hard-m77`) nothing of it runs: Hard works out no plans and its evaluator reads none, so it is
+  D-067's to the bit.
+  - **Which plan, and where it comes from: the deciding side's, at the decision's root.** The army value reads one plan:
+    `normal::army_plan` of the side the Evaluator values for, worked out once per Hard decision at the decision's state
+    (with the enemy's, for the rollouts below: `hard::ArmyPlans`, `army_plans`) and given to every Evaluator of it. At
+    Move Units ours is the plan M80 already passes to Normal's move scores (one set for the decision, passed to every move
+    plan it values: `hard_plan_unit_move`'s `team`); at the other decisions the set is worked out once (`evaluator()` in
+    hard_bot.cpp). The rollouts' end states and the rollout policy's charge values read the same plan. The enemy's units
+    keep D-067's queues (distance alone) and their duels stay independent: the enemy's coordination is not modelled.
+    - *Ours, not both sides':* the brief left open whose plans the queues follow; both sides' was built first (the
+      enemy taken to play its own plan, as the new Normal and Hard do) and lost badly in the Chaos Space Marine seat
+      (below: 73 and 79 of 200 against the M81 Hard's 139 and 131). Traced (rosters seed 1): with the enemy's root plan its
+      group members lead their queues with their focus, so every unit of ours that no enemy group targets looks safe in
+      the timeline, and the search walks those units forward in battle rounds 1 and 2 (the M81 Hard waits out of reach,
+      "win 81-85%", and wins the shooting game); the real opponent re-plans at every decision, and its plan follows our
+      moves. So the enemy model is D-067's robust one (each enemy unit attacks the closest of ours first), and the plan
+      the value reads is the one the deciding side will itself play. The enemy's plan did predict results better (MSE of V
+      against the result, below), but its errors are where the search goes.
+    - *The root's, not each valued state's:* every option of a decision is valued against the same groups (within one
+      Movement phase only 57-63% of an earlier mover's partners are still its partners when it moves, M80; a plan per
+      valued state would make a candidate's value jump where it changes the plan); it costs nothing measurable; and it is
+      M79's design note ("once per Hard decision at the root, never per evaluated state"). The per-state alternative was
+      built and measured (below): about 27% more decision time, and weaker.
+  - **The queue rule.** A unit of ours is in a group at a valued state when our plan gives it partners, the group's target
+    has models there and at least two of the group's members (it among them) have models there. Then the target leads its
+    queue (after the charged pair's target in a charge's fight value), unless it is engaged with an enemy unit and not with
+    the target (an engaged unit deals with what it fights first, its main enemy); every other enemy unit follows by
+    distance, as before. Every other unit's queue is distance alone, as before (its sort key is its gap: the same order, to
+    the bit). In code the queue entry keeps its gap (arrival and travel read it) and gets a separate sort key.
+  - **The timeline** is D-067's, the same arithmetic; it now also records the expected wounds each attacker takes from
+    each target (and, for diagnostics, the turn of the attacking side in which each unit's wounds run out). A group's
+    members lead with its target, so their volleys are pooled on it from each member's arrival: the target falls at the
+    group's combined pace, and each member starts on its next target in that turn (D-067's "what a volley has left goes on
+    to the next one"). That is the brief's "the group members' later targets start earlier", with no new rule.
+  - **The combined pace into P(wiped): each member fights its slice of the target.** For a group on target t: M is the
+    members whose queue starts with t and that take wounds from it in the timeline (dealt > 0). With two or more:
+    - each member's share s_m = dealt_m / (the sum over M);
+    - member m's duel is with its slice of t: t at w_t x s_m wounds (w_t its wounds now; at least 1, read between the
+      whole wounds below and above it, as the chain's wounds are whole), from now (delay 0), at the pair's real position
+      and stage (pair_node with a `Slice`: the chain at the slice's wounds; m's shooting in the half-turn in progress takes
+      off the slice what it would take off the whole unit; t's own shooting in progress lands with probability s_m), or
+      the charged pair's fight (pair_charge) when m is charge_values' charger;
+    - P_G(t wiped) = the sum over M of s_m x P(m wipes its slice): the expected share of t the group destroys, each slice
+      counted whole or not at all;
+    - survive(t) = (1 - P_G) x the product over every other attacker's duel with t (D-067), in place of the members' own
+      duels with the whole t. A member outside M (it deals nothing to t in the timeline, or it is engaged elsewhere) keeps
+      its own duel.
+    - Why slices: a member alone removes its slice at its own pace in w_t s_m / pace_m, which is the group's combined
+      time, so each slice duel is the chain's duel at the group's pace, with its approach, the target's reply scaled down
+      with the slice and every stage of the half-turn in progress, at no new table. The shares come from the timeline, so
+      a member that arrives late gets a small share and the one in front a large one: a lone member in reach before its
+      partners is valued nearly alone (no hiding behind partners, the batch's risk), and the group's value rises only when
+      its members arrive together (M80's synchronisation, in the army value).
+    - The brief's "for a group on one target, the target's wipe turn comes from the group's combined pace": the wipe turn is
+      the timeline's (pooled), and P(wiped) follows it through the slices; D-067's fates took P(wiped) from independent
+      duels of single attackers with the whole unit, so three monsters on the Chaos Terminators, which the timeline already
+      had wiping them out in battle round 3, gave P(wiped) 0.04.
+    - The plan's queues without slices were measured in the arena (below); the minimum of the slices' P (every slice must
+      fall) instead of the share-weighted sum only for calibration (below: worse).
+  - **Unchanged:** the target's own attacks (its queue and timeline: it attacks one unit at a time, D-010), so the
+    members' fates; the tempo and material terms (each side's longest-lasting unit's main duel, still the whole duel);
+    the points tiebreak (it reads the fates). A state with no group gives D-067's value to the bit
+    (`M82_Evaluator.AUnitWithoutAGroupKeepsItsQueue`).
+  - **The rollouts read the decision's plans.** M81 made the rollouts' shooting (Normal's `choose_shooting`) work out the
+    shooting side's army plan at every Shoot decision of every rollout (its focus targets, D-083 part 3); it now reads
+    the decision's (the Evaluator's `plans()`, both sides' at the root: `hard::ArmyPlans`, `army_plans`). Measured: the same
+    strength, the Chaos Space Marines' decision p95 274 ms instead of 351 (below). The M81 hand-back's suggestion. This is
+    why a decision works out both sides' plans although the army value reads only its own side's.
+  - **Cost:** the plans, 2 x about 0.7 ms per decision (M79's cost); per valued state, the groups found (a few lookups and
+    engagement tests) and for each slice member at most two more pair_node calls, whose shooting is the pair's own
+    (best_shooting worked out once per pair and state, `ShotMemo::best`: the same plan, so the same values). Timed on the
+    23 Move Units, Charge and casualty decisions of the Chaos Space Marines in rounds 1-3 of a rosters game (Release, a
+    disabled diagnostic, `M82_Diagnostics.DISABLED_TimeTheDecisions` in its scratch form): no plans 206.9 ms mean, the
+    root's plans 207.5 ms, every valued state's own 263.8 ms, the root's with the rollouts reading them 193.5 ms.
+  - **Measured first** (the probes in `tests/ai/m82_test.cpp`, Release):
+    - *Queues and wipe turns* (`DISABLED_ProbeQueuesAndWipeTurns`, Hard against Normal, rosters seeds 1-2, each side's
+      first Move Units decision of rounds 1-3; in its first form both sides' plans): every queue without a group came out
+      as D-067's (121 of 121). A group's target falls sooner in the timeline where a member had another unit first (the
+      Chaos Terminators under the Tyrannofex and a Screamer-killer: turn 4 under D-067, 3 with the plan) and its P(wiped)
+      rises from the independent duels' to the slices': three monsters on the Terminators 0.04 to 0.26, the Tyrannofex and
+      a Screamer-killer on a Legionaries unit 0.04 to 0.66, the Havocs and a Legionaries unit on the Tyrannofex 0.17 to
+      0.26. A group whose shares are lopsided (the Terminators 0.95, a Legionaries unit 0.05) changes little. The final
+      form (the deciding side's plan; seeds 1-3, both sides' decisions): 196 queues without a group, all as D-067's; the
+      Chaos Space Marines' first groups come in round 3 (the Terminators, Havocs and a Legionaries unit on the Tyrannofex:
+      wipe turn 3 to 2, P(wiped) 0.22 to 0.35); the Tyranids' three monsters on the Terminators from round 1 (P(wiped)
+      0.02 to 0.29 in round 1, 0.00 to 0.62 in round 2).
+    - *The tests' fixture* (`DISABLED_ScreamerFixture`): both Legionaries units 12" from a Screamer-killer, the Tyrant Guard
+      far away: the Screamer-killer falls in turn 2 (either unit alone: turn 3, or never), P(wiped) 0.42 against 0.10 for
+      the same members' duels apart; with the Guard next to the boltgun unit, that unit's queue starts with the
+      Screamer-killer instead of the Guard, and its wipe turn moves from 3 to 2 (P 0.07 to 0.42). At 16" with the Guard near,
+      no group pays and the value is D-067's to the bit.
+    - *Calibration* (`DISABLED_CalibrationAgainstResults`: Normal against Normal, side A's V at each half-turn's first Move
+      Units decision against the game's result, the mean squared error; 60 games, 600 positions on the rosters, 585 on
+      random armies): D-067 0.953 (rosters) and 0.368 (random armies); both sides' plans with the slices 0.768 and 0.323
+      (round 1 on the rosters 1.47 to 1.05: D-067 had the Chaos Space Marines well ahead at the start of games they lose
+      70% of the time); both sides' with the queues only 1.026; both sides' with the slices' minimum 0.930; side A's plan
+      only, with the slices, 0.977.
+  - **How it was found** (Release arena, the rosters, the new Normal as the opponent, seeds 1-200 unless named; 4 runs in
+    parallel, so the times are relative; the Chaos Space Marines (A) are the seat Hard's move search plays, the Tyranids
+    (B, 9 units) move as Normal does, D-078 part 11; each variant a scratch `--weights` switch, removed once chosen, the
+    final build checked to play the chosen variant's games exactly by `--per-game` hashes):
+
+    | Hard (A) | A wins of 200 | points A / B | Hard p95 ms |
+    |---|---|---|---|
+    | M81 (the baseline) | 139 (seeds 201-400: 131) | 354 / 270 | 385 |
+    | both sides' plans at the root, slices | 73 (201-400: 79) | 303 / 394 | 340 |
+    | both sides', the queues only | 108 | 358 / 364 | 317 |
+    | both sides' at every valued state, slices | 113 | 354 / 351 | 328 (max 7.3 s) |
+    | ours only, slices | 147 (201-400: 137) | 361 / 265 | 351 |
+    | ours only, the queues only | 142 | 357 / 269 | 342 |
+    | **ours only, slices, the rollouts read the plans (chosen)** | **151 (201-400: 135)** | 353 / 257 | 274 |
+
+    The Tyranid seat (Hard as B, seeds 1-200 and 201-400): M81 137 and 140; both sides' plans 137 and 138; ours only 138
+    (the seat moves as Normal: only its charges, casualties, coherency and consolidations read the value).
+    - The better predictor played worst: both sides' plans gave the best calibration and the worst games. The search
+      finds the enemy model's errors (its group members busy with their focus); a value that is right on average and
+      wrong where the search goes is the worse value to search with.
+    - The slices are what make a plan's queue pay: the queues alone, with our plan, are level with the baseline (142); with
+      both sides' they lose 31 games.
+  - **Approximations kept:**
+    - The enemy is D-067's: each of its units attacks the closest of ours first, its attackers' duels are independent,
+      whatever its own plan (it re-plans at every decision; modelling its root plan was measured worse).
+    - The root's plan is read at every state the decision values, a rollout's end included: a group whose target or
+      members are gone there falls back to D-067's queues (two members with models, the target with models), but the
+      groups are not re-chosen.
+    - The shares are the timeline's (expected wounds, no attrition of the members); a slice is valued whole or not at all,
+      so P_G is the expected share of the target destroyed rather than P(all of it), which counts a group's partial work
+      (as the points tiebreak does) and is generous for D-007's wipe-out. A target down to a wound or two can't be split:
+      every slice is then most of it and P_G is about the members' mean, below the union of their own duels.
+    - The target's reply on the members is unchanged (its own queue and timeline, the whole unit): the slices weaken the
+      target only inside each member's own duel.
+  - **Moves and Hard's own weights** (the brief's other two questions, measured on top of the chosen value, seeds 1-200):
+    - `move_search_units` (7, D-078 part 11) is kept: with 9, so that Hard's 9-unit Tyranids search their own moves with
+      the new value, they won 88 of 200 against the new Normal (moving as Normal: 138), with a decision p95 of 405 ms
+      against 15 and a slowest decision of 7.8 s (4 runs in parallel). D-078's finding (the big side's own search holds
+      back) stands with the plans.
+    - Hard's `BotWeights::move` stays Normal's for M80's terms: with `follow` 0 (every member with partners follows its
+      group in Hard's own move candidates) the Chaos Space Marines won 125 of 200 against 147 with M80's 0.2 gate; Hard's
+      default plan is Normal's (M80), which follows the gate. `approach` and `cohesion` were not swept (they act only on
+      units that follow, which the gate decides).
+    - The rollouts' moves at a group member's target instead of the rollout target (D-067's real target choice): 148
+      against 147, slower; not kept.
+  - **The final measurement** (the chosen form, Release arena; PLAN.md M82's Results has the table): against the new
+    Normal over seeds 1-400 the new Hard wins 286 rosters games as the Chaos Space Marines (M81 270) and 273 as the
+    Tyranids (M81 277); against `hard-m77` 307 and 130 (M81 on seeds 1-200: 156 and 60; the new 154 and 64); random armies
+    (seeds 1-100) 20 and 77 (M81 19 and 72); Strike, the Space Marines win all 60 games of every pairing (Hard's Tyranids
+    draw one against Normal). Times (three runs at once, as M81 measured): the Chaos Space Marines' decision p95 270 ms
+    and max 2.83 s (M81 in the same run 288 ms and 2.84 s: the max is a game's first decision, which builds the 30 chain
+    tables); peak RSS 0.60 GB (M81 0.62 GB).
+  - **Tests** (`tests/ai/m82_test.cpp`): `M82_Evaluator.AUnitsQueueFollowsTheArmyPlan` (the boltgun Legionaries' queue
+    starts with the pair's Screamer-killer, not the Tyrant Guard closest to them; it falls a turn sooner),
+    `AGroupWipesItsTargetSooner` (together a turn sooner than either alone, P(wiped) above twice the independent duels'
+    and above either alone, the next target started sooner), `AUnitWithoutAGroupKeepsItsQueue` (the enemy's queues and
+    start turns are M77's; with no group the value is M77's to the bit; at the rosters' start, valued for the Tyranids,
+    every unit without a group keeps its queue); `M82_Hard.TheMoveValuesReadTheArmyPlan` (Hard's own Move Units values
+    differ from M77's with a group, equal without); `M82_Rollouts.TheShootingReadsTheGivenPlan` (Normal's shooting given
+    the state's own plan chooses what it chooses working it out; another plan of the side is read, another side's
+    ignored); `M82_Regression.TheM77SwitchKeepsTheOldEvaluator` (M77 reads no plan: its values are those of an evaluator
+    given none, at every Move Units and Shoot decision of two rounds of a rosters game, where the current one's differ).
+    Disabled diagnostics: `M82_Diagnostics.DISABLED_ProbeQueuesAndWipeTurns`, `DISABLED_ScreamerFixture`,
+    `DISABLED_CalibrationAgainstResults`, `DISABLED_TimeTheDecisions`. No existing test changed: every one passes
+    unchanged with the new value (M44's, M57's and M69's evaluator and decision tests included), so none needed
+    `Generation::M77`.
+  - **Replays:** every one regenerates byte-identically, m58 and m70 (Hard vs Hard) included: in those two games no Hard
+    decision changes (the values printed in Hard's reasons do; they are not in the files). `M70_Replay.TheSavedFileMatchesTheGame`
+    and `BotsWithChainCachesOfTheirOwnPlayTheSameActions` failed with both sides' plans (that game changed) and pass with
+    the chosen form.

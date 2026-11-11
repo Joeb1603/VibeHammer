@@ -81,7 +81,9 @@ struct RolloutTrace {
 // rollout_budget(weights, start).rollouts rollouts from `start` (a state in `side`'s turn), each to the start of
 // `side`'s next turn.
 // Deterministic: a pure function of its arguments. `traces`, if given, gets every rollout (diagnostics only).
-// D-083 part 3 (M81): `generation`, Hard's (HardContext::generation): the rollouts' shooting is Normal's at it.
+// D-083 part 3 (M81): `generation`, Hard's (HardContext::generation): the rollouts' shooting is Normal's at it. D-083 part 4
+// (M82): that shooting reads the evaluator's army plans (the decision's, both sides': Evaluator::plans) instead of working
+// one out at every Shoot decision.
 [[nodiscard]] MonteCarloResult monte_carlo(const Evaluator& eval, analysis::OddsCache& odds,
                                            const core::GameState& start, core::Side side, std::uint64_t seed,
                                            const LookaheadWeights& weights, const Opening& opening = {},

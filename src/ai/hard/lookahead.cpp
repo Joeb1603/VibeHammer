@@ -20,6 +20,7 @@
 #include "core/state/queries.hpp"
 #include "directions.hpp"
 #include "fallback.hpp"
+#include "normal/army_plan.hpp"
 #include "normal/charge.hpp"
 #include "normal/movement.hpp"
 #include "normal/shooting.hpp"
@@ -336,7 +337,16 @@ private:
     // shooting less like the real one: Hard's Marines finished later (Release arena, 200 seeds: mean end round 3.645
     // against 3.555).
     std::optional<GameAction> shoot(const GameState& s, const std::vector<GameAction>& legal) {
-        if (const std::optional<normal::ShootingChoice> c = normal::choose_shooting(odds_, s, legal, generation_)) {
+        // D-083 part 4 (M82): the shooting side's plan of the decision's (the evaluator's), not one worked out here.
+        const normal::ArmyPlan* plan = nullptr;
+        for (const GameAction& a : legal) {
+            const auto* shoot = std::get_if<core::action::Shoot>(&a);
+            const core::Unit* u = shoot != nullptr ? s.find_unit(shoot->unit) : nullptr;
+            if (u == nullptr) continue;
+            plan = &eval_.plans().sides[core::side_index(u->side)];
+            break;
+        }
+        if (const std::optional<normal::ShootingChoice> c = normal::choose_shooting(odds_, s, legal, generation_, plan)) {
             return GameAction{core::action::Shoot{c->unit, c->type, c->shots}};
         }
         for (const GameAction& a : legal) {

@@ -67,6 +67,19 @@
 //   copies of one; [HAZARDOUS] is priced at Normal's rate.
 // - Under the points tiebreak (D-076) the army value plays for points: a finished game is the engine's result, and
 //   otherwise P(neither side wiped out) x (P(ahead on points) - P(behind)) is added to D-007's terms (duel_play: no duel).
+//
+// M82 (D-083 part 4): the army plan of the side valued for (normal::army_plan at the decision's root, worked out once per
+// decision with the enemy's, ArmyPlans; none under Generation::M77). The enemy's units keep D-067's queues: its
+// coordination is not modelled (it re-plans at every decision). The lookahead's rollouts read both sides' plans for their
+// shooting (lookahead.hpp).
+// - A unit of one of our groups whose target has models and that has a partner with models starts its queue with the
+//   target (then the others by distance), unless it is engaged with another enemy unit and not with the target. Every
+//   other unit's queue is distance alone, as before.
+// - The members that start on the target and take wounds from it in the timeline fight it together: each member's duel
+//   is with its slice of the target (the target's wounds x the member's share of the wounds they take from it, so each
+//   alone wipes its slice at the group's combined pace), and the target's P(wiped) by the group is the share-weighted
+//   P(each slice is wiped), in place of those members' duels with the whole target. The target's own attacks and every
+//   other pair are as before.
 
 #include <array>
 #include <cstddef>
@@ -79,7 +92,9 @@
 
 #include "analysis/odds.hpp"
 #include "core/state/game_state.hpp"
+#include "generation.hpp"
 #include "hard/weights.hpp"
+#include "normal/army_plan.hpp"
 
 namespace wh40k::ai::hard {
 
@@ -200,14 +215,59 @@ struct UnitFate {
     double p_wiped = 0.0;  // P(the unit is wiped out in that duel)
 };
 
+// D-083 part 4 (M82): a decision's army plans, both sides' (normal::army_plan at its root), worked out once per decision:
+// the army value reads the plan of the side it values for, the lookahead's rollouts read each side's for its shooting
+// (its focus targets, D-083 part 3) instead of working it out at every Shoot decision. Inactive for a pre-teamwork
+// generation (M55, M77).
+struct ArmyPlans {
+    std::array<normal::ArmyPlan, 2> sides{};  // by side index
+};
+// Both sides' plans in `root` (Generation::M55 / M77: inactive, nothing worked out).
+[[nodiscard]] ArmyPlans army_plans(analysis::OddsCache& cache, const core::GameState& root, Generation generation);
+
+// D-083 part 4 (tests, diagnostics): the army value's attention timeline at a state.
+struct AttentionTarget {
+    core::UnitId unit;
+    std::optional<int> start;  // the attacker's turn (0: its next, or this one if it is its own) it starts on it
+    double dealt = 0.0;        // the expected wounds it takes from it in the timeline
+};
+struct AttentionQueue {
+    core::UnitId attacker;
+    std::optional<core::UnitId> focus;     // its group's target, first in its queue (nullopt: distance alone)
+    std::vector<AttentionTarget> targets;  // in queue order
+};
+// A group's target as the army value reads it: the members that start on it and take wounds from it (each with its
+// slice), and its P(wiped) by them.
+struct GroupPace {
+    core::UnitId target;
+    std::vector<core::UnitId> members;  // in unit order
+    std::vector<double> shares;         // each member's share of the wounds they take from it in the timeline
+    double p_wiped = 0.0;  // by the group: the members' slices, share-weighted
+    double p_apart = 0.0;  // by the same members' duels with the whole target, independent (as without the plan)
+};
+struct Attention {
+    std::vector<AttentionQueue> queues;  // every unit with models, in unit order
+    // Every unit with models: the turn of the other side in which the timeline's wounds on it run out (nullopt: never
+    // within the game).
+    std::vector<std::pair<core::UnitId, std::optional<int>>> wiped_turn;
+    std::vector<GroupPace> groups;  // in unit order of the target
+    [[nodiscard]] const AttentionQueue* queue_of(core::UnitId attacker) const;
+    [[nodiscard]] std::optional<int> wiped(core::UnitId unit) const;
+    [[nodiscard]] const GroupPace* group_on(core::UnitId target) const;
+};
+
 // The evaluator for one decision: `root` fixes the duel and the line length (D-067: or the army's tables); any
 // later state of the same game can be evaluated with it (positions are scaled onto the line).
 class Evaluator {
 public:
     // `force_army` (tests, D-067): with one unit per side, the army's combination of the duel (each pair read as the
     // duel reads it: the duel's table, line and stage tests), so its value can be compared with the duel's.
+    // D-083 part 4 (M82): with several units on a side the army value reads `side`'s army plan, and the rollouts both
+    // sides': `plans` (the decision's, worked out once by the caller at its root), else army_plans(root) at
+    // `generation`. None under M55 / M77, whatever is given.
     Evaluator(analysis::OddsCache& odds, const core::GameState& root, core::Side side, ChainWeights weights,
-              ChainCache* cache = nullptr, bool force_army = false);
+              ChainCache* cache = nullptr, bool force_army = false, Generation generation = Generation::Current,
+              const ArmyPlans* plans = nullptr);
     ~Evaluator();
     Evaluator(const Evaluator&) = delete;
     Evaluator& operator=(const Evaluator&) = delete;
@@ -273,6 +333,11 @@ public:
     [[nodiscard]] static const core::Unit* main_enemy(const core::GameState& state, const core::Unit& unit);
     // D-067: every unit's fate in the army evaluation of `state` (empty for a duel's evaluator).
     [[nodiscard]] std::vector<UnitFate> fates(const core::GameState& state) const;
+    // D-083 part 4 (tests, diagnostics): the attention timeline of the army evaluation of `state` (empty for a duel's).
+    [[nodiscard]] Attention attention(const core::GameState& state) const;
+    // D-083 part 4: the army plan the army value reads (side()'s; inactive: none), and both sides' (the rollouts').
+    [[nodiscard]] const normal::ArmyPlan& plan() const noexcept { return plans_.sides[core::side_index(side_)]; }
+    [[nodiscard]] const ArmyPlans& plans() const noexcept { return plans_; }
 
     [[nodiscard]] UnitView view(const core::GameState& state, core::Side of) const;
     [[nodiscard]] int line_buckets() const noexcept;
@@ -311,7 +376,8 @@ private:
     [[nodiscard]] Evaluation army_evaluate(const core::GameState& state,
                                            std::optional<core::UnitId> no_charge = std::nullopt,
                                            const Charged* charged = nullptr,
-                                           std::vector<UnitFate>* fates = nullptr) const;
+                                           std::vector<UnitFate>* fates = nullptr,
+                                           Attention* attention = nullptr) const;
     // The cached table covering `spec`, else a new one (kept in the cache, most recently used last).
     [[nodiscard]] std::shared_ptr<const ChainTable> find_or_build(Spec spec, ChainCache* cache) const;
     // D-078: the same for several specs at once, the missing tables built by the cache's workers (each with its own odds
@@ -329,6 +395,7 @@ private:
     std::vector<PairTable> army_tables_;
     std::vector<std::pair<core::UnitId, std::uint64_t>> unit_keys_;  // D-067: each unit's type, from the root
     std::array<double, 2> start_wounds_{};  // D-067: each side's starting wounds (units with models at the root)
+    ArmyPlans plans_{};  // D-083 part 4: both sides' army plans at the root (inactive: none)
 };
 
 }  // namespace wh40k::ai::hard
