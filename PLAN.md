@@ -5132,7 +5132,7 @@ units.
 
 ---
 
-## M83: Tuning, replays, docs, pull request
+## M83: Tuning, replays, docs, pull request ✅ (done)
 **Effort:** `high` · **Rules:** none · **Decision:** D-083 (final numbers)
 
 > - Tune `approach`, `cohesion`, the finishing bonus and the group limit with the arena (seeds 1–200, both seats),
