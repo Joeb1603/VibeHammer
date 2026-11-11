@@ -400,8 +400,34 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 others_.push_back(std::move(x));
             }
         }
-        if (focus != nullptr) make_team(*plan, *focus, line_focus);
+        if (focus != nullptr) {
+            make_team(*plan, *focus, line_focus);
+        } else if (!pre_teamwork(generation_) && plan != nullptr && plan->active && weights_.approach_alone > 0.0 &&
+                   !start_engaged_) {
+            make_lone_approach(*e);
+        }
     }
+}
+
+// D-083 part 5 (M83): a unit that follows no group closes on its closest enemy unit beyond the line's horizon (where
+// every move scores about the same and units drifted back), unless that unit outreaches it: its reach, Move plus its
+// longest range (at least 7", a charge at even odds), is longer than ours. Within the horizon the score is as before.
+void MoveScoreContext::make_lone_approach(const core::Unit& closest) {
+    const auto reach_of = [](const analysis::ThreatRanges& th) {
+        return th.move_mm + std::max(th.max_range_mm, 7.0f * core::MM_PER_INCH);
+    };
+    const float ours = reach_of(us_threat_);
+    if (ours < reach_of(analysis::threat_ranges(closest))) return;
+    MoveTeam t;
+    t.focus = closest.id;
+    t.line = false;
+    t.alone = true;
+    t.focus_models = core::posed_models(closest);
+    t.start_gap_mm = core::unit_distance(us_, closest).value_or(kFar);
+    const float m = us_threat_.move_mm;
+    t.per_turn_mm = m > 0.0f ? m + kMeanAdvanceMm : 0.0f;
+    t.reach_mm = ours;
+    team_ = std::move(t);
 }
 
 void MoveScoreContext::make_team(const ArmyPlan& plan, const core::Unit& focus, bool line) {
@@ -488,7 +514,8 @@ double MoveScoreContext::approach_term(const std::vector<core::Position>& positi
     const auto turns = [&](float g) {
         return static_cast<double>(std::max(0.0f, g - team_->reach_mm) / team_->per_turn_mm);
     };
-    return weights_.approach * (turns(team_->start_gap_mm) - turns(gap_mm));
+    const double w = team_->alone ? weights_.approach_alone : weights_.approach;
+    return w * (turns(team_->start_gap_mm) - turns(gap_mm));
 }
 
 double MoveScoreContext::cohesion_term(const std::vector<core::Position>& positions) const {

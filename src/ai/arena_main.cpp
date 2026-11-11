@@ -134,6 +134,8 @@ void apply_weights(const std::string& text, wh40k::ai::hard::BotWeights& w) {
             w.move.cohesion = d;
         } else if (key == "follow") {
             w.move.follow = d;
+        } else if (key == "approach_alone") {  // D-083 part 5 (M83)
+            w.move.approach_alone = d;
         } else {
             throw std::invalid_argument("unknown weight");
         }

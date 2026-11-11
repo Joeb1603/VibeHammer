@@ -101,8 +101,10 @@ Position centroid_of(const std::vector<Position>& ps) {
     return Position{c.x / n, c.y / n, 0.0f};
 }
 
-// D-083 part 2 (M80): " with Legionaries 5", " with Havocs 4 and Legionaries 5", " with A, B and C".
+// D-083 part 2 (M80): " with Legionaries 5", " with Havocs 4 and Legionaries 5", " with A, B and C"; " alone" for a
+// unit that closes in on its closest enemy unit without a group (part 5, M83).
 std::string with_text(const GameState& gs, const MoveTeam& team) {
+    if (team.alone) return " alone";  // D-083 part 5 (M83): no group, closing in on the closest enemy unit
     std::string out;
     for (std::size_t i = 0; i < team.partners.size(); ++i) {
         out += i == 0 ? " with " : i + 1 == team.partners.size() ? " and " : ", ";

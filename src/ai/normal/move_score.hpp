@@ -102,7 +102,11 @@ struct MoveWeights {
     // D-083 part 2 (M80): only for a unit that follows its group in the army plan (nothing for any other unit).
     double approach = 0.05;   // x the turns saved towards the focus beyond the line's horizon
     double cohesion = 0.005;  // x max(0, the gap to the nearest partner - 6"), per inch
-    double follow = 0.2;      // a unit follows its group when the group's gain is at least this share of its risk
+    // a unit follows its group when the group's gain is at least this share of its risk (M83: 0.1, was 0.2)
+    double follow = 0.1;
+    // D-083 part 5 (M83): x the turns saved towards the closest enemy unit beyond the line's horizon, for a unit that
+    // follows no group and whose reach (Move plus its longest range, at least 7") is no shorter than that unit's.
+    double approach_alone = 0.05;
 };
 
 struct MoveScore {
@@ -215,6 +219,9 @@ struct MoveTeam {
     float start_gap_mm = 0.0f;               // ours to the focus at the move's start
     float reach_mm = 0.0f;                   // approach: the line's horizon, our Move plus our attack's reach
     float per_turn_mm = 0.0f;                // approach: a turn's travel (M plus the D6's mean)
+    // D-083 part 5 (M83): no group: the approach term alone (MoveWeights::approach_alone) towards the closest enemy
+    // unit, which the line follows as before; no partners, no support.
+    bool alone = false;
 };
 
 // Everything the score needs about the position before the move: the two units, their threat ranges and rates,
@@ -404,6 +411,7 @@ private:
     std::vector<Other> others_;
     // D-083 part 2 (M80)
     void make_team(const ArmyPlan& plan, const core::Unit& focus, bool line);
+    void make_lone_approach(const core::Unit& closest);
     std::optional<MoveTeam> team_;
 };
 
