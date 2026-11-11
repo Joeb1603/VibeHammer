@@ -239,7 +239,7 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
     // is the same sum as before).
     if (ctx.team() != nullptr) {
         if (ctx.team()->line) s.focus = ctx.team()->focus;
-        s.approach = ctx.approach_term(plan.positions);
+        s.approach = ctx.approach_term(plan.positions, s.gap_mm);
         s.cohesion = ctx.cohesion_term(plan.positions);
         s.total += s.approach + s.cohesion;
     }
@@ -501,13 +501,18 @@ void MoveScoreContext::make_team(const ArmyPlan& plan, const core::Unit& focus, 
     team_ = std::move(t);
 }
 
-double MoveScoreContext::approach_term(const std::vector<core::Position>& positions) const {
+double MoveScoreContext::approach_term(const std::vector<core::Position>& positions,
+                                       std::optional<float> line_gap_mm) const {
     if (!team_ || !(team_->per_turn_mm > 0.0f) || team_->mode == AttackMode::Engaged) return 0.0;
     float gap_mm = kFar;
-    for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
-        const core::BasePose at{positions[i], us_.models[i].base, us_.models[i].facing_deg};
-        for (const core::PosedModel& m : team_->focus_models) {
-            gap_mm = std::min(gap_mm, core::base_distance(at, m.pose()));
+    if (team_->alone && line_gap_mm) {
+        gap_mm = *line_gap_mm;  // the focus is the line's enemy: enemy_gaps measured the same pairs
+    } else {
+        for (std::size_t i = 0; i < us_.models.size() && i < positions.size(); ++i) {
+            const core::BasePose at{positions[i], us_.models[i].base, us_.models[i].facing_deg};
+            for (const core::PosedModel& m : team_->focus_models) {
+                gap_mm = std::min(gap_mm, core::base_distance(at, m.pose()));
+            }
         }
     }
     if (!(gap_mm < kFar)) return 0.0;

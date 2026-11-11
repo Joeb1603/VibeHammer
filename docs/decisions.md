@@ -5638,3 +5638,104 @@ Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state
     decision changes (the values printed in Hard's reasons do; they are not in the files). `M70_Replay.TheSavedFileMatchesTheGame`
     and `BotsWithChainCachesOfTheirOwnPlayTheSameActions` failed with both sides' plans (that game changed) and pass with
     the chosen form.
+- **Part 5 (M83): tuning and the final numbers** (`src/ai/normal/move_score.{hpp,cpp}`, `movement.cpp`,
+  `arena_main.cpp`). Bot only: no rule, core, state, action, event or JSON change. Amends part 2 (the follow gate,
+  0.2 to 0.1; an approach term for units without a group) and, through it, D-066 / D-077's move score.
+  - **How it was tuned.** A scratch build (a git worktree, removed afterwards) read the batch's knobs from environment
+    variables: M80's `approach`, `cohesion` and `follow`; M81's finishing turns, focus weight and split margin; the
+    plan's group limit and minimum gain; and an approach term for units without a group in several forms. Each variant
+    played the new Normal against `normal-m77` from each seat, rosters and random armies, seeds 1-400 in one run (200
+    seeds can't tell two candidates apart: about 8 wins of noise), and the chosen one was confirmed on seeds 401-800,
+    which no tuning used. With every switch at its default the scratch build played the M82 games exactly (the same
+    `--per-game` lines), and the final build plays the chosen variant's games exactly (actions and final states; only the
+    reasons differ). Wins of the new Normal's side (A = Chaos Space Marines, B = Tyranids):
+
+    | Variant (seeds 1-400) | rosters A | rosters B | random A | random B |
+    |---|---|---|---|---|
+    | M82 (the baseline; pre-batch mirror 130 / 270 / 70 / 330) | 146 | 303 | 85 | 328 |
+    | approach 0.05 for every unit without a group, towards its closest enemy unit | 211 | 285 | 84 | 336 |
+    | the same, only for a unit its closest enemy unit doesn't outreach | 207 | 301 | 79 | 322 |
+    | the same at 0.02 | 205 | 301 | 79 | 322 |
+    | the same at 0.1 | 205 | 301 | 76 | 320 |
+    | approach 0.05 towards the nearest target of one of our groups | 127 | (cut) | 92 | 324 |
+    | **not outreached, 0.05, and the follow gate at 0.1 (chosen)** | **196** | **300** | **86** | **323** |
+
+    | Confirmation (seeds 401-800) | rosters A | rosters B | random A | random B |
+    |---|---|---|---|---|
+    | M82 | 130 | 312 | 103 | 316 |
+    | not outreached, 0.05 | 185 | 313 | 93 | 316 |
+    | **not outreached, 0.05, follow 0.1 (chosen)** | **188** | **311** | **96** | **317** |
+
+    Over seeds 1-800 the chosen setting against M82: rosters A +108 (384 against 276), B -4, random A -6, B -4; the
+    approach term alone: +116, -1, -16, -6. "(cut)": a container restart killed that run, and the variant was dropped
+    on its other three seats. Two variants were cut before they ran (the nearest group target only where not
+    outreached; the follow gate at 0.1 alone, which M81 had measured: no consistent gain without the approach term).
+    M81's terms (the finishing turns, the focus weight, the split margin) and the plan's group limit and minimum gain
+    were not swept again: M81 and M79 measured them, and the approach term was the open lever of the M80-M82 hand-backs.
+  - **The approach for a unit without a group** (`MoveWeights::approach_alone` 0.05; `MoveTeam::alone`,
+    `MoveScoreContext::make_lone_approach`). A unit that follows no group (no partners, or a group under the gate), is
+    not engaged, and whose closest enemy unit doesn't outreach it (reach: Move plus the longest range, at least 7", a
+    charge at even odds; ours at least theirs) gets M80's approach term towards that unit: 0.05 x the turns saved
+    beyond the line's horizon. The line stays the closest enemy unit's, with no partners, no support and no shared
+    reply, so within the horizon its score is exactly as before; the candidates line up on that unit, as they did
+    without a team. Off under `pre_teamwork` and when the plan is inactive (one unit a side, our last unit), so V1 and
+    both bot scenarios play as before. Reasons say "alone": "Advance on Termagants 9 alone (+0.03 ...)".
+    - *Why "not outreached":* the M80 hand-back's lever (every unit without partners approaching) raised the rosters'
+      Chaos Space Marines but cost the Tyranids: their cheap infantry walks into the Chaos Space Marines' longer guns
+      (here: rosters B -18). A unit that outreaches its enemy, or matches it, arrives in its own reach first; one that
+      is outreached keeps holding back (M68's finding for a unit alone). On the rosters that is mostly the Chaos Space
+      Marines' shooters, which now close to their range in battle round 1 (traced, seed 5: "R1 A StartMove: Legionaries
+      5: Advance on Termagants 9 alone (+0.03 ...) - 27.9\" from Termagants 9").
+    - *What it does not do:* it brings shooters to the edge of their range, not into contact, so units never within 12"
+      of an enemy unit hardly move (rosters A 1.66 against 1.68 before the batch) and the first engagement comes no
+      sooner. The Tyranid infantry that stays 40-50" away is outreached and keeps holding back (below: open).
+  - **The follow gate 0.1** (`MoveWeights::follow`, was 0.2): with the approach term, 0.1 gave up 11 rosters A games of
+    400 (196 against 207; 188 against 185 on 401-800) and won 7 + 3 random A games, so it is the setting that loses no
+    seat beyond the noise over 800 seeds, and it raises the gang-ups (rosters Normal vs Normal, the Tyranids 0.48 a
+    game against M81's 0.36; random armies 0.31 / 0.16).
+  - **Hard** ranks its move candidates with `BotWeights::move` (Normal's `MoveWeights` until now), so both changes
+    reached it. Measured against the new Normal on the rosters (Release, 4 runs at once, wins of Hard's side):
+
+    | Hard's move weights | as the CSM, seeds 1-200 / 201-400 | as the Tyranids, 1-200 / 201-400 |
+    |---|---|---|
+    | Normal's (approach_alone 0.05, follow 0.1) | 118 / 96 (214 of 400) | 105 / 106 (211) |
+    | **approach_alone 0, follow 0.1 (chosen)** | **128 / 102 (230)** | **106 / 107 (213)** |
+    | approach_alone 0, follow 0.2 (M82's move weights) | 124 / - | - |
+    | approach_alone 0.05, follow 0.2 | 112 / - | 104 / - |
+
+    So Hard keeps M82's move score for units without a group (`BotWeights::move{.approach_alone = 0.0}`): its own search
+    decides those moves, and the term cost it 16 games of 400 in the seat where the search plays (the Tyranid seat moves
+    as Normal, 9 units > `move_search_units`, and is level). The follow gate stays Normal's (0.1 and 0.2 within the
+    noise). Hard's margin over Normal narrowed from M82's (286 and 273 of 400 against the M82 Normal): in the Tyranid
+    seat because the new Normal's Chaos Space Marines are much stronger (+108 of 800 against `normal-m77`); in the Chaos
+    Space Marine seat it lost about 27 of 200 even with M82's move weights, which this milestone didn't take apart (the
+    opponent's new Tyranids, which Hard's rollouts also play, or Hard's rollouts of its own side). Both seats stay above
+    the batch's 50%.
+  - **The final numbers** (PLAN.md's M83 Results has the batch acceptance table, every item met or open):
+    - *Met:* the gang-ups on random armies (Chaos Space Marines 0.16, Tyranids 0.31 a game, Normal vs Normal, against
+      0.04 / 0.13 before the batch) and the rosters' Chaos Space Marines (0.10 against 0.04); shooting more concentrated
+      (the rosters' Chaos Space Marines 1.19 targets per Shoot against 1.50); the new Normal's Tyranids against
+      `normal-m77` (rosters 75%, random armies 81%); the new Hard against the new Normal (57.5% and 53.3% of 400 rosters
+      games); Strike (every game the Space Marines', as before, and played as at M82); no regression against Easy; Normal's
+      maximum decision under 1 s; rosters RSS 0.60-0.67 GB; every run clean; the identity set and the byte-identical
+      replays.
+    - *Open:* the rosters' Tyranid gang-ups (0.48, target 0.56); lone engagements (rosters 0.87 / 0.74, random armies
+      0.76 / 0.64: none halved, most up, since more units fight); units never within 12" (rosters 1.66 / 6.08 against
+      1.68 / 6.42; random armies down a fifth, not half); the Chaos Space Marine seat against `normal-m77` (rosters 49% and
+      47% on seeds 1-400 / 401-800, from 32.5% in the pre-batch mirror; random armies 21.5% / 24%, from 17.5%: the armies
+      favour the Tyranids, and the 55% / 50% targets assume an even matchup); Normal's p95 on the rosters (16.0-16.4 ms for
+      the Chaos Space Marines on this session's machine, where the M82 build measures 14.4-15.1 ms: the extra is the
+      new play, positions in range, not the term's cost); Hard's maximum decision (3.45-3.73 s with three runs at once,
+      the M82 build 3.05 s in the same run: a game's first decision, which builds the chain tables, on a slower machine).
+  - **Approximations kept:** the reach test is one number per unit (Move plus its longest range), not per weapon or
+    per target's models; the approach is towards the closest enemy unit only; the gate is one share of the risk for
+    every group.
+  - **Tests** (`tests/ai/m83_test.cpp`, 5): `M83_Normal.AUnitWithoutAGroupClosesInBeyondTheHorizon` (the boltgun
+    Legionaries 50" from Termagants and the Chaos Lord far from the Tyrant Guard: each gets the term, with its closest
+    enemy unit as the focus, no line, no partners; none at M77 or with the weight 0; the Lord closes in where M77
+    drifts; the reason says "alone"), `AnOutreachedUnitKeepsItsMove` (Termagants 45" from the Havocs: no term, the
+    M77 move, label and score), `WithinTheHorizonTheScoreIsAsBefore` (the Havocs 30" from the Tyrant Guard: the term
+    is 0), `OneUnitASideHasNoApproach` (V1); `M83_Hard.RanksItsMovesWithoutTheLoneApproach` (Hard's move weights are
+    Normal's but for `approach_alone` 0). No existing test changed.
+  - **Replays:** regenerated on purpose (seeds kept): m68, m70 (Hard), m73 and m77, each ending in a result; m58 (Strike
+    plays as at M82), m45, m46, m47, m75, every core replay and every fixture came out byte-identical.
