@@ -4,6 +4,7 @@
 #include <atomic>
 #include <bit>
 #include <cmath>
+#include <deque>
 #include <exception>
 #include <limits>
 #include <map>
@@ -1527,12 +1528,12 @@ struct ArmyTypes {
     std::array<double, 2> start_wounds{};
 };
 
-struct ArmyPlan : ArmyTypes {
+struct TablePlan : ArmyTypes {
     std::vector<Spec> specs;
 };
 
 // The army's unit types (units with models, each side's in unit order; the first unit of a type stands for it). D-080
-// (M73): shared by army_plan and chain_plan_size, so both count the same types.
+// (M73): shared by table_plan and chain_plan_size, so both count the same types.
 std::optional<ArmyTypes> army_types(const core::GameState& root) {
     if (root.battle_rounds <= 0) return std::nullopt;
     std::vector<const core::Unit*> a_units;
@@ -1558,10 +1559,10 @@ std::optional<ArmyTypes> army_types(const core::GameState& root) {
     return out;
 }
 
-std::optional<ArmyPlan> army_plan(const core::GameState& root, const ChainWeights& weights, float bucket) {
+std::optional<TablePlan> table_plan(const core::GameState& root, const ChainWeights& weights, float bucket) {
     std::optional<ArmyTypes> types = army_types(root);
     if (!types) return std::nullopt;
-    ArmyPlan plan;
+    TablePlan plan;
     static_cast<ArmyTypes&>(plan) = std::move(*types);
     const int line = army_line(root, bucket);
     for (const auto& [ka, ua] : plan.a_types) {
@@ -1619,7 +1620,7 @@ std::vector<ChainTableInfo> plan_chain_tables(const core::GameState& root, Chain
         }
         return out;
     }
-    if (const std::optional<ArmyPlan> plan = army_plan(root, weights, Evaluator::bucket_mm())) {
+    if (const std::optional<TablePlan> plan = table_plan(root, weights, Evaluator::bucket_mm())) {
         for (const Spec& s : plan->specs) out.push_back(ChainTable::info_of(s));
     }
     return out;
@@ -1639,7 +1640,7 @@ ChainPlanSize chain_plan_size(const core::GameState& root) {
     }
     const std::optional<ArmyTypes> types = army_types(root);
     if (!types) return out;
-    // As army_plan and army_spec: the army's line, the game's half-turns from the root's on, compact when the whole
+    // As table_plan and army_spec: the army's line, the game's half-turns from the root's on, compact when the whole
     // game's tables at full precision would take more than kCompactAboveBytes.
     const int line = army_line(root, Evaluator::bucket_mm());
     const int half_turns = 2 * root.battle_rounds;
@@ -1662,13 +1663,43 @@ ChainPlanSize chain_plan_size(const core::GameState& root) {
     return out;
 }
 
+ArmyPlans army_plans(analysis::OddsCache& cache, const core::GameState& root, Generation generation) {
+    ArmyPlans out;
+    if (pre_teamwork(generation)) return out;
+    for (const core::Side s : {core::Side::A, core::Side::B}) {
+        out.sides[si(s)] = normal::army_plan(cache, root, s, generation);
+    }
+    return out;
+}
+
+const AttentionQueue* Attention::queue_of(core::UnitId attacker) const {
+    for (const AttentionQueue& q : queues) {
+        if (q.attacker == attacker) return &q;
+    }
+    return nullptr;
+}
+
+std::optional<int> Attention::wiped(core::UnitId unit) const {
+    for (const auto& [id, turn] : wiped_turn) {
+        if (id == unit) return turn;
+    }
+    return std::nullopt;
+}
+
+const GroupPace* Attention::group_on(core::UnitId target) const {
+    for (const GroupPace& g : groups) {
+        if (g.target == target) return &g;
+    }
+    return nullptr;
+}
+
 Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, core::Side side, ChainWeights weights,
-                     ChainCache* cache, bool force_army)
+                     ChainCache* cache, bool force_army, Generation generation, const ArmyPlans* plans)
     : odds_(odds), side_(side), weights_(weights) {
     const std::optional<Duel> d = duel_play(root);
     if (!d) {
         // D-067: the army. One table per pair of unit types present (both sides need a unit with models).
-        std::optional<ArmyPlan> plan = army_plan(root, weights, kBucketMm);
+        std::optional<TablePlan> plan = table_plan(root, weights, kBucketMm);
         if (!plan) return;
         army_ = true;
         unit_keys_ = std::move(plan->unit_keys);
@@ -1679,6 +1710,10 @@ Evaluator::Evaluator(analysis::OddsCache& odds, const core::GameState& root, cor
         for (const auto& [ka, ua] : plan->a_types) {
             for (const auto& [kb, ub] : plan->b_types) army_tables_.push_back(PairTable{ka, kb, tables[k++]});
         }
+        // D-083 part 4 (M82): the decision's plans (the caller's, worked out once for it); none for a pre-teamwork
+        // generation.
+        if (pre_teamwork(generation)) return;
+        plans_ = plans != nullptr ? *plans : army_plans(odds, root, generation);
         return;
     }
     duel_ = *d;
@@ -1850,6 +1885,33 @@ struct ShotMemo {
         by_unit.emplace_back(u.id, analysis::shot_option_sets(*state, u));
         return by_unit.back().second;
     }
+    // D-083 part 4 (M82): each pair's best shooting (the shooter at the target, [HAZARDOUS] at Normal's rate), worked out
+    // once: a group member's slice duel reads its pair's (the same plan, so the same values). A deque keeps the
+    // references.
+    struct Plan {
+        core::UnitId shooter;
+        core::UnitId target;
+        std::optional<analysis::ShootingPlan> plan;
+    };
+    std::deque<Plan> plans;
+    const std::optional<analysis::ShootingPlan>& best(analysis::OddsCache& odds, const core::Unit& ux,
+                                                       const core::Unit& uy) {
+        for (const Plan& p : plans) {
+            if (p.shooter == ux.id && p.target == uy.id) return p.plan;
+        }
+        const double rate = normal::hazard_rate(*state, ux, uy);
+        plans.push_back(Plan{ux.id, uy.id, analysis::best_shooting(odds, *state, ux.id, uy.id, rate, of(ux))});
+        return plans.back().plan;
+    }
+};
+
+// D-083 part 4 (M82): one unit of a pair read as a slice of itself (a group's target, each member's duel with its share):
+// `wounds` in the chain (at most its own, at least 1), and `share` of its attacks in the half-turn in progress (its
+// shooting's outcome with that probability, no damage otherwise: its share of the expected wounds).
+struct Slice {
+    core::Side side = core::Side::A;
+    int wounds = 1;
+    double share = 1.0;
 };
 
 LinePos pos_on_line(const PairMode& mode, int line, float bucket, bool engaged, float gap_mm, float room_a,
@@ -1870,15 +1932,20 @@ bool pair_engaged(const PairMode& mode, const core::GameState& state, const core
 
 // The value (side A's view) of the duel between `ua` (side A) and `ub` (side B) in `state`, by where the turn is
 // (Evaluator::evaluate). Precondition: both have models, the half-turn is within the game.
+// D-083 part 4: `slice`, one of the two read as a slice of itself (nullptr: both whole, as before M82).
 Node pair_node(const ChainTable& t, analysis::OddsCache& odds, const core::GameState& state, const core::Unit& ua,
-               const core::Unit& ub, const PairMode& mode) {
+               const core::Unit& ub, const PairMode& mode, const Slice* slice = nullptr) {
     const float bucket = Evaluator::bucket_mm();
     const int h = half_turn_of(state);
     const core::Side x = core::turn_side(state);
     const core::Unit& ux = x == core::Side::A ? ua : ub;
     const core::Unit& uy = x == core::Side::A ? ub : ua;
-    const int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
-    const int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    const int whole_a = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
+    const int whole_b = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    const bool slice_a = slice != nullptr && slice->side == core::Side::A;
+    const bool slice_b = slice != nullptr && slice->side == core::Side::B;
+    const int wa = slice_a ? std::clamp(slice->wounds, 1, whole_a) : whole_a;
+    const int wb = slice_b ? std::clamp(slice->wounds, 1, whole_b) : whole_b;
     const float room_a = room_away(state, ua, centroid_of(ub));
     const float room_b = room_away(state, ub, centroid_of(ua));
     const bool engaged = pair_engaged(mode, state, ux, uy);
@@ -1908,23 +1975,38 @@ Node pair_node(const ChainTable& t, analysis::OddsCache& odds, const core::GameS
     // The shooting of the side whose turn it is, from the engine (best_shooting), then the charge or the fight.
     const auto before_shoot = [&](bool may_charge) {
         // D-078: [HAZARDOUS] priced at Normal's rate (D-077; nothing changes without such a profile); the options shared.
-        const double rate = normal::hazard_rate(state, ux, uy);
-        const std::optional<analysis::ShootingPlan> plan =
-            mode.shots != nullptr ? analysis::best_shooting(odds, state, ux.id, uy.id, rate, mode.shots->of(ux))
-                                  : analysis::best_shooting(odds, state, ux.id, uy.id, rate);
-        const int wy = xa ? wb : wa;
+        // D-083 part 4: the shared options' plan worked out once per pair (ShotMemo::best).
+        std::optional<analysis::ShootingPlan> own;
+        const std::optional<analysis::ShootingPlan>* plan = &own;
+        if (mode.shots != nullptr) {
+            plan = &mode.shots->best(odds, ux, uy);
+        } else {
+            own = analysis::best_shooting(odds, state, ux.id, uy.id, normal::hazard_rate(state, ux, uy));
+        }
+        // The target's whole wounds (the engine's outcome is over them) and, D-083 part 4, its slice's in the chain.
+        const int wy = xa ? whole_b : whole_a;
+        const int wy_chain = xa ? wb : wa;
+        const bool target_slice = xa ? slice_b : slice_a;
+        // D-083 part 4: a shooter read as a slice hits with its share (no damage otherwise).
+        const double hit = (xa ? slice_a : slice_b) ? std::clamp(slice->share, 0.0, 1.0) : 1.0;
         std::vector<double> pmf(static_cast<std::size_t>(wy) + 1, 0.0);
-        if (plan && plan->outcome.wounds_left_pmf.size() == pmf.size()) {
-            pmf = plan->outcome.wounds_left_pmf;
+        if (*plan && (*plan)->outcome.wounds_left_pmf.size() == pmf.size()) {
+            pmf = (*plan)->outcome.wounds_left_pmf;
         } else {
             pmf.back() = 1.0;
         }
         const int wpm = std::max(1, t.side(core::opponent(x)).wounds_per_model);
         const int models = static_cast<int>(uy.models.size());
         Node out;
-        for (int left = 0; left <= wy; ++left) {
-            const double q = pmf[static_cast<std::size_t>(left)];
+        for (int whole_left = 0; whole_left <= wy; ++whole_left) {
+            double q = pmf[static_cast<std::size_t>(whole_left)];
+            if (hit < 1.0) {
+                q *= hit;
+                if (whole_left == wy) q += 1.0 - hit;
+            }
             if (q == 0.0) continue;
+            // D-083 part 4: a target read as a slice loses what the whole unit would.
+            const int left = target_slice ? std::max(0, wy_chain - (wy - whole_left)) : whole_left;
             if (left == 0) {
                 add(out, t.win(x, h, wa, wb), q);
                 continue;
@@ -1936,7 +2018,7 @@ Node pair_node(const ChainTable& t, analysis::OddsCache& odds, const core::GameS
                 continue;
             }
             // The defender removes its front models (the worst case for a charge, M40's distance_after_casualties).
-            const int destroyed = std::clamp(models - (left + wpm - 1) / wpm, 0, std::max(0, models - 1));
+            const int destroyed = std::clamp(models - (whole_left + wpm - 1) / wpm, 0, std::max(0, models - 1));
             const float gap_k = analysis::kth_closest_model_distance(ux, uy, destroyed + 1).value_or(gap);
             add(out, after_shoot(na, nb, gap_k, may_charge), q);
         }
@@ -2099,14 +2181,19 @@ struct PairCharge {
     Node hold;
     Node fight;
 };
+// D-083 part 4: `slice`, one of the two read as a slice of itself (nullptr: both whole).
 PairCharge pair_charge(const ChainTable& t, const core::GameState& state, const core::Unit& ua, const core::Unit& ub,
-                       const PairMode& mode) {
+                       const PairMode& mode, const Slice* slice = nullptr) {
     const float bucket = Evaluator::bucket_mm();
     const int h = half_turn_of(state);
     const core::Side x = core::turn_side(state);
     const bool xa = x == core::Side::A;
-    const int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
-    const int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    int wa = std::clamp(wounds_of(ua), 1, t.side(core::Side::A).max_wounds);
+    int wb = std::clamp(wounds_of(ub), 1, t.side(core::Side::B).max_wounds);
+    if (slice != nullptr) {
+        int& w = slice->side == core::Side::A ? wa : wb;
+        w = std::clamp(slice->wounds, 1, w);
+    }
     const float room_a = room_away(state, ua, centroid_of(ub));
     const float room_b = room_away(state, ub, centroid_of(ua));
     const float gap = core::unit_distance(ua, ub).value_or(0.0f);
@@ -2258,7 +2345,7 @@ const core::Unit* Evaluator::main_enemy(const core::GameState& state, const core
 }
 
 Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<core::UnitId> no_charge,
-                                    const Charged* charged, std::vector<UnitFate>* fates) const {
+                                    const Charged* charged, std::vector<UnitFate>* fates, Attention* attention) const {
     if (const std::optional<Evaluation> e = army_terminal(state)) return *e;
     ShotMemo shots;
     shots.state = &state;
@@ -2324,6 +2411,38 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
         return charged_node && ((x.id == charged->unit && y.id == charged->target) ||
                                 (x.id == charged->target && y.id == charged->unit));
     };
+    // D-083 part 4 (M82): our plan's groups at this state: a group whose target has models and two or more of whose
+    // members have models. A member's queue starts with the target unless it is engaged with another enemy unit and not
+    // with the target (an engaged unit deals with what it fights first, as its main enemy).
+    struct Group {
+        const core::Unit* target = nullptr;
+        std::vector<const core::Unit*> members;  // with models, in the plan's (unit) order
+    };
+    std::vector<Group> groups;
+    std::vector<std::pair<const core::Unit*, const core::Unit*>> leads;  // (member, its target) when it leads its queue
+    const normal::ArmyPlan& ours = plan();
+    if (ours.active && ours.side == side_) {
+        for (const normal::PlanGroup& pg : ours.groups) {
+            const core::Unit* target = state.find_unit(pg.target);
+            if (target == nullptr || target->models.empty()) continue;
+            Group g{target, {}};
+            for (const normal::PlanMember& m : pg.members) {
+                const core::Unit* u = state.find_unit(m.unit);
+                if (u != nullptr && !u->models.empty() && u->side != target->side) g.members.push_back(u);
+            }
+            if (g.members.size() < 2) continue;
+            for (const core::Unit* u : g.members) {
+                if (!core::is_engaged(state, *u) || engaged_with(state, *u, *target)) leads.emplace_back(u, target);
+            }
+            groups.push_back(std::move(g));
+        }
+    }
+    const auto focus_of = [&](const core::Unit* u) -> const core::Unit* {
+        for (const auto& [m, t] : leads) {
+            if (m == u) return t;
+        }
+        return nullptr;
+    };
     // Attention: each unit deals with the enemy units closest to it first (D-010; engaged ones are the closest), so
     // its duel with a further one starts once it has wiped out the closer ones (ChainTable::wipe_half_turns).
     // A unit survives only if it survives every enemy unit's duel (the fates of the duels are independent).
@@ -2341,23 +2460,33 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
         }
         return fate.front();
     };
-    // Each attacker's queue: the enemy units, closest first (the charged pair's target first).
+    // Each attacker's queue: the enemy units, closest first (the charged pair's target first). D-083 part 4: a group
+    // member that leads with its group's target has it next (then the others by distance).
+    struct Entry {
+        float gap;  // the gap now (-1: the charged pair's target)
+        const core::Unit* unit;
+        float key;  // the queue's order
+    };
     struct Queue {
         const core::Unit* attacker;
-        std::vector<std::pair<float, const core::Unit*>> targets;  // (gap now, unit)
-        std::vector<int> start;  // [k]: the attacker's turn (0: its next) in which it starts on targets[k]
+        std::vector<Entry> targets;
+        std::vector<int> start;      // [k]: the attacker's turn (0: its next) in which it starts on targets[k]
+        std::vector<double> dealt;   // [k]: D-083 part 4, the expected wounds it takes from targets[k] in the timeline
+        const core::Unit* focus = nullptr;
     };
+    constexpr float kFocusKey = -0.5f;  // after the charged pair's target (-1), before every real gap
     std::vector<Queue> queues;
     for (const core::Unit* e : alive) {
-        Queue q{e, {}, {}};
+        Queue q{e, {}, {}, {}, focus_of(e)};
         for (const core::Unit* v : alive) {
             if (v->side == e->side) continue;
             const float gap = is_charged_pair(*e, *v) ? -1.0f : core::unit_distance(*e, *v).value_or(0.0f);
-            q.targets.emplace_back(gap, v);
+            q.targets.push_back(Entry{gap, v, v == q.focus && gap >= 0.0f ? kFocusKey : gap});
         }
         std::stable_sort(q.targets.begin(), q.targets.end(),
-                         [](const auto& x, const auto& y) { return x.first < y.first; });
+                         [](const Entry& x, const Entry& y) { return x.key < y.key; });
         q.start.assign(q.targets.size(), std::numeric_limits<int>::max());
+        q.dealt.assign(q.targets.size(), 0.0);
         queues.push_back(std::move(q));
     }
     // The attention timeline, each side's attackers in their own turns: every attacker works on its closest target
@@ -2366,15 +2495,17 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
     // turn; what a volley has left when its target falls goes on to the next one, which it starts this turn if at
     // least half of the volley is left (else next turn). So the attackers share the work: a unit three squads stand
     // in front of is reached once they have wiped out what is in front of it together, not each on its own. (The
-    // duel that then starts models the approach to that unit itself.)
+    // duel that then starts models the approach to that unit itself.) D-083 part 4: a group's members, which start on
+    // its target, wipe it out at their combined pace, and so start on their next targets sooner.
     const int turns_left = (std::max(0, half_turns - h) + 1) / 2 + 1;
     const auto arrival = [&](const Queue& q, std::size_t k) {
         const analysis::ThreatRanges r = analysis::threat_ranges(*q.attacker);
         const float reach = std::max(r.shooting_reach_mm(), r.move_mm + core::inches_to_mm(7.0f));
-        const float gap = std::max(0.0f, q.targets[k].first);
+        const float gap = std::max(0.0f, q.targets[k].gap);
         if (!(gap > reach) || !(r.move_mm > 0.0f)) return 0;
         return static_cast<int>(std::ceil((gap - reach) / r.move_mm - 1e-6f));
     };
+    std::vector<std::pair<const core::Unit*, std::optional<int>>> wiped_turn;  // D-083 part 4 (diagnostics)
     for (const core::Side s : {core::Side::A, core::Side::B}) {
         std::vector<std::pair<const core::Unit*, double>> left;  // wounds left of the side's targets
         for (const core::Unit* v : alive) {
@@ -2386,6 +2517,10 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
             }
             return left.front().second;
         };
+        const std::size_t first_wipe = wiped_turn.size();
+        if (attention != nullptr) {
+            for (const auto& [v, w] : left) wiped_turn.emplace_back(v, std::nullopt);
+        }
         std::vector<std::size_t> at(queues.size(), 0);  // each attacker's position in its queue
         for (std::size_t qi = 0; qi < queues.size(); ++qi) {
             if (queues[qi].attacker->side == s && !queues[qi].start.empty()) queues[qi].start[0] = 0;
@@ -2396,7 +2531,7 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
                 if (q.attacker->side != s) continue;
                 double volley = 1.0;  // the share of this turn's volley still to spend
                 while (volley > 1e-9 && at[qi] < q.targets.size()) {
-                    const core::Unit* v = q.targets[at[qi]].second;
+                    const core::Unit* v = q.targets[at[qi]].unit;
                     double& w = wounds_left(v);
                     if (w <= 1e-9) {  // wiped out already (by another attacker)
                         ++at[qi];
@@ -2412,28 +2547,67 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
                     const double spend = std::min(volley, w / pace);
                     w -= spend * pace;
                     volley -= spend;
+                    q.dealt[at[qi]] += spend * pace;
+                    if (attention != nullptr && w <= 1e-9) {
+                        for (std::size_t i = first_wipe; i < wiped_turn.size(); ++i) {
+                            if (wiped_turn[i].first == v && !wiped_turn[i].second) wiped_turn[i].second = turn;
+                        }
+                    }
                 }
             }
         }
     }
-    for (Queue& q : queues) {
+    // D-083 part 4: each group's slices: the members whose queue starts with the target and that take wounds from it in
+    // the timeline, each with its share of what they take. With two or more, they fight it together: each member's duel
+    // is with its slice (the target's wounds x its share), and the target's P(wiped) by them is the share-weighted
+    // P(each slice is wiped), in place of those members' own duels with the whole target.
+    struct Slices {
+        const core::Unit* target = nullptr;
+        std::vector<std::pair<std::size_t, double>> members;  // (queue index, share)
+        double p_apart_survive = 1.0;  // (diagnostics) the target surviving those members' own duels
+    };
+    std::vector<Slices> slices;
+    std::vector<bool> absorbed(queues.size(), false);  // the queue's first duel is one of a group's slices
+    for (const Group& g : groups) {
+        Slices sl{g.target, {}, 1.0};
+        double total = 0.0;
+        for (std::size_t qi = 0; qi < queues.size(); ++qi) {
+            const Queue& q = queues[qi];
+            if (std::find(g.members.begin(), g.members.end(), q.attacker) == g.members.end()) continue;
+            if (q.targets.empty() || q.targets.front().unit != g.target || !(q.dealt.front() > 1e-9)) continue;
+            const core::Unit& a = q.attacker->side == core::Side::A ? *q.attacker : *g.target;
+            const core::Unit& b = q.attacker->side == core::Side::A ? *g.target : *q.attacker;
+            if (table_for(a, b) == nullptr) continue;
+            sl.members.emplace_back(qi, q.dealt.front());
+            total += q.dealt.front();
+        }
+        if (sl.members.size() < 2 || !(total > 0.0)) continue;
+        for (auto& [qi, share] : sl.members) {
+            share /= total;
+            absorbed[qi] = true;
+        }
+        slices.push_back(std::move(sl));
+    }
+    for (std::size_t qi = 0; qi < queues.size(); ++qi) {
+        Queue& q = queues[qi];
         const core::Unit* e = q.attacker;
         // While it deals with the closer units the attacker closes on the first of them, its M in each of its turns
         // (never past it): a later duel starts from where that leaves it (centre to centre, as far as the gap goes).
         const core::Position from = centroid_of(*e);
         core::Position towards = from;
-        if (!q.targets.empty()) towards = centroid_of(*q.targets.front().second);
+        if (!q.targets.empty()) towards = centroid_of(*q.targets.front().unit);
         const float span = std::hypot(towards.x - from.x, towards.y - from.y);
         const float move_mm = analysis::threat_ranges(*e).move_mm;
         for (std::size_t k = 0; k < q.targets.size(); ++k) {
-            const auto& [gap, v] = q.targets[k];
+            const float gap = q.targets[k].gap;
+            const core::Unit* v = q.targets[k].unit;
             const int delay = q.start[k] >= turns_left ? half_turns : std::min(2 * q.start[k], half_turns);
             const core::Unit& a = e->side == core::Side::A ? *e : *v;
             const core::Unit& b = e->side == core::Side::A ? *v : *e;
             float gap_then = std::max(0.0f, gap);
             if (delay > 0 && span > 0.0f) {
                 const float travel = std::min(move_mm * static_cast<float>(delay / 2),
-                                              std::max(0.0f, q.targets.front().first));
+                                              std::max(0.0f, q.targets.front().gap));
                 const core::Position to{from.x + (towards.x - from.x) / span * travel,
                                         from.y + (towards.y - from.y) / span * travel, 0.0f};
                 const core::Position cv = centroid_of(*v);
@@ -2444,9 +2618,75 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
             std::optional<Node> n = is_charged_pair(*e, *v) ? charged_node : node_at(a, b, delay, gap_then);
             if (!n) continue;
             Fate& f = fate_of(v);
-            f.survive *= 1.0 - (v->side == core::Side::A ? n->pl : n->pw);
+            const double p_wipe = v->side == core::Side::A ? n->pl : n->pw;
+            if (k == 0 && absorbed[qi]) {
+                for (Slices& sl : slices) {
+                    if (sl.target == v) sl.p_apart_survive *= 1.0 - p_wipe;
+                }
+            } else {
+                f.survive *= 1.0 - p_wipe;
+            }
             if (f.main == e) f.main_node = n;
         }
+    }
+    // D-083 part 4: each group's target, by its slices. A member's slice of wounds s (at least 1) is read between the
+    // whole wounds below and above it (the chain's wounds are whole).
+    std::vector<GroupPace> paces;
+    for (const Slices& sl : slices) {
+        const core::Unit& v = *sl.target;
+        GroupPace pace{v.id, {}, {}, 0.0, 1.0 - sl.p_apart_survive};
+        double p_group = 0.0;
+        for (const auto& [qi, member_share] : sl.members) {
+            const double share = member_share;  // (a plain variable: the lambda below captures it)
+            const core::Unit& m = *queues[qi].attacker;
+            const core::Unit& a = m.side == core::Side::A ? m : v;
+            const core::Unit& b = m.side == core::Side::A ? v : m;
+            const ChainTable* t = table_for(a, b);
+            const int whole = std::clamp(wounds_of(v), 1, t->side(v.side).max_wounds);
+            const double s_w = std::max(1.0, share * static_cast<double>(whole));
+            const int lo = std::min(whole, static_cast<int>(std::floor(s_w)));
+            const double up = lo < whole ? s_w - static_cast<double>(lo) : 0.0;
+            const auto wiped_at = [&](int wounds) {
+                const Slice slice{v.side, wounds, share};
+                const Node n = is_charged_pair(m, v) ? pair_charge(*t, state, a, b, mode, &slice).fight
+                                                     : pair_node(*t, odds_, state, a, b, mode, &slice);
+                return v.side == core::Side::A ? n.pl : n.pw;
+            };
+            double p = wiped_at(lo);
+            if (up > 1e-9) p = (1.0 - up) * p + up * wiped_at(lo + 1);
+            p_group += share * p;
+            pace.members.push_back(m.id);
+            pace.shares.push_back(share);
+        }
+        pace.p_wiped = std::clamp(p_group, 0.0, 1.0);
+        fate_of(sl.target).survive *= 1.0 - pace.p_wiped;
+        paces.push_back(std::move(pace));
+    }
+    if (attention != nullptr) {
+        for (const Queue& q : queues) {
+            AttentionQueue aq{q.attacker->id, q.focus != nullptr ? std::optional<core::UnitId>(q.focus->id) : std::nullopt,
+                              {}};
+            for (std::size_t k = 0; k < q.targets.size(); ++k) {
+                const std::optional<int> st = q.start[k] >= turns_left ? std::nullopt : std::optional<int>(q.start[k]);
+                aq.targets.push_back(AttentionTarget{q.targets[k].unit->id, st, q.dealt[k]});
+            }
+            attention->queues.push_back(std::move(aq));
+        }
+        for (const core::Unit* u : alive) {
+            for (const auto& [v, turn] : wiped_turn) {
+                if (v == u) attention->wiped_turn.emplace_back(u->id, turn);
+            }
+        }
+        // The groups in unit order of their targets (their members are in unit order: the queues are).
+        const auto order = [&](core::UnitId id) {
+            for (std::size_t i = 0; i < alive.size(); ++i) {
+                if (alive[i]->id == id) return i;
+            }
+            return alive.size();
+        };
+        std::stable_sort(paces.begin(), paces.end(),
+                         [&](const GroupPace& x, const GroupPace& y) { return order(x.target) < order(y.target); });
+        attention->groups = std::move(paces);
     }
     double p_a = 1.0;  // P(side A wins): every unit of side B wiped out
     double p_b = 1.0;
@@ -2504,6 +2744,12 @@ Evaluation Evaluator::army_evaluate(const core::GameState& state, std::optional<
 std::vector<UnitFate> Evaluator::fates(const core::GameState& state) const {
     std::vector<UnitFate> out;
     if (army_) (void)army_evaluate(state, std::nullopt, nullptr, &out);
+    return out;
+}
+
+Attention Evaluator::attention(const core::GameState& state) const {
+    Attention out;
+    if (army_) (void)army_evaluate(state, std::nullopt, nullptr, nullptr, &out);
     return out;
 }
 

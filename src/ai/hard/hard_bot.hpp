@@ -76,11 +76,12 @@ struct HardMovePlan {
 };
 // `normal_default`: Normal's own plan (normal::plan_unit_move) is the default, kept unless another is worth more
 // than BotWeights::margin more.
-// D-083 part 2 (M80): `army`, Normal's army plan of the moving unit's side in `origin` (nullptr: computed here, once).
+// D-083 part 2 (M80) and part 4 (M82): `team`, both sides' army plans in `origin` (nullptr: worked out here, once): the
+// moving unit's side's for Normal's move scores, both for the evaluator and its rollouts.
 [[nodiscard]] std::optional<HardMovePlan> hard_plan_unit_move(HardContext& context, analysis::OddsCache& cache,
                                                               const core::GameState& origin, bool lookahead,
                                                               bool normal_default = true,
-                                                              const normal::ArmyPlan* army = nullptr);
+                                                              const ArmyPlans* team = nullptr);
 
 // The value of each move type at a MoveUnits decision (tests, diagnostics), as hard_policy weighs them.
 struct HardTypeValues {

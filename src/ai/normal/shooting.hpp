@@ -30,6 +30,7 @@
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "generation.hpp"
+#include "normal/army_plan.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -44,8 +45,10 @@ class ShootingAim {
 public:
     ShootingAim() = default;
     // The aim of `side` (the side shooting) in `state` (the army plan's group targets are its focus targets). `cache`
-    // and `state` must outlive it.
-    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side, Generation generation);
+    // and `state` must outlive it. D-083 part 4 (M82): `plan`, `side`'s army plan to read (Hard's rollouts: the root's)
+    // instead of working it out in `state` (nullptr, or another side's: worked out).
+    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side, Generation generation,
+                const ArmyPlan* plan = nullptr);
     [[nodiscard]] bool active() const noexcept { return active_; }
     // The bonus of a declaration with these outcomes (unit shares; 0 when inactive).
     [[nodiscard]] double bonus(std::span<const analysis::TargetOutcome> outcomes) const;
@@ -85,9 +88,11 @@ struct ShootingChoice {
 // From the Shoot decision's legal actions: the unit, type and declaration worth the most, or nullopt when no
 // offered Shoot is worth anything (end the step). D-083 part 3 (M81): with focus fire active (ShootingAim), the values
 // with its bonus, and a unit shooting at a focus target first.
+// D-083 part 4 (M82): `plan`, the shooting side's army plan to read (nullptr, or another side's: worked out here, as M81).
 [[nodiscard]] std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
                                                             const std::vector<core::GameAction>& legal,
-                                                            Generation generation = Generation::Current);
+                                                            Generation generation = Generation::Current,
+                                                            const ArmyPlan* plan = nullptr);
 
 // The value of `volley` resolved in `order` (indices into it) against `target`, in model equivalents.
 [[nodiscard]] double order_value(analysis::OddsCache& cache, std::span<const analysis::VolleyBatch> volley,
