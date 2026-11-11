@@ -1,34 +1,29 @@
 # VibeHammer: Warhammer 40,000 11th Edition Rules Engine
 
 A deterministic C++20 rules engine for Warhammer 40k 11th Edition, with a 2D top-down Windows client.
-V1 goal: one Space Marine Intercessor Squad vs one Tyranid Termagant unit, played hotseat on a 24"x24" board,
-following the real core rules. Since M38-M45 the client also plays against a bot (or watches bot vs bot, D-054).
-Since M53-M58 there is also a full-size 60"x44" scenario with several units per side
-(`data/scenarios/strike_44x60.json`: 3 Intercessor Squads vs 4 Termagant units, D-064), which every bot level plays.
-Since M59-M70 there is a 44"x60" portrait scenario with two real army rosters (`data/scenarios/rosters_44x60.json`,
-"Incursion": 5 Chaos Space Marine units vs 9 Tyranid units, including the oval-based Tyrannofex). It is decided on
-points destroyed after round 5 unless one side is wiped out (D-076), and every bot level plays it.
-Since M71-M77 there are custom battles: an army builder (Chaos Space Marines vs Tyranids, Incursion 1000 pts, the
-list rules read from BSData, D-079, D-082) builds the rosters scenario's battle from two army lists, and the units are
-either auto-placed or set up by hand, the sides alternating one unit at a time through a `PendingDecision` (D-081).
-Every bot level plays them; Normal and Hard deploy by a heuristic (D-081, M77).
-Since M78-M83 Normal and Hard fight as an army when a side has several units: an army plan puts units in groups on
-one target, the groups move up together, focus their fire and charge jointly, and Hard's army value reads the plan (D-083).
+V1 (M0–M13): Intercessor Squad vs Termagants, hotseat on a 24"x24" board, following the real core rules.
+Since then: bots at three levels (Easy/Normal/Hard, D-054), the 60"x44" Strike scenario (D-064), the 44"x60"
+rosters scenario with oval bases and a points result (D-074, D-076), custom battles with an army builder and
+hand deployment (D-079, D-081, D-082), and army-level teamwork for Normal and Hard (D-083). The finished
+milestones are in `docs/plan_archive.md`.
 
-The milestone plan is in `PLAN.md`. Before starting work, check which milestone is current and stay inside its scope.
-V1 (M0–M13) is complete. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance
-criteria (see "Later (post-V1)"), agree it with the user, then work inside it.
+The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
+inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance criteria
+(see "Later (post-V1)"), agree it with the user, then work inside it.
 
 ## Repository layout
 
 ```
 CLAUDE.md                 this file
 README.md                 overview for people visiting the repo (play, build, layout)
-PLAN.md                   milestone plan with acceptance criteria
+PLAN.md                   current and upcoming milestones, with acceptance criteria
+docs/plan_archive.md      the finished milestones M0–M83, verbatim
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
 docs/datasheets/          the two New Recruit army rosters behind rosters_44x60.json (GW copyright: private repo only)
-docs/decisions.md         rule interpretations and design decisions (D-001 ...), cited in code
+docs/decisions.md         index of rule interpretations and design decisions (D-001 ...), cited in code
+docs/decisions/D-NNN.md   one file per decision
+docs/dev/                 reference: replays, client flags, bot arena, packaging and data regeneration
 data/units/*.json         unit datasheets generated from BSData (do not hand-edit)
 data/scenarios/*.json     battlefield size, deployment, armies, loadouts
 data/factions.json        the custom battles' factions and their datasheets (D-079)
@@ -66,68 +61,23 @@ needs the X11/GL dev packages (libxrandr, libxinerama, libxcursor, libxi, libgl1
 ```bash
 cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build/linux && (cd build/linux && ctest)
-# Regenerate tests/replays/ on purpose only, then check the diff:
-./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=Replay.DISABLED_RegenerateReplays
-# The bot-game replay m45_bot_game.json (Hard vs Hard, seed 9) comes from the ai tests instead (M45):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M45_Replay.DISABLED_RegenerateBotGameReplay
-# and m46_bot_fight_moves.json (Normal vs Normal, 20 Termagants, seed 1) likewise (M46):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M46_Replay.DISABLED_RegenerateFightMoveReplay
-# and m47_default_casualties.json (Easy vs Easy, 20 Termagants, seed 121) likewise (M47):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M47_Replay.DISABLED_RegenerateDefaultCasualtiesReplay
-# and m58_strike_bot_game.json (Hard vs Hard on the Strike scenario) likewise (M58):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M58_Replay.DISABLED_RegenerateStrikeBotGameReplay
-# and m68_rosters_normal_bot_game.json (Normal vs Normal on the rosters, seed 5) likewise (M68):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M68_Replay.DISABLED_RegenerateRostersNormalBotGameReplay
-# and m70_rosters_bot_game.json (Hard vs Hard on the rosters, seed 93) likewise (M70):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M70_Replay.DISABLED_RegenerateRostersBotGameReplay
-# and m73_custom_bot_game.json (Normal vs Normal on two custom lists, seed 1) likewise (M73):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M73_Replay.DISABLED_RegenerateCustomBotGameReplay
-# and m75_builder_battle.json (Easy vs Easy on an army-builder battle, seed 1) likewise (M75):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M75_Replay.DISABLED_RegenerateBuilderBattleReplay
-# and m77_custom_hand_deploy_bot_game.json (Normal vs Normal, custom lists set up by hand, seed 1) likewise (M77):
-./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay
 ```
-(The M73, M75 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`.)
+Regenerating `tests/replays/` (on purpose only) and the rules for saved replays: `docs/dev/replays.md`.
 
-On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` and
-`build/default/tests/ai/Debug/wh40k_ai_tests.exe` with the same flags.
-
-- To send the game to someone: `powershell -ExecutionPolicy Bypass -File tools\package.ps1`. It builds Release,
-  stages the exe, VC++ runtime DLLs, `data/` and `tests/replays/` with a README, smoke-tests the staged exe, and
-  writes `VibeHammer.zip` in the repo root (gitignored). The staged `data/` includes `data/factions.json` and the
-  stock lists in `data/armies/` (M72); the builder saves a player's lists in `armies/` next to the exe (gitignored
-  as `/armies/` in the repo). The exe looks for `data/` next to itself first, then the source tree. Never add `docs/rules/`, `docs/datasheets/` or the PDF to the package.
-- To publish a GitHub release (M52, D-063): set the version in `CMakeLists.txt` and `src/core/version.cpp`, write
-  `docs/releases/vX.Y.Z.md`, then push tag `vX.Y.Z` (or run the Release workflow by hand with that tag).
-  `.github/workflows/release.yml` builds on Windows, runs ctest, packages and attaches
-  `VibeHammer-vX.Y.Z-windows-x64.zip`.
+- Packaging (`tools\package.ps1`; never add `docs/rules/`, `docs/datasheets/` or the PDF to the package), GitHub
+  releases and regenerating `docs/rules/` and `data/units/` (`tools/extract_rules.py`, `tools/fetch_bsdata.py`, the
+  pinned BSData sha) are in `docs/dev/release_and_data.md`.
 - Dependencies come from CMake `FetchContent` pinned to exact tags: raylib, Dear ImGui, rlImGui, nlohmann_json, GoogleTest.
 - Treat warnings as errors in `wh40k_core` (`/W4 /WX /permissive-`). Don't silence a warning to get a build through.
 - A change is not done until it builds and `ctest` passes. Report test failures as they are; never skip, delete or weaken a test to get to green.
-
-## Regenerating source material
-
-```powershell
-python tools/extract_rules.py                # rebuild docs/rules/ from 11th-ed-core-rules.pdf
-python tools/fetch_bsdata.py "Imperium - Space Marines.json" "Intercessor Squad" data/units/intercessor_squad.json --ref <sha>
-python tools/fetch_bsdata.py "Tyranids.json" "Termagants" data/units/termagants.json --ref <sha>
-```
-
-The nine roster units (M59: Hive Tyrant, Genestealers, Tyrant Guard, Screamer-killer, Tyrannofex, Chaos Lord,
-Legionaries, Chaos Terminator Squad, Havocs) come from the same tool and catalogues (D-070). Pass the BSData entry
-name and the output file in the same way.
-
-Each unit JSON records the BSData commit it came from in `source.commit` (all of them at `0f9035541630...` today). Pin to that sha unless you are deliberately updating the data.
-Pass `--fetched <YYYY-MM-DD>` to keep a file's existing `source.fetched` date when regenerating it. Since M71 the tool
-also writes a `list_building` block (points by unit size, wargear slots, costs and limits, copy limits; D-079) for the
-nine roster datasheets and Termagants.
+  Exception: a change that touches only `.md` files needs no build or `ctest` (no build step or test reads them).
 
 ## Rules: the source of truth
 
 - **Before implementing or changing any game mechanic, look up its rule number in `docs/rules/00_index.md` and read that section file.** Don't implement from memory: 11th edition differs from 10th in many details (e.g. 2" engagement range, allocation groups, consolidation modes, Bolt Rifle firing modes).
 - The rules text is verbatim pdftotext output. Sidebars, diagrams and example captions can appear out of order. Rule text is the authority, and examples only illustrate it.
 - In section 05, the dice-face tables (hit, wound and save) were transcribed from page images. Everything else is raw extraction.
-- If a rule is ambiguous, or `docs/rules/` disagrees with what you expected, **stop and ask**. Don't guess. Record the decision in `docs/decisions.md` (create it if missing), with the rule number.
+- If a rule is ambiguous, or `docs/rules/` disagrees with what you expected, **stop and ask**. Don't guess. Record the decision as a new `docs/decisions/D-NNN.md`, with the rule number, and add its line to the index in `docs/decisions.md`.
 - Cite rule numbers in code and tests: `// 05.04 Inflict Damage: lowest save roll first` and `TEST(R05_04_InflictDamage, ResolvesLowestRollFirst)`.
 - **Known gaps (app-only rules):** the PDF names some rules under "See also" without including their text, because they live in the Warhammer 40,000 app. The ones V1 touches are: Modifying Dice Rolls, Modifying Damage, Modified Characteristics, Characteristic Modifiers, Random Characteristics, Multiple Weapon Profiles (D-001), Target No Longer Eligible or Viable, Closest Model/Unit (M3, M10), Within/Wholly Within (M3, M8), Multiple Battle-shock Rolls (M7, M11), Re-rolls and Rules Sequencing. "Destroyed" is partly covered: the Rules Appendix (`05_reference/25_rules_appendix.md`) has a DESTROYED entry; use that text. Starting Strength/Half-strength, Different Move Characteristics and fight-phase passing are also in the appendix. Never invent the app-only rules. When a milestone needs one, first check `docs/decisions.md`: wording the user supplied is already recorded for Within/Wholly Within (D-009), Closest Model/Unit (D-010), Modifying Dice Rolls and Re-rolls (D-011), Target No Longer Eligible or Viable (D-012), Multiple Battle-shock Rolls (D-015) and Random Characteristics (D-069). That wording is AI-sourced and not verified against the app, so treat it as a working assumption. For any other app-only rule, ask the user for the wording and record it in `docs/decisions.md`.
 - If `docs/rules/` is missing, ask the user to run `python tools/extract_rules.py`. Don't reconstruct rules from memory.
@@ -200,62 +150,24 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Geometry tests use explicit coordinates in inches, converted with a helper, so the numbers read like the rulebook.
 - Tests that check a decision rather than a numbered rule are named after it (`TEST(D020_FightSequence, ...)`), Rules Appendix tests use `Appendix_...`, and client tests (`wh40k_client_tests`) use the milestone (`M12_...`, `M13_...`).
 - At the end of each milestone, add at least one replay file under `tests/replays/` covering that milestone's flow. Stop the replay before any phase a later milestone will change (as `m9_charge.json` and `m10_fight.json` do), so it stays valid.
-- Replays are regenerated only on purpose (`Replay.DISABLED_RegenerateReplays`, and `M45_Replay.DISABLED_RegenerateBotGameReplay` / `M46_Replay.DISABLED_RegenerateFightMoveReplay` / `M47_Replay.DISABLED_RegenerateDefaultCasualtiesReplay` / `M58_Replay.DISABLED_RegenerateStrikeBotGameReplay` / `M68_Replay.DISABLED_RegenerateRostersNormalBotGameReplay` / `M70_Replay.DISABLED_RegenerateRostersBotGameReplay` / `M73_Replay.DISABLED_RegenerateCustomBotGameReplay` / `M75_Replay.DISABLED_RegenerateBuilderBattleReplay` / `M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay` in the ai tests for `m45_bot_game.json` / `m46_bot_fight_moves.json` / `m47_default_casualties.json` / `m58_strike_bot_game.json` / `m68_rosters_normal_bot_game.json` / `m70_rosters_bot_game.json` / `m73_custom_bot_game.json` / `m75_builder_battle.json` / `m77_custom_hand_deploy_bot_game.json`; see Build and test). Existing replay files must come out byte-identical; check with `git diff tests/replays`. The `TheSavedFileMatchesTheGame` tests check that the bot files are what the bots play now:
-  - `M47_Replay`: `m47_default_casualties.json` is what Easy plays.
-  - `M58_Replay`: `m58_strike_bot_game.json` is what Hard plays, through its first battle rounds.
-  - `M68_Replay`: `m68_rosters_normal_bot_game.json` is what Normal plays.
-  - `M70_Replay`: `m70_rosters_bot_game.json` is what Hard plays, through round 1. `M70_Replay.BotsWithChainCachesOfTheirOwnPlayTheSameActions` checks that the arena's shared Hard chain cache changes no decision.
-  - `M73_Replay`: `m73_custom_bot_game.json` is what Normal plays on two custom lists.
-  - `M75_Replay`: `m75_builder_battle.json` is what Easy plays, through round 1.
-  - `M77_Replay`: `m77_custom_hand_deploy_bot_game.json` is what Normal plays, its deployment by hand included.
-  - The whole M58 and M70 games are their `DISABLED_TheWholeSavedFileMatchesTheGame` tests.
-  - The Teamwork batch (M80–M83, D-083) regenerated m58, m68, m70, m73 and m77 on purpose; m45, m46, m47 and m75
-    stayed byte-identical. The pre-batch games are still checked by `M58_Replay.ThePreBatchGameIsAWipeOutInBattleRoundThree`,
-    `M68_Replay.ThePreBatchGameShootsSuperchargedAndFightsOnBothSides`, `M70_Replay.ThePreBatchGameFightsAndLosesAUnitOnBothSides`
-    and `M73_Replay.ThePreBatchGameShootsAndFightsOnBothSides`: each plays the replay's seed with `Generation::M77`
-    (the pre-batch bots), replays it through core and checks what the old file was chosen for.
+- Replays are regenerated only on purpose, and existing replay files must come out byte-identical (check with
+  `git diff tests/replays`). The commands, the `TheSavedFileMatchesTheGame` checks and the pre-batch replay tests
+  are in `docs/dev/replays.md`.
 
 ## Working style for Claude in this repo
 
-- One milestone per session. Run `/clear` between milestones (except where `PLAN.md` records a batch the user pre-approved, such as M38–M45). Re-read `PLAN.md` and the relevant `docs/rules/` files at the start.
+- One milestone per session. Run `/clear` between milestones, batches included (a batch is approved up front;
+  each milestone still gets a fresh session). At the start read the current milestone in `PLAN.md`, the
+  decisions it cites (`docs/decisions/D-NNN.md`) and the relevant `docs/rules/` files, not whole archives.
+- While iterating, run only the tests for the work at hand (`ctest --preset debug -R <milestone or rule>`). Run the
+  full `ctest`, arena runs and `--per-game` checks once, when the milestone is otherwise done.
 - For milestones marked "plan mode" in `PLAN.md`, propose the design (types, files, decision flow) and wait for approval before writing code.
 - Commit at the end of each green milestone with a message naming the milestone and rule numbers covered, then push. In cloud sessions the environment's stop hook requires uncommitted work to be committed and pushed. Open a pull request and merge it (rebase merge, to keep `main` linear) only when the user asks.
-- The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests (`wh40k_client_tests`) and screenshots under `xvfb-run`. The client's flags for this are `--screenshot <file.png>`, `--steps <n>` (click the first decision button n times), `--select <unit id>`, `--select-model <model id>`, `--seed <n>` (fixes the seed; without it each game's seed is random, D-038), `--scenario <file>`, `--replay <file>`, `--frame <n>`, `--zoom <px per mm>`, `--dice <n>` (1 keeps the dice pop-ups that the `--steps` rolls made, 2 also reveals the first; they're dropped otherwise, D-033) `--menu 1` (shows the start screen, which any other flag skips; D-055), `--bot A|B|both|none` (the sides the bot plays), `--bot-level easy|normal|hard`, `--bot-speed slow|normal|fast|instant` and `--bot-steps <n>` (after `--steps`, runs up to n bot decisions at once before the first frame, stopping at a human's decision; `--steps` itself stops at a bot's decision; D-054; it prints `bot-steps: <taken> of <n> bot actions taken` to stdout, which `package.ps1`'s second smoke test checks, M45). Flags added in M59–M70 for screenshots:
-  - `--load <save.json>` starts on a saved game. It can't be combined with `--scenario`, `--replay` or `--seed`.
-  - `--pick-dice <i,j,...>` picks wound dice in the first re-roll pop-up.
-  - `--pick-models <id,...>` picks models in the first casualty pick.
-  - `--click-units <id,...>` clicks units on the board and opens the last target's weapon menu.
-  - `--turn <model>:<deg>[:<dx>,<dy>]` makes a scripted turned drag of an oval model.
-  - `--window <w>x<h>` opens the window at that size instead of maximized.
-
-  Flags added in M75–M76 (custom battles, D-082):
-  - `--builder 1` opens the army builder. With it, `--select <unit id>` selects a builder unit (its id in the battle,
-    side A's units first) and `--open-slot <group>:<slot>` opens one of its wargear combos.
-  - `--army-a <file>`, `--army-b <file>` (army lists; a side without one keeps its stock army), `--first A|B` and
-    `--deploy auto|hand` start a custom battle, or preload the builder with `--builder 1`. They can't be combined with
-    `--scenario`, `--replay` or `--load`, and `--builder 1` not with `--menu 1`.
-  - `--deploy-unit <unit>:<dx>,<dy>[:<model>:<x>,<y>]` starts placing that unit by hand in its side's first
-    deployment decision, moved from core's proposal (inches), one model optionally put at (x, y). `--turn` also turns
-    a model being placed.
-
-  None of these submits an action. While dragging an oval model, Q / E turn it 15° and Shift+wheel turns it 5°. A run with any flag uses the default settings and never reads or writes `vibehammer_settings.json`. `--steps` only clicks panel buttons, so it can't reach decisions made by clicking the board (picking shooters, targets, charges), or the rolls they lead to. A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows. Bot strength is measured with the Release arena: `cmake --build --preset release --target wh40k_bot_arena`, then `.\build\default\src\ai\Release\wh40k_bot_arena.exe --games 200 --a easy --b easy` (flags `--games`, `--a`, `--b` (levels `easy`, `normal`, `hard`, plus the hidden `easy-m55` / `normal-m55`, which play as at M55 for regression comparisons, D-066, and `normal-m77` / `hard-m77`, which play as before the Teamwork batch, D-083), `--scenario`, `--seed`, `--step-cap` (default 5000 steps; a Strike game takes about 300), `--per-game 1` (one line per game with hashes of its actions, final state and decision trace, for proving play unchanged, M54), `--trace <seed>` (one game's bot decisions with their reasons and times) `--weights key=value,...` (overrides level Hard's `BotWeights` for tuning, M44), and for custom battles instead of `--scenario` (M72, M74) `--army-a <file>` / `--army-b <file>` (army lists), `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand` (hand: the bots set the units up in the deployment step); it exits 1 on any rejected action, reverted move or unfinished game). The bot scenarios are `data/scenarios/bot_termagants_first.json` and `bot_20_termagants.json` (M44), and the several-unit `strike_44x60.json` (M53) and `rosters_44x60.json` (M67). With one unit per side the bots play exactly as before M56/M57; changes to the multi-unit path must keep 1v1 `--per-game` output identical. The roster work (M68 D-077, M69 D-078) is gated on facts the older scenarios don't have, such as the points rule, mixed loadouts, [HAZARDOUS], MONSTERS, units over 20 wounds and sides of more than 7 units. V1, both bot scenarios and Strike played exactly as before it (proved with `--per-game`).
-  Custom battles and hand deployment (M71–M77) changed nothing there either. The Teamwork batch (M78–M83, D-083)
-  changed Normal and Hard on Strike, the rosters and custom battles on purpose (from M80). The "identity set", checked
-  with `--per-game` against the pre-batch baseline, is now:
-  - V1 and both bot scenarios (every pairing) and every Easy vs Easy game play exactly as before;
-  - the hidden levels `normal-m77` / `hard-m77` play as the pre-batch bots on every scenario
-    (`M78_Regression.TheM77LevelsMatchThePreBatchHashes` pins five of their games to the pre-batch hashes).
-  - Every batch behaviour is gated on `!pre_teamwork(generation)` (`src/ai/generation.hpp`) and is off with one unit a side.
-
-  The deployment step only exists in a scenario with `"deployment": "alternating"` (D-081); Easy sets up at Auto-place's
-  spots, Normal and Hard by M77's heuristic (never building Hard's chain tables during deployment).
-  - In the arena, two Hard bots share one chain cache. A cache never changes a decision.
-  - Hard builds missing chain tables on up to 4 threads, all joined before a decision returns (`--weights table_workers=1` builds them serially).
-  - On the rosters Hard uses about 0.6 GB, and a side of more than 7 units (the Tyranids) moves as Normal does (`move_search_units`).
-  - The summary has three teamwork lines per game and side (M78): gang-ups (an enemy unit engaged by two or more of
-    ours at a Fight phase's start) and lone engagements; shooting spread (distinct targets per Shoot, the top
-    target's share of a phase's selections); contact (units never within 12" of an enemy unit, first engagement round).
-    The `--per-game` line is unchanged.
+- The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests
+  (`wh40k_client_tests`) and screenshots under `xvfb-run`; the client's flags are in `docs/dev/client_flags.md`.
+  A full game by mouse still needs a manual run on Windows.
+- Bot strength is measured with the Release `wh40k_bot_arena`. Its flags, the bot scenarios, the hidden levels and
+  the "identity set" that bot changes must keep (proved with `--per-game`) are in `docs/dev/bot_arena.md`.
 - Don't add dependencies beyond those listed without asking.
 - Don't edit `data/units/*.json` by hand. Re-run the fetch tool, or put overrides in the scenario file.
 - Never commit the PDF or `rules-summary.txt`. They are gitignored on purpose (Games Workshop copyright).

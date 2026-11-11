@@ -116,10 +116,12 @@ it and publishes it.
 | `tests/` | GoogleTest suites for core, client logic and the bot, plus the saved replays |
 | `data/units/`, `data/scenarios/` | unit datasheets generated from BSData, and the scenarios |
 | `data/factions.json`, `data/armies/` | the custom battles' factions and their stock army lists |
-| `docs/decisions.md` | rule interpretations and design decisions (D-001 ...), cited in code |
+| `docs/decisions.md`, `docs/decisions/` | index of the rule interpretations and design decisions (D-001 ...), one file each, cited in code |
 | `docs/rules/` | the core rules text the engine follows (private; see below) |
 | `docs/datasheets/` | the two army rosters behind the Incursion scenario (private; see below) |
-| `PLAN.md`, `CLAUDE.md` | the milestone plan, and the architecture and conventions |
+| `docs/dev/` | developer reference: replays, client flags, the bot arena, packaging and data regeneration |
+| `PLAN.md`, `docs/plan_archive.md` | the milestone plan (current and upcoming), and the finished milestones |
+| `CLAUDE.md` | the architecture and conventions |
 
 ## Rules text and copyright
 
