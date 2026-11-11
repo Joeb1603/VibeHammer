@@ -39,7 +39,10 @@ struct LookaheadWeights {
 };
 
 struct BotWeights {
-    normal::MoveWeights move{};  // M43's whole-turn score: Hard ranks its move candidates with it first
+    // M43's whole-turn score: Hard ranks its move candidates with it first. D-083 part 5 (M83): without Normal's
+    // approach for a unit without a group (Hard's search decides those moves; with it, Hard won 214 of 400 rosters
+    // games as the Chaos Space Marines against Normal, without it 230).
+    normal::MoveWeights move{.approach_alone = 0.0};
     ChainWeights chain{};
     LookaheadWeights lookahead{};
     std::size_t static_plans = 4;  // move candidates simulated in full and valued with the chain, per move

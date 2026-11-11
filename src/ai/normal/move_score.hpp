@@ -310,7 +310,10 @@ public:
     [[nodiscard]] const MoveTeam* team() const noexcept { return team_ ? &*team_ : nullptr; }
     // The terms of a unit with partners (0 without): approach and cohesion, and whether the focus's reply counts on
     // the unit at `positions` (its gap to the focus `gap_mm`).
-    [[nodiscard]] double approach_term(const std::vector<core::Position>& positions) const;
+    // `line_gap_mm`: the closest pair's gap to the line's enemy after the move, when the caller has it; a unit closing
+    // in alone (its focus is that enemy) reads it instead of measuring again.
+    [[nodiscard]] double approach_term(const std::vector<core::Position>& positions,
+                                       std::optional<float> line_gap_mm = std::nullopt) const;
     // The synced partners support the line (it follows the focus and some partner reaches it by our next turn).
     [[nodiscard]] bool supported() const noexcept { return team_ && team_->line && team_->synced; }
     [[nodiscard]] double cohesion_term(const std::vector<core::Position>& positions) const;

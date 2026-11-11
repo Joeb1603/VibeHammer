@@ -1,6 +1,7 @@
 // M83 (D-083 part 5): tuning. A unit that follows no group closes in on its closest enemy unit beyond the line's
 // horizon (MoveWeights::approach_alone), unless that unit outreaches it; within the horizon, and for an outreached
-// unit, the score is as before. Hand-built roster positions (the M79/M80 fixtures' units).
+// unit, the score is as before. The follow gate is 0.1 (was 0.2). Hard ranks its moves without the lone approach.
+// Hand-built roster positions (the M79/M80 fixtures' units).
 
 #include <gtest/gtest.h>
 
@@ -20,6 +21,7 @@
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
 #include "generation.hpp"
+#include "hard/weights.hpp"
 #include "normal/army_plan.hpp"
 #include "normal/move_score.hpp"
 #include "normal/movement.hpp"
@@ -113,10 +115,11 @@ GameState far_apart(float gap) {
 }  // namespace
 
 TEST(M83_Normal, AUnitWithoutAGroupClosesInBeyondTheHorizon) {
-    // The boltgun Legionaries 50" from a Termagants unit and the Chaos Lord 50" from the Tyrant Guard, beyond their next
-    // turn's reach even after an Advance: every move scores about the same on the line there. Neither has a group, and
-    // neither is outreached by its closest enemy unit (the Legionaries reach 6" + 24" against the Termagants' 6" + 18";
-    // the Lord 6" + its 12" pistol against the Guard's 6" + 7"), so both now close in. Before (M77) the Lord drifted.
+    // The boltgun Legionaries 50" from a Termagants unit and the Chaos Lord about 50" from the Tyrant Guard, beyond
+    // their next turn's reach even after an Advance: every move scores about the same on the line there. Neither has
+    // a group, and neither is outreached by its closest enemy unit (the Legionaries reach 6" + 24" against the
+    // Termagants' 6" + 18"; the Lord 6" + its 12" pistol against the Guard's 6" + 7"), so both now close in. Before
+    // (M77) the Lord drifted.
     const GameState gs = far_apart(50.0f);
     OddsCache cache;
     const ArmyPlan plan = army_plan(cache, gs, Side::A);
@@ -216,4 +219,20 @@ TEST(M83_Normal, OneUnitASideHasNoApproach) {
     OddsCache cache;
     const MoveScoreContext ctx(cache, sim.state(), u.id, MoveWeights{}, Generation::Current, nullptr);
     EXPECT_EQ(ctx.team(), nullptr);
+}
+
+TEST(M83_Hard, RanksItsMovesWithoutTheLoneApproach) {
+    // Hard's move score is Normal's except for the approach of a unit without a group (D-083 part 5: Hard's own search
+    // decides those moves; the term measured worse for it). The follow gate and every other weight are Normal's.
+    const hard::BotWeights w{};
+    const MoveWeights n{};
+    EXPECT_DOUBLE_EQ(w.move.approach_alone, 0.0);
+    EXPECT_GT(n.approach_alone, 0.0);
+    EXPECT_DOUBLE_EQ(w.move.follow, n.follow);
+    EXPECT_DOUBLE_EQ(w.move.approach, n.approach);
+    EXPECT_DOUBLE_EQ(w.move.cohesion, n.cohesion);
+    EXPECT_DOUBLE_EQ(w.move.delay, n.delay);
+    EXPECT_DOUBLE_EQ(w.move.survival, n.survival);
+    EXPECT_DOUBLE_EQ(w.move.edge, n.edge);
+    EXPECT_DOUBLE_EQ(w.move.coherency, n.coherency);
 }
