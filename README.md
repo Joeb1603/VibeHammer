@@ -68,6 +68,12 @@ behind each step.
 - **Several units per side:** every phase handles any number of units, and all three bot levels plan across
   their whole army. On the Incursion scenario Normal and Hard weigh units by their points and play for the
   points result. Hard's first decision of a game there takes a second or two, and it uses about 0.6 GB of memory.
+  - **Teamwork:** Normal and Hard fight as an army. Each turn an army plan looks for enemy units that two or three
+    of its units beat together where each alone would lose, and puts them in a group on that target. The group
+    moves up together, waiting at the edge of the target's reach for its slower members. Its units shoot the
+    group's target first and finish off wounded units rather than spread their fire, and a unit charges in where a
+    partner is already fighting. Hard's evaluator counts the group's target falling at the group's combined pace.
+    With one unit a side nothing changes, and Easy still plays on its own.
 
 **Not yet:** terrain, objectives and missions, stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
