@@ -4915,10 +4915,27 @@ list queries (below). M76 adds part 2 (placing units by hand in the client).
     `R03_04_Engagement.EveryPlacedModelWithinEngagementRangeIsAtFault`. No replay: the flow's actions are M74's
     (`m74_hand_deployment.json` sets the Tyrannofex up by hand), and the editor itself makes no game state.
 
-## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group; part 3, M81: focus fire and joint charges; part 4, M82: Hard on the army plan)
-**Decided:** 2026-11-10 (M78 of the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings are
-marked *conservative*). Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or
-JSON change. Later parts (M79–M83) are added below.
+## D-083: Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group; part 3, M81: focus fire and joint charges; part 4, M82: Hard on the army plan; part 5, M83: tuning and the final numbers)
+**Decided:** 2026-11-10 to 2026-11-11 (the pre-approved M78–M83 batch, PLAN.md "Teamwork"; the conservative readings
+are marked *conservative*). Bot and arena only throughout: no rule, core, state, action, event or file format change.
+
+**Summary.** Before the batch Normal scored each unit's move alone against its closest enemy unit and Hard valued
+every pair of units as an independent duel, so on the rosters most units held back and the monsters arrived one at a
+time. The batch measures teamwork in the arena (part 0), gives each side an **army plan** (part 1: per enemy unit, the
+smallest group of two or three of our units whose joint exchange pays where each alone would not), and makes the bots
+play it: a unit that follows its group lines up on the group's target, counts its partners' volleys and shares the
+target's reply, and waits at the edge of reach for them (part 2); shooting concentrates and finishes wounded units,
+partners join a charge (part 3); Hard's army value leads each group member's queue with the group's target and lets the
+group wipe it at its combined pace (part 4); and a unit with no group closes in beyond the horizon unless its closest
+enemy unit outreaches it, with the follow gate lowered to 0.1 (part 5). It amends **D-066** (the line follows the group's
+focus, not only the closest enemy unit; the charged value counts partners), **D-054**'s shooting and charge choices
+(M41, M42: focus fire, the finishing bonus, the split margin, the charge order), **D-067** (the queues and a group
+target's P(wiped)), **D-077** (the move score through D-066; the approach terms) and **D-078** (part 11's
+`move_search_units`, measured again and kept at 7). V1, both bot scenarios and Easy play exactly as before;
+`Generation::M77` (`normal-m77` / `hard-m77`) plays the pre-batch bots. The final numbers and the targets left open
+are in part 5.
+
+Part 0 is bot and arena only, and changes no play anywhere: no rule, core, state, replay or JSON change.
 - **Part 0 (M78): the arena's teamwork statistics** (`src/ai/arena.{hpp,cpp}`). `play_bot_session` feeds a
   `TeamworkCounter` the initial state and then, after every accepted action, that action's events and the state right
   after it. To make that possible the client's automatic actions are now counted one at a time (run_auto_actions with
