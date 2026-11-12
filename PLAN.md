@@ -423,12 +423,102 @@ averages half the units on the battlefield or more.
 
 ---
 
+## Terrain, and the bot playing for cover (M88–M89)
+
+Agreed with the user on 2026-11-12 (both milestones approved together as a batch, in M88's plan mode). Terrain is
+2D: areas and features are footprints on the battlefield plane, with no floors, vertical moves or Plunging Fire
+(D-087). A new default scenario puts terrain on the objective battlefield: the three objective areas become terrain
+areas (14.01), with a dense ruin at the Centre. Without terrain nothing changes: old scenarios, replays, state files
+and the bot's identity set stay byte-identical. Each milestone starts in a fresh session.
+
+## M88: Terrain in 2D
+**Effort:** `xhigh` · **Plan mode:** done (design approved 2026-11-12; D-087, D-088, D-089)
+
+> Implement terrain as designed in D-087 (areas and features, Exposed / Light / Dense, the scenario format,
+> movement and set-up), D-088 (13.10 obscuring areas, 13.11 Solid as a Dense feature's whole footprint, 13.09 Hidden
+> with its 15" detection range and the ranged-attacks record, 06.01 Fully Visible) and D-089 (13.08 Benefit of cover;
+> worsening BS by 1, the working assumption). Read 13, 03.01 and 06.01 and those three decisions first.
+> - **Core:**
+>   - the terrain types in `GameState::terrain`;
+>   - shape geometry in `geometry/terrain_shape.*` (a convex polygon support in D-074's GJK);
+>   - a terrain-aware `has_line_of_sight` overload and `fully_visible_past`;
+>   - the rules queries in `rules/terrain.*`;
+>   - shooting's visibility and cover;
+>   - the skill worsened in `attacks.cpp`;
+>   - path, move-end, `move_reach` and set-up checks;
+>   - the loader's `"terrain"` block, `load_terrain_block`, and `custom_battle_scenario`'s terrain argument.
+> - **Scenario:** `data/scenarios/incursion_terrain_44x60.json` with the agreed layout (below), as the start screen's
+>   default.
+> - **Client:** draw areas and features, explain cover, Hidden and obscured targets, shade terrain in the move reach,
+>   and give custom battles the terrain block.
+> - **Bot:** plays legally around terrain (its candidates never end on features, and monsters' lines don't cross
+>   Dense walls over 2"). It does not value terrain yet (M89). Arena `--terrain <scenario>`.
+
+**The layout** (point-symmetric about (22", 30"); south is y = 0; exact coordinates finalised in code, every formation
+clear of solid features):
+
+| Area | Shape | Features |
+|---|---|---|
+| Centre (objective) | circle (22, 30), 12" | two Dense walls 5" high, 0.5" thick, L-shaped (x 17–23 / y 27–27.5 and x 17–17.5 / y 27–31), and the mirror image |
+| A home / B home (objectives) | circles (22, 6) / (22, 54), 6" | an Exposed crater, 4" (no solid feature in a deployment zone) |
+| SW ruin / NE ruin | rectangles x 4–14, y 18–24 / x 30–40, y 36–42 | two Dense walls 5" high, L-shaped, open towards the near deployment zone |
+| SE barricades / NW barricades | rectangles x 30–38, y 18–23 / x 6–14, y 37–42 | two Light low walls each |
+| W craters / E craters | circles (3.5, 30) / (40.5, 30), 5" | an Exposed crater, 3" |
+
+**Acceptance**
+- **Tests:** rule-named tests (ScriptedDice, inch coordinates) for 13.01 validation, 13.06 paths and ends, 13.08 cover
+  (both conditions, BS 3+ to 4+, an unmodified 6 still hits, [TORRENT], separate batches), 13.09 Hidden (14.9" against
+  15.1", shooting ends it for this turn and the next), 13.10, 13.11 and 06.01 Fully Visible. Also D-087–D-089 cases and
+  state round-trip tests for every new field, including an old state with no terrain key.
+- **Replay:** `tests/replays/m88_terrain.json`, path-based on the new scenario, from round 1 of bot play. It includes a
+  shot with cover, a monster going round a wall and a hidden unit. It is checked by the engine replay only, so M89's
+  bot changes don't invalidate it.
+- **Unchanged:** every old replay byte-identical; old scenarios unchanged; the identity set (`docs/dev/bot_arena.md`)
+  identical to the M87 binary, every `game` line.
+- **Clean arena runs:** the terrain scenario (200 games with each side going first) and random armies with
+  `--terrain` (200 + 200), with no rejected action, reverted move, fallback or unfinished game. Record the win rates, the
+  share of ranged attacks with cover, the targets refused for Hidden or obscuring, and the p95 decision time (target: at
+  most twice M87's).
+- **Screenshot** under `xvfb-run` on the terrain scenario.
+- **Build** and full `ctest` green.
+- **Docs:** D-087–D-089 marked implemented, with what was chosen in code; CLAUDE.md (the overview line; geometry: terrain
+  is 2D, z stays 0); README; `docs/dev/bot_arena.md`; `docs/dev/replays.md`.
+
+---
+
+## M89: The bot plays for cover
+**Effort:** `high` · **Plan mode:** yes (refine this outline on M88's code; a new D-090)
+
+> The bot values terrain. No rule, engine, state or file-format change.
+> - **The enemy's reply:** `analysis::ShotContext` gains the target's cover (BS worsened) and visibility, both
+>   defaulting to today's values. They are set from the enemy models' current positions (Hidden beyond 15",
+>   obscuring), in `MoveScoreContext::shot()` and `other_ranged`. If the enemy closes by its Move, line of sight is
+>   assumed again, but cover from being within an area holds. The rate caches (`RateKey`, `Other::ranged`,
+>   `model_volleys_`) key on these fields.
+> - **Our shots in the cheap score:** visibility from the candidate end positions (a few sampled models) and the
+>   targets' cover.
+> - **Candidates:** spots in terrain areas (like D-086's area spots), positions that keep a unit Hidden, and one detour
+>   round a blocking feature's inflated corners for models that can't cross it.
+> - **Gate:** terrain present and a new `MoveWeights::cover` above 0 (an arena `--weights` key), so terrain-free play
+>   stays identical.
+
+**Acceptance**
+- The M89 bot beats the M88 bot on the terrain scenario in at least 55% of 400 games (200 with each side going first).
+- The share of the enemy's ranged attacks into cover or Hidden units goes up. The Chaos Space Marines' share of wins on
+  the terrain scenario is recorded.
+- Identity: the identity set identical to the M88 binary. Clean runs as in M88.
+- D-090 records the design and the tuning. Build and full `ctest` green.
+
+---
+
 ## Later (post-V1, rough order)
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
-1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
+1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89. Still to do: the z axis (13.06
+   Moving Vertically and upper surfaces, 13.11 gaps above 3", 22.05 Plunging Fire), Stealth (24.33, left out of M88 by
+   the user's choice), and a terrain editor for custom battles.
 2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084), the bot in M87 (D-086). This enables
    Objective Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state
    only). Left open from M87: the objective scenario's balance (the Chaos Space Marines win about a third: the Tyranids'

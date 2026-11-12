@@ -100,3 +100,6 @@ decision, the code that cites it, and its tests.
 - [D-084](decisions/D-084.md): The objective mission: objectives first, kills still count; objective areas and control (14.02, 14.03 as state only), the scenario format, custom battles and the client (M86; amends D-076 for scenarios that ask for it)
 - [D-085](decisions/D-085.md): One bot: the levels Easy and Hard and the hidden regression levels removed; Easy's answers kept as the bot's defaults (M85; amends D-054, supersedes the level parts of D-066, D-067, D-078, D-080 and D-083)
 - [D-086](decisions/D-086.md): The bot plays the mission: area sets in the army plan, the objective terms in the move score, the approach to an area (M87; amends D-083 part 5 and D-084's Bot note)
+- [D-087](decisions/D-087.md): Terrain in 2D: areas, features, categories, the scenario format, movement and set-up (13.01–13.06, 03.01; M88)
+- [D-088](decisions/D-088.md): Visibility with terrain: Obscuring, Solid in 2D, Hidden and Fully Visible (13.07, 13.09–13.11, 06.01; M88; extends D-017)
+- [D-089](decisions/D-089.md): Benefit of cover and worsening BS (13.08; "Modified Characteristics", app-only rule; M88)
