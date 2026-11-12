@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <cmath>
 #include <initializer_list>
@@ -750,4 +751,128 @@ TEST(M87_Normal, AFreshBotGivesTheMemosMoveOnTheObjectiveScenario) {
     EXPECT_GT(bots[0].memo_hits() + bots[1].memo_hits(), 0u);
 }
 
+// ==== The bot-game replay ====
 
+namespace {
+
+// Dice seed (the bot on both sides on the objective scenario, seeds searched with DISABLED_SearchObjectivesSeed): a
+// whole game decided on victory points after battle round 5 (D-084), each side scoring its home, VP scored away from a
+// home too, and fights on both sides.
+constexpr std::uint64_t kObjectivesSeed = 1;
+constexpr const char* kObjectivesFile = "m87_objectives_bot_game.json";
+
+std::filesystem::path saved_path() { return std::filesystem::path(WH40K_REPLAY_DIR) / kObjectivesFile; }
+
+struct BotGame {
+    Replay replay;
+    GameRecord record;
+};
+
+// Played through GameSession (every action validated, the client's automatic skips included), its history a
+// scenario-form replay, as M68's. Replaying it needs only core.
+BotGame play_objectives_bot_game(std::uint64_t seed = kObjectivesSeed) {
+    BotGame g;
+    g.replay.description =
+        "M87: a whole game played by the bot on both sides from the objective scenario "
+        "(data/scenarios/incursion_objectives_44x60.json, D-084) with dice seed " +
+        std::to_string(seed) +
+        ": the bot plays for the objectives (D-086: area sets in the army plan, the objective terms in the move score). "
+        "Replaying it needs only the engine.";
+    g.replay.initial.scenario = kObjectiveScenario;
+    g.replay.initial.seed = seed;
+    wh40k::client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
+    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000);
+    g.replay.steps = session.history();
+    g.replay.expect = replay_expectation(session.state());
+    return g;
+}
+
+// The VP each side scored at each area (VictoryPointsScored) in a replay's events.
+std::vector<std::array<int, 2>> area_vp_of(const ReplayResult& r, std::size_t areas) {
+    std::vector<std::array<int, 2>> out(areas, std::array<int, 2>{});
+    for (const GameEvent& e : r.events) {
+        if (const auto* v = std::get_if<event::VictoryPointsScored>(&e)) out[v->objective][side_index(v->side)] += v->vp;
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST(M87_Replay, TheObjectiveBotGameReplaysToItsResultWithCoreOnly) {
+    const Replay saved = load_replay(saved_path());
+    ASSERT_TRUE(saved.initial.scenario.has_value());
+    EXPECT_EQ(*saved.initial.scenario, kObjectiveScenario);
+    EXPECT_EQ(saved.initial.seed, kObjectivesSeed);
+    const ReplayResult first = run_replay(saved, wh40k::test::repo_root());
+    ASSERT_TRUE(first.ok()) << "step " << *first.failed_step << ": " << first.reasons.front();
+    EXPECT_EQ(replay_expectation(first.final_state), saved.expect);
+    const ReplayResult second = run_replay(saved, wh40k::test::repo_root());
+    ASSERT_TRUE(second.ok());
+    EXPECT_EQ(first.final_state, second.final_state);  // deterministic
+    // Decided on victory points after the last battle round (D-084); each side scores objective VP, and some are scored
+    // away from the scorer's own home (the Centre or a raid).
+    ASSERT_TRUE(first.final_state.result.has_value());
+    ASSERT_TRUE(first.final_state.result->vp.has_value());
+    EXPECT_EQ(first.final_state.flow.battle_round, 5);
+    const std::vector<std::array<int, 2>> by_area =
+        area_vp_of(first, first.final_state.mission->objectives.size());
+    int away = 0;
+    for (const std::size_t s : {std::size_t{0}, std::size_t{1}}) {
+        int total = 0;
+        for (const auto& a : by_area) total += a[s];
+        EXPECT_GT(total, 0) << "side " << s;
+        const std::size_t own_home = s == 0 ? kHomeA : kHomeB;
+        for (std::size_t i = 0; i < by_area.size(); ++i) away += i == own_home ? 0 : by_area[i][s];
+    }
+    EXPECT_GT(away, 0);
+}
+
+TEST(M87_Replay, TheSavedFileMatchesTheGame) {
+    // The bot with the replay's seed plays exactly the saved game now (D-054), with nothing rejected, reverted or
+    // answered by the fallback.
+    const Replay saved = load_replay(saved_path());
+    const BotGame g = play_objectives_bot_game();
+    EXPECT_TRUE(g.record.finished);
+    EXPECT_EQ(g.record.rejected, 0u);
+    EXPECT_EQ(g.record.reverted, 0u);
+    EXPECT_EQ(g.record.fallbacks, 0u);
+    ASSERT_EQ(saved.steps.size(), g.replay.steps.size());
+    for (std::size_t i = 0; i < saved.steps.size(); ++i) {
+        ASSERT_EQ(Json(saved.steps[i]).dump(), Json(g.replay.steps[i]).dump()) << "step " << i;
+    }
+    EXPECT_EQ(Json(saved).dump(2), Json(g.replay).dump(2));
+}
+
+// Writes tests/replays/m87_objectives_bot_game.json. Run on purpose only:
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M87_Replay.DISABLED_RegenerateObjectivesBotGameReplay
+TEST(M87_Replay, DISABLED_RegenerateObjectivesBotGameReplay) {
+    const BotGame g = play_objectives_bot_game();
+    ASSERT_TRUE(g.record.finished);  // a result, not the step cap
+    ASSERT_EQ(g.record.rejected, 0u);
+    ASSERT_EQ(g.record.reverted, 0u);
+    ASSERT_EQ(g.record.fallbacks, 0u);
+    const ReplayResult r = run_replay(g.replay, wh40k::test::repo_root());
+    ASSERT_TRUE(r.ok()) << "step " << *r.failed_step << ": " << r.reasons.front();
+    ASSERT_TRUE(r.final_state.result.has_value());
+    if (::testing::Test::HasFailure()) return;  // never overwrite the committed replay with a broken game
+    save_replay(g.replay, saved_path());
+}
+
+// Prints, per seed, whether the game shows what the replay is about (run on purpose, in Release):
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M87_Replay.DISABLED_SearchObjectivesSeed
+TEST(M87_Replay, DISABLED_SearchObjectivesSeed) {
+    for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+        const BotGame g = play_objectives_bot_game(seed);
+        const ReplayResult r = run_replay(g.replay, wh40k::test::repo_root());
+        if (!r.ok() || !r.final_state.result || !r.final_state.result->vp) continue;
+        const std::vector<std::array<int, 2>> by_area = area_vp_of(r, r.final_state.mission->objectives.size());
+        int fights[2] = {0, 0};
+        for (const ReplayStep& s : g.replay.steps) {
+            if (std::holds_alternative<action::Fight>(s.action)) ++fights[side_index(s.side)];
+        }
+        std::printf("seed %llu: winner %s; VP by area", static_cast<unsigned long long>(seed),
+                    r.final_state.result->winner ? (*r.final_state.result->winner == Side::A ? "A" : "B") : "-");
+        for (const auto& a : by_area) std::printf(" %d/%d", a[0], a[1]);
+        std::printf("; fights %d/%d\n", fights[0], fights[1]);
+    }
+}
