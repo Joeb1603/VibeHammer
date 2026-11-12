@@ -11,11 +11,11 @@ portrait battlefield:
 - **The objectives.** There are three: a 12" Centre and a 6" home area for each side. At the end of every phase and
   turn, the side with more Objective Control (OC) in an area controls it.
 - **Scoring.** From battle round 2, each side scores in its own Command phase for the areas it controls:
-  - the Centre, 5 VP;
-  - its own home, 2 VP;
-  - the enemy's home, 4 VP.
+  - the Centre, 1 VP;
+  - its own home, 4 VP;
+  - the enemy's home, 8 VP.
 
-  After battle round 5 each side also scores 1 VP per 50 points it has destroyed.
+  After battle round 5 each side also scores 1 VP per 25 points it has destroyed.
 - **Winning.** Wiping the other side out still wins. Otherwise the most VP wins, and points destroyed settle a tie.
 
 The start screen's Scenario list has the other scenarios:
@@ -87,8 +87,11 @@ behind each step.
     moves up together, waiting at the edge of the target's reach for its slower members. Its units shoot the
     group's target first and finish off wounded units rather than spread their fire, and a unit charges in where a
     partner is already fighting. With one unit a side nothing changes.
+  - **Objectives:** on a mission the bot plays for the areas. Its army plan sends the units that no group needs to
+    hold, take or contest an area, choosing the cheapest units with enough OC. Moves count the VP they deny the enemy
+    at the end of the bot's turn and the VP they hold through the enemy's turn.
 
-**Not yet:** terrain, objectives and missions, stratagems, unit abilities (including
+**Not yet:** terrain, missions beyond the one objective mission, stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
 `PLAN.md` lists what comes next.
 
