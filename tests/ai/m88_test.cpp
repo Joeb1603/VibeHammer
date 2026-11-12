@@ -244,12 +244,16 @@ struct TerrainReplay {
 // Stops at the first decision of the battle round after the one with the detour (or after round 4 without one).
 TerrainReplay play_terrain_replay(std::uint64_t seed) {
     TerrainReplay out;
-    out.replay.description =
-        "M88: battle rounds 1 and 2 (or until the detour) of the bot playing both sides on the terrain scenario "
-        "(data/scenarios/incursion_terrain_44x60.json, D-087-D-089) with dice seed " + std::to_string(seed) +
-        ". One move is scripted: a MONSTER goes round a dense wall it can't move through (13.06) in two straight "
-        "lines. The game shows shots at targets with the benefit of cover (13.08) and a hidden unit (13.09). Checked "
-        "by the engine replay only, so later bot changes leave it valid.";
+    const auto describe = [&](int detour_round) {
+        out.replay.description =
+            "M88: the bot playing both sides on the terrain scenario (data/scenarios/incursion_terrain_44x60.json, "
+            "D-087-D-089) with dice seed " + std::to_string(seed) + ", from battle round 1 to the end of battle round " +
+            std::to_string(detour_round) + ". One move is scripted, in battle round " + std::to_string(detour_round) +
+            ": a MONSTER goes round a dense wall it can't move through (13.06) in two straight lines. The game shows "
+            "shots at targets with the benefit of cover (13.08) and targets refused because they are hidden (13.09). "
+            "Checked by the engine replay only, so later bot changes leave it valid.";
+    };
+    describe(0);
     out.replay.initial.scenario = kTerrainScenario;
     out.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(out.replay, repo_root()));
@@ -282,6 +286,7 @@ TerrainReplay play_terrain_replay(std::uint64_t seed) {
                     if (!session.submit(a).ok()) ++out.rejected;
                 }
                 out.detour = true;
+                describe(gs.flow.battle_round);
                 stop_round = gs.flow.battle_round + 1;
                 count();
                 continue;

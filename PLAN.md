@@ -431,7 +431,7 @@ Agreed with the user on 2026-11-12 (both milestones approved together as a batch
 areas (14.01), with a dense ruin at the Centre. Without terrain nothing changes: old scenarios, replays, state files
 and the bot's identity set stay byte-identical. Each milestone starts in a fresh session.
 
-## M88: Terrain in 2D
+## M88: Terrain in 2D ✅ (done)
 **Effort:** `xhigh` · **Plan mode:** done (design approved 2026-11-12; D-087, D-088, D-089)
 
 > Implement terrain as designed in D-087 (areas and features, Exposed / Light / Dense, the scenario format,
@@ -483,6 +483,66 @@ clear of solid features):
 - **Build** and full `ctest` green.
 - **Docs:** D-087–D-089 marked implemented, with what was chosen in code; CLAUDE.md (the overview line; geometry: terrain
   is 2D, z stays 0); README; `docs/dev/bot_arena.md`; `docs/dev/replays.md`.
+
+Read in M88's implementation session (2026-11-12, the user's choices): the replay's monster detour is one scripted
+two-leg move inside the bot game (the bot itself detours from M89); "random armies with `--terrain` (200 + 200)" is
+`--deploy auto` and `--deploy hand`, 200 games each.
+
+**Results** (2026-11-12; D-087–D-089 "In code")
+- **Core.**
+  - `geometry/terrain_shape.*`: convex polygons and circles; exact round-base formulas; GJK with a polygon support for
+    ovals.
+  - `state/terrain.*`: the types and `check_terrain_data`.
+  - `rules/terrain.*`: `TerrainView`, `model_visible`, `visibility_problem`, `benefit_of_cover` and `path_features`.
+  - The terrain line-of-sight overload and `fully_visible_past` (`visibility_oval.cpp`).
+  - Path checks, `move_end_problems`, `move_reach`'s `ReachTerrain`s, and set-up.
+  - Shooting's visibility, refusal reasons and cover; the BS worsened in `gather_attack_batches`.
+  - The ranged-attacks record; the loader's `"terrain"` block, `load_terrain_block`, and `custom_battle_scenario`'s
+    terrain argument.
+- **Scenario.** `data/scenarios/incursion_terrain_44x60.json` (the agreed layout; the start screen's default).
+- **Client.**
+  - The board draws areas and features.
+  - Hovering an area explains its rules; the Game panel lists the terrain.
+  - A greyed target's tooltip gives the engine's reason (13.09, 13.10 / 13.11).
+  - The weapon menu and the hit card show the cover line.
+  - The move reach and drop fixing avoid features and walls' shadows.
+  - Custom battles take the terrain block.
+- **Bot.** Its move candidates use the engine's terrain tests (no end on a feature, no line through an uncrossable
+  wall). The state hash takes the terrain and the record behind tags. It does not value terrain (M89).
+- **Arena.** `--terrain <scenario>`, and the `terrain (M88)` summary line.
+- **Acceptance** (Release arena, seeds 1–200):
+
+  | Item | Number | Target | |
+  |---|---|---|---|
+  | clean runs: the terrain scenario with A first, and with B first; random armies `--terrain`, auto and hand | 800 games: no rejected action, reverted move, fallback or unfinished game | 0 | met |
+  | Chaos Space Marines' wins, terrain scenario | 25.0% (A first) / 38.5% (B first); M87's objective scenario 32.0% (A first) | recorded | |
+  | Chaos Space Marines' wins, random armies with terrain | 18.5% auto / 18.5% hand | recorded | |
+  | ranged selections with the benefit of cover | terrain scenario A 70.6% / 51.4%, B 21.5% / 19.5%; random armies A 52.0% / 49.9%, B 25.1% / 26.9% | recorded | |
+  | enemy units in range refused per game | Hidden: terrain scenario A 0.08 / 0.95, B 0.00 / 0.01; random armies 0.17–0.34. Obscuring or dense terrain: terrain scenario A 13.2 / 15.9, B 1.7 / 1.5; random armies 6.8–13.1 | recorded | |
+  | p95 decision time | terrain scenario 16.6 / 16.1 ms against M87's 12.7 ms on the objective scenario (1.3x); random armies with terrain 12.4 ms | at most 2x | met |
+  | identity set (`docs/dev/bot_arena.md`) and the objective scenario | identical to the M87 binary, every `game` line (1,800 of 1,800 games) | identical | met |
+  | replays | every old replay byte-identical; new `m88_terrain.json` | | met |
+
+  The Hidden counts are low because the bot doesn't value terrain yet: its units seldom stand in a dense area
+  without shooting while the enemy has them in range. M89 changes that.
+- **Tests.**
+  - `tests/m88_terrain_test.cpp`: 13.01, 13.06, 13.08–13.11, 06.01 Fully Visible, D-087–D-089, the geometry, the
+    redundancy property, and the replay checked with core only.
+  - `tests/client/m88_test.cpp`: the board, the shoot reasons, the cover line, the reach and drop fixing, the builder
+    and the default.
+  - `tests/ai/m88_test.cpp`: candidates, a clean game, the arena line, the state hash, and the replay's regeneration
+    and seed search.
+  - Changed: `M86_Settings` and `M38_Settings` repointed at the new default (by design, as M86 repointed M38).
+    `M12_NoRulesInTheClient` allows the client logic `core/rules/terrain.hpp`'s read-only queries (D-024).
+- **Replay.** `tests/replays/m88_terrain.json` (seed 80), battle rounds 1–3:
+  - the Hive Tyrant's scripted detour round the east end of the south-west ruin's north wall, in battle round 3;
+  - shots into cover;
+  - two targets refused because they were hidden.
+
+  It stops at the first decision of battle round 4 and is checked by the engine replay only.
+- **Build and `ctest`.** Linux Debug build clean; full `ctest` 1,402 of 1,402 passed. Screenshots under `xvfb-run`
+  of the replay at steps 200 (battle round 2) and 271 (just after the detour). A full game by mouse on Windows stays a manual check
+  for the user.
 
 ---
 

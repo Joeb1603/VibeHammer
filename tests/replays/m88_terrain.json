@@ -1,5 +1,5 @@
 {
-  "description": "M88: battle rounds 1 and 2 (or until the detour) of the bot playing both sides on the terrain scenario (data/scenarios/incursion_terrain_44x60.json, D-087-D-089) with dice seed 80. One move is scripted: a MONSTER goes round a dense wall it can't move through (13.06) in two straight lines. The game shows shots at targets with the benefit of cover (13.08) and a hidden unit (13.09). Checked by the engine replay only, so later bot changes leave it valid.",
+  "description": "M88: the bot playing both sides on the terrain scenario (data/scenarios/incursion_terrain_44x60.json, D-087-D-089) with dice seed 80, from battle round 1 to the end of battle round 3. One move is scripted, in battle round 3: a MONSTER goes round a dense wall it can't move through (13.06) in two straight lines. The game shows shots at targets with the benefit of cover (13.08) and targets refused because they are hidden (13.09). Checked by the engine replay only, so later bot changes leave it valid.",
   "expect": {
     "battle_round": 4,
     "models": [
