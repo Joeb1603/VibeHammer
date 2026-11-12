@@ -547,27 +547,60 @@ two-leg move inside the bot game (the bot itself detours from M89); "random armi
 ---
 
 ## M89: The bot plays for cover
-**Effort:** `high` · **Plan mode:** yes (refine this outline on M88's code; a new D-090)
+**Effort:** `high` · **Plan mode:** done (design approved 2026-11-12; D-090)
 
-> The bot values terrain. No rule, engine, state or file-format change.
-> - **The enemy's reply:** `analysis::ShotContext` gains the target's cover (BS worsened) and visibility, both
->   defaulting to today's values. They are set from the enemy models' current positions (Hidden beyond 15",
->   obscuring), in `MoveScoreContext::shot()` and `other_ranged`. If the enemy closes by its Move, line of sight is
->   assumed again, but cover from being within an area holds. The rate caches (`RateKey`, `Other::ranged`,
->   `model_volleys_`) key on these fields.
-> - **Our shots in the cheap score:** visibility from the candidate end positions (a few sampled models) and the
->   targets' cover.
-> - **Candidates:** spots in terrain areas (like D-086's area spots), positions that keep a unit Hidden, and one detour
->   round a blocking feature's inflated corners for models that can't cross it.
-> - **Gate:** terrain present and a new `MoveWeights::cover` above 0 (an arena `--weights` key), so terrain-free play
->   stays identical.
+> The bot values terrain (D-090). Bot and arena only: no rule, engine, state or file-format change. Read 13.08–13.11,
+> D-087–D-089 and D-090 first.
+> - **Gate and weight:** `MoveWeights::cover` (default 1, an arena `--weights` key, 0 to 1; outside exits 2) and
+>   `cover_on` (terrain present and `cover` above 0). Each terrain-aware rate is `(1 - cover) x plain + cover x
+>   terrain` (a target that can't be seen: terrain rate 0). With the gate off no terrain code runs, so terrain-free
+>   play and `cover=0` play are the M88 bot's, bit for bit.
+> - **Sight for hypothetical positions:** `src/ai/analysis/terrain_sight.*` (`TerrainSight`), over one
+>   `core::TerrainView`: masks for any pose, area cover, could-hide, sees (Hidden beyond 15"), unit sees (up to
+>   `kSightSamples` = 3 models a side, with a box pre-test), not fully visible. Model blockers are ignored.
+> - **`analysis::ShotContext`:** `target_cover` (BS worsened by 1, as `attacks.cpp`) and `visible` (false: no volley),
+>   defaulting to today's values.
+> - **The enemy's reply** (`score_impl` → `hold_line`, `enemy_turn_from`, `other_threat`), per plan: area cover holds
+>   at every end; the "stays" end uses visibility and cover from the enemy's current models; an end where it moves sees
+>   again, except a hidden unit while the end gap is over 15". Hidden only when the plan makes no ranged attack this
+>   turn (`shoot_now` 0; holding fire on purpose stays open). `RateKey`, `wipes_` and `Other::ranged` key on cover.
+>   `our_next_turn` gets the enemy's area cover where it stands.
+> - **Our shots in the cheap score** (`our_shooting`, `our_shooting_at_other`): a model that can't see the target
+>   unit adds no volley; the target's cover from its area or from not being fully visible; the volley keys gain cover.
+> - **Candidates** (appended after D-086's area spots): cover spots in every reachable area (a unit that takes cover),
+>   hidden spots in an area with a Dense feature (offset away from the closest enemy), and a two-leg detour round a
+>   blocking polygon's inflated silhouette corners for models that can't cross it.
+> - **Hand deployment:** with cover on, M77's candidates sorted (stably) by the models with area cover (a Dense area
+>   counts double) for a unit that takes cover; the first unit set up faces the enemy zone's centre.
+> - **Arena:** a `cover (M89)` line on terrain battlefields, by target side (the selections into cover, the Hidden
+>   refusals). The `--per-game` line is unchanged.
+> - **Terrain-blind, recorded open in D-090:** the army plan, threat tables, charges, fights, `ShootingAim::reply`, our
+>   next turn's visibility, model blockers, detours round circles.
 
 **Acceptance**
-- The M89 bot beats the M88 bot on the terrain scenario in at least 55% of 400 games (200 with each side going first).
-- The share of the enemy's ranged attacks into cover or Hidden units goes up. The Chaos Space Marines' share of wins on
-  the terrain scenario is recorded.
-- Identity: the identity set identical to the M88 binary. Clean runs as in M88.
-- D-090 records the design and the tuning. Build and full `ctest` green.
+- **Head-to-head** (the user's reading, 2026-11-12): on the terrain scenario the M89 bot (default weights) against the
+  M88 bot (`cover=0`): `--weights-a cover=1 --weights-b cover=0` and the reverse, each with `--first A` and `--first B`,
+  100 games each (seeds 1–100). The M89 bot wins at least 55% of the 400 games; confirmed on seeds 101–200.
+- **Into cover:** against `cover=0`, the share of the enemy's ranged selections into cover goes up, and so do the
+  Hidden refusals of the bot's units.
+- **Recorded:** the Chaos Space Marines' wins on the terrain scenario (M89 on both sides, A first and B first) and on
+  random armies with `--terrain` (auto and hand); the tuning (`cover` 0.5 / 1, `kSightSamples` 2 / 3 / 4, each
+  candidate kind on or off) in D-090.
+- **Identity:** the nine identity runs at the default weights identical to the M88 binary; the four terrain runs (the
+  terrain scenario A first and B first, random armies `--terrain` auto and hand) with `--weights cover=0` identical to
+  the M88 binary. Every `game` line.
+- **Clean runs:** no rejected action, reverted move, fallback or unfinished game; p95 decision time at most twice
+  M88's (16.6 ms).
+- **Tests:** `tests/ai/m89_test.cpp`: `M89_Sight`, `M89_Odds`, `M89_MoveScore` (cover off and no terrain bit-identical;
+  the blend at 0.5 halfway), `M89_Candidates` (the Hive Tyrant's detour), `M89_Deploy`, `M89_Arena`, `M89_Regression`
+  (the terrain scenario with `cover=0` plays as at M88), `M89_Replay`. Tests pinning terrain-scenario play at the
+  default weights are pinned to `cover=0`, as M87 pinned `M86_Bot`.
+- **Replay:** `tests/replays/m89_cover_bot_game.json`, a bot game on the terrain scenario with a unit taking cover, a
+  hidden unit and the bot's own detour; checked with core only and `TheSavedFileMatchesTheGame`. Every older replay
+  byte-identical.
+- **Docs:** D-090 with the design and the tuning; PLAN.md Results; `docs/dev/bot_arena.md` (the key, the line, the M89
+  binary as the reference); README and the CLAUDE.md overview line. Screenshot under `xvfb-run`.
+- **Build** and full `ctest` green.
 
 ---
 
