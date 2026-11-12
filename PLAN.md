@@ -361,8 +361,9 @@ Each milestone is planned in detail in plan mode at the start of its own session
 
 ---
 
-## M87: The bot plays for objectives
-**Effort:** `xhigh` · **Plan mode:** yes (agreed 2026-11-11)
+## M87: The bot plays for objectives ✅ (done; balance and holding back open)
+**Effort:** `xhigh` · **Plan mode:** yes (agreed 2026-11-11; design approved 2026-11-12; the mission's numbers chosen by
+the user 2026-11-12)
 
 > The army plan assigns groups to objective areas (take, hold, contest), weighing each area's VP, distance and
 > threat, as well as to enemy units. A unit without a group heads for an area instead of holding back (replacing
@@ -378,6 +379,45 @@ Each milestone is planned in detail in plan mode at the start of its own session
 - Changes to play on the non-objective scenarios are recorded; Normal's replays regenerated on purpose if they change.
 - Build and full `ctest` green.
 
+Read in plan mode (2026-11-12): "each seat" is each side over 400 games, 200 with each side going first; the mission
+stays symmetric, and a random-army gap is recorded open; "well down" is a third fewer units never within 12" and a
+quarter fewer lone engagements (both sides together); a blob is a game whose largest connected group of engaged units
+averages half the units on the battlefield or more.
+
+**Results** (2026-11-12, D-086; D-084's Tuned note)
+- **The bot** (D-086): area sets in the army plan (after the groups, which they leave as they were); the objective terms
+  in the move score (the enemy scoring a move denies at the end of our turn, ours it holds through the enemy's turn,
+  at the VP rate `vp_share`; the enemy's level a distribution, each enemy unit in one place); a unit with an area and no
+  group heads for it (it replaces the lone approach for such a unit); spots on the areas among the candidates; the last
+  unit weighed on the VP result. Gated on a mission and the objective weights (`objective` 1, `objective_approach` 0.1,
+  `objective_fire` 0): without a mission, or with all three 0, play is M86's.
+- **The mission** (the user's choice after the tuning table in D-084's note): Centre 1 VP, own home 4, enemy home 8,
+  1 kill VP per 25 points (was Centre 5, homes 2 / 4, 1 per 50). M86's numbers are kept as
+  `tests/data/scenarios/m86_objectives_44x60.json` for the D-084 rule tests, the M86 replay and the client's M86 checks.
+- **Acceptance** (Release arena, seeds 1–200, confirmed on 201–400):
+
+  | Item | Number | Target | |
+  |---|---|---|---|
+  | Chaos Space Marines' wins, objective scenario | 30.8% / 33.5% (M86's numbers with the new bot: 1.2%) | 40–60% | open |
+  | Chaos Space Marines' wins, random armies | 23.0% / 18.2% (before any mission 24.5%) | 40–60% | open (agreed) |
+  | objective VP against kill VP a game | 33.6 vs 31.5 (objective scenario), 32.0 vs 25.2 (random armies) | more from objectives | met |
+  | units never within 12", both sides | 7.76 (M83 7.74), random armies 5.86 (5.70) | a third fewer | open |
+  | lone engagements, both sides | 1.32 (1.61), random armies 1.27 (1.40) | a quarter fewer | open (down 18% / 9%) |
+  | no single blob | the largest melee 0.17 of the units on the battlefield | under half | met |
+  | identity: V1, both bot scenarios, Strike, the rosters; the mission runs with the objective weights 0 on M86's block | identical to M86, every `game` line | identical | met |
+  | replays | m46, m68, m73, m77 byte-identical; m86 regenerated (its scenario path only); new m87 | | met |
+  | clean runs | no rejected action, reverted move, fallback or unfinished game | 0 | met |
+
+- **Why balance is open:** the Tyranids out-control the Chaos Space Marines (67 OC against 56, Termagants OC 20 for 55
+  points), so every Centre that counts goes to them; only a Centre worth nothing reached 57.5%. The bot's weights
+  moved nothing beyond the noise (D-086).
+- **Tests:** `tests/ai/m87_test.cpp` (the VP rate, who scores next, the enemy's level, the terms, area sets,
+  candidates, the approach and its reason, the promise, the last unit, a fresh bot against the memo, the arena's new
+  lines, the tuned mission, the M86 regression pins, the replay). Changed: `M86_Bot` is pinned to the objective weights
+  0 (its premise, the bot ignoring objectives, holds only then); the M86 tests read the fixture.
+- **Replay:** `tests/replays/m87_objectives_bot_game.json` (seed 29: each side holds its home, both score the Centre,
+  fights on both sides; the Tyranids win on VP).
+
 ---
 
 ## Later (post-V1, rough order)
@@ -386,8 +426,11 @@ Each milestone is planned in detail in plan mode at the start of its own session
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
-2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084); the bot is M87. This enables Objective
-   Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state only).
+2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084), the bot in M87 (D-086). This enables
+   Objective Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state
+   only). Left open from M87: the objective scenario's balance (the Chaos Space Marines win about a third: the Tyranids'
+   OC takes the Centre; an asymmetric mission, other armies or terrain are the levers), units holding back (about as at
+   M83), and the bot's charges, pile-ins and consolidations still ignore the areas.
    - **Bot personalities** (after M87): Aggressive (values kills and charges, takes risks) and Tactical (values
      objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
