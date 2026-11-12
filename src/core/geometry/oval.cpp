@@ -577,6 +577,18 @@ Vec support(const Convex& s, Vec d) noexcept {
     if (s.hx > 0.0) p.x += d.x > 0.0 ? s.hx : (d.x < 0.0 ? -s.hx : 0.0);
     if (s.hy > 0.0) p.y += d.y > 0.0 ? s.hy : (d.y < 0.0 ? -s.hy : 0.0);
     if (dot(s.sweep, d) > 0.0) p = p + s.sweep;
+    if (s.poly_n > 0) {  // M88: the polygon's vertex furthest along d (the first one on a tie)
+        int best = 0;
+        double best_dot = dot(s.poly[0], d);
+        for (int i = 1; i < s.poly_n; ++i) {
+            const double t = dot(s.poly[i], d);
+            if (t > best_dot) {
+                best_dot = t;
+                best = i;
+            }
+        }
+        p = p + s.poly[best];
+    }
     return p;
 }
 
@@ -590,7 +602,7 @@ SignedDistance convex_signed_distance_impl(const Convex& a, const Convex& b, dou
     if (gjk_separated([&](Vec d) { return sup_k(d) - x; }, x * -1.0, threshold, out)) return out;
     // Two plain ellipses (no sweep, no box): K is smooth, with the curvature bound.
     const auto plain = [](const Convex& s) {
-        return s.hx == 0.0 && s.hy == 0.0 && s.sweep.x == 0.0 && s.sweep.y == 0.0 && s.b > 0.0;
+        return s.hx == 0.0 && s.hy == 0.0 && s.sweep.x == 0.0 && s.sweep.y == 0.0 && s.b > 0.0 && s.poly_n == 0;
     };
     if (plain(a) && plain(b)) {
         const CurvatureBound curvature{{a.u, b.u}, {a.a, b.a}, {a.b, b.b}};
@@ -919,6 +931,57 @@ RotationCheck rotation_against_edge(const Rect& battlefield, const BasePose& sta
     return out;
 }
 
+namespace {
+
+// D-074: an oval's turn against a convex shape by conservative advancement. Turning by t radians moves the outline by
+// at most (a - b) t, so the signed distance changes by at most that (Hausdorff bound, D-074). M88: factored out of
+// rotation_against_base (the same arithmetic) so terrain features use it too.
+RotationCheck rotation_against_convex_impl(const BasePose& start, double f0, double delta, const Convex& other) {
+    const Ellipse e = ellipse_along(start.base, Vec{}, Vec{0.0, 1.0});
+    const double lipschitz = (e.a - e.b) * kDegToRad;  // mm per degree
+    const double block_below = -kEps + 0.5 * kEps;      // a facing tried within EPS/2 of overlapping: blocked
+    const double keep_above = -kEps + 0.25 * kEps;      // the steps keep the signed distance above this
+    const double dir = delta > 0.0 ? 1.0 : -1.0;
+    const double total = std::abs(delta);
+    RotationCheck out;
+    out.exact = false;
+    double done = 0.0;
+    double best = std::numeric_limits<double>::infinity();
+    double best_f = f0;
+    constexpr int kMaxSteps = 1000000;
+    for (int step = 0; step < kMaxSteps; ++step) {
+        const double facing = f0 + dir * done;
+        const double sd = convex_signed_distance(convex_of(ellipse_at(start, facing)), other).lo;
+        if (sd < best) {
+            best = sd;
+            best_f = facing;
+        }
+        if (sd < block_below) {
+            out.blocked = true;
+            out.facing_deg = normalise_facing_deg(static_cast<float>(facing));
+            out.clearance_mm = static_cast<float>(sd);
+            return out;
+        }
+        if (done >= total) break;
+        if (!(lipschitz > 0.0)) {
+            done = total;  // a circle: turning changes nothing
+            continue;
+        }
+        done = std::min(total, done + (sd - keep_above) / lipschitz);
+    }
+    if (done < total) {  // not shown clear within the step budget: blocked (conservative)
+        out.blocked = true;
+        out.facing_deg = normalise_facing_deg(static_cast<float>(f0 + dir * done));
+        out.clearance_mm = static_cast<float>(best);
+        return out;
+    }
+    out.facing_deg = normalise_facing_deg(static_cast<float>(best_f));
+    out.clearance_mm = static_cast<float>(best);
+    return out;
+}
+
+}  // namespace
+
 RotationCheck rotation_against_base(const BasePose& start, float to_deg, const BasePose& obstacle) {
     const double f0 = static_cast<double>(start.facing_deg);
     const double delta = is_round(start.base) ? 0.0 : normalise_deg(static_cast<double>(to_deg) - f0);
@@ -966,50 +1029,22 @@ RotationCheck rotation_against_base(const BasePose& start, float to_deg, const B
         out.blocked = best < -kEps;
         return out;
     }
-    // Oval against oval: conservative advancement. Turning by t radians moves the outline by at most (a - b) t, so the
-    // signed distance changes by at most that (Hausdorff bound, D-074).
-    const Ellipse e = ellipse_along(start.base, Vec{}, Vec{0.0, 1.0});
-    const double lipschitz = (e.a - e.b) * kDegToRad;  // mm per degree
-    const double block_below = -kEps + 0.5 * kEps;      // a facing tried within EPS/2 of overlapping: blocked
-    const double keep_above = -kEps + 0.25 * kEps;      // the steps keep the signed distance above this
-    const double dir = delta > 0.0 ? 1.0 : -1.0;
-    const double total = std::abs(delta);
-    RotationCheck out;
-    out.exact = false;
-    double done = 0.0;
-    double best = std::numeric_limits<double>::infinity();
-    double best_f = f0;
-    const Convex other = convex_of(ellipse_of(obstacle));
-    constexpr int kMaxSteps = 1000000;
-    for (int step = 0; step < kMaxSteps; ++step) {
-        const double facing = f0 + dir * done;
-        const double sd = convex_signed_distance(convex_of(ellipse_at(start, facing)), other).lo;
-        if (sd < best) {
-            best = sd;
-            best_f = facing;
-        }
-        if (sd < block_below) {
-            out.blocked = true;
-            out.facing_deg = normalise_facing_deg(static_cast<float>(facing));
-            out.clearance_mm = static_cast<float>(sd);
-            return out;
-        }
-        if (done >= total) break;
-        if (!(lipschitz > 0.0)) {
-            done = total;  // a circle: turning changes nothing
-            continue;
-        }
-        done = std::min(total, done + (sd - keep_above) / lipschitz);
-    }
-    if (done < total) {  // not shown clear within the step budget: blocked (conservative)
-        out.blocked = true;
-        out.facing_deg = normalise_facing_deg(static_cast<float>(f0 + dir * done));
-        out.clearance_mm = static_cast<float>(best);
+    // Oval against oval: conservative advancement (rotation_against_convex).
+    return rotation_against_convex_impl(start, f0, delta, convex_of(ellipse_of(obstacle)));
+}
+
+RotationCheck oval_detail::rotation_against_convex(const BasePose& start, float to_deg, const Convex& other) {
+    const double f0 = static_cast<double>(start.facing_deg);
+    const double delta = is_round(start.base) ? 0.0 : normalise_deg(static_cast<double>(to_deg) - f0);
+    if (delta == 0.0) {
+        double r = 0.0;
+        const Convex base = static_core(start, r);
+        const double sd = convex_signed_distance(base, other, r - kEps).value - r;
+        RotationCheck out = static_rotation_check(start, sd);
+        out.blocked = sd < -kEps;
         return out;
     }
-    out.facing_deg = normalise_facing_deg(static_cast<float>(best_f));
-    out.clearance_mm = static_cast<float>(best);
-    return out;
+    return rotation_against_convex_impl(start, f0, delta, other);
 }
 
 }  // namespace wh40k::core

@@ -192,6 +192,26 @@ std::vector<EffectLine> hit_modifier_lines(std::span<const core::WeaponSelection
     return out;
 }
 
+std::vector<EffectLine> cover_lines(std::span<const core::WeaponSelection> selections, std::optional<int> skill) {
+    if (!skill) return {};  // [TORRENT]: no hit roll, no BS (24.37)
+    const std::size_t n = static_cast<std::size_t>(std::count_if(
+        selections.begin(), selections.end(), [](const core::WeaponSelection& s) { return s.benefit_of_cover; }));
+    if (n == 0) return {};
+    std::string text = "Benefit of cover: BS " + std::to_string(*skill) + "+ worsened to " + std::to_string(*skill + 1) +
+                       "+ (13.08)";
+    if (n != selections.size()) text += " (" + std::to_string(n) + " of " + models(selections.size()) + ")";
+    return {EffectLine{text, EffectKind::Active}};
+}
+
+HelpEntry benefit_of_cover_help() {
+    return {"Benefit of cover",
+            "A target has the benefit of cover against a model's ranged attacks if every model in it is INFANTRY, "
+            "BEASTS or SWARM within a terrain area, or isn't fully visible to the attacker because of terrain in the "
+            "way (light or dense features, or obscuring areas). The attacks' BS is worsened by 1 (3+ becomes 4+); an "
+            "unmodified 6 still hits (D-089).",
+            "13.08", true};
+}
+
 HelpEntry monsters_moving_help() {
     return {"Moving MONSTERS and VEHICLES",
             "In a Normal or Advance move, a MONSTER or VEHICLE model can be moved through enemy models that aren't "

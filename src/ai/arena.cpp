@@ -10,6 +10,9 @@
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/actions.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/geometry/oval.hpp"
+#include "core/rules/shooting.hpp"
+#include "core/rules/terrain.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
@@ -139,6 +142,43 @@ void TeamworkCounter::flush_shooting() {
     }
 }
 
+void TeamworkCounter::observe_shoot(const core::GameState& before, core::UnitId unit) {
+    if (before.terrain.empty()) return;
+    const core::Unit* u = before.find_unit(unit);
+    if (u == nullptr || u->models.empty()) return;
+    const std::size_t s = core::side_index(u->side);
+    // The unit's longest range (any model's ranged weapon profile).
+    std::optional<float> longest;
+    for (const core::Model& m : u->models) {
+        for (const core::Weapon& w : m.weapons) {
+            for (const core::WeaponProfile& p : w.profiles) {
+                if (p.kind == core::WeaponKind::Ranged && p.range_mm) longest = std::max(longest.value_or(0.0f), *p.range_mm);
+            }
+        }
+    }
+    if (!longest) return;
+    for (const core::Unit& e : before.units) {
+        if (e.side == u->side || e.models.empty()) continue;
+        // The first model of ours within that range of the enemy unit (D-009, edge to edge).
+        const core::Model* in_range = nullptr;
+        for (const core::Model& m : u->models) {
+            for (const core::Model& t : e.models) {
+                if (core::within(core::base_distance(core::pose_of(m), core::pose_of(t)), *longest)) in_range = &m;
+                if (in_range != nullptr) break;
+            }
+            if (in_range != nullptr) break;
+        }
+        if (in_range == nullptr) continue;
+        if (std::any_of(u->models.begin(), u->models.end(),
+                        [&](const core::Model& m) { return core::unit_visible_to_model(before, m, e); })) {
+            continue;
+        }
+        const core::VisibilityProblemKind kind = core::visibility_problem(before, *in_range, e).kind;
+        if (kind == core::VisibilityProblemKind::Hidden) ++stats_.refused_hidden[s];
+        if (kind == core::VisibilityProblemKind::Terrain) ++stats_.refused_terrain[s];
+    }
+}
+
 void TeamworkCounter::observe(const std::vector<core::GameEvent>& events, const core::GameState& after) {
     for (const core::GameEvent& e : events) {
         if (const auto* p = std::get_if<core::event::PhaseStarted>(&e)) {
@@ -169,6 +209,12 @@ void TeamworkCounter::observe(const std::vector<core::GameEvent>& events, const 
             const std::size_t s = core::side_index(u->side);
             ++stats_.shoots[s];
             stats_.shoot_targets[s] += distinct_targets(*sh);
+            if (!after.terrain.empty()) {  // M88 (D-089)
+                for (const core::WeaponSelection& sel : sh->selections) {
+                    ++stats_.ranged_selections[s];
+                    if (sel.benefit_of_cover) ++stats_.covered_selections[s];
+                }
+            }
             for (const core::WeaponSelection& sel : sh->selections) {
                 auto& shots = phase_shots_[s];
                 const auto it = std::find_if(shots.begin(), shots.end(),
@@ -281,6 +327,9 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
             rec.problems.insert(rec.problems.begin(), "the bot stopped: " + choice.reason);
             break;
         }
+        if (const auto* shoot = std::get_if<core::action::Shoot>(&choice.action)) {
+            teamwork.observe_shoot(session.state(), shoot->unit);  // M88: before the targets are shot
+        }
         const core::ValidationResult r = session.submit(choice.action);
         if (!r.ok()) {
             ++rec.rejected;
@@ -372,6 +421,10 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
             r.teamwork.never_within_12[s] += t.never_within_12[s];
             r.teamwork.first_engagement_round[s] += t.first_engagement_round[s];
             if (t.first_engagement_round[s] > 0) ++r.engaged_games[s];
+            r.teamwork.ranged_selections[s] += t.ranged_selections[s];  // M88
+            r.teamwork.covered_selections[s] += t.covered_selections[s];
+            r.teamwork.refused_hidden[s] += t.refused_hidden[s];
+            r.teamwork.refused_terrain[s] += t.refused_terrain[s];
         }
         // M87 (D-086)
         r.teamwork.largest_cluster += g.teamwork.largest_cluster;
@@ -458,13 +511,15 @@ PerGameReport run_per_game(const ScenarioForSeed& scenario_for, int games, std::
 }
 
 ArmySource load_army_source(const std::filesystem::path& repo_root) {
-    return ArmySource{core::load_factions(repo_root), core::caching_datasheet_resolver(repo_root), std::nullopt};
+    return ArmySource{core::load_factions(repo_root), core::caching_datasheet_resolver(repo_root), std::nullopt,
+                      std::nullopt};
 }
 
 core::GameState custom_battle_state(const ArmySource& source, const core::ArmyList& a, const core::ArmyList& b,
                                     core::Side first_turn, core::DeploymentMode mode) {
     return core::build_game_state(core::custom_battle_scenario(a, b, first_turn, source.factions, source.resolve, mode,
-                                                               source.mission ? &*source.mission : nullptr),
+                                                               source.mission ? &*source.mission : nullptr,
+                                                               source.terrain ? &*source.terrain : nullptr),
                                   source.resolve);
 }
 
@@ -575,6 +630,18 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                       "phase's start %.2f, as a share of the units on the battlefield %.3f\n",
                       t.largest_cluster / n, t.largest_cluster_share / n);
         out += buf;
+        if (!scenario.terrain.empty()) {  // M88 (D-087-D-089)
+            std::snprintf(buf, sizeof buf,
+                          "terrain (M88): ranged weapon selections with the benefit of cover A %d of %d (%.1f%%) / B %d "
+                          "of %d (%.1f%%); enemy units in range refused per game for Hidden A %.2f / B %.2f, for "
+                          "obscuring or dense terrain A %.2f / B %.2f\n",
+                          t.covered_selections[0], t.ranged_selections[0],
+                          100.0 * ratio(t.covered_selections[0], t.ranged_selections[0]), t.covered_selections[1],
+                          t.ranged_selections[1], 100.0 * ratio(t.covered_selections[1], t.ranged_selections[1]),
+                          t.refused_hidden[0] / n, t.refused_hidden[1] / n, t.refused_terrain[0] / n,
+                          t.refused_terrain[1] / n);
+            out += buf;
+        }
     }
     std::string coherency;  // M43: which games lost models to coherency (for --trace)
     for (const GameRecord& g : r.games) {

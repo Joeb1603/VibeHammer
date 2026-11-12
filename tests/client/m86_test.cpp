@@ -115,9 +115,8 @@ TEST(M86_Log, ControlChangesScoringAndTheMissionResultHaveLogLines) {
               "[D-084] Battle round 5 ends: a draw: equal victory points (9 each) and equal points destroyed (18 each)");
 }
 
-TEST(M86_Settings, TheObjectiveScenarioIsTheDefaultAndInTheList) {
-    EXPECT_EQ(AppSettings{}.scenario, kObjectiveScenario);
-    EXPECT_EQ(settings_from_json(nlohmann::json{{"scenario", ""}}).scenario, kObjectiveScenario);
+// M88 (D-087) made the terrain scenario the default (M88_Settings checks it); the objective scenario stays in the list.
+TEST(M86_Settings, TheObjectiveScenarioIsInTheList) {
     // A saved file keeps the scenario it names.
     EXPECT_EQ(settings_from_json(nlohmann::json{{"scenario", "data/scenarios/v1_skirmish.json"}}).scenario,
               "data/scenarios/v1_skirmish.json");

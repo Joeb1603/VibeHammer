@@ -177,6 +177,124 @@ void add_shadow_tangents(Pieces& p, Vec from, const std::vector<Vec>& outline) {
     }
 }
 
+// ---- M88 (D-087): terrain ----
+
+// The terrain feature's outline in the mover's centre space, for the threshold `threshold` (moved kShapeSlackMm to the
+// legal side, outward): for a round mover exact pieces (each polygon edge moved out by the radius plus the threshold,
+// a circle of that radius at each vertex; a circle feature grown by it), for an oval a chain of points on its edge,
+// every half degree round the feature's centre. With `from`, the shadow's tangent lines from it too (D-044). Pieces
+// that aren't on the boundary only add candidates; every spot is checked with in_region.
+void add_terrain_pieces(Pieces& p, const core::ReachTerrain& t, const Vec* from) {
+    const double threshold = static_cast<double>(t.threshold_mm) + kShapeSlackMm;
+    const Vec off = vec(t.offset);
+    std::vector<Circle> corners;
+    if (t.mover_base.shape == core::BaseShape::Round) {
+        const double big = 0.5 * static_cast<double>(t.mover_base.diameter_mm) + threshold;
+        if (!(big > 0.0)) return;
+        if (t.shape.is_circle()) {
+            corners.push_back(Circle{vec(t.shape.centre) + off, 0.5 * static_cast<double>(t.shape.diameter_mm) + big});
+        } else {
+            const std::vector<core::Position>& v = t.shape.vertices;
+            for (std::size_t i = 0; i < v.size(); ++i) {
+                const Vec a = vec(v[i]) + off;
+                const Vec b = vec(v[(i + 1) % v.size()]) + off;
+                const Vec e = b - a;
+                const double l = norm(e);
+                if (!(l > 0.0)) continue;
+                const Vec n{e.y / l, -e.x / l};  // outward for a counter-clockwise polygon
+                p.segments.push_back(Segment{a + n * big, b + n * big});
+                p.vertices.push_back(a + n * big);
+                p.vertices.push_back(b + n * big);
+                corners.push_back(Circle{a, big});
+            }
+        }
+    } else {
+        // An oval: points on the edge of {c : signed distance < threshold} along rays from the feature's centre.
+        const Vec c = vec(core::reach_terrain_centre(t));
+        const double inner = static_cast<double>(core::reach_terrain_inner_radius_mm(t)) + kShapeSlackMm;
+        const double outer = static_cast<double>(core::reach_terrain_outer_radius_mm(t)) + kShapeSlackMm;
+        if (!(inner > 0.0)) return;
+        core::ReachTerrain grown = t;
+        grown.threshold_mm = static_cast<float>(threshold);
+        constexpr int kSteps = 720;
+        std::vector<Vec> pts;
+        for (int k = 0; k < kSteps; ++k) {
+            double sn = 0.0;
+            double cs = 1.0;
+            core::oval_detail::sin_cos_deg(360.0 * static_cast<double>(k) / kSteps, sn, cs);
+            const Vec d{cs, sn};
+            double lo = std::max(0.0, inner - 1.0);
+            double hi = outer + 1.0;
+            for (int i = 0; i < 26 && hi - lo > 1e-5; ++i) {
+                const double mid = 0.5 * (lo + hi);
+                if (core::reach_terrain_contains(grown, position(c + d * mid))) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            pts.push_back(c + d * (0.5 * (lo + hi)));
+        }
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            p.vertices.push_back(pts[i]);
+            p.segments.push_back(Segment{pts[i], pts[(i + 1) % pts.size()]});
+        }
+        if (from != nullptr) {
+            // The outline's points stand in for the corners: the tangents through its extreme points.
+            Pieces tangents;
+            const Vec f = *from;
+            const Vec base = pts.front() - f;
+            const double bl = norm(base);
+            if (bl > 0.0) {
+                const Vec u{base.x / bl, base.y / bl};
+                double lo = 0.0;
+                double hi = 0.0;
+                Vec at_lo = pts.front();
+                Vec at_hi = pts.front();
+                for (const Vec& v : pts) {
+                    const Vec w = v - f;
+                    const double a = std::atan2(cross(u, w), dot(u, w));
+                    if (a < lo) {
+                        lo = a;
+                        at_lo = v;
+                    }
+                    if (a > hi) {
+                        hi = a;
+                        at_hi = v;
+                    }
+                }
+                for (const Vec& tp : {at_lo, at_hi}) {
+                    const Vec d = tp - f;
+                    const double l = norm(d);
+                    if (!(l > 0.0)) continue;
+                    p.lines.push_back(Line{f, d * (1.0 / l)});
+                    p.vertices.push_back(tp);
+                }
+            }
+        }
+        return;
+    }
+    for (const Circle& c : corners) {
+        p.circles.push_back(c);
+        if (from == nullptr) continue;
+        // The tangent lines from `from` to this corner's circle, with their tangent points.
+        const Vec f = *from;
+        const Vec u0 = c.c - f;
+        const double d = norm(u0);
+        if (d <= c.r) continue;
+        const Vec u = u0 * (1.0 / d);
+        const double length = std::sqrt(d * d - c.r * c.r);
+        const double sin_a = c.r / d;
+        const double cos_a = length / d;
+        const Vec t1{u.x * cos_a - u.y * sin_a, u.x * sin_a + u.y * cos_a};
+        const Vec t2{u.x * cos_a + u.y * sin_a, -u.x * sin_a + u.y * cos_a};
+        p.lines.push_back(Line{f, t1});
+        p.lines.push_back(Line{f, t2});
+        p.vertices.push_back(f + t1 * length);
+        p.vertices.push_back(f + t2 * length);
+    }
+}
+
 Pieces pieces_of(const ReachRegion& region) {
     Pieces p;
     const core::Rect& b = region.bounds;
@@ -228,6 +346,9 @@ ReachRegion inset(const ReachRegion& region, float mm) {
     }
     for (core::ReachShape& sh : out.outside_shapes) sh.threshold_mm += mm;
     for (ShapeShadow& s : out.outside_shape_shadows) s.shape.threshold_mm += mm;
+    // M88: a terrain area's threshold is a signed distance too.
+    for (core::ReachTerrain& t : out.outside_terrain) t.threshold_mm += mm;
+    for (TerrainShadow& s : out.outside_terrain_shadows) s.terrain.threshold_mm += mm;
     return out;
 }
 
@@ -289,6 +410,30 @@ void add_shapes(Pieces& p, const ReachRegion& region, const Vec* q, double limit
         std::vector<Vec> outline;
         add_shape_outline(p, s.shape, true, nullptr, limit, &outline);  // the whole outline, for its tangents
         add_shadow_tangents(p, vec(s.from), outline);
+    }
+    // M88: the terrain areas and shadows near the drop (or the drag's line).
+    const auto terrain_outer = [](const core::ReachTerrain& t) {
+        return static_cast<double>(core::reach_terrain_outer_radius_mm(t));
+    };
+    const auto terrain_near = [&](const core::ReachTerrain& t) {
+        const Vec c = vec(core::reach_terrain_centre(t));
+        if (q != nullptr) return norm(*q - c) <= terrain_outer(t) + limit + 1.0;
+        return point_segment(c, from, to) <= terrain_outer(t) + 1.0;
+    };
+    for (const core::ReachTerrain& t : region.outside_terrain) {
+        if (terrain_near(t)) add_terrain_pieces(p, t, nullptr);
+    }
+    for (const TerrainShadow& s : region.outside_terrain_shadows) {
+        const Vec f = vec(s.from);
+        if (q != nullptr) {
+            if (!near_disc_shadow(f, vec(core::reach_terrain_centre(s.terrain)), terrain_outer(s.terrain) + 1.0, *q,
+                                  limit)) {
+                continue;
+            }
+            add_terrain_pieces(p, s.terrain, &f);
+        } else if (terrain_near(s.terrain)) {
+            add_terrain_pieces(p, s.terrain, nullptr);
+        }
     }
 }
 
@@ -539,9 +684,17 @@ std::optional<DropProblem> drop_problem(const ReachRegion& region, const core::P
                     [&](const ShapeShadow& s) { return shadow_holds(s, p); })) {
         return DropProblem::ThroughEnemyModel;
     }
+    if (std::any_of(region.outside_terrain_shadows.begin(), region.outside_terrain_shadows.end(),
+                    [&](const TerrainShadow& s) { return terrain_shadow_holds(s, p); })) {
+        return DropProblem::ThroughTerrain;  // M88
+    }
     if (std::any_of(region.outside_all.begin(), region.outside_all.end(), inside) ||
         std::any_of(region.outside_shapes.begin(), region.outside_shapes.end(), holds)) {
         return DropProblem::OnModel;
+    }
+    if (std::any_of(region.outside_terrain.begin(), region.outside_terrain.end(),
+                    [&](const core::ReachTerrain& t) { return terrain_holds(t, p); })) {
+        return DropProblem::OnTerrain;  // M88
     }
     if (!std::all_of(region.inside_all.begin(), region.inside_all.end(), inside)) return DropProblem::TooFar;
     const core::Rect& b = region.bounds;
@@ -563,7 +716,9 @@ std::optional<FixedDrop> fix_drop(const ReachRegion& region, const core::Positio
     const ReachRegion check = inset(region, kFixNudgeMm * 0.5f);
     std::optional<Vec> spot;
     FixedDrop::How how = FixedDrop::How::Nearest;
-    if (*problem != DropProblem::ThroughEnemyModel) spot = nearest(in, check, vec(from), vec(drop));
+    if (*problem != DropProblem::ThroughEnemyModel && *problem != DropProblem::ThroughTerrain) {
+        spot = nearest(in, check, vec(from), vec(drop));
+    }
     if (!spot) {
         spot = along(in, check, vec(from), vec(drop));
         how = FixedDrop::How::AlongDrag;
@@ -602,6 +757,8 @@ std::string drop_problem_text(DropProblem problem) {
         case DropProblem::TooFar: return "it was further than the model can move";
         case DropProblem::OffBattlefield: return "it was off the battlefield (03.01)";
         case DropProblem::NotCloser: return "it didn't end closer to the target";
+        case DropProblem::ThroughTerrain: return "its line ran into a terrain feature it can't move through (13.06)";
+        case DropProblem::OnTerrain: return "it was on a terrain feature (03.01)";
     }
     return "";
 }

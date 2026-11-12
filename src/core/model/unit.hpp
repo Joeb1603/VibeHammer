@@ -64,6 +64,15 @@ struct UnitPhaseFlags {
     friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
 };
 
+// D-088 (M88): the record behind 13.09 Hidden: whether the unit made one or more ranged attacks during this turn and
+// during the previous turn. Kept only on a battlefield with terrain (the only place 13.09 reads it): a Shoot action
+// sets this_turn; leaving the End of Turn step, previous_turn takes this_turn and this_turn clears.
+struct RangedAttackRecord {
+    bool this_turn = false;
+    bool previous_turn = false;
+    friend bool operator==(const RangedAttackRecord&, const RangedAttackRecord&) = default;
+};
+
 // 01.02: a unit of one or more models.
 struct Unit {
     UnitId id;
@@ -82,6 +91,8 @@ struct Unit {
     bool battle_shocked = false;  // 01.07
     UnitTurnFlags turn_flags;
     UnitPhaseFlags phase_flags;
+    // D-088 (M88): JSON "ranged_attacks", omitted when both are false (always, without terrain).
+    RangedAttackRecord ranged_attacks;
 
     friend bool operator==(const Unit&, const Unit&) = default;
 };

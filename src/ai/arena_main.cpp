@@ -25,6 +25,9 @@
 // M87 (D-086): --mission <scenario file>, for --army-a / --army-b / --random-armies only: the scenario whose mission block
 //   the battles play (default data/scenarios/incursion_objectives_44x60.json, M86); for tuning the mission's numbers.
 //   With --scenario it exits 2.
+// M88 (D-087): --terrain <scenario file>, for --army-a / --army-b / --random-armies only: the scenario whose terrain
+//   block the battles are fought over (e.g. data/scenarios/incursion_terrain_44x60.json; its areas may link to the
+//   mission's objectives). Without it, a bare battlefield as before. With --scenario it exits 2.
 
 #include <cstdio>
 #include <exception>
@@ -107,6 +110,7 @@ int main(int argc, char** argv) {
     bool random_armies = false;
     std::optional<wh40k::core::DeploymentMode> deploy;  // M74 (D-081)
     std::optional<std::string> mission;                 // M87 (D-086)
+    std::optional<std::string> terrain;                 // M88 (D-087)
     for (int i = 1; i < argc; i += 2) {
         const std::string key = argv[i];
         if (i + 1 >= argc) {
@@ -133,6 +137,8 @@ int main(int argc, char** argv) {
                 deploy = value == "hand" ? wh40k::core::DeploymentMode::Hand : wh40k::core::DeploymentMode::Auto;
             } else if (key == "--mission") {
                 mission = value;
+            } else if (key == "--terrain") {
+                terrain = value;
             } else if (key == "--random-armies") {
                 const int v = std::stoi(value);
                 if (v != 0 && v != 1) throw std::invalid_argument("not 0 or 1");
@@ -183,6 +189,11 @@ int main(int argc, char** argv) {
                              "own mission)\n");
         return 2;
     }
+    if (terrain && !armies && !random_armies) {
+        std::fprintf(stderr, "wh40k_bot_arena: --terrain needs --army-a, --army-b or --random-armies (a scenario has its "
+                             "own terrain)\n");
+        return 2;
+    }
     const wh40k::core::DeploymentMode deploy_mode = deploy.value_or(wh40k::core::DeploymentMode::Auto);
     try {
         const fs::path root(WH40K_REPO_ROOT);
@@ -199,6 +210,9 @@ int main(int argc, char** argv) {
             // M87 (D-086): --mission names another scenario to read the block from.
             loaded.mission =
                 core::load_mission_block(mission ? in_repo(*mission) : root / "data/scenarios/incursion_objectives_44x60.json");
+            // M88 (D-087): --terrain names a scenario to read a "terrain" block from (its areas may link to the
+            // mission's objectives by name). Without it, a bare battlefield as before.
+            if (terrain) loaded.terrain = core::load_terrain_block(in_repo(*terrain));
             const auto source = std::make_shared<wh40k::ai::ArmySource>(std::move(loaded));
             const core::Side first_turn = first.value_or(core::Side::A);
             if (random_armies) {
@@ -224,6 +238,7 @@ int main(int argc, char** argv) {
                 scenario_for = [state](std::uint64_t) { return state; };
             }
             if (deploy_mode == core::DeploymentMode::Hand) scenario += ", deployment by hand (D-081)";
+            if (terrain) scenario += ", terrain from " + *terrain + " (D-087)";
         } else {
             wh40k::core::GameState state = wh40k::core::load_scenario(in_repo(scenario), root);
             if (first) state.first_turn = *first;

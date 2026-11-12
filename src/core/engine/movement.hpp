@@ -10,6 +10,7 @@
 #include "core/engine/actions.hpp"
 #include "core/geometry/pose.hpp"
 #include "core/geometry/primitives.hpp"
+#include "core/geometry/terrain_shape.hpp"
 #include "core/state/game_state.hpp"
 
 namespace wh40k::core {
@@ -80,6 +81,34 @@ struct ReachShape {
 // circumscribed_radius(mover) + circumscribed_radius(obstacle) + threshold: the shape lies inside this disc.
 [[nodiscard]] float reach_shape_outer_radius_mm(const ReachShape& shape);
 
+// M88 (D-087): one of MoveReach's terrain areas: the centres c at which the moving base, at `mover_facing_deg`, is within
+// `threshold_mm` of the feature's footprint (reach_terrain_contains):
+//     shape_signed_distance(BasePose{c - offset, mover_base, mover_facing_deg}, shape) < threshold_mm.
+// The thresholds: 0 (not ending on a Light or Dense feature, 03.01 / 13.06, as a ReachShape's 0) and -EPS (blocking:
+// a straight line's swept base would overlap a Dense feature the model can't move through by more than EPS,
+// translation_crosses_shape). `offset` is 0 from move_reach (a client shifting a whole-unit drag sets it).
+// - The set is convex (the signed distance to a convex set is convex in c), so on any ray it is one interval: bisection
+//   on reach_terrain_contains finds its ends, as for a ReachShape.
+// - It holds the disc round reach_terrain_centre of radius reach_terrain_inner_radius_mm and lies inside the disc of
+//   radius reach_terrain_outer_radius_mm.
+struct ReachTerrain {
+    Base mover_base;
+    float mover_facing_deg = 0.0f;
+    TerrainShape shape;
+    Position offset;
+    float threshold_mm = 0.0f;
+    std::size_t area = 0;     // the feature: GameState::terrain[area].features[feature]
+    std::size_t feature = 0;
+    friend bool operator==(const ReachTerrain&, const ReachTerrain&) = default;
+};
+[[nodiscard]] bool reach_terrain_contains(const ReachTerrain& t, const Position& centre);
+// The shape's inner point (shape_inner_point) shifted by `offset`.
+[[nodiscard]] Position reach_terrain_centre(const ReachTerrain& t);
+// inscribed_radius(mover) + the shape's inradius at its inner point + threshold (the set holds this disc, when positive).
+[[nodiscard]] float reach_terrain_inner_radius_mm(const ReachTerrain& t);
+// circumscribed_radius(mover) + the shape's furthest point from its inner point + threshold (the set lies in this disc).
+[[nodiscard]] float reach_terrain_outer_radius_mm(const ReachTerrain& t);
+
 struct MoveReach {
     Position start;
     float max_mm = 0.0f;
@@ -103,6 +132,12 @@ struct MoveReach {
     std::vector<ReachShape> forbidden_shapes;
     std::vector<std::vector<ReachShape>> required_any_shapes;
     std::vector<ReachShape> blocking_shapes;
+    // M88 (D-087). Empty without terrain, so the reach is as before.
+    // - forbidden_terrain: the Light and Dense features (03.01 / 13.06: no move ends on one);
+    // - blocking_terrain: the Dense features over 2" tall the model can't move through (13.06; a Desperate Escape
+    //   too), whose shadows from `from` it can't reach in one straight line. turn_blocked also counts a turn into one.
+    std::vector<ReachTerrain> forbidden_terrain;
+    std::vector<ReachTerrain> blocking_terrain;
     friend bool operator==(const MoveReach&, const MoveReach&) = default;
 };
 // At the model's current facing.

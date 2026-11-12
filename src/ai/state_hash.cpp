@@ -68,6 +68,13 @@ void add(Fnv1a& h, const core::Unit& u) {
         h.i32(u.points);
         h.i32(u.starting_wounds);
     }
+    // M88 (D-088): the ranged-attacks record (13.09 Hidden reads it) only when set, behind a tag, so a state without
+    // terrain (never set) hashes as before.
+    if (u.ranged_attacks != core::RangedAttackRecord{}) {
+        h.u64(0x726e6764ull);  // "rngd"
+        h.flag(u.ranged_attacks.this_turn);
+        h.flag(u.ranged_attacks.previous_turn);
+    }
     h.u64(u.models.size());
     for (const core::Model& m : u.models) {
         add(h, m.id);
@@ -245,6 +252,27 @@ std::uint64_t state_hash(const core::GameState& state) {
         }
         h.i32(m.objective_vp[0]);
         h.i32(m.objective_vp[1]);
+    }
+    // M88 (D-087): the terrain only when there is some, behind a tag, so every other state hashes as before. Fixed for
+    // the game, so its shape is enough: each area's and feature's category and footprint.
+    if (!state.terrain.empty()) {
+        h.u64(0x7465727aull);  // "terz"
+        h.u64(state.terrain.size());
+        const auto add_shape = [&h](const core::TerrainShape& t) {
+            h.u64(t.vertices.size());
+            for (const core::Position& p : t.vertices) add(h, p);
+            add(h, t.centre);
+            h.f32(t.diameter_mm);
+        };
+        for (const core::TerrainArea& a : state.terrain) {
+            add_shape(a.shape);
+            h.u64(a.features.size());
+            for (const core::TerrainFeature& f : a.features) {
+                h.u64(static_cast<std::uint64_t>(f.category));
+                h.f32(f.height_mm.value_or(0.0f));
+                add_shape(f.shape);
+            }
+        }
     }
     // state.dice is deliberately not hashed (D-054: the bot never peeks at the rolls to come).
     return h.value();

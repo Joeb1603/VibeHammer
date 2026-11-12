@@ -172,6 +172,8 @@ inline constexpr int kEberlyMaxIterations = 1100;
 
 // A convex shape for GJK: centre + ellipse (u, v, a, b; a point when both are 0) + an axis-aligned box (half sizes
 // hx, hy) + the segment from 0 to `sweep` (the hull of the shape at the centre and at centre + sweep).
+// M88 (D-087, D-088): + a convex polygon, `poly_n` vertices at `poly` (offsets from c, owned by the caller; c must be
+// inside the shape, e.g. the vertex mean). Shapes without one (poly_n 0) are exactly as before.
 struct Convex {
     Vec c;
     Vec u{0.0, 1.0};
@@ -181,6 +183,8 @@ struct Convex {
     double hx = 0.0;
     double hy = 0.0;
     Vec sweep;
+    const Vec* poly = nullptr;
+    int poly_n = 0;
 };
 [[nodiscard]] Vec support(const Convex& s, Vec d) noexcept;
 
@@ -210,6 +214,11 @@ inline constexpr double kGjkToleranceMm = 1e-9;
 // The signed distance between two posed bases in double: exact formulas for round-round and round-oval, GJK/EPA for
 // oval-oval (value of the bracket).
 [[nodiscard]] SignedDistance pose_signed_distance(const BasePose& a, const BasePose& b) noexcept;
+
+// M88 (D-087): the base's turn from start.facing_deg to `to_deg` against any convex shape (a terrain feature), by the
+// same conservative advancement as rotation_against_base's oval against oval. A round base (or no turn) is the static
+// check at the start: blocked when the base overlaps the shape by more than EPS_MM.
+[[nodiscard]] RotationCheck rotation_against_convex(const BasePose& start, float to_deg, const Convex& other);
 
 }  // namespace oval_detail
 

@@ -95,6 +95,10 @@ std::vector<EffectLine> attack_notes(const core::GameState& state, const AttackC
     }
     // D-073: 10.06 / 17.03 and the D-011 cap.
     for (EffectLine& line : hit_modifier_lines(sels, batch->profile.hit_modifier)) notes.push_back(std::move(line));
+    // M88 (D-089): 13.08 (the batch's skill already has it: one less is the weapon's).
+    if (batch->profile.skill && !sels.empty() && sels.front().benefit_of_cover) {
+        for (EffectLine& line : cover_lines(sels, *batch->profile.skill - 1)) notes.push_back(std::move(line));
+    }
     return notes;
 }
 

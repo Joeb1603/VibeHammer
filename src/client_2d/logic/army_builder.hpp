@@ -35,10 +35,12 @@ struct CustomBattleSetup {
 // D-079: the custom battle's initial state (not started): core's custom_battle_scenario through build_game_state.
 // Throws core::DataError when the setup can't be played (the same factions, an unknown faction, a list problem).
 // D-084 (M86): with `mission` (a scenario file's "mission" block) the battle plays the objective mission.
+// D-087 (M88): with `terrain` (a scenario file's "terrain" block) the battlefield has that terrain.
 [[nodiscard]] core::GameState custom_battle_state(const CustomBattleSetup& setup,
                                                   const std::vector<core::Faction>& factions,
                                                   const core::DatasheetResolver& resolve,
-                                                  const nlohmann::json* mission = nullptr);
+                                                  const nlohmann::json* mission = nullptr,
+                                                  const nlohmann::json* terrain = nullptr);
 
 // A problem of one side's list, attached to its unit where it has one (army_problems), else to the army.
 struct BuilderProblem {
@@ -208,6 +210,13 @@ public:
     void set_mission(std::optional<nlohmann::json> mission) { mission_ = std::move(mission); }
     [[nodiscard]] const nlohmann::json* mission() const { return mission_ ? &*mission_ : nullptr; }
 
+    // D-087 (M88): the terrain the battle is fought over: the "terrain" block of a scenario file (the client gives it
+    // data/scenarios/incursion_terrain_44x60.json's, whose areas link to that mission's objectives). Without one (the
+    // default) the battlefield is bare, as before. load_terrain throws core::DataError if the file has no terrain.
+    void load_terrain(const std::filesystem::path& scenario_file);
+    void set_terrain(std::optional<nlohmann::json> terrain) { terrain_ = std::move(terrain); }
+    [[nodiscard]] const nlohmann::json* terrain() const { return terrain_ ? &*terrain_ : nullptr; }
+
 private:
     core::ArmyList& list_mut(core::Side side) { return armies_[core::side_index(side)]; }
     [[nodiscard]] const core::Faction* faction_of(const std::string& id) const;
@@ -219,6 +228,7 @@ private:
 
     std::filesystem::path data_root_;
     std::optional<nlohmann::json> mission_;  // D-084 (M86)
+    std::optional<nlohmann::json> terrain_;  // D-087 (M88)
     std::vector<core::Faction> factions_;
     core::DatasheetResolver resolve_;
     std::array<core::ArmyList, 2> armies_;

@@ -180,6 +180,32 @@ std::vector<PathViolation> check_model_path(ModelId mover, const Base& base, std
     check_end(context.friendly);
     check_end(context.enemy);
     check_end(context.passable_enemy);  // 17.01 passes through them, but a move still can't end on them (D-073)
+
+    // M88 (D-087), 13.06: Dense features over 2" tall stop models that can't move through them (any move type).
+    for (const PathFeature& f : context.uncrossable) {
+        for (std::size_t s = 0; s + 1 < points.size(); ++s) {
+            if (turns(s) && rotation_against_shape(BasePose{points[s], base, facing(s)}, facing(s + 1), *f.shape).blocked) {
+                out.push_back({PathViolationKind::TurnCrossesTerrain, std::nullopt, s,
+                               "13.06: " + model_name(mover) + "'s base cannot be turned through terrain feature " +
+                                   f.label + " (before segment " + std::to_string(s + 1) + ")"});
+                break;  // one report per feature
+            }
+            if (translation_crosses_shape(BasePose{points[s], base, facing(s + 1)}, points[s + 1], *f.shape)) {
+                out.push_back({PathViolationKind::CrossesTerrain, std::nullopt, s,
+                               "13.06: " + model_name(mover) + " cannot move through terrain feature " + f.label +
+                                   " (segment " + std::to_string(s + 1) + "); it must move around it"});
+                break;  // one report per feature
+            }
+        }
+    }
+    // M88 (D-087), 03.01 Ending a Move: not partway through a Light or Dense feature (ground level only, in 2D).
+    for (const PathFeature& f : context.no_end) {
+        if (overlaps_shape(end, *f.shape)) {
+            out.push_back({PathViolationKind::EndsOnTerrain, std::nullopt, std::nullopt,
+                           "03.01: " + model_name(mover) + " cannot end its move partway through terrain feature " +
+                               f.label});
+        }
+    }
     return out;
 }
 

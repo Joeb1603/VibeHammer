@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -14,6 +15,7 @@
 #include "core/geometry/visibility.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/terrain.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -96,6 +98,14 @@ bool visible_past(const Model& observer, const Unit& target, std::span<const Pos
     return false;
 }
 
+// M88 (D-088): the same with terrain: 13.09 Hidden, 13.10 Obscuring and 13.11 Solid (model_visible).
+bool visible_past(TerrainView& view, const Model& observer, const Unit& target, std::span<const PosedModel> blockers) {
+    for (const Model& m : target.models) {
+        if (model_visible(view, observer, target, m, blockers)) return true;
+    }
+    return false;
+}
+
 // M54: the facts the declarations of one unit share, each worked out the first time a declaration needs it
 // (the same queries a declaration made on its own before): the enemy units the shooting unit is engaged with
 // (04.02, 10.06), whether a target unit is engaged (04.02) and whether a target unit is visible to a model
@@ -127,9 +137,23 @@ public:
         const auto bkey = std::make_pair(own != nullptr ? std::uint64_t{own->id.v} + 1 : 0, target.id.v);
         auto b = blockers_.find(bkey);
         if (b == blockers_.end()) b = blockers_.emplace(bkey, visibility_blockers(state_, own, target)).first;
-        const bool v = visible_past(model, target, b->second);
+        bool v = false;
+        if (state_.terrain.empty()) {
+            v = visible_past(model, target, b->second);
+        } else {
+            if (!terrain_) terrain_.emplace(state_);  // M88: shared by every declaration of this unit
+            v = visible_past(*terrain_, model, target, b->second);
+        }
         visible_.emplace(key, v);
         return v;
+    }
+    // The 06.01 reason `target` can't be selected by `model` (only when it isn't visible). M88 (D-088): with terrain,
+    // visibility_problem's (13.09, 13.10 / 13.11 or 06.01).
+    std::string not_visible_reason(const Model& model, const Unit& target) const {
+        if (state_.terrain.empty()) {
+            return "06.01: " + unit_label(target.id) + " is not visible to " + model_label(model.id);
+        }
+        return visibility_problem(state_, model, target).text;
     }
 
 private:
@@ -140,6 +164,7 @@ private:
     std::map<std::pair<std::uint32_t, std::uint32_t>, bool> visible_;  // (model, target unit)
     // by (observing unit id + 1, or 0 for none; target unit)
     std::map<std::pair<std::uint64_t, std::uint32_t>, std::vector<PosedModel>> blockers_;
+    std::optional<TerrainView> terrain_;  // M88: only with terrain
 };
 
 // 04.02 / 10.06: the target rules for one declaration (the target unit exists and is an enemy).
@@ -171,7 +196,7 @@ std::optional<std::string> target_problem(const Unit& unit, const Model& model, 
                ", an engaged MONSTER/VEHICLE unit (Rules Appendix FAQ)";
     }
     if (!facts.visible(model, target)) {
-        return "06.01: " + unit_label(target.id) + " is not visible to " + model_label(model.id);
+        return facts.not_visible_reason(model, target);
     }
     if (!target_within_range(model, profile, target)) {
         return "04.02: " + unit_label(target.id) + " is not within range (" + format_inches(*profile.range_mm) + ") of " +
@@ -340,7 +365,10 @@ std::vector<ShootingType> eligible_shooting_types(const GameState& state, const 
 }
 
 bool unit_visible_to_model(const GameState& state, const Model& observer, const Unit& target) {
-    return visible_past(observer, target, visibility_blockers(state, find_unit_of_model(state, observer.id), target));
+    const std::vector<PosedModel> blockers = visibility_blockers(state, find_unit_of_model(state, observer.id), target);
+    if (state.terrain.empty()) return visible_past(observer, target, blockers);
+    TerrainView view(state);  // M88 (D-088)
+    return visible_past(view, observer, target, blockers);
 }
 
 bool target_within_range(const Model& model, const WeaponProfile& profile, const Unit& target) {
@@ -431,6 +459,9 @@ AttackContext shooting_context(const GameState& state, const Unit& unit) {
 std::vector<WeaponSelection> make_weapon_selections(const GameState& state, const Unit& unit, ShootingType type,
                                                     std::span<const ShotDeclaration> shots) {
     std::vector<WeaponSelection> out;
+    // M88 (D-089): 13.08 per attacking model and target unit, worked out once each (only with terrain).
+    std::optional<TerrainView> view;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, bool> cover;
     for (const ShotDeclaration& s : shots) {
         WeaponSelection sel = select_weapon_target(state, s.model, s.weapon_index, s.profile_index, s.target);
         const Model& model = *find_model(unit, s.model);
@@ -455,6 +486,14 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
             // the net at the hit roll (D-073).
             sel.hit_modifier -= 1;
             sel.hit_modifier_rules.push_back(HitModifierRule::EngagedMonsterTarget);
+        }
+        if (!state.terrain.empty() && target != nullptr) {
+            // 13.08 (D-089): decided when the targets are selected; models lost later don't change it.
+            if (!view) view.emplace(state);
+            const auto key = std::make_pair(s.model.v, s.target.v);
+            auto it = cover.find(key);
+            if (it == cover.end()) it = cover.emplace(key, benefit_of_cover(*view, model, *target)).first;
+            sel.benefit_of_cover = it->second;
         }
         out.push_back(sel);
     }

@@ -13,6 +13,7 @@
 #include "core/state/decision.hpp"
 #include "core/state/flow.hpp"
 #include "core/state/mission.hpp"
+#include "core/state/terrain.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -70,6 +71,9 @@ struct GameState {
     // D-084 (M86): the objective mission (objective areas, their control and the VP scored), present exactly when
     // result_rule is Mission. JSON "mission", omitted when absent, so every older file is unchanged.
     std::optional<Mission> mission;
+    // D-087 (M88): the terrain areas (13.01) and their features, in file order. JSON "terrain", omitted when empty, so
+    // every older file loads and saves unchanged. Fixed for the game.
+    std::vector<TerrainArea> terrain;
 
     [[nodiscard]] const SideInfo& side(Side s) const { return sides[side_index(s)]; }
     [[nodiscard]] const Unit* find_unit(UnitId id) const;

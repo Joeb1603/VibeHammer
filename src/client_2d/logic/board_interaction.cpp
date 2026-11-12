@@ -88,6 +88,12 @@ void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& en
         if (std::find(rules.begin(), rules.end(), core::HitModifierRule::EngagedMonsterTarget) != rules.end()) {
             entry.help.push_back(engaged_monster_target_help());
         }
+        // M88 (D-089): 13.08, as the selections the engine would make record it.
+        const std::vector<EffectLine> cover = cover_lines(selections, p->has<core::ability::Torrent>() ? std::nullopt : p->skill);
+        if (!cover.empty()) {
+            for (const EffectLine& line : cover) entry.effects.push_back(line);
+            entry.help.push_back(benefit_of_cover_help());
+        }
     }
     for (EffectLine& line : random_characteristic_lines(*p)) entry.effects.push_back(std::move(line));  // D-069
 }

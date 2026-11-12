@@ -35,7 +35,8 @@ add_library(wh40k_client_logic STATIC
     watch_controls.cpp
     shot_plan.cpp
     settings.cpp
-    timeline.cpp)
+    timeline.cpp
+    terrain_view.cpp)
 
 target_include_directories(wh40k_client_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(wh40k_client_logic PUBLIC wh40k_core)

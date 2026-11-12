@@ -63,13 +63,20 @@ How to play
      - Continue saved game (when there is one), Watch a replay, Quit.
   3. Follow the decision panel at the top; click the board to pick units, targets and moves.
      The start screen's Scenario list has, among others:
-     - incursion_objectives_44x60.json (the default): the armies of rosters_44x60.json (below)
-       with three objective areas, a 12" Centre and a 6" home per side. At the end of every
-       phase and turn the side with more OC in an area controls it. From battle round 2, each
-       side scores in its own Command phase: the Centre 5 VP, its own home 2 VP, the enemy's
-       home 4 VP. After battle round 5, 1 VP per 50 points destroyed. A side that wipes the
-       other out wins; otherwise the most VP wins (points destroyed settle a tie). Custom
-       battles play the same mission;
+     - incursion_terrain_44x60.json (the default): incursion_objectives_44x60.json (below)
+       fought over terrain: a ruin of two 5" walls in the Centre, ruins, barricades and craters
+       elsewhere. No model ends a move on a wall or barricade; only infantry moves through
+       dense walls; areas with walls block sight through them; infantry in an area (or targets
+       partly hidden by terrain) have cover, the shooter's BS worsened by 1; infantry in a ruin
+       that didn't shoot this turn or last can only be seen from within 15". Hover an area on
+       the board for its rules. Custom battles use the same terrain;
+     - incursion_objectives_44x60.json: the armies of rosters_44x60.json (below) with three
+       objective areas, a 12" Centre and a 6" home per side. At the end of every phase and
+       turn the side with more OC in an area controls it. From battle round 2, each side
+       scores in its own Command phase: the Centre 1 VP, its own home 4 VP, the enemy's home
+       8 VP. After battle round 5, 1 VP per 25 points destroyed. A side that wipes the other
+       out wins; otherwise the most VP wins (points destroyed settle a tie). Custom battles
+       play the same mission;
      - v1_skirmish.json: Space Marine Intercessors vs Tyranid Termagants, one unit each on a
        24" x 24" battlefield;
      - strike_44x60.json: a full-size 60" x 44" battlefield with 3 Intercessor Squads against

@@ -3,8 +3,8 @@
 A Warhammer 40,000 (11th edition) skirmish for Windows. It is a deterministic C++20 rules engine with a 2D
 top-down client that follows the core rules, played hotseat or against a bot.
 
-The default scenario is **Incursion objectives** (`incursion_objectives_44x60.json`), two armies on a 44" x 60"
-portrait battlefield:
+The default scenario is **Incursion terrain** (`incursion_terrain_44x60.json`), two armies on a 44" x 60" portrait
+battlefield with terrain:
 - **The armies.** The Chaos Space Marines field a Chaos Lord, two squads of Legionaries, Chaos Terminators and
   Havocs. The Tyranids field a Hive Tyrant, Termagants, Genestealers, Tyrant Guard, two Screamer-killers and a
   Tyrannofex.
@@ -17,15 +17,28 @@ portrait battlefield:
 
   After battle round 5 each side also scores 1 VP per 25 points it has destroyed.
 - **Winning.** Wiping the other side out still wins. Otherwise the most VP wins, and points destroyed settle a tie.
+- **Terrain** (2D: footprints on the battlefield, no floors). The objective areas are terrain areas: a ruin of two
+  5" L-shaped walls stands in the Centre and a crater in each home. Ruins stand south-west and north-east, barricades
+  south-east and north-west, and craters on the long edges.
+  - **Moving:** no model ends a move on a wall or barricade. Only INFANTRY (and BEASTS, SWARM, MOBILE) moves through
+    dense walls over 2" tall; monsters go round them.
+  - **Seeing:** an area with walls or barricades blocks sight through it, unless one of the two models is in it.
+    Dense walls block sight everywhere.
+  - **Cover:** infantry in an area, or targets partly hidden behind terrain, worsen the shooter's BS by 1.
+  - **Hidden:** infantry in a ruin that didn't shoot this turn or last can only be seen from within 15".
+
+  Hover an area for its rules.
 
 The start screen's Scenario list has the other scenarios:
+- **Incursion objectives** (`incursion_objectives_44x60.json`): the same battle without terrain.
 - **V1 skirmish** (`v1_skirmish.json`): one unit each on a 24" x 24" board.
 - **Strike** (`strike_44x60.json`): three Intercessor Squads against four units of Termagants on a full-size
   60" x 44" battlefield.
 - **Incursion** (`rosters_44x60.json`): the same armies with no objectives. The side that destroyed more points
   wins.
 
-A **custom battle** plays the objective mission with armies you build yourself, set up automatically or by hand.
+A **custom battle** plays the objective mission over the same terrain with armies you build yourself, set up
+automatically or by hand.
 
 On the board, each unit has its own shade of its side's colour and a number.
 
@@ -91,7 +104,8 @@ behind each step.
     hold, take or contest an area, choosing the cheapest units with enough OC. Moves count the VP they deny the enemy
     at the end of the bot's turn and the VP they hold through the enemy's turn.
 
-**Not yet:** terrain, missions beyond the one objective mission, stratagems, unit abilities (including
+**Not yet:** terrain heights (floors, climbing, Plunging Fire) and Stealth, the bot seeking cover (M89), missions
+beyond the one objective mission, stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
 `PLAN.md` lists what comes next.
 

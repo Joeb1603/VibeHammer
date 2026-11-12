@@ -47,9 +47,10 @@ bool same_path(const fs::path& a, const fs::path& b) {
 }  // namespace
 
 core::GameState custom_battle_state(const CustomBattleSetup& setup, const std::vector<core::Faction>& factions,
-                                    const core::DatasheetResolver& resolve, const nlohmann::json* mission) {
+                                    const core::DatasheetResolver& resolve, const nlohmann::json* mission,
+                                    const nlohmann::json* terrain) {
     return core::build_game_state(core::custom_battle_scenario(setup.armies[0], setup.armies[1], setup.first_turn,
-                                                               factions, resolve, setup.deployment, mission),
+                                                               factions, resolve, setup.deployment, mission, terrain),
                                   resolve);
 }
 
@@ -659,11 +660,16 @@ bool ArmyBuilder::can_start() const { return !start_problem().has_value(); }
 CustomBattleSetup ArmyBuilder::setup() const { return CustomBattleSetup{armies_, first_turn_, deployment_}; }
 
 nlohmann::json ArmyBuilder::battle_scenario() const {
-    return core::custom_battle_scenario(armies_[0], armies_[1], first_turn_, factions_, resolve_, deployment_, mission());
+    return core::custom_battle_scenario(armies_[0], armies_[1], first_turn_, factions_, resolve_, deployment_, mission(),
+                                        terrain());
 }
 
-core::GameState ArmyBuilder::battle_state() const { return custom_battle_state(setup(), factions_, resolve_, mission()); }
+core::GameState ArmyBuilder::battle_state() const {
+    return custom_battle_state(setup(), factions_, resolve_, mission(), terrain());
+}
 
 void ArmyBuilder::load_mission(const fs::path& scenario_file) { mission_ = core::load_mission_block(scenario_file); }
+
+void ArmyBuilder::load_terrain(const fs::path& scenario_file) { terrain_ = core::load_terrain_block(scenario_file); }
 
 }  // namespace wh40k::client

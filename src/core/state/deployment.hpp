@@ -28,8 +28,9 @@ namespace wh40k::core {
 // every problem found is listed. In order: the unit is `side`'s and waiting to be set up; each of its models is placed
 // exactly once, at a finite position with z 0, with a finite facing (0 for a round base, D-074); each base is wholly on
 // the battlefield (03.02) and wholly within its side's deployment zone (D-009); no model is on another, in the unit or
-// already on the battlefield (03.01 Ending a Move, D-064); the unit is in coherency (03.03); it is unengaged (03.02,
-// 03.04). Units not yet set up are not on the battlefield and are ignored.
+// already on the battlefield (03.01 Ending a Move, D-064); M88 (D-087): no model is on a Light or Dense terrain
+// feature; the unit is in coherency (03.03); it is unengaged (03.02, 03.04). Units not yet set up are not on the
+// battlefield and are ignored.
 [[nodiscard]] std::vector<std::string> set_up_problems(const GameState& state, Side side, const action::DeployUnit& a);
 
 // M76 (D-082 part 2): one of set_up_problems' reasons with the models of the unit being set up that cause it, for the

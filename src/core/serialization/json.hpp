@@ -136,6 +136,16 @@ void to_json(Json& j, const ObjectiveArea& v);
 void from_json(const Json& j, ObjectiveArea& v);
 void to_json(Json& j, const Mission& v);
 void from_json(const Json& j, Mission& v);
+void to_json(Json& j, const TerrainShape& v);  // D-087 (M88)
+void from_json(const Json& j, TerrainShape& v);
+void to_json(Json& j, TerrainCategory v);
+void from_json(const Json& j, TerrainCategory& v);
+void to_json(Json& j, const TerrainFeature& v);
+void from_json(const Json& j, TerrainFeature& v);
+void to_json(Json& j, const TerrainArea& v);
+void from_json(const Json& j, TerrainArea& v);
+void to_json(Json& j, const RangedAttackRecord& v);  // D-088 (M88)
+void from_json(const Json& j, RangedAttackRecord& v);
 void to_json(Json& j, const VpTally& v);
 void from_json(const Json& j, VpTally& v);
 void to_json(Json& j, const GameResult& v);
