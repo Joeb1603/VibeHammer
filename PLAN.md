@@ -417,6 +417,9 @@ averages half the units on the battlefield or more.
   0 (its premise, the bot ignoring objectives, holds only then); the M86 tests read the fixture.
 - **Replay:** `tests/replays/m87_objectives_bot_game.json` (seed 29: each side holds its home, both score the Centre,
   fights on both sides; the Tyranids win on VP).
+- **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,348 of 1,348 passed. Identity: all 9 runs (1,800
+  games) identical to the M86 binary. Screenshot under `xvfb-run` (seed 29, round 3): both homes held, the Terminators
+  contesting the Centre. A full game by mouse on Windows stays a manual check for the user.
 
 ---
 
