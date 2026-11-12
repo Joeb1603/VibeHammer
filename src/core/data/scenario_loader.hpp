@@ -25,6 +25,10 @@ using DatasheetResolver = std::function<Datasheet(const std::string& unit_file)>
 [[nodiscard]] GameState build_game_state(const nlohmann::json& scenario,
                                          const DatasheetResolver& resolve);
 
+// D-084 (M86): the "mission" block of a scenario file (custom battles copy it, custom_battle_scenario). Throws
+// DataError if the file has none.
+[[nodiscard]] nlohmann::json load_mission_block(const std::filesystem::path& scenario_path);
+
 // Loads a scenario file; its "unit_file" paths are resolved against `repo_root`.
 [[nodiscard]] GameState load_scenario(const std::filesystem::path& scenario_path,
                                       const std::filesystem::path& repo_root);

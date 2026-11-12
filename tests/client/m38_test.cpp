@@ -59,7 +59,7 @@ TEST(M38_Settings, DefaultsMatchThePlan) {
     const AppSettings s;
     EXPECT_EQ(s.human_side, Side::A);
     EXPECT_EQ(s.bot_speed, BotSpeed::Normal);
-    EXPECT_EQ(s.scenario, "data/scenarios/v1_skirmish.json");
+    EXPECT_EQ(s.scenario, "data/scenarios/incursion_objectives_44x60.json");  // M86 (D-084): the objective scenario
     EXPECT_FALSE(s.fixed_seed);
     EXPECT_TRUE(s.show_dice);
     EXPECT_TRUE(s.skip_empty_steps);

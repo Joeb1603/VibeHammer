@@ -203,12 +203,23 @@ struct PointsTally {
     friend bool operator==(const PointsTally&, const PointsTally&) = default;
 };
 
+// D-084 (M86): both sides' victory points: objective VP scored in the Command phases, kill VP from the points
+// destroyed (D-076), and their sum. Indexed by side_index.
+struct VpTally {
+    std::array<int, 2> objectives{};
+    std::array<int, 2> kills{};
+    std::array<int, 2> total{};
+    friend bool operator==(const VpTally&, const VpTally&) = default;
+};
+
 // D-007: the end of the game.
 struct GameResult {
     std::optional<Side> winner;  // nullopt: a draw
     std::string reason;          // rule-cited
     // D-076: both sides' points destroyed, when the scenario decides the game on them (JSON omitted otherwise).
     std::optional<PointsTally> points{};
+    // D-084 (M86): both sides' victory points, when the scenario plays the mission (JSON omitted otherwise).
+    std::optional<VpTally> vp{};
     friend bool operator==(const GameResult&, const GameResult&) = default;
 };
 

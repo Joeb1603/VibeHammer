@@ -39,11 +39,14 @@ struct CustomBattleSettings {
     friend bool operator==(const CustomBattleSettings&, const CustomBattleSettings&) = default;
 };
 
+// D-084 (M86): the objective scenario, the start screen's default; custom battles play its mission.
+inline constexpr const char* kObjectiveScenario = "data/scenarios/incursion_objectives_44x60.json";
+
 // Everything the start screen and the sidebar toggles set. Saved to vibehammer_settings.json next to the exe.
 struct AppSettings {
     core::Side human_side = core::Side::A;  // "You play" in a game against the bot
     BotSpeed bot_speed = BotSpeed::Normal;
-    std::string scenario = "data/scenarios/v1_skirmish.json";  // relative to the data root
+    std::string scenario = kObjectiveScenario;  // relative to the data root (M86: the objective scenario)
     bool fixed_seed = false;    // D-038
     std::uint64_t seed = 0;
     bool show_dice = true;        // D-033

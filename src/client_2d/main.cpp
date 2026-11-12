@@ -12,7 +12,7 @@
 //   reproducible; --menu 1 shows the start screen anyway (for screenshots).
 //   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
 //   --seed n: the dice seed for the first new game (M13; the panel can change it for later games).
-//   --scenario file: the scenario for new games (default data/scenarios/v1_skirmish.json).
+//   --scenario file: the scenario for new games (default data/scenarios/incursion_objectives_44x60.json, M86).
 //   --dice n: 1 keeps the dice pop-ups the --steps rolls made (otherwise dropped), 2 also shows the first
 //             card's faces (M20, for screenshots).
 //   M39 (D-054): --bot: the sides the bot plays in the first game (default none: hotseat); --bot-speed sets its
@@ -131,6 +131,16 @@ fs::path find_data_root() {
 const fs::path kRepoRoot = find_data_root();
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
 const fs::path kSavePath = kRepoRoot / "saves/game.json";              // gitignored
+
+// D-084 (M86): custom battles play the objective scenario's mission. If the file can't be read the builder keeps
+// none, and its battles are decided on points destroyed (D-076) as before.
+void give_mission(ArmyBuilder& builder) {
+    try {
+        builder.load_mission(resolve_data_path(kRepoRoot, kObjectiveScenario));
+    } catch (const std::exception&) {
+        builder.set_mission(std::nullopt);
+    }
+}
 const fs::path kExportPath = kRepoRoot / "replays/exported_replay.json";  // gitignored
 // M38 (D-055): the saved settings live next to the exe (under build/ in a source build, so not in the repo).
 fs::path settings_path() { return fs::path(GetApplicationDirectory()) / "vibehammer_settings.json"; }
@@ -248,7 +258,7 @@ public:
             if (custom_setup_ && builder_) {
                 // M75 (D-082): a custom battle is rebuilt from its setup (the two lists, first turn, deployment).
                 const core::GameState initial =
-                    custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver());
+                    custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver(), builder_->mission());
                 start_session(GameSession::new_game(initial, settings_.seed));
                 status_ = "New game: " + initial.scenario_name + ", seed " + std::to_string(settings_.seed) + ". " +
                           players_text();
@@ -285,6 +295,7 @@ public:
         if (builder_) return true;
         try {
             builder_.emplace(kRepoRoot);
+            give_mission(*builder_);  // D-084 (M86)
             builder_->apply(settings_.custom_battle);
             return true;
         } catch (const std::exception& e) {
@@ -2348,6 +2359,16 @@ private:
 
     void draw_game_info() {
         const core::GameState& s = state();
+        if (const std::optional<std::string> vp = victory_points_text(s)) {  // D-084 (M86): VP so far
+            ImGui::TextWrapped("%s", vp->c_str());
+            ImGui::SetItemTooltip("D-084: in your own Command phase from battle round %d, you score each objective "
+                                  "you control (the area's VP for your side, shown on the board as A/B). After "
+                                  "battle round %d you also get %d VP per full %d points destroyed (the kills shown "
+                                  "are what the points destroyed give now). Unless a side is wiped out, the most VP "
+                                  "wins; equal VP is decided on points destroyed.",
+                                  s.mission->first_scoring_round, s.battle_rounds, s.mission->kill_vp,
+                                  s.mission->kill_points);
+        }
         if (const std::optional<std::string> points = points_destroyed_text(s)) {  // D-076 (M67): the running totals
             ImGui::TextUnformatted(points->c_str());
             ImGui::SetItemTooltip("D-076: unless a side is wiped out, the side that has destroyed more points wins "
@@ -2718,6 +2739,7 @@ private:
             ImGui::TextColored(colour, "%s", text->title.c_str());
             ImGui::PopFont();
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28.0f);
+            if (text->vp) ImGui::TextUnformatted(text->vp->c_str());          // D-084 (M86): both sides' VP
             if (text->points) ImGui::TextUnformatted(text->points->c_str());  // D-076 (M67): both totals
             ImGui::TextDisabled("%s", text->reason.c_str());
             ImGui::PopTextWrapPos();
@@ -3021,6 +3043,7 @@ int main(int argc, char** argv) {
         if (options.builder || options.custom_battle()) {
             // M75: the builder before the window opens, so a bad list exits with code 2 like a bad flag value.
             custom.builder.emplace(kRepoRoot);
+            give_mission(*custom.builder);  // D-084 (M86)
             apply_launch_armies(options, *custom.builder);
             custom.open_builder = options.builder;
             custom.start = !options.builder;

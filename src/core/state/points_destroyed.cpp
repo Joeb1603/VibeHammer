@@ -59,6 +59,9 @@ void check_points_data(const GameState& state, std::string_view where) {
             if (state.result_rule == ResultRule::PointsDestroyed) {
                 fail(where, unit_label(u) + " has no points; result \"points_destroyed\" needs the points of every unit");
             }
+            if (state.result_rule == ResultRule::Mission) {  // D-084: kill VP and the tiebreak count points
+                fail(where, unit_label(u) + " has no points; result \"mission\" needs the points of every unit");
+            }
             continue;
         }
         total += u.points;

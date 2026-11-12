@@ -226,6 +226,26 @@ std::uint64_t state_hash(const core::GameState& state) {
         h.u64(state.undeployed.size());
         for (const core::Unit& u : state.undeployed) add(h, u);
     }
+    // M86 (D-084): the mission (its areas, their control and the VP scored) only when there is one, behind a tag, so
+    // every other state hashes as before.
+    if (state.mission) {
+        const core::Mission& m = *state.mission;
+        h.u64(0x6d697373ull);  // "miss"
+        h.i32(m.first_scoring_round);
+        h.i32(m.kill_points);
+        h.i32(m.kill_vp);
+        h.u64(m.objectives.size());
+        for (const core::ObjectiveArea& a : m.objectives) {
+            add(h, a.centre);
+            h.f32(a.diameter_mm);
+            h.i32(a.vp[0]);
+            h.i32(a.vp[1]);
+            add_opt_int(h, a.controller);
+            add_opt_int(h, a.secured_by);
+        }
+        h.i32(m.objective_vp[0]);
+        h.i32(m.objective_vp[1]);
+    }
     // state.dice is deliberately not hashed (D-054: the bot never peeks at the rolls to come).
     return h.value();
 }

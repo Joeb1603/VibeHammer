@@ -237,6 +237,8 @@ struct GameOver {  // D-007
     std::string reason;
     // D-076 (M67): both sides' points destroyed, when the scenario decides the game on them (JSON omitted otherwise).
     std::optional<PointsTally> points{};
+    // D-084 (M86): both sides' victory points, when the scenario plays the mission (JSON omitted otherwise).
+    std::optional<VpTally> vp{};
     friend bool operator==(const GameOver&, const GameOver&) = default;
 };
 struct WoundRollsRerolled {  // 24.38 [TWIN-LINKED], D-011 (D-072): the attacker's re-rolls of a batch's wound rolls
@@ -265,6 +267,21 @@ struct UnitNotSetUp {  // D-081: no legal spot was left; the unit counts as dest
     Side side = Side::A;
     friend bool operator==(const UnitNotSetUp&, const UnitNotSetUp&) = default;
 };
+struct ObjectiveControlChanged {  // 14.02 (D-084, M86): an objective's controller changed at the end of a phase or turn
+    std::size_t objective = 0;        // index into GameState::mission->objectives
+    std::string name;
+    std::optional<Side> controller;   // nullopt: neither player controls it now
+    std::array<int, 2> levels{};      // both players' levels of control, indexed by side_index
+    friend bool operator==(const ObjectiveControlChanged&, const ObjectiveControlChanged&) = default;
+};
+struct VictoryPointsScored {  // D-084 (M86): a player scores an objective they control in their Command phase
+    Side side = Side::A;
+    std::size_t objective = 0;
+    std::string name;
+    int vp = 0;
+    int total = 0;  // the side's objective VP after scoring
+    friend bool operator==(const VictoryPointsScored&, const VictoryPointsScored&) = default;
+};
 }  // namespace event
 
 // New alternatives are appended at the end, so every existing index stays the same.
@@ -281,7 +298,8 @@ using GameEvent =
                  event::WoundRollsMade, event::AllocationOrderDeclared, event::SaveRollsMade,
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled, event::DeploymentStarted,
-                 event::UnitSetUp, event::UnitNotSetUp>;
+                 event::UnitSetUp, event::UnitNotSetUp, event::ObjectiveControlChanged,
+                 event::VictoryPointsScored>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

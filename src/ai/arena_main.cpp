@@ -176,7 +176,10 @@ int main(int argc, char** argv) {
         wh40k::ai::ScenarioForSeed scenario_for;
         if (armies || random_armies) {
             namespace core = wh40k::core;
-            const auto source = std::make_shared<wh40k::ai::ArmySource>(wh40k::ai::load_army_source(root));
+            auto loaded = wh40k::ai::load_army_source(root);
+            // M86 (D-084): custom and random battles play the objective scenario's mission, as in the client.
+            loaded.mission = core::load_mission_block(root / "data/scenarios/incursion_objectives_44x60.json");
+            const auto source = std::make_shared<wh40k::ai::ArmySource>(std::move(loaded));
             const core::Side first_turn = first.value_or(core::Side::A);
             if (random_armies) {
                 scenario = "random armies (D-079)";

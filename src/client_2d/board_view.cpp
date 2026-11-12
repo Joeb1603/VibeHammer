@@ -9,6 +9,7 @@
 #include "base_shape.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/queries.hpp"
+#include "phase_track.hpp"
 
 namespace wh40k::client {
 
@@ -149,6 +150,26 @@ void draw_unit_label(const core::Unit& unit, const std::string& label, const Boa
     draw_label(cam.to_screen(x / n, y / n), cam.to_px(radius_mm), label, dimmed, ui_scale);
 }
 
+// D-084 (M86): the objective areas, filled with their controller's colour (neutral grey while neither player controls
+// one), outlined, with their name and VP just above the area (where the models standing in it don't hide it). Drawn
+// under the grid, the bases and their labels.
+void draw_objectives(const core::GameState& state, const BoardCamera& cam, float ui_scale) {
+    for (const ObjectiveMark& m : objective_marks(state)) {
+        const Vector2 c = cam.to_screen(m.centre);
+        const float r = cam.to_px(m.radius_mm);
+        const Color tint = m.controller ? side_color(*m.controller) : Color{200, 200, 205, 255};
+        DrawCircleV(c, r, ColorAlpha(tint, m.controller ? 0.32f : 0.14f));
+        const float thick = (m.secured ? 4.0f : 2.0f) * ui_scale;
+        DrawRing(c, std::max(0.0f, r - thick), r, 0.0f, 360.0f, 96, ColorAlpha(tint, 0.9f));
+        const int size = 10 * std::max(1, static_cast<int>(std::lround(1.6f * ui_scale)));
+        const int w = MeasureText(m.label.c_str(), size);
+        const int tx = static_cast<int>(std::lround(c.x)) - w / 2;
+        const int ty = static_cast<int>(std::lround(c.y - r)) - size - 2;
+        DrawText(m.label.c_str(), tx + 1, ty + 1, size, BLACK);
+        DrawText(m.label.c_str(), tx, ty, size, RAYWHITE);
+    }
+}
+
 }  // namespace
 
 void fill_base(const BoardCamera& cam, const core::BasePose& pose, Color colour, float grow_px) {
@@ -224,6 +245,7 @@ void draw_board(const core::GameState& state, const BoardCamera& cam,
         // M76: the zone a side is setting a unit up in, more strongly (D-082 part 2).
         DrawRectangleRec(cam.to_screen(zone), ColorAlpha(side_color(side), highlighted_zone == side ? 0.34f : 0.18f));
     }
+    draw_objectives(state, cam, ui_scale);  // D-084 (M86)
     draw_grid(state.battlefield, cam);
     DrawRectangleLinesEx(cam.to_screen(board), 2.0f, kEdge);
     if (highlighted_zone) {

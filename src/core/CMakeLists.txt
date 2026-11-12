@@ -18,6 +18,7 @@ add_library(wh40k_core STATIC
     engine/events.cpp
     engine/fight.cpp
     engine/movement.cpp
+    engine/objectives.cpp
     engine/replay.cpp
     engine/shooting.cpp
     engine/turn_phases.cpp
@@ -49,6 +50,7 @@ add_library(wh40k_core STATIC
     state/deployment.cpp
     state/flow.cpp
     state/game_state.cpp
+    state/objectives.cpp
     state/points_destroyed.cpp
     state/queries.cpp)
 

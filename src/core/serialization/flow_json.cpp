@@ -466,16 +466,35 @@ void from_json(const Json& j, PointsTally& v) {
     }
 }
 
+// D-084 (M86): both sides' objective, kill and total VP.
+void to_json(Json& j, const VpTally& v) {
+    j = Json{{"objectives", v.objectives}, {"kills", v.kills}, {"total", v.total}};
+}
+void from_json(const Json& j, VpTally& v) {
+    j.at("objectives").get_to(v.objectives);
+    j.at("kills").get_to(v.kills);
+    j.at("total").get_to(v.total);
+    for (std::size_t i = 0; i < 2; ++i) {
+        if (v.objectives[i] < 0 || v.kills[i] < 0 || v.total[i] != v.objectives[i] + v.kills[i]) {
+            throw DataError("state JSON: D-084: a VP tally needs objective and kill VP of 0 or more and their sum as "
+                            "the total: " + j.dump());
+        }
+    }
+}
+
 void to_json(Json& j, const GameResult& v) {
     j = Json{{"reason", v.reason}};
     put_opt(j, "winner", v.winner);
     if (v.points) j["points"] = *v.points;  // D-076: omitted unless the game was decided on points
+    if (v.vp) j["vp"] = *v.vp;              // D-084: omitted unless the game was decided on the mission
 }
 void from_json(const Json& j, GameResult& v) {
     get_opt(j, "winner", v.winner);
     j.at("reason").get_to(v.reason);
     v.points.reset();
     if (j.contains("points")) v.points = j.at("points").get<PointsTally>();
+    v.vp.reset();
+    if (j.contains("vp")) v.vp = j.at("vp").get<VpTally>();
 }
 
 // ---- decisions ----

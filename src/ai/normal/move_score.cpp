@@ -283,7 +283,9 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
     }
     us_round_ = all_round(us_.models);
     us_mv_ = monster_or_vehicle(us_);
-    points_rule_ = origin.result_rule == core::ResultRule::PointsDestroyed;
+    // M86 (D-084): the mission scores kills (kill VP) and settles equal VP on points destroyed, so the bot plays it as
+    // the points rule (it ignores the objectives until M87).
+    points_rule_ = origin.result_rule == core::ResultRule::PointsDestroyed || origin.result_rule == core::ResultRule::Mission;
     for (const core::Model& m : us_.models) us_extents_.push_back(edge_extents(m.base, m.facing_deg));
     us_threat_ = analysis::threat_ranges(us_);
     our_ranges_ = ranged_ranges(us_);

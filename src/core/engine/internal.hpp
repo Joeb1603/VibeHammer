@@ -34,6 +34,13 @@ void on_enter_stage(GameState& state, DiceSource& dice, Events& events);
 // Exit work for the current stage, before the next stage is set.
 void on_leave_stage(GameState& state, Events& events);
 
+// 14.02 (D-084, M86; objectives.cpp): determine control of every objective, at the end of a phase (`end_of_phase`)
+// or of a turn; an ObjectiveControlChanged event for each change. No-op without a mission.
+void update_objective_control(GameState& state, bool end_of_phase, Events& events);
+// D-084: the turn's player scores each objective they control, in their Command phase from the first scoring round;
+// a VictoryPointsScored event for each. No-op without a mission.
+void score_objectives(GameState& state, Side side, Events& events);
+
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::MoveUnits& d);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::StartMove& a);
 void apply_details(GameState& state, Side side, const action::StartMove& a, DiceSource& dice, Events& events);

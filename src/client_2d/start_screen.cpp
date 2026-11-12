@@ -70,9 +70,18 @@ StartRequest StartScreen::draw(AppSettings& s, const StartContext& ctx) {
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - ImGui::CalcTextSize(title).x) * 0.5f);
     ImGui::TextColored(kTitleColour, "%s", title);
     ImGui::PopFont();
-    const std::string subtitle = info_.name + "   |   " + info_.sides[0] + " vs " + info_.sides[1];
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - ImGui::CalcTextSize(subtitle.c_str()).x) * 0.5f);
-    ImGui::TextUnformatted(subtitle.c_str());
+    // M86: the sides only when the scenario's name doesn't already say them; a line wider than the column wraps.
+    const std::string sides = info_.sides[0] + " vs " + info_.sides[1];
+    const std::string subtitle = info_.name.find(sides) != std::string::npos ? info_.name : info_.name + "   |   " + sides;
+    const float subtitle_width = ImGui::CalcTextSize(subtitle.c_str()).x;
+    if (subtitle_width <= width) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - subtitle_width) * 0.5f);
+        ImGui::TextUnformatted(subtitle.c_str());
+    } else {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width);
+        ImGui::TextWrapped("%s", subtitle.c_str());
+        ImGui::PopTextWrapPos();
+    }
     const std::string tagline = "Warhammer 40,000 11th edition rules engine, version " + ctx.version;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - ImGui::CalcTextSize(tagline.c_str()).x) * 0.5f);
     ImGui::TextDisabled("%s", tagline.c_str());

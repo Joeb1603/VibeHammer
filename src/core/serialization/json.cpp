@@ -9,6 +9,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/serialization/json_util.hpp"
 
@@ -390,6 +391,37 @@ void check_undeployed(const GameState& v) {
 
 }  // namespace
 
+// ---- D-084 (M86): the mission ----
+void to_json(Json& j, const ObjectiveArea& v) {
+    j = Json{{"name", v.name}, {"centre", v.centre}, {"diameter_mm", v.diameter_mm}, {"vp", v.vp}};
+    if (v.controller) j["controller"] = *v.controller;  // 14.02: omitted while neither player controls it
+    if (v.secured_by) j["secured_by"] = *v.secured_by;  // 14.03: omitted while not secured
+}
+void from_json(const Json& j, ObjectiveArea& v) {
+    j.at("name").get_to(v.name);
+    j.at("centre").get_to(v.centre);
+    j.at("diameter_mm").get_to(v.diameter_mm);
+    j.at("vp").get_to(v.vp);
+    v.controller.reset();
+    if (j.contains("controller")) v.controller = j.at("controller").get<Side>();
+    v.secured_by.reset();
+    if (j.contains("secured_by")) v.secured_by = j.at("secured_by").get<Side>();
+}
+void to_json(Json& j, const Mission& v) {
+    j = Json{{"first_scoring_round", v.first_scoring_round},
+             {"kill_points", v.kill_points},
+             {"kill_vp", v.kill_vp},
+             {"objectives", v.objectives},
+             {"objective_vp", v.objective_vp}};
+}
+void from_json(const Json& j, Mission& v) {
+    j.at("first_scoring_round").get_to(v.first_scoring_round);
+    j.at("kill_points").get_to(v.kill_points);
+    j.at("kill_vp").get_to(v.kill_vp);
+    j.at("objectives").get_to(v.objectives);
+    j.at("objective_vp").get_to(v.objective_vp);
+}
+
 void to_json(Json& j, const GameState& v) {
     j = Json{{"scenario_name", v.scenario_name},
              {"battlefield", v.battlefield},
@@ -404,6 +436,8 @@ void to_json(Json& j, const GameState& v) {
     put_opt(j, "result", v.result);
     // D-076: omitted at the default (D-007), so older files are unchanged.
     if (v.result_rule == ResultRule::PointsDestroyed) j["result_rule"] = "points_destroyed";
+    if (v.result_rule == ResultRule::Mission) j["result_rule"] = "mission";  // D-084
+    if (v.mission) j["mission"] = *v.mission;  // D-084: omitted without a mission, so older files are unchanged
     // D-081: omitted when empty (every state but a deployment by hand), so older files are unchanged.
     if (!v.undeployed.empty()) j["undeployed"] = v.undeployed;
 }
@@ -422,15 +456,22 @@ void from_json(const Json& j, GameState& v) {
     v.result_rule = ResultRule::D007Draw;
     if (j.contains("result_rule")) {
         const Json& r = j.at("result_rule");
-        if (!r.is_string() || r.get<std::string>() != "points_destroyed") {
-            throw DataError("state JSON: D-076: unknown result_rule " + r.dump() + " (the only value is \"points_destroyed\")");
+        if (r.is_string() && r.get<std::string>() == "points_destroyed") {
+            v.result_rule = ResultRule::PointsDestroyed;
+        } else if (r.is_string() && r.get<std::string>() == "mission") {
+            v.result_rule = ResultRule::Mission;  // D-084
+        } else {
+            throw DataError("state JSON: D-076: unknown result_rule " + r.dump() +
+                            " (the values are \"points_destroyed\" and \"mission\")");
         }
-        v.result_rule = ResultRule::PointsDestroyed;
     }
+    v.mission.reset();
+    if (j.contains("mission")) v.mission = j.at("mission").get<Mission>();  // D-084
     v.undeployed.clear();
     if (j.contains("undeployed")) j.at("undeployed").get_to(v.undeployed);  // D-081
     check_undeployed(v);
     check_points_data(v, "state JSON");  // D-076: the points and their bounds (undeployed units included, D-081)
+    check_mission_data(v, "state JSON");  // D-084
 }
 
 }  // namespace wh40k::core

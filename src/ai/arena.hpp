@@ -86,6 +86,11 @@ struct GameRecord {
     // M68 (D-077): in a points scenario, the points each side destroyed by the game's end (indexed by the side that
     // destroyed them, core::points_destroyed as a decimal), whatever decided it; 0 otherwise.
     std::array<double, 2> points_destroyed{};
+    // M86 (D-084): in a mission game, decided on victory points after the last battle round (on_points then means equal
+    // VP decided on points destroyed), and each side's objective and kill VP by the game's end, whatever decided it.
+    bool on_vp = false;
+    std::array<int, 2> objective_vp{};
+    std::array<int, 2> kill_vp{};
     int end_round = 0;
     std::array<int, 2> surviving_models{};  // indexed by side_index
     std::array<int, 2> wounds_lost{};       // M41: wounds each side's models lost (destroyed models count all theirs)
@@ -122,6 +127,9 @@ struct ArenaResult {
     std::array<int, 2> points_wins{};  // M67 (D-076): of those, the wins and draws decided on points destroyed
     int points_draws = 0;
     std::array<double, 2> mean_points_destroyed{};  // M68 (D-077): by the side that destroyed them
+    std::array<int, 2> vp_wins{};                   // M86 (D-084): the wins decided on victory points
+    std::array<double, 2> mean_objective_vp{};      // M86 (D-084): by side
+    std::array<double, 2> mean_kill_vp{};
     int unfinished = 0;
     std::size_t rejected = 0;
     std::size_t reverted = 0;
@@ -182,6 +190,9 @@ struct PerGameReport {
 struct ArmySource {
     std::vector<core::Faction> factions;  // data/factions.json
     core::DatasheetResolver resolve;      // caching, from the repo root
+    // M86 (D-084): the objective mission its battles play (a scenario file's "mission" block; the arena's command line
+    // gives it data/scenarios/incursion_objectives_44x60.json's). nullopt: decided on points destroyed (D-076).
+    std::optional<nlohmann::json> mission;
 };
 [[nodiscard]] ArmySource load_army_source(const std::filesystem::path& repo_root);
 

@@ -99,8 +99,11 @@ BuilderRequest ArmyBuilderScreen::draw(ArmyBuilder& b, AppSettings& s, const std
     ImGui::SameLine(0.0f, em * 1.5f);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + em * 0.55f);
     ImGui::TextDisabled("Incursion: up to %d points a side. 44\" x 60\", 12\" zones on the south (A) and north (B) "
-                        "edges, %d battle rounds, decided on points destroyed (D-076).",
-                        core::kIncursionPointsLimit, core::kCustomBattleRounds);
+                        "edges, %d battle rounds, %s.",
+                        core::kIncursionPointsLimit, core::kCustomBattleRounds,
+                        b.mission() != nullptr
+                            ? "the objective mission: VP for objectives and kills, then points destroyed (D-084)"
+                            : "decided on points destroyed (D-076)");
 
     // The three columns over everything but the battle options at the bottom.
     const float bottom = ImGui::GetFrameHeightWithSpacing() * 3.0f + ImGui::GetStyle().ItemSpacing.y * 3.0f + em;

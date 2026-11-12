@@ -1,0 +1,1168 @@
+{
+  "description": "M86: the objective scenario (data/scenarios/incursion_objectives_44x60.json; D-084, 14.02): the rosters armies with a 12\" Centre and a 6\" home per side. Round 1: the Chaos Terminator Squad (unit 3) advances straight north (5\" + the advance roll); every other Chaos Space Marine unit remains stationary. The east Genestealers (unit 13) move 8\" south; the rest of Side B remains stationary (its held-back Tyrant Guard and Tyrannofex stand on B's home, which Side B controls from the end of Side A's first Command phase). Round 2: the Terminators move 5\" north onto the Centre, which Side A controls from the end of that Movement phase; Side B scores its home (2 VP) in its Command phase. Nothing shoots or charges. Every other decision takes the first legal action. Stops at Side A's first Move Units decision of battle round 3, after Side A scores the Centre (5 VP) in its Command phase.",
+  "expect": {
+    "battle_round": 3,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 113.80000305175781,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 145.8000030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 177.8000030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 209.8000030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 241.8000030517578,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 6,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 113.80000305175781,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 7,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 145.8000030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 8,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 177.8000030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 9,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 209.8000030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 10,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 241.8000030517578,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 11,
+        "unit": 2,
+        "wounds_remaining": 5,
+        "x_mm": 330.1999816894531,
+        "y_mm": 284.79998779296875
+      },
+      {
+        "model": 12,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 440.70001220703125,
+        "y_mm": 640.3999633789063
+      },
+      {
+        "model": 13,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 480.70001220703125,
+        "y_mm": 640.3999633789063
+      },
+      {
+        "model": 14,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 520.7000122070313,
+        "y_mm": 640.3999633789063
+      },
+      {
+        "model": 15,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 560.7000122070313,
+        "y_mm": 640.3999633789063
+      },
+      {
+        "model": 16,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 600.7000122070313,
+        "y_mm": 640.3999633789063
+      },
+      {
+        "model": 17,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 440.70001220703125,
+        "y_mm": 600.3999633789063
+      },
+      {
+        "model": 18,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 480.70001220703125,
+        "y_mm": 600.3999633789063
+      },
+      {
+        "model": 19,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 520.7000122070313,
+        "y_mm": 600.3999633789063
+      },
+      {
+        "model": 20,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 560.7000122070313,
+        "y_mm": 600.3999633789063
+      },
+      {
+        "model": 21,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 600.7000122070313,
+        "y_mm": 600.3999633789063
+      },
+      {
+        "model": 22,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 669.2999877929688,
+        "y_mm": 208.59999084472656
+      },
+      {
+        "model": 23,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 709.2999877929688,
+        "y_mm": 208.59999084472656
+      },
+      {
+        "model": 24,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 749.2999877929688,
+        "y_mm": 208.59999084472656
+      },
+      {
+        "model": 25,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 789.2999877929688,
+        "y_mm": 208.59999084472656
+      },
+      {
+        "model": 26,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 829.2999877929688,
+        "y_mm": 208.59999084472656
+      },
+      {
+        "model": 27,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 888.5,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 28,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 920.5,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 29,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 952.5,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 30,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 984.5,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 31,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 1016.5,
+        "y_mm": 288.79998779296875
+      },
+      {
+        "model": 32,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 888.5,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 33,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 920.5,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 34,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 952.5,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 35,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 984.5,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 36,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 1016.5,
+        "y_mm": 256.79998779296875
+      },
+      {
+        "model": 37,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 44.599998474121094,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 38,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 73.0999984741211,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 39,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 101.5999984741211,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 40,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 130.10000610351563,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 41,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 158.60000610351563,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 42,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 44.599998474121094,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 43,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 73.0999984741211,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 44,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 101.5999984741211,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 45,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 130.10000610351563,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 46,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 158.60000610351563,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 47,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 215.39999389648438,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 48,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 247.39999389648438,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 49,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 279.3999938964844,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 50,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 311.3999938964844,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 51,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 343.3999938964844,
+        "y_mm": 1235.199951171875
+      },
+      {
+        "model": 52,
+        "unit": 8,
+        "wounds_remaining": 10,
+        "x_mm": 419.1000061035156,
+        "y_mm": 1264.199951171875
+      },
+      {
+        "model": 53,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 438.9499816894531,
+        "y_mm": 1345.7999267578125
+      },
+      {
+        "model": 54,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 488.9499816894531,
+        "y_mm": 1345.7999267578125
+      },
+      {
+        "model": 55,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 538.949951171875,
+        "y_mm": 1345.7999267578125
+      },
+      {
+        "model": 56,
+        "unit": 10,
+        "wounds_remaining": 10,
+        "x_mm": 558.7999877929688,
+        "y_mm": 1249.199951171875
+      },
+      {
+        "model": 57,
+        "unit": 11,
+        "wounds_remaining": 16,
+        "x_mm": 628.6499633789063,
+        "y_mm": 1380.7999267578125
+      },
+      {
+        "model": 58,
+        "unit": 12,
+        "wounds_remaining": 10,
+        "x_mm": 698.5,
+        "y_mm": 1264.199951171875
+      },
+      {
+        "model": 59,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 774.2000122070313,
+        "y_mm": 1032.0
+      },
+      {
+        "model": 60,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 806.2000122070313,
+        "y_mm": 1032.0
+      },
+      {
+        "model": 61,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 838.2000122070313,
+        "y_mm": 1032.0
+      },
+      {
+        "model": 62,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 870.2000122070313,
+        "y_mm": 1032.0
+      },
+      {
+        "model": 63,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 902.2000122070313,
+        "y_mm": 1032.0
+      },
+      {
+        "model": 64,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 959.0,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 65,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 987.5,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 66,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 1016.0,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 67,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 1044.5,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 68,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 1073.0,
+        "y_mm": 1233.449951171875
+      },
+      {
+        "model": 69,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 959.0,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 70,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 987.5,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 71,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 1016.0,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 72,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 1044.5,
+        "y_mm": 1261.949951171875
+      },
+      {
+        "model": 73,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 1073.0,
+        "y_mm": 1261.949951171875
+      }
+    ],
+    "result": null,
+    "stage": "MoveUnits"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "data/scenarios/incursion_objectives_44x60.json",
+    "seed": 86
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 440.70001220703125,
+            "y": 513.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 480.70001220703125,
+            "y": 513.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 520.7000122070313,
+            "y": 513.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 560.7000122070313,
+            "y": 513.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 600.7000122070313,
+            "y": 513.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 440.70001220703125,
+            "y": 473.39996337890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 480.70001220703125,
+            "y": 473.39996337890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 520.7000122070313,
+            "y": 473.39996337890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 560.7000122070313,
+            "y": 473.39996337890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 600.7000122070313,
+            "y": 473.39996337890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 59,
+        "path": [
+          {
+            "x": 774.2000122070313,
+            "y": 1032.0,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 60,
+        "path": [
+          {
+            "x": 806.2000122070313,
+            "y": 1032.0,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 61,
+        "path": [
+          {
+            "x": 838.2000122070313,
+            "y": 1032.0,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 62,
+        "path": [
+          {
+            "x": 870.2000122070313,
+            "y": 1032.0,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 902.2000122070313,
+            "y": 1032.0,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 440.70001220703125,
+            "y": 640.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 480.70001220703125,
+            "y": 640.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 520.7000122070313,
+            "y": 640.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 560.7000122070313,
+            "y": 640.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 600.7000122070313,
+            "y": 640.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 440.70001220703125,
+            "y": 600.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 480.70001220703125,
+            "y": 600.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 520.7000122070313,
+            "y": 600.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 560.7000122070313,
+            "y": 600.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 600.7000122070313,
+            "y": 600.3999633789063,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    }
+  ]
+}

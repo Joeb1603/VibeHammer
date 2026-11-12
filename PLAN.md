@@ -276,8 +276,8 @@ Each milestone is planned in detail in plan mode at the start of its own session
 
 ---
 
-## M86: Objectives and a mission
-**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11)
+## M86: Objectives and a mission ✅ (done)
+**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11; design approved 2026-11-12)
 
 > Objective areas and control (14.02 Level of Control: the OC of models within range, compared at the end of each
 > phase and turn, ties uncontrolled; 14.03 Secured Objectives as state only, nothing secures yet). An objective area is
@@ -294,6 +294,53 @@ Each milestone is planned in detail in plan mode at the start of its own session
 - A replay of a short objective game under `tests/replays/`; every old replay byte-identical; old scenarios unchanged.
 - The bot plays the objective scenario and custom battles to the end with no rejected action (arena, 200 games).
 - Build and full `ctest` green.
+
+**Results** (2026-11-12, D-084's "Implemented" note)
+- **Design as agreed in plan mode.** The user chose two points there:
+  - the arena's random and army-list battles play the mission, as the client's custom battles do;
+  - the bot scores a mission like the points rule.
+
+  Core's `custom_battle_scenario` keeps the old battle unless it is given the mission block, so the m73, m75 and m77
+  fixtures and replays didn't change.
+- **Core:**
+  - `state/mission.hpp` (`Mission`, `ObjectiveArea`);
+  - `state/objectives.*` (within range, level of control, `determine_control`, `controlling_units`, kill VP, the VP
+    tally, the data checks);
+  - `engine/objectives.cpp` (the checks at every phase end and turn end, and the Command phase scoring);
+  - the result in `advance.cpp`;
+  - two events: `ObjectiveControlChanged` (14.02) and `VictoryPointsScored` (D-084);
+  - `VpTally` on `GameResult` and `GameOver`;
+  - the loader's `"mission"` block and `load_mission_block`.
+- **Scenario:** `data/scenarios/incursion_objectives_44x60.json`, the rosters plus the three areas, and the client's
+  new default. Both homes are controlled from the first check:
+  - A's by the Terminators' back rank (their two ranks reach 8.85" from the edge);
+  - B's by the held-back Tyrant Guard and Tyrannofex.
+
+  For M87.
+- **Tests:** 31 core tests (`R14_02_LevelOfControl` ×9, `R14_03_SecuredObjectives` ×4, `D084_Scoring` ×4,
+  `D084_KillVp`, `D084_Result` ×4, `D007_GameEnd.AWipeOutStillWinsAtOnceUnderTheMission`, `D084_Scenario` ×4,
+  `D084_CustomBattle`, `D084_Json` ×4), `D084_Replay`, 6 client tests (`M86_*`) and 4 ai tests (`M86_*`).
+- **Tests changed, none weakened:**
+  - `D076_Loader.MalformedPointsOrResultAreRefused` and `D076_Json.MalformedPointsInAStateAreRefused`: the refusal now
+    lists both values.
+  - `Serialization.EveryEventKindRoundTrips`: the two new events.
+  - `M38_Settings.DefaultsMatchThePlan`: the new default scenario.
+- **Replay:** `tests/replays/m86_objectives.json` (scripted, seed 86):
+  - the Terminators advance in round 1 and take the Centre in round 2;
+  - Side B scores its home (2 VP), then Side A the Centre (5 VP);
+  - it stops at Side A's round-3 Movement phase.
+
+  Every other replay came out byte-identical, and the old scenarios are unchanged.
+- **Client:**
+  - areas on the board in their controller's colour, labelled above the area;
+  - the VP line in the Game panel;
+  - VP in the victory pop-up and the log;
+  - the builder's text names the mission.
+
+  The start screen's subtitle no longer repeats the side names when the scenario's name has them, and wraps when it
+  is too wide (the new default's name was clipped).
+- **Arena:** ARENA_RESULTS
+- **Build and `ctest`:** CTEST_RESULTS
 
 ---
 
@@ -322,8 +369,8 @@ Each milestone is planned in detail in plan mode at the start of its own session
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): Exposed/Light/Dense areas, cover, visibility blocking, Hidden. This adds the z axis.
-2. **Objectives** (14) and a simple mission: planned as M86 (engine, D-084) and M87 (the bot). This enables Objective
-   Consolidation and Bolter Discipline.
+2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084); the bot is M87. This enables Objective
+   Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state only).
    - **Bot personalities** (after M87): Aggressive (values kills and charges, takes risks) and Tactical (values
      objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).

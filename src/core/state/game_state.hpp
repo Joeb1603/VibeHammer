@@ -12,6 +12,7 @@
 #include "core/model/unit.hpp"
 #include "core/state/decision.hpp"
 #include "core/state/flow.hpp"
+#include "core/state/mission.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -35,7 +36,9 @@ struct DeploymentZone {
 
 // How the game is decided when no side is wiped out (scenario "result"). D-007: a draw after the last battle round.
 // D-076 (M67, amends D-007): the side that destroyed more points wins (core/state/points_destroyed.hpp).
-enum class ResultRule : std::uint8_t { D007Draw, PointsDestroyed };
+// D-084 (M86, amends D-076): the objective mission: the most victory points wins, then points destroyed
+// (core/state/objectives.hpp).
+enum class ResultRule : std::uint8_t { D007Draw, PointsDestroyed, Mission };
 
 struct SideInfo {
     std::string name;
@@ -64,6 +67,9 @@ struct GameState {
     // D-076: how the game is decided after the last battle round. JSON "result_rule", omitted at the default (D-007),
     // so every older file loads and saves unchanged. With PointsDestroyed every unit has points (Unit::points).
     ResultRule result_rule = ResultRule::D007Draw;
+    // D-084 (M86): the objective mission (objective areas, their control and the VP scored), present exactly when
+    // result_rule is Mission. JSON "mission", omitted when absent, so every older file is unchanged.
+    std::optional<Mission> mission;
 
     [[nodiscard]] const SideInfo& side(Side s) const { return sides[side_index(s)]; }
     [[nodiscard]] const Unit* find_unit(UnitId id) const;

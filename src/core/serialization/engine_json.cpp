@@ -441,6 +441,7 @@ void to_json(Json& j, const GameEvent& v) {
                 put_opt(j, "winner", e.winner);
                 j["reason"] = e.reason;
                 if (e.points) j["points"] = *e.points;  // D-076: omitted unless the game was decided on points
+                if (e.vp) j["vp"] = *e.vp;              // D-084: omitted unless the game was decided on the mission
             } else if constexpr (std::is_same_v<T, WoundRollsRerolled>) {
                 j["batch"] = e.batch;  // 24.38 (D-072)
                 j["rerolls"] = e.rerolls;
@@ -454,6 +455,17 @@ void to_json(Json& j, const GameEvent& v) {
             } else if constexpr (std::is_same_v<T, UnitSetUp> || std::is_same_v<T, UnitNotSetUp>) {
                 j["unit"] = e.unit;  // 03.02 / D-081
                 j["side"] = e.side;
+            } else if constexpr (std::is_same_v<T, ObjectiveControlChanged>) {
+                j["objective"] = e.objective;  // 14.02 (D-084)
+                j["name"] = e.name;
+                put_opt(j, "controller", e.controller);
+                j["levels"] = e.levels;
+            } else if constexpr (std::is_same_v<T, VictoryPointsScored>) {
+                j["side"] = e.side;  // D-084
+                j["objective"] = e.objective;
+                j["name"] = e.name;
+                j["vp"] = e.vp;
+                j["total"] = e.total;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -560,6 +572,7 @@ void from_json(const Json& j, GameEvent& v) {
         get_opt(j, "winner", g.winner);
         j.at("reason").get_to(g.reason);
         if (j.contains("points")) g.points = j.at("points").get<PointsTally>();  // D-076
+        if (j.contains("vp")) g.vp = j.at("vp").get<VpTally>();                  // D-084
         v = g;
     } else if (kind == "WoundRollsRerolled") {
         v = WoundRollsRerolled{j.at("batch").get<std::size_t>(), j.at("rerolls").get<std::vector<WoundReroll>>(),
@@ -573,6 +586,16 @@ void from_json(const Json& j, GameEvent& v) {
         v = UnitSetUp{j.at("unit").get<UnitId>(), j.at("side").get<Side>()};
     } else if (kind == "UnitNotSetUp") {
         v = UnitNotSetUp{j.at("unit").get<UnitId>(), j.at("side").get<Side>()};
+    } else if (kind == "ObjectiveControlChanged") {
+        ObjectiveControlChanged c;
+        j.at("objective").get_to(c.objective);
+        j.at("name").get_to(c.name);
+        get_opt(j, "controller", c.controller);
+        j.at("levels").get_to(c.levels);
+        v = c;
+    } else if (kind == "VictoryPointsScored") {
+        v = VictoryPointsScored{j.at("side").get<Side>(), j.at("objective").get<std::size_t>(),
+                                j.at("name").get<std::string>(), j.at("vp").get<int>(), j.at("total").get<int>()};
     } else {
         bad_enum("GameEvent", j);
     }

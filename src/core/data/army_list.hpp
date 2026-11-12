@@ -174,9 +174,12 @@ struct RandomArmyStats {
 // auto-layout formation. Side names are the army names, else the faction names. Throws DataError if the factions are
 // the same or unknown, or either list has army_problems. D-081 (M74): with DeploymentMode::Hand the scenario has
 // "deployment": "alternating" and no formations (the units are set up by hand); everything else is the same.
+// D-084 (M86): with `mission` (a scenario file's "mission" block, load_mission_block) the battle plays the objective
+// mission instead: "result": "mission" and that block. Without it (the default) the scenario is as before.
 [[nodiscard]] nlohmann::json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_turn,
                                                     const std::vector<Faction>& factions,
                                                     const DatasheetResolver& resolve,
-                                                    DeploymentMode mode = DeploymentMode::Auto);
+                                                    DeploymentMode mode = DeploymentMode::Auto,
+                                                    const nlohmann::json* mission = nullptr);
 
 }  // namespace wh40k::core

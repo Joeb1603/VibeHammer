@@ -923,6 +923,99 @@ Replay m74_replay(bool& ok, std::string& problem) {
     return r;
 }
 
+// M86 (D-084): a short game on the objective scenario (a scenario-file replay). `ok` says whether the seed shows what
+// it is about: the Terminators take the Centre at the end of Side A's round-2 Movement phase, Side B scores its home
+// in its round-2 Command phase and Side A the Centre in its round-3 one; `problem`, the first refused step.
+constexpr const char* kM86Scenario = "data/scenarios/incursion_objectives_44x60.json";
+constexpr std::uint64_t kM86Seed = 86;
+
+Replay m86_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M86: the objective scenario (data/scenarios/incursion_objectives_44x60.json; D-084, 14.02): the rosters "
+        "armies with a 12\" Centre and a 6\" home per side. Round 1: the Chaos Terminator Squad (unit 3) advances "
+        "straight north (5\" + the advance roll); every other Chaos Space Marine unit remains stationary. The east "
+        "Genestealers (unit 13) move 8\" south; the rest of Side B remains stationary (its held-back Tyrant Guard and "
+        "Tyrannofex stand on B's home, which Side B controls from the end of Side A's first Command phase). Round 2: "
+        "the Terminators move 5\" north onto the Centre, which Side A controls from the end of that Movement phase; "
+        "Side B scores its home (2 VP) in its Command phase. Nothing shoots or charges. Every other decision takes the "
+        "first legal action. Stops at Side A's first Move Units decision of battle round 3, after Side A scores the "
+        "Centre (5 VP) in its Command phase.";
+    r.initial.scenario = kM86Scenario;
+    r.initial.seed = seed;
+    GameState g = replay_initial_state(r, repo_root());
+    std::vector<GameEvent> events = start_game(g);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    auto until = [&](Side side, int round) {
+        while (!failed && g.pending && !(g.flow.battle_round == round && *g.pending == PendingDecision{side, decision::MoveUnits{}})) {
+            act(wh40k::test::neutral_action(g));
+        }
+    };
+    // A straight move of every model by dy inches (or, for an Advance, by its M plus the roll), leading rank first.
+    auto move = [&](std::uint32_t id, MoveType type, float dy_in) {
+        act(action::StartMove{UnitId{id}, type, std::nullopt});
+        if (failed) return;
+        const Unit& u = *g.find_unit(UnitId{id});
+        if (type == MoveType::Advance) {
+            const float m_in = mm_to_inches(*u.models.front().characteristics.move_mm);
+            dy_in = (m_in + static_cast<float>(u.phase_flags.advance_roll.value_or(0))) * (dy_in < 0.0f ? -1.0f : 1.0f);
+        }
+        std::vector<Model> models = u.models;
+        std::stable_sort(models.begin(), models.end(), [&](const Model& a, const Model& b) {
+            return dy_in > 0.0f ? a.position.y > b.position.y : a.position.y < b.position.y;
+        });
+        for (const Model& m : models) {
+            const Position p = *move_start_position(g, m.id);
+            act(action::ProposeModelMove{m.id, {Position{p.x, p.y + wh40k::test::in(dy_in), 0.0f}}, {}});
+        }
+        act(action::CommitUnitMove{});
+    };
+    auto rest_stationary = [&] {
+        while (!failed && g.pending && std::holds_alternative<decision::MoveUnits>(g.pending->kind)) {
+            act(wh40k::test::neutral_action(g));
+        }
+    };
+    constexpr std::uint32_t kTerminators = 3;
+    constexpr std::uint32_t kGenestealers = 13;
+    until(Side::A, 1);
+    move(kTerminators, MoveType::Advance, 1.0f);
+    rest_stationary();
+    until(Side::B, 1);
+    move(kGenestealers, MoveType::Normal, -8.0f);
+    until(Side::A, 2);
+    move(kTerminators, MoveType::Normal, 5.0f);
+    rest_stationary();
+    until(Side::A, 3);
+    if (failed || !g.pending) return r;
+    r.expect = replay_expectation(g);
+    const auto changed = events_of<event::ObjectiveControlChanged>(events);
+    const auto scored = events_of<event::VictoryPointsScored>(events);
+    const bool centre_taken = std::any_of(changed.begin(), changed.end(), [](const event::ObjectiveControlChanged& c) {
+        return c.name == "Centre" && c.controller == Side::A;
+    });
+    ok = centre_taken && scored.size() == 2 &&
+         scored[0] == event::VictoryPointsScored{Side::B, 2, "B home", 2, 2} &&
+         scored[1] == event::VictoryPointsScored{Side::A, 0, "Centre", 5, 5};
+    return r;
+}
+
 }  // namespace
 
 TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
@@ -1603,6 +1696,14 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m74_problem.empty()) << m74_problem;
     EXPECT_TRUE(m74_shows_it) << "the M74 replay no longer turns the Tyrannofex or scans for the Screamer-killer";
     save_if_clean(m74, kReplayDir / "m74_hand_deployment.json");
+
+    // M86 (D-084): a short game on the objective scenario.
+    bool m86_shows_it = false;
+    std::string m86_problem;
+    const Replay m86 = m86_replay(kM86Seed, m86_shows_it, m86_problem);
+    ASSERT_TRUE(m86_problem.empty()) << m86_problem;
+    EXPECT_TRUE(m86_shows_it) << "seed " << kM86Seed << " no longer takes the Centre and scores both sides";
+    save_if_clean(m86, kReplayDir / "m86_objectives.json");
 }
 
 // M74 (D-081): the replay's scenario file is the stock armies' custom battle set up by hand.
@@ -1637,6 +1738,29 @@ TEST(D081_Replay, TheHandDeploymentReplaySetsUpAndStartsBattleRoundOne) {
     bool ok = false;
     std::string problem;
     const Replay again = m74_replay(ok, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+}
+
+// M86 (D-084): the saved replay takes the Centre, scores both sides and stops at Side A's round-3 Move Units decision.
+TEST(D084_Replay, TheObjectiveReplayTakesTheCentreAndScoresBothSides) {
+    const Replay saved = load_replay(kReplayDir / "m86_objectives.json");
+    ASSERT_TRUE(saved.initial.scenario.has_value());
+    EXPECT_EQ(*saved.initial.scenario, kM86Scenario);
+    const ReplayResult run = run_replay(saved, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    const GameState& end = run.final_state;
+    EXPECT_EQ(end.flow.battle_round, 3);
+    EXPECT_EQ(end.pending, (PendingDecision{Side::A, decision::MoveUnits{}}));
+    ASSERT_TRUE(end.mission.has_value());
+    EXPECT_EQ(end.mission->objectives[0].controller, Side::A);
+    EXPECT_EQ(end.mission->objectives[1].controller, std::nullopt);
+    EXPECT_EQ(end.mission->objectives[2].controller, Side::B);
+    EXPECT_EQ(end.mission->objective_vp, (std::array<int, 2>{5, 2}));
+    bool ok = false;
+    std::string problem;
+    const Replay again = m86_replay(kM86Seed, ok, problem);
     EXPECT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(ok);
     EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now

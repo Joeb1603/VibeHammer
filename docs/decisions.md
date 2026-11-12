@@ -97,5 +97,5 @@ decision, the code that cites it, and its tests.
 - [D-081](decisions/D-081.md): Deployment by hand: alternating set-up through a pending decision; a unit with no legal spot counts as destroyed (M74; amends D-003, D-007 and D-065; extends D-054 and D-079)
 - [D-082](decisions/D-082.md): Custom battles in the client: the army builder (M75 part 1); hand deployment (M76 part 2)
 - [D-083](decisions/D-083.md): Teamwork: the bots fight as an army (M78–M83; part 0, M78: measuring it and the M77 regression switch; part 1, M79: the army plan; part 2, M80: Normal moves as a group; part 3, M81: focus fire and joint charges; part 4, M82: Hard on the army plan; part 5, M83: tuning and the final numbers)
-- [D-084](decisions/D-084.md): The objective mission: objectives first, kills still count (M86; amends D-076 for scenarios that ask for it)
+- [D-084](decisions/D-084.md): The objective mission: objectives first, kills still count; objective areas and control (14.02, 14.03 as state only), the scenario format, custom battles and the client (M86; amends D-076 for scenarios that ask for it)
 - [D-085](decisions/D-085.md): One bot: the levels Easy and Hard and the hidden regression levels removed; Easy's answers kept as the bot's defaults (M85; amends D-054, supersedes the level parts of D-066, D-067, D-078, D-080 and D-083)

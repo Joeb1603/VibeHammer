@@ -11,6 +11,7 @@
 #include "core/engine/actions.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/serialization/json.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 #include "session.hpp"
@@ -264,7 +265,16 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     rec.finished = end.result.has_value();
     if (end.result) rec.winner = end.result->winner;
     rec.on_points = end.result && end.result->points.has_value();  // M67 (D-076)
-    if (end.result_rule == core::ResultRule::PointsDestroyed) {  // M68 (D-077): the points destroyed by the end
+    if (end.result && end.result->vp) {  // M86 (D-084): VP first; points destroyed only settle equal VP
+        rec.on_vp = end.result->vp->total[0] != end.result->vp->total[1];
+        rec.on_points = !rec.on_vp;
+    }
+    if (end.mission) {  // M86 (D-084): both sides' VP by the end
+        const core::VpTally vp = core::vp_tally(end);
+        rec.objective_vp = vp.objectives;
+        rec.kill_vp = vp.kills;
+    }
+    if (end.result_rule == core::ResultRule::PointsDestroyed || end.result_rule == core::ResultRule::Mission) {  // M68 (D-077): the points destroyed by the end
         const core::PointsTally tally = core::points_destroyed(end);
         for (std::size_t i = 0; i < 2; ++i) {
             rec.points_destroyed[i] = static_cast<double>(tally.destroyed[i]) / static_cast<double>(tally.denominator);
@@ -300,6 +310,7 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
         } else if (g.winner) {
             ++r.wins[core::side_index(*g.winner)];
             if (g.on_points) ++r.points_wins[core::side_index(*g.winner)];  // M67 (D-076)
+            if (g.on_vp) ++r.vp_wins[core::side_index(*g.winner)];          // M86 (D-084)
         } else {
             ++r.draws;
             if (g.on_points) ++r.points_draws;
@@ -318,6 +329,8 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
             r.fight_move_steps[s] += g.fight_move_steps[s];
             r.fight_moves[s] += g.fight_moves[s];
             r.mean_points_destroyed[s] += g.points_destroyed[s];
+            r.mean_objective_vp[s] += g.objective_vp[s];  // M86
+            r.mean_kill_vp[s] += g.kill_vp[s];
             const TeamworkStats& t = g.teamwork;  // M78
             r.teamwork.gang_ups[s] += t.gang_ups[s];
             r.teamwork.ganged_units[s] += t.ganged_units[s];
@@ -341,6 +354,10 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
         r.mean_wounds_lost[1] /= n;
         r.mean_points_destroyed[0] /= n;
         r.mean_points_destroyed[1] /= n;
+        for (std::size_t s = 0; s < 2; ++s) {
+            r.mean_objective_vp[s] /= n;
+            r.mean_kill_vp[s] /= n;
+        }
     }
     r.p50_ms = percentile(ms, 0.50);
     r.p95_ms = percentile(ms, 0.95);
@@ -403,12 +420,13 @@ PerGameReport run_per_game(const ScenarioForSeed& scenario_for, int games, std::
 }
 
 ArmySource load_army_source(const std::filesystem::path& repo_root) {
-    return ArmySource{core::load_factions(repo_root), core::caching_datasheet_resolver(repo_root)};
+    return ArmySource{core::load_factions(repo_root), core::caching_datasheet_resolver(repo_root), std::nullopt};
 }
 
 core::GameState custom_battle_state(const ArmySource& source, const core::ArmyList& a, const core::ArmyList& b,
                                     core::Side first_turn, core::DeploymentMode mode) {
-    return core::build_game_state(core::custom_battle_scenario(a, b, first_turn, source.factions, source.resolve, mode),
+    return core::build_game_state(core::custom_battle_scenario(a, b, first_turn, source.factions, source.resolve, mode,
+                                                               source.mission ? &*source.mission : nullptr),
                                   source.resolve);
 }
 
@@ -448,6 +466,22 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                   r.side_p50_ms[0], r.side_p95_ms[0], r.side_max_ms[0], r.side_p50_ms[1], r.side_p95_ms[1],
                   r.side_max_ms[1]);
     out += buf;
+    if (scenario.result_rule == core::ResultRule::Mission) {  // M86 (D-084): only for a mission scenario
+        std::snprintf(buf, sizeof buf,
+                      "decided after the last battle round (D-084): on victory points A wins %d, B wins %d; on points "
+                      "destroyed (equal VP) A wins %d, B wins %d; draws %d\n",
+                      r.vp_wins[0], r.vp_wins[1], r.points_wins[0], r.points_wins[1], r.points_draws);
+        out += buf;
+        std::snprintf(buf, sizeof buf,
+                      "mean VP by the end (D-084): objectives A %.2f, B %.2f; kills A %.2f, B %.2f; total A %.2f, B "
+                      "%.2f\n",
+                      r.mean_objective_vp[0], r.mean_objective_vp[1], r.mean_kill_vp[0], r.mean_kill_vp[1],
+                      r.mean_objective_vp[0] + r.mean_kill_vp[0], r.mean_objective_vp[1] + r.mean_kill_vp[1]);
+        out += buf;
+        std::snprintf(buf, sizeof buf, "mean points destroyed by the end (D-077): A %.2f, B %.2f\n",
+                      r.mean_points_destroyed[0], r.mean_points_destroyed[1]);
+        out += buf;
+    }
     if (scenario.result_rule == core::ResultRule::PointsDestroyed) {  // M67 (D-076): only for such a scenario
         std::snprintf(buf, sizeof buf,
                       "decided on points destroyed after the last battle round (D-076): A wins %d, B wins %d, draws %d\n",

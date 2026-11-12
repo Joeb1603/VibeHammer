@@ -324,6 +324,8 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::DeploymentStarted{Side::B},          // M74 (D-081)
         event::UnitSetUp{UnitId{3}, Side::A},       // M74
         event::UnitNotSetUp{UnitId{4}, Side::B},    // M74
+        event::ObjectiveControlChanged{1, "A home", Side::A, {3, 1}},  // M86 (14.02)
+        event::VictoryPointsScored{Side::B, 2, "B home", 2, 7},         // M86 (D-084)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

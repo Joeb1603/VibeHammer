@@ -6,6 +6,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/state/game_state.hpp"
 
@@ -36,13 +37,31 @@ struct GameOverText {
     std::string title;
     std::string reason;
     std::optional<core::Side> winner;  // nullopt: a draw
-    std::optional<std::string> points;  // D-076; nullopt when the scenario doesn't decide on points
+    std::optional<std::string> points;  // D-076 (and D-084); nullopt when the scenario doesn't decide on points
+    // D-084 (M86): with the objective mission, both sides' VP: "Victory points: Side A (Chaos Space Marines) 23 (18
+    // objectives + 5 kills), Side B (Tyranids) 19 (15 objectives + 4 kills)".
+    std::optional<std::string> vp;
 };
 [[nodiscard]] std::optional<GameOverText> game_over_text(const core::GameState& state);
 
 // D-076 (M67): the points each side has destroyed so far, for the Game panel ("Points destroyed: Side A 120, Side B
 // 55.5"); nullopt when the scenario doesn't use the points tiebreak (nothing is shown then).
 [[nodiscard]] std::optional<std::string> points_destroyed_text(const core::GameState& state);
+
+// D-084 (M86): with the objective mission, both sides' VP so far, with the kill VP the points destroyed would give if
+// the battle ended now: "Victory points: Side A 9 (7 + 2 kills), Side B 2 (2 + 0 kills)". nullopt without a mission.
+[[nodiscard]] std::optional<std::string> victory_points_text(const core::GameState& state);
+
+// D-084 (M86): an objective area as the board draws it: where, how big, its controller's colour (none: neutral), and
+// its label, "Centre 5/5" (the VP for Side A / Side B).
+struct ObjectiveMark {
+    core::Position centre;               // mm
+    float radius_mm = 0.0f;
+    std::optional<core::Side> controller;
+    bool secured = false;                // 14.03
+    std::string label;
+};
+[[nodiscard]] std::vector<ObjectiveMark> objective_marks(const core::GameState& state);
 
 // "MoveUnits" -> "Move Units".
 [[nodiscard]] std::string spaced(std::string_view camel_case);

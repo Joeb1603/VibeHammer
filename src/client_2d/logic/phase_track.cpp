@@ -3,6 +3,7 @@
 #include <cctype>
 
 #include "core/engine/engine.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 
 namespace wh40k::client {
@@ -52,7 +53,18 @@ std::optional<GameOverText> game_over_text(const core::GameState& state) {
     } else {
         t.title = "Draw";
     }
-    if (state.result_rule == core::ResultRule::PointsDestroyed) {
+    if (state.mission) {
+        // D-084: the VP the result was decided on; after a wipe-out (D-007) the VP as the game ended.
+        const core::VpTally vp = state.result->vp ? *state.result->vp : core::vp_tally(state);
+        const auto one = [&](core::Side s) {
+            const std::size_t i = core::side_index(s);
+            return std::string(s == core::Side::A ? "Side A (" : "Side B (") + state.side(s).name + ") " +
+                   std::to_string(vp.total[i]) + " (" + std::to_string(vp.objectives[i]) + " objectives + " +
+                   std::to_string(vp.kills[i]) + " kills)";
+        };
+        t.vp = "Victory points: " + one(core::Side::A) + ", " + one(core::Side::B);
+    }
+    if (state.result_rule == core::ResultRule::PointsDestroyed || state.result_rule == core::ResultRule::Mission) {
         // D-076: the totals the result was decided on; after a wipe-out (D-007) the totals as the game ended.
         const core::PointsTally tally = state.result->points ? *state.result->points : core::points_destroyed(state);
         t.points = "Points destroyed: Side A (" + state.side(core::Side::A).name + ") " + tally.display[0] +
@@ -62,10 +74,38 @@ std::optional<GameOverText> game_over_text(const core::GameState& state) {
 }
 
 std::optional<std::string> points_destroyed_text(const core::GameState& state) {
-    if (state.result_rule != core::ResultRule::PointsDestroyed) return std::nullopt;
+    if (state.result_rule != core::ResultRule::PointsDestroyed && state.result_rule != core::ResultRule::Mission) {
+        return std::nullopt;
+    }
     const core::PointsTally tally = state.result && state.result->points ? *state.result->points
                                                                          : core::points_destroyed(state);
     return "Points destroyed: Side A " + tally.display[0] + ", Side B " + tally.display[1];
+}
+
+std::optional<std::string> victory_points_text(const core::GameState& state) {
+    if (!state.mission) return std::nullopt;
+    const core::VpTally vp = state.result && state.result->vp ? *state.result->vp : core::vp_tally(state);
+    const auto one = [&vp](core::Side s) {
+        const std::size_t i = core::side_index(s);
+        return std::string(s == core::Side::A ? "Side A " : "Side B ") + std::to_string(vp.total[i]) + " (" +
+               std::to_string(vp.objectives[i]) + " + " + std::to_string(vp.kills[i]) + " kills)";
+    };
+    return "Victory points: " + one(core::Side::A) + ", " + one(core::Side::B);
+}
+
+std::vector<ObjectiveMark> objective_marks(const core::GameState& state) {
+    std::vector<ObjectiveMark> out;
+    if (!state.mission) return out;
+    for (const core::ObjectiveArea& a : state.mission->objectives) {
+        ObjectiveMark m;
+        m.centre = a.centre;
+        m.radius_mm = a.diameter_mm * 0.5f;
+        m.controller = a.controller;
+        m.secured = a.secured_by.has_value();
+        m.label = a.name + " " + std::to_string(a.vp[0]) + "/" + std::to_string(a.vp[1]);
+        out.push_back(std::move(m));
+    }
+    return out;
 }
 
 }  // namespace wh40k::client

@@ -776,7 +776,7 @@ ArmyList random_army(const Faction& faction, const DatasheetResolver& resolve, s
 // ---- The battle ----
 
 Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_turn, const std::vector<Faction>& factions,
-                            const DatasheetResolver& resolve, DeploymentMode mode) {
+                            const DatasheetResolver& resolve, DeploymentMode mode, const Json* mission) {
     if (const auto p = battle_problems(a, b); !p.empty()) throw DataError("custom battle: " + p.front());
     const Battlefield field = custom_field();
     Json sides = Json::object();
@@ -837,6 +837,14 @@ Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_tur
             "the south (A) and north (B) edges, 5 battle rounds, decided on points destroyed (D-076). Units are set "
             "up by hand, the sides alternating one unit at a time, starting with the side that takes the second turn "
             "(D-081); the engine proposes the auto-layout's spots (D-079 part 2).";
+    }
+    if (mission != nullptr) {
+        // D-084 (M86): the objective mission, its numbers from the scenario file the block came from.
+        out["result"] = "mission";
+        out["mission"] = *mission;
+        out["notes"] = out["notes"].get<std::string>() +
+                       " D-084: played as the objective mission (objective areas, victory points; points destroyed "
+                       "settle equal VP) instead of on points destroyed alone.";
     }
     return out;
 }

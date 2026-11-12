@@ -40,6 +40,12 @@ void on_enter_stage(GameState& state, DiceSource& dice, Events& events) {
         case Stage::StartOfTurn:
             events.push_back(event::TurnStarted{state.flow.battle_round, side});  // 07.02
             break;
+        case Stage::StartOfCommandPhase:
+            // D-084 (M86): in their own Command phase from the first scoring round, the player scores each objective
+            // they control (controlled since the end of the opponent's turn: control changes only at the ends of
+            // phases and turns, 14.02).
+            score_objectives(state, side, events);
+            break;
         case Stage::GainCoreCP:
             gain_core_cp(state, events);  // 08.02
             break;
@@ -83,10 +89,12 @@ void on_leave_stage(GameState& state, Events& events) {
     const Stage stage = state.flow.stage;
     const Side side = turn_side(state);
     if (is_phase_end(stage)) {
+        update_objective_control(state, true, events);  // 14.02: at the end of each phase (D-084, M86)
         events.push_back(event::PhaseEnded{phase_of(stage), side});
     }
     switch (stage) {
         case Stage::EndOfTurn:
+            update_objective_control(state, false, events);  // 14.02: and at the end of each turn
             for (Unit& u : state.units) {
                 u.turn_flags = UnitTurnFlags{};  // effects that last "until the end of the turn" end
             }

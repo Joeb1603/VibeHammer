@@ -239,9 +239,9 @@ TEST(D076_Loader, MalformedPointsOrResultAreRefused) {
     {
         nlohmann::json j = rosters_json();
         j["result"] = "points";
-        EXPECT_EQ(refusal(j), "scenario: root: D-076: unknown result \"points\" (the only value is \"points_destroyed\")");
+        EXPECT_EQ(refusal(j), "scenario: root: D-076: unknown result \"points\" (the values are \"points_destroyed\" and \"mission\")");
         j["result"] = 7;
-        EXPECT_EQ(refusal(j), "scenario: root: D-076: unknown result 7 (the only value is \"points_destroyed\")");
+        EXPECT_EQ(refusal(j), "scenario: root: D-076: unknown result 7 (the values are \"points_destroyed\" and \"mission\")");
     }
     {
         nlohmann::json j = rosters_json();
@@ -511,7 +511,7 @@ TEST(D076_Json, MalformedPointsInAStateAreRefused) {
         return state_refusal(j);
     };
     EXPECT_EQ(with([](nlohmann::json& j) { j["result_rule"] = "points"; }),
-              "state JSON: D-076: unknown result_rule \"points\" (the only value is \"points_destroyed\")");
+              "state JSON: D-076: unknown result_rule \"points\" (the values are \"points_destroyed\" and \"mission\")");
     EXPECT_EQ(with([](nlohmann::json& j) { j["units"][0]["points"] = -5; }),
               "state JSON: D-076: unit 1 'Legionaries' has points -5; points must be a positive integer of at most 100000");
     EXPECT_EQ(with([](nlohmann::json& j) { j["units"][0]["points"] = 2.5; }),

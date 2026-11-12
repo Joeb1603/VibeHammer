@@ -6,6 +6,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
 #include "core/model/keywords.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 
 namespace wh40k::core::detail {
@@ -22,8 +23,8 @@ bool side_has_models(const GameState& state, Side side) {
 }
 
 void end_game(GameState& state, std::optional<Side> winner, std::string reason, Events& events,
-              std::optional<PointsTally> points = std::nullopt) {
-    state.result = GameResult{winner, reason, points};
+              std::optional<PointsTally> points = std::nullopt, std::optional<VpTally> vp = std::nullopt) {
+    state.result = GameResult{winner, reason, points, vp};
     state.flow.stage = Stage::GameOver;
     state.flow.activation.reset();
     state.flow.attack.reset();
@@ -33,7 +34,7 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.fight.reset();
     state.flow.forced_fights.clear();
     state.pending.reset();
-    events.push_back(event::GameOver{winner, std::move(reason), std::move(points)});
+    events.push_back(event::GameOver{winner, std::move(reason), std::move(points), vp});
 }
 
 // D-076 (amends D-007): after the End of Battle Round step of the last battle round, with both sides on the
@@ -51,6 +52,41 @@ void end_game_on_points(GameState& state, Events& events) {
                          tally.display[side_index(Side::A)] + ", Side B " + tally.display[side_index(Side::B)] + "; ";
     reason += winner ? side_label(*winner) + " wins on points destroyed" : "equal points destroyed: the game is a draw";
     end_game(state, winner, std::move(reason), events, std::move(tally));
+}
+
+// D-084 (M86, amends D-076): after the End of Battle Round step of the last battle round, with both sides on the
+// battlefield, the side with more victory points (objective VP + kill VP) wins; equal VP is decided by points
+// destroyed (D-076, exactly); equal again is a draw.
+void end_game_on_mission(GameState& state, Events& events) {
+    PointsTally tally = points_destroyed(state);
+    const VpTally vp = vp_tally(state);
+    const std::size_t ia = side_index(Side::A);
+    const std::size_t ib = side_index(Side::B);
+    const auto side_vp = [&vp](Side s) {
+        const std::size_t i = side_index(s);
+        return side_label(s) + " " + std::to_string(vp.total[i]) + " (" + std::to_string(vp.objectives[i]) +
+               " objectives + " + std::to_string(vp.kills[i]) + " kills)";
+    };
+    std::string reason = "D-084: battle round " + std::to_string(state.flow.battle_round) +
+                         " has ended with both sides on the battlefield; victory points: " + side_vp(Side::A) + ", " +
+                         side_vp(Side::B) + "; ";
+    std::optional<Side> winner;
+    if (vp.total[ia] != vp.total[ib]) {
+        winner = vp.total[ia] > vp.total[ib] ? Side::A : Side::B;
+        reason += side_label(*winner) + " wins on victory points";
+    } else {
+        const std::int64_t a = tally.destroyed[ia];
+        const std::int64_t b = tally.destroyed[ib];
+        reason += "equal victory points (" + std::to_string(vp.total[ia]) + " each); points destroyed: Side A " +
+                  tally.display[ia] + ", Side B " + tally.display[ib] + "; ";
+        if (a != b) {
+            winner = a > b ? Side::A : Side::B;
+            reason += side_label(*winner) + " wins on points destroyed";
+        } else {
+            reason += "equal points destroyed: the game is a draw";
+        }
+    }
+    end_game(state, winner, std::move(reason), events, std::move(tally), vp);
 }
 
 // D-007: if a side has no models on the battlefield, the game ends immediately (checked when no
@@ -103,6 +139,10 @@ void next_stage(GameState& state, DiceSource& dice, Events& events) {
             if (state.flow.battle_round >= state.battle_rounds) {
                 if (state.result_rule == ResultRule::PointsDestroyed) {
                     end_game_on_points(state, events);
+                    return;
+                }
+                if (state.result_rule == ResultRule::Mission) {
+                    end_game_on_mission(state, events);
                     return;
                 }
                 // D-007: the battle ends after battle round N with both sides on the battlefield.

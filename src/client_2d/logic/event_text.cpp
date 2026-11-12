@@ -205,6 +205,23 @@ std::string body(const core::GameEvent& e) {
                 return attack_count_text(x.attack_dice, x.random_attacks) + " attacks against " + unit(x.target) +
                        " are lost" + (x.random_attacks.empty() ? "" : " (not rolled)");
             } else if constexpr (std::is_same_v<T, ev::GameOver>) {
+                if (x.vp && x.points) {
+                    // D-084: "Battle round 5 ends: Side A wins on victory points (23 to 19)", the winner's first; on
+                    // equal VP the points destroyed decide.
+                    const core::VpTally& v = *x.vp;
+                    const core::PointsTally& p = *x.points;
+                    const std::string round = "Battle round " + std::to_string(p.battle_round) + " ends: ";
+                    if (v.total[0] != v.total[1]) {
+                        const std::size_t w = core::side_index(*x.winner);
+                        return round + side(*x.winner) + " wins on victory points (" + std::to_string(v.total[w]) +
+                               " to " + std::to_string(v.total[1 - w]) + ")";
+                    }
+                    const std::string equal = "equal victory points (" + std::to_string(v.total[0]) + " each)";
+                    if (!x.winner) return round + "a draw: " + equal + " and equal points destroyed (" + p.display[0] + " each)";
+                    const std::size_t w = core::side_index(*x.winner);
+                    return round + side(*x.winner) + " wins on points destroyed (" + p.display[w] + " to " +
+                           p.display[1 - w] + ") after " + equal;
+                }
                 if (x.points) {
                     // D-076: "Battle round 5 ends: Side A wins on points destroyed (412.5 to 380)", the winner's first.
                     const core::PointsTally& p = *x.points;
@@ -240,6 +257,20 @@ std::string body(const core::GameEvent& e) {
             } else if constexpr (std::is_same_v<T, ev::UnitNotSetUp>) {
                 return side(x.side) + " can't set up " + unit(x.unit) +
                        ": no legal spot is left, so it counts as destroyed";
+            } else if constexpr (std::is_same_v<T, ev::ObjectiveControlChanged>) {
+                // 14.02: "Side A takes control of Centre (OC 4 to 2)", or "Centre is no longer controlled (OC 2 each)".
+                const std::string a = std::to_string(x.levels[0]);
+                const std::string b = std::to_string(x.levels[1]);
+                if (!x.controller) {
+                    return x.name + " is no longer controlled (OC " +
+                           (x.levels[0] == x.levels[1] ? a + " each" : "Side A " + a + ", Side B " + b) + ")";
+                }
+                const std::size_t w = core::side_index(*x.controller);
+                return side(*x.controller) + " takes control of " + x.name + " (OC " + std::to_string(x.levels[w]) +
+                       " to " + std::to_string(x.levels[1 - w]) + ")";
+            } else if constexpr (std::is_same_v<T, ev::VictoryPointsScored>) {
+                return side(x.side) + " scores " + std::to_string(x.vp) + " VP for holding " + x.name + " (" +
+                       std::to_string(x.total) + " objective VP)";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }

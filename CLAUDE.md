@@ -4,8 +4,8 @@ A deterministic C++20 rules engine for Warhammer 40k 11th Edition, with a 2D top
 V1 (M0–M13): Intercessor Squad vs Termagants, hotseat on a 24"x24" board, following the real core rules.
 Since then: a bot opponent (D-054; one level since M85, D-085), the 60"x44" Strike scenario (D-064), the 44"x60"
 rosters scenario with oval bases and a points result (D-074, D-076), custom battles with an army builder and
-hand deployment (D-079, D-081, D-082), and army-level teamwork for the bot (D-083). The finished
-milestones are in `docs/plan_archive.md`.
+hand deployment (D-079, D-081, D-082), army-level teamwork for the bot (D-083), and objectives with a mission of our
+own, scored in VP (14.02, D-084; the default scenario since M86). The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
 inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance criteria

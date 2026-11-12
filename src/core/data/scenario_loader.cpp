@@ -17,6 +17,7 @@
 #include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/deployment.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 
@@ -197,6 +198,45 @@ GameState build_game_state(const Json& scenario, const DatasheetResolver& resolv
 
 namespace {
 
+int require_int(const Json& j, const char* key, const std::string& where) {
+    const Json& e = require(j, key, where);
+    if (!e.is_number_integer() || e.get<std::int64_t>() < std::numeric_limits<int>::min() ||
+        e.get<std::int64_t>() > std::numeric_limits<int>::max()) {
+        fail(where + ": field '" + key + "' must be an integer, not " + e.dump());
+    }
+    return e.get<int>();
+}
+
+// D-084 (M86): the "mission" block, in inches like the rest of the file. Its numbers are checked against the state by
+// check_mission_data once the units are built.
+Mission parse_mission(const Json& j) {
+    const std::string where = "mission";
+    if (!j.is_object()) fail(where + ": D-084: must be an object");
+    Mission m;
+    m.first_scoring_round = require_int(j, "first_scoring_round", where);
+    const Json& kill = require(j, "kill_vp", where);
+    m.kill_points = require_int(kill, "points", where + ".kill_vp");
+    m.kill_vp = require_int(kill, "vp", where + ".kill_vp");
+    const Json& objectives = require(j, "objectives", where);
+    if (!objectives.is_array()) fail(where + ": D-084: 'objectives' must be an array");
+    for (std::size_t i = 0; i < objectives.size(); ++i) {
+        const Json& o = objectives[i];
+        const std::string owhere = where + ".objectives[" + std::to_string(i) + "]";
+        ObjectiveArea a;
+        const Json& name = require(o, "name", owhere);
+        if (!name.is_string()) fail(owhere + ": field 'name' must be a string");
+        a.name = name.get<std::string>();
+        a.centre = Position{inches_to_mm(require_inches(o, "x_in", owhere)), inches_to_mm(require_inches(o, "y_in", owhere)),
+                            0.0f};
+        a.diameter_mm = inches_to_mm(require_inches(o, "diameter_in", owhere));
+        const Json& vp = require(o, "vp", owhere);
+        a.vp[side_index(Side::A)] = require_int(vp, "A", owhere + ".vp");
+        a.vp[side_index(Side::B)] = require_int(vp, "B", owhere + ".vp");
+        m.objectives.push_back(std::move(a));
+    }
+    return m;
+}
+
 GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& resolve) {
     GameState gs;
     gs.scenario_name = require(scenario, "name", "root").get<std::string>();
@@ -210,14 +250,19 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     if (scenario.contains("seed")) {
         gs.dice.seed = scenario.at("seed").get<std::uint64_t>();
     }
-    // D-076: optional; absent means D-007 (a draw after the last battle round).
+    // D-076: optional; absent means D-007 (a draw after the last battle round). D-084 (M86): "mission" plays the
+    // objective mission of the "mission" block.
     if (scenario.contains("result")) {
         const Json& r = scenario.at("result");
-        if (!r.is_string() || r.get<std::string>() != "points_destroyed") {
-            fail("root: D-076: unknown result " + r.dump() + " (the only value is \"points_destroyed\")");
+        if (r.is_string() && r.get<std::string>() == "points_destroyed") {
+            gs.result_rule = ResultRule::PointsDestroyed;
+        } else if (r.is_string() && r.get<std::string>() == "mission") {
+            gs.result_rule = ResultRule::Mission;
+        } else {
+            fail("root: D-076: unknown result " + r.dump() + " (the values are \"points_destroyed\" and \"mission\")");
         }
-        gs.result_rule = ResultRule::PointsDestroyed;
     }
+    if (scenario.contains("mission")) gs.mission = parse_mission(scenario.at("mission"));
 
     // D-081 (M74): optional; absent means the formations below (D-003). "alternating": every unit is set up by hand,
     // the sides alternating, before battle round 1 (GameState::undeployed).
@@ -282,6 +327,8 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
                 unit.starting_wounds = static_cast<int>(wounds);
             } else if (gs.result_rule == ResultRule::PointsDestroyed) {
                 fail(uwhere + ": D-076: missing field 'points' (result \"points_destroyed\" needs every unit's points)");
+            } else if (gs.result_rule == ResultRule::Mission) {
+                fail(uwhere + ": D-084: missing field 'points' (result \"mission\" needs every unit's points)");
             }
 
             if (by_hand) {
@@ -301,6 +348,7 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     check_no_overlap(gs);
     check_unengaged(gs);
     check_points_data(gs, "scenario");  // D-076: the bound on the exact count (D-081: units to set up included)
+    check_mission_data(gs, "scenario");  // D-084: the mission block and result "mission" go together, in range
     // D-081: every unit to set up by hand has a legal spot with nothing else on the battlefield (as a formation must be
     // a legal set-up, D-008, D-064). So the side that sets up first always sets up its first unit.
     for (const Side side : {Side::A, Side::B}) {
@@ -317,6 +365,14 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
 }
 
 }  // namespace
+
+nlohmann::json load_mission_block(const std::filesystem::path& scenario_path) {
+    const Json scenario = read_json_file(scenario_path);
+    if (!scenario.is_object() || !scenario.contains("mission")) {
+        throw DataError("scenario " + scenario_path.generic_string() + ": D-084: no \"mission\" block");
+    }
+    return scenario.at("mission");
+}
 
 GameState load_scenario(const std::filesystem::path& scenario_path,
                         const std::filesystem::path& repo_root) {

@@ -59,6 +59,8 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::DeploymentStarted>) return {"DeploymentStarted", "D-081"};
     else if constexpr (std::is_same_v<T, event::UnitSetUp>) return {"UnitSetUp", "03.02"};
     else if constexpr (std::is_same_v<T, event::UnitNotSetUp>) return {"UnitNotSetUp", "D-081"};
+    else if constexpr (std::is_same_v<T, event::ObjectiveControlChanged>) return {"ObjectiveControlChanged", "14.02"};
+    else if constexpr (std::is_same_v<T, event::VictoryPointsScored>) return {"VictoryPointsScored", "D-084"};
     else static_assert(sizeof(T) == 0, "unhandled event");
 }
 
@@ -73,7 +75,9 @@ std::string_view event_rule(const GameEvent& e) {
         [](const auto& x) -> std::string_view {
             using T = std::decay_t<decltype(x)>;
             // D-076 (M67): a game decided on points destroyed cites D-076 (it amends D-007).
+            // D-084 (M86): a game decided on the mission's victory points cites D-084 (it amends D-076 there).
             if constexpr (std::is_same_v<T, event::GameOver>) {
+                if (x.vp) return "D-084";
                 if (x.points) return "D-076";
             }
             return name_rule<T>().rule;

@@ -34,9 +34,11 @@ struct CustomBattleSetup {
 
 // D-079: the custom battle's initial state (not started): core's custom_battle_scenario through build_game_state.
 // Throws core::DataError when the setup can't be played (the same factions, an unknown faction, a list problem).
+// D-084 (M86): with `mission` (a scenario file's "mission" block) the battle plays the objective mission.
 [[nodiscard]] core::GameState custom_battle_state(const CustomBattleSetup& setup,
                                                   const std::vector<core::Faction>& factions,
-                                                  const core::DatasheetResolver& resolve);
+                                                  const core::DatasheetResolver& resolve,
+                                                  const nlohmann::json* mission = nullptr);
 
 // A problem of one side's list, attached to its unit where it has one (army_problems), else to the army.
 struct BuilderProblem {
@@ -199,6 +201,13 @@ public:
     [[nodiscard]] nlohmann::json battle_scenario() const;
     [[nodiscard]] core::GameState battle_state() const;
 
+    // D-084 (M86): the objective mission the battle plays: the "mission" block of a scenario file (the client gives it
+    // data/scenarios/incursion_objectives_44x60.json's). Without one (the default) the battle is decided on points
+    // destroyed (D-076), as before. load_mission throws core::DataError if the file has no mission.
+    void load_mission(const std::filesystem::path& scenario_file);
+    void set_mission(std::optional<nlohmann::json> mission) { mission_ = std::move(mission); }
+    [[nodiscard]] const nlohmann::json* mission() const { return mission_ ? &*mission_ : nullptr; }
+
 private:
     core::ArmyList& list_mut(core::Side side) { return armies_[core::side_index(side)]; }
     [[nodiscard]] const core::Faction* faction_of(const std::string& id) const;
@@ -209,6 +218,7 @@ private:
     void touched(core::Side side);
 
     std::filesystem::path data_root_;
+    std::optional<nlohmann::json> mission_;  // D-084 (M86)
     std::vector<core::Faction> factions_;
     core::DatasheetResolver resolve_;
     std::array<core::ArmyList, 2> armies_;

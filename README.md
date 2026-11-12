@@ -1,16 +1,33 @@
 # VibeHammer
 
 A Warhammer 40,000 (11th edition) skirmish for Windows. It is a deterministic C++20 rules engine with a 2D
-top-down client. Space Marine Intercessor Squads fight Tyranid Termagants following the core rules, either
-hotseat or against a bot. The default scenario is one unit each on a 24" x 24" board. The **Strike**
-scenario (pick `strike_44x60.json` in the start screen's Scenario list) is a full-size 60" x 44" battlefield
-with three Intercessor Squads against four units of Termagants. The **Incursion** scenario
-(`rosters_44x60.json`) puts two armies on a 44" x 60" portrait battlefield. The Chaos Space Marines field a
-Chaos Lord, two squads of Legionaries, Chaos Terminators and Havocs. The Tyranids field a Hive Tyrant,
-Termagants, Genestealers, Tyrant Guard, two Screamer-killers and a Tyrannofex. Wiping the other side out
-still wins. Otherwise, after battle round 5, the side that destroyed more points wins. A **custom battle**
-plays the same way with armies you build yourself, set up automatically or by hand. Each unit has its own
-shade of its side's colour and a number on the board.
+top-down client that follows the core rules, played hotseat or against a bot.
+
+The default scenario is **Incursion objectives** (`incursion_objectives_44x60.json`), two armies on a 44" x 60"
+portrait battlefield:
+- **The armies.** The Chaos Space Marines field a Chaos Lord, two squads of Legionaries, Chaos Terminators and
+  Havocs. The Tyranids field a Hive Tyrant, Termagants, Genestealers, Tyrant Guard, two Screamer-killers and a
+  Tyrannofex.
+- **The objectives.** There are three: a 12" Centre and a 6" home area for each side. At the end of every phase and
+  turn, the side with more Objective Control (OC) in an area controls it.
+- **Scoring.** From battle round 2, each side scores in its own Command phase for the areas it controls:
+  - the Centre, 5 VP;
+  - its own home, 2 VP;
+  - the enemy's home, 4 VP.
+
+  After battle round 5 each side also scores 1 VP per 50 points it has destroyed.
+- **Winning.** Wiping the other side out still wins. Otherwise the most VP wins, and points destroyed settle a tie.
+
+The start screen's Scenario list has the other scenarios:
+- **V1 skirmish** (`v1_skirmish.json`): one unit each on a 24" x 24" board.
+- **Strike** (`strike_44x60.json`): three Intercessor Squads against four units of Termagants on a full-size
+  60" x 44" battlefield.
+- **Incursion** (`rosters_44x60.json`): the same armies with no objectives. The side that destroyed more points
+  wins.
+
+A **custom battle** plays the objective mission with armies you build yourself, set up automatically or by hand.
+
+On the board, each unit has its own shade of its side's colour and a number.
 
 ![Bot vs bot: the Termagants advance away from the Intercessors](docs/images/bot_vs_bot.png)
 
