@@ -758,7 +758,7 @@ namespace {
 // Dice seed (the bot on both sides on the objective scenario, seeds searched with DISABLED_SearchObjectivesSeed): a
 // whole game decided on victory points after battle round 5 (D-084), each side scoring its home, VP scored away from a
 // home too, and fights on both sides.
-constexpr std::uint64_t kObjectivesSeed = 1;
+constexpr std::uint64_t kObjectivesSeed = 29;
 constexpr const char* kObjectivesFile = "m87_objectives_bot_game.json";
 
 std::filesystem::path saved_path() { return std::filesystem::path(WH40K_REPLAY_DIR) / kObjectivesFile; }
