@@ -1,5 +1,5 @@
 {
-  "description": "M86: the objective scenario (data/scenarios/incursion_objectives_44x60.json; D-084, 14.02): the rosters armies with a 12\" Centre and a 6\" home per side. Round 1: the Chaos Terminator Squad (unit 3) advances straight north (5\" + the advance roll); every other Chaos Space Marine unit remains stationary. The east Genestealers (unit 13) move 8\" south; the rest of Side B remains stationary (its held-back Tyrant Guard and Tyrannofex stand on B's home, which Side B controls from the end of Side A's first Command phase). Round 2: the Terminators move 5\" north onto the Centre, which Side A controls from the end of that Movement phase; Side B scores its home (2 VP) in its Command phase. Nothing shoots or charges. Every other decision takes the first legal action. Stops at Side A's first Move Units decision of battle round 3, after Side A scores the Centre (5 VP) in its Command phase.",
+  "description": "M86: the objective scenario as M86 shipped it (tests/data/scenarios/m86_objectives_44x60.json; D-084, 14.02): the rosters armies with a 12\" Centre and a 6\" home per side. Round 1: the Chaos Terminator Squad (unit 3) advances straight north (5\" + the advance roll); every other Chaos Space Marine unit remains stationary. The east Genestealers (unit 13) move 8\" south; the rest of Side B remains stationary (its held-back Tyrant Guard and Tyrannofex stand on B's home, which Side B controls from the end of Side A's first Command phase). Round 2: the Terminators move 5\" north onto the Centre, which Side A controls from the end of that Movement phase; Side B scores its home (2 VP) in its Command phase. Nothing shoots or charges. Every other decision takes the first legal action. Stops at Side A's first Move Units decision of battle round 3, after Side A scores the Centre (5 VP) in its Command phase.",
   "expect": {
     "battle_round": 3,
     "models": [
@@ -520,7 +520,7 @@
   },
   "format": 1,
   "initial": {
-    "scenario": "data/scenarios/incursion_objectives_44x60.json",
+    "scenario": "tests/data/scenarios/m86_objectives_44x60.json",
     "seed": 86
   },
   "steps": [

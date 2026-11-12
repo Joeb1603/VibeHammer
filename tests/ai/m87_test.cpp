@@ -68,12 +68,21 @@ constexpr std::size_t kCentre = 0;
 constexpr std::size_t kHomeA = 1;
 constexpr std::size_t kHomeB = 2;
 
+// The objective scenario as M86 shipped it (Centre 5, homes 2 / 4, 1 kill VP per 50 points): the regression checks
+// compare with M86's games on it.
+GameState m86_objectives() {
+    return load_scenario(wh40k::test::repo_root() / "tests/data/scenarios/m86_objectives_44x60.json",
+                         wh40k::test::repo_root());
+}
+
 GameState objectives() {
     return load_scenario(wh40k::test::repo_root() / kObjectiveScenario, wh40k::test::repo_root());
 }
 
+// Hand-built positions on M86's numbers (the fixture), so these mechanism checks don't move when the shipped mission is
+// tuned.
 GameState objectives_with(std::initializer_list<UnitId> ids, int first_scoring_round = 2) {
-    const GameState all = objectives();
+    const GameState all = m86_objectives();
     GameState gs = all;
     gs.units.clear();
     for (const Unit& u : all.units) {
@@ -170,14 +179,48 @@ GameState play_movement(GameState gs, const MoveWeights& weights, std::vector<st
 // ==== The VP rate ====
 
 TEST(M87_Score, TheVpRateIsKillPointsPerVpOverTheMeanUnitPoints) {
-    // 14 units, 960 + 955 points: a mean of 136.79; 50 points per kill VP.
+    // 14 units, 960 + 955 points: a mean of 136.79; 25 points per kill VP (M87's numbers; 50 at M86).
     GameState gs = objectives();
-    EXPECT_NEAR(vp_share(gs), 50.0 / (1915.0 / 14.0), 1e-9);
-    gs.mission->kill_vp = 2;  // 25 points per VP
     EXPECT_NEAR(vp_share(gs), 25.0 / (1915.0 / 14.0), 1e-9);
+    EXPECT_NEAR(vp_share(m86_objectives()), 50.0 / (1915.0 / 14.0), 1e-9);
+    gs.mission->kill_vp = 5;  // 5 points per VP
+    EXPECT_NEAR(vp_share(gs), 5.0 / (1915.0 / 14.0), 1e-9);
     gs.mission->kill_vp = 0;  // no kill VP: still kill_points per VP
-    EXPECT_NEAR(vp_share(gs), 50.0 / (1915.0 / 14.0), 1e-9);
+    EXPECT_NEAR(vp_share(gs), 25.0 / (1915.0 / 14.0), 1e-9);
     EXPECT_EQ(vp_share(wh40k::test::load_rosters_scenario()), 0.0);  // no mission
+}
+
+// ==== The shipped mission ====
+
+TEST(M87_Mission, TheObjectiveScenarioCarriesTheTunedNumbers) {
+    // D-084 tuned in M87 (D-086, the user's choice): Centre 1 VP, own home 4, enemy home 8, 1 kill VP per 25 points; the
+    // rest is M86's scenario (the fixture), the homes still wholly within their deployment zones.
+    const GameState gs = objectives();
+    const GameState m86 = m86_objectives();
+    EXPECT_EQ(gs.units, m86.units);
+    EXPECT_EQ(gs.sides, m86.sides);
+    EXPECT_EQ(gs.battlefield, m86.battlefield);
+    EXPECT_EQ(gs.result_rule, ResultRule::Mission);
+    ASSERT_TRUE(gs.mission && m86.mission);
+    const Mission& m = *gs.mission;
+    EXPECT_EQ(m.first_scoring_round, 2);
+    EXPECT_EQ(m.kill_points, 25);
+    EXPECT_EQ(m.kill_vp, 1);
+    ASSERT_EQ(m.objectives.size(), 3u);
+    EXPECT_EQ(m.objectives[kCentre].vp, (std::array<int, 2>{1, 1}));
+    EXPECT_EQ(m.objectives[kHomeA].vp, (std::array<int, 2>{4, 8}));
+    EXPECT_EQ(m.objectives[kHomeB].vp, (std::array<int, 2>{8, 4}));
+    for (std::size_t i = 0; i < m.objectives.size(); ++i) {
+        ObjectiveArea a = m.objectives[i];
+        a.vp = m86.mission->objectives[i].vp;
+        EXPECT_EQ(a, m86.mission->objectives[i]) << "only the VP changed";
+    }
+    for (const Side s : {Side::A, Side::B}) {
+        const ObjectiveArea& home = m.objectives[s == Side::A ? kHomeA : kHomeB];
+        const Rect zone = zone_rect(gs.battlefield, gs.side(s).deployment_zone);
+        EXPECT_GE(home.centre.y - home.diameter_mm / 2, zone.min_y);
+        EXPECT_LE(home.centre.y + home.diameter_mm / 2, zone.max_y);
+    }
 }
 
 // ==== The outlook ====
@@ -264,7 +307,7 @@ TEST(M87_Outlook, ABattleShockedUnitAddsNothing) {
 
 TEST(M87_MoveScore, StandingOnAnAreaTheEnemyHoldsDeniesIt) {
     // The first scoring round is 1, so B's round-1 Command phase (after A's turn) scores: Termagants (OC 20) hold the
-    // Centre; the boltgun Legionaries (OC 20) stand 3" south of it. Ending with every model in it denies B's 5 VP;
+    // Centre; the boltgun Legionaries (OC 20) stand 3" south of it. Ending with every model in it denies B's Centre VP;
     // a few models (less OC than the Termagants') deny nothing, and neither does staying outside.
     GameState gs = objectives_with({kBoltguns, kLord, kTermagants, kGuard}, 1);
     mf::place_rank(unit(gs, kTermagants), 22.0f, 33.0f);
@@ -281,7 +324,8 @@ TEST(M87_MoveScore, StandingOnAnAreaTheEnemyHoldsDeniesIt) {
     const AreaOutlook& c = o->areas[kCentre];
     EXPECT_EQ(c.them_now, 20);
     EXPECT_EQ(c.others, 0);
-    EXPECT_NEAR(c.value_them, 5.0 * vp_share(gs), 1e-12);
+    EXPECT_NEAR(c.value_them, gs.mission->objectives[kCentre].vp[1] * vp_share(gs), 1e-12);
+    EXPECT_GT(c.value_them, 0.0);
     const ObjectiveTerms stay = objective_terms(*o, gs, us, positions_of(us), 1.0);
     EXPECT_EQ(stay.deny, 0.0);
     const ObjectiveTerms all_in = objective_terms(*o, gs, us, shifted(us, 0.0f, 6.0f), 1.0);
@@ -293,7 +337,7 @@ TEST(M87_MoveScore, StandingOnAnAreaTheEnemyHoldsDeniesIt) {
 
 TEST(M87_MoveScore, TheScoreTermFallsWithTheEnemysReach) {
     // The Terminators (OC 10) on A's home; A scores it in round 2 if it holds through B's turn. Nothing in reach: the
-    // whole 2 VP; a Screamer-killer (OC 3) within its Move: still certain; Termagants (OC 20) within their Move: less than
+    // home's whole VP; a Screamer-killer (OC 3) within its Move: still certain; Termagants (OC 20) within their Move: less than
     // half (they could also make the Centre: one_place splits their chances); Termagants within range of it now
     // (they stay): nothing.
     double two_vp = 0.0;
@@ -306,7 +350,7 @@ TEST(M87_MoveScore, TheScoreTermFallsWithTheEnemysReach) {
         mf::place_rank(unit(gs, kTermagants), 30.0f, 58.0f);
         if (enemy) mf::place_rank(unit(gs, *enemy), 22.0f, enemy_y);
         gs = at_move_units(gs);
-        two_vp = 2.0 * vp_share(gs);
+        two_vp = gs.mission->objectives[kHomeA].vp[0] * vp_share(gs);  // the home's VP for A
         const ArmyPlan plan = no_plan(gs, Side::A);
         const Unit& us = *gs.find_unit(kTerminators);
         const std::optional<ObjectiveOutlook> o = objective_outlook(gs, us, plan, turns_left(gs), 1.0);
@@ -398,7 +442,7 @@ TEST(M87_Plan, WithoutAMissionThereAreNoAreasAndTheGroupsAreUnchanged) {
 TEST(M87_Plan, TheCheapestUnitThatHoldsAnAreaIsChosenAndTheBestAreaGoesFirst) {
     // A to move, the enemy far north: the boltgun Legionaries (OC 20, 180 points) and the Havocs (OC 5, 135 points),
     // both within a Normal move of A's home and the Legionaries able to reach the Centre. Nothing can contest either
-    // area soon, so one unit holds each: the Centre (5 VP a scoring) takes the Legionaries first, and the Havocs take the
+    // area soon, so one unit holds each: the Centre (5 VP a scoring here) takes the Legionaries first, and the Havocs take the
     // home. With the Centre worth nothing to A the home's set is the Havocs alone: of the units that hold it for certain,
     // the one with the least at stake (value per risk).
     const auto plan_of = [](int centre_vp_a) {
@@ -577,7 +621,7 @@ TEST(M87_Regression, TheRostersAndTheObjectiveScenarioWithoutObjectiveWeightsPla
     EXPECT_EQ(per_game_field(rosters.text, "trace"), kM86Trace);
     BotConfig m86;
     m86.move = zero_objectives();
-    const PerGameReport mission = run_per_game(objectives(), 1, 1, m86, m86);
+    const PerGameReport mission = run_per_game(m86_objectives(), 1, 1, m86, m86);
     EXPECT_TRUE(mission.clean);
     EXPECT_EQ(per_game_field(mission.text, "actions"), kM86Actions);
     EXPECT_EQ(per_game_field(mission.text, "state"), kM86ObjectivesState);
@@ -585,7 +629,7 @@ TEST(M87_Regression, TheRostersAndTheObjectiveScenarioWithoutObjectiveWeightsPla
 }
 
 TEST(M87_Regression, TheDefaultWeightsPlayTheObjectiveScenarioDifferently) {
-    const PerGameReport mission = run_per_game(objectives(), 1, 1, BotConfig{}, BotConfig{});
+    const PerGameReport mission = run_per_game(m86_objectives(), 1, 1, BotConfig{}, BotConfig{});
     EXPECT_TRUE(mission.clean);
     EXPECT_NE(per_game_field(mission.text, "actions"), kM86Actions);
 }

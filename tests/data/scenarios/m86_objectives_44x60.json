@@ -1,0 +1,388 @@
+{
+  "name": "Incursion objectives - Chaos Space Marines vs Tyranids (44x60 portrait)",
+  "battlefield": {
+    "width_in": 44,
+    "depth_in": 60
+  },
+  "battle_rounds": 5,
+  "first_turn": "A",
+  "result": "mission",
+  "mission": {
+    "first_scoring_round": 2,
+    "kill_vp": {
+      "points": 50,
+      "vp": 1
+    },
+    "objectives": [
+      {
+        "name": "Centre",
+        "x_in": 22,
+        "y_in": 30,
+        "diameter_in": 12,
+        "vp": {
+          "A": 5,
+          "B": 5
+        }
+      },
+      {
+        "name": "A home",
+        "x_in": 22,
+        "y_in": 6,
+        "diameter_in": 6,
+        "vp": {
+          "A": 2,
+          "B": 4
+        }
+      },
+      {
+        "name": "B home",
+        "x_in": 22,
+        "y_in": 54,
+        "diameter_in": 6,
+        "vp": {
+          "A": 4,
+          "B": 2
+        }
+      }
+    ]
+  },
+  "sides": {
+    "A": {
+      "name": "Chaos Space Marines",
+      "deployment_zone": {
+        "edge": "south",
+        "depth_in": 12
+      },
+      "units": [
+        {
+          "unit_file": "data/units/legionaries.json",
+          "points": 180,
+          "models": [
+            {
+              "type": "Aspiring Champion",
+              "count": 1,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "type": "Legionary w/ chainsword",
+              "count": 9,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 7,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/chaos_lord.json",
+          "points": 95,
+          "models": [
+            {
+              "type": "Chaos Lord",
+              "count": 1,
+              "weapons": [
+                "Plasma pistol",
+                "Astartes chainblade"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 13,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/chaos_terminator_squad.json",
+          "points": 370,
+          "models": [
+            {
+              "type": "Terminator Champion",
+              "count": 1,
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            },
+            {
+              "type": "Accursed weapon and combi-bolter",
+              "count": 9,
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 20.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/havocs.json",
+          "points": 135,
+          "models": [
+            {
+              "type": "Havoc Champion",
+              "count": 1,
+              "weapons": [
+                "Plasma gun",
+                "Astartes chainsword"
+              ]
+            },
+            {
+              "type": "Havoc w/ lascannon",
+              "count": 4,
+              "weapons": [
+                "Havoc lascannon",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 29.5,
+            "depth_in": 3,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/legionaries.json",
+          "points": 180,
+          "models": [
+            {
+              "type": "Aspiring Champion",
+              "count": 1,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "type": "Legionary w/ boltgun",
+              "count": 9,
+              "weapons": [
+                "Boltgun",
+                "Bolt pistol",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 37.5,
+            "anchor": "zone_front"
+          }
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": {
+        "edge": "north",
+        "depth_in": 12
+      },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "points": 55,
+          "models": [
+            {
+              "type": "Termagants",
+              "count": 10,
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 4,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/genestealers.json",
+          "points": 75,
+          "models": [
+            {
+              "type": "Genestealer",
+              "count": 5,
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 11,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/screamer_killer.json",
+          "points": 125,
+          "models": [
+            {
+              "type": "Screamer-killer",
+              "count": 1,
+              "weapons": [
+                "Bio-plasmic scream",
+                "Screamer-killer talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 16.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/tyrant_guard.json",
+          "points": 80,
+          "models": [
+            {
+              "type": "Tyrant Guard",
+              "count": 3,
+              "weapons": [
+                "Scything talons and rending claws"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 19.25,
+            "depth_in": 4,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/hive_tyrant.json",
+          "points": 195,
+          "models": [
+            {
+              "type": "Hive Tyrant",
+              "count": 1,
+              "weapons": [
+                "Monstrous bonesword and lash whip",
+                "Monstrous scything talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 22,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/tyrannofex.json",
+          "points": 170,
+          "models": [
+            {
+              "type": "Tyrannofex",
+              "count": 1,
+              "weapons": [
+                "Powerful limbs",
+                "Stinger salvoes",
+                "Fleshborer hive"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 24.75,
+            "depth_in": 4,
+            "facing_deg": 0,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/screamer_killer.json",
+          "points": 125,
+          "models": [
+            {
+              "type": "Screamer-killer",
+              "count": 1,
+              "weapons": [
+                "Bio-plasmic scream",
+                "Screamer-killer talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 27.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/genestealers.json",
+          "points": 75,
+          "models": [
+            {
+              "type": "Genestealer",
+              "count": 5,
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 33,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/termagants.json",
+          "points": 55,
+          "models": [
+            {
+              "type": "Termagants",
+              "count": 10,
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 40,
+            "anchor": "zone_front"
+          }
+        }
+      ]
+    }
+  },
+  "notes": "M86 scenario (D-084, the objective mission; agreed with the user 2026-11-11): the armies, formations and points of rosters_44x60.json (D-076: the two New Recruit rosters, Incursion, 960 and 955 points, on a 44\" wide by 60\" deep battlefield with 12\"-deep deployment zones on the short south (A) and north (B) edges), plus three objective areas, terrain objectives with no terrain effects (14.01, 14.02): a 12\"-diameter Centre at the middle of the battlefield and a 6\"-diameter home area per side, centred on the centre line 6\" from that side's own edge (A home in the south, B home in the north). Control (14.02): at the end of each phase and turn, the player with the higher total OC of models within an area controls it; equal levels: neither. Scoring (D-084): in each player's own Command phase in battle rounds 2-5 they score each area they control: Centre 5 VP, own home 2 VP, enemy home 4 VP (\"vp\" per side). Kill VP: after battle round 5, 1 VP per full 50 points destroyed (D-076's count). Result: a side with no models left loses at once (D-007); otherwise the most VP wins, equal VP is decided on points destroyed, and equal again is a draw. Every number of the mission is in the \"mission\" block, so it can be tuned here without code (M87). Only the unit points and loadouts are taken from the rosters (docs/datasheets/, Games Workshop copyright, not copied here)."
+}

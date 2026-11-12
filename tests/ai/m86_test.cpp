@@ -25,7 +25,8 @@ using namespace wh40k::ai;
 
 namespace {
 
-constexpr const char* kObjectiveScenario = "data/scenarios/incursion_objectives_44x60.json";
+// The objective scenario as M86 shipped it (M87 tuned the shipped file's numbers, D-086).
+constexpr const char* kObjectiveScenario = "tests/data/scenarios/m86_objectives_44x60.json";
 
 GameState objectives() { return load_scenario(wh40k::test::repo_root() / kObjectiveScenario, wh40k::test::repo_root()); }
 

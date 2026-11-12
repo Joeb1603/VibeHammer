@@ -10,7 +10,7 @@
   "mission": {
     "first_scoring_round": 2,
     "kill_vp": {
-      "points": 50,
+      "points": 25,
       "vp": 1
     },
     "objectives": [
@@ -20,8 +20,8 @@
         "y_in": 30,
         "diameter_in": 12,
         "vp": {
-          "A": 5,
-          "B": 5
+          "A": 1,
+          "B": 1
         }
       },
       {
@@ -30,8 +30,8 @@
         "y_in": 6,
         "diameter_in": 6,
         "vp": {
-          "A": 2,
-          "B": 4
+          "A": 4,
+          "B": 8
         }
       },
       {
@@ -40,8 +40,8 @@
         "y_in": 54,
         "diameter_in": 6,
         "vp": {
-          "A": 4,
-          "B": 2
+          "A": 8,
+          "B": 4
         }
       }
     ]
@@ -384,5 +384,5 @@
       ]
     }
   },
-  "notes": "M86 scenario (D-084, the objective mission; agreed with the user 2026-11-11): the armies, formations and points of rosters_44x60.json (D-076: the two New Recruit rosters, Incursion, 960 and 955 points, on a 44\" wide by 60\" deep battlefield with 12\"-deep deployment zones on the short south (A) and north (B) edges), plus three objective areas, terrain objectives with no terrain effects (14.01, 14.02): a 12\"-diameter Centre at the middle of the battlefield and a 6\"-diameter home area per side, centred on the centre line 6\" from that side's own edge (A home in the south, B home in the north). Control (14.02): at the end of each phase and turn, the player with the higher total OC of models within an area controls it; equal levels: neither. Scoring (D-084): in each player's own Command phase in battle rounds 2-5 they score each area they control: Centre 5 VP, own home 2 VP, enemy home 4 VP (\"vp\" per side). Kill VP: after battle round 5, 1 VP per full 50 points destroyed (D-076's count). Result: a side with no models left loses at once (D-007); otherwise the most VP wins, equal VP is decided on points destroyed, and equal again is a draw. Every number of the mission is in the \"mission\" block, so it can be tuned here without code (M87). Only the unit points and loadouts are taken from the rosters (docs/datasheets/, Games Workshop copyright, not copied here)."
+  "notes": "M86 scenario (D-084, the objective mission; agreed with the user 2026-11-11): the armies, formations and points of rosters_44x60.json (D-076: the two New Recruit rosters, Incursion, 960 and 955 points, on a 44\" wide by 60\" deep battlefield with 12\"-deep deployment zones on the short south (A) and north (B) edges), plus three objective areas, terrain objectives with no terrain effects (14.01, 14.02): a 12\"-diameter Centre at the middle of the battlefield and a 6\"-diameter home area per side, centred on the centre line 6\" from that side's own edge (A home in the south, B home in the north). Control (14.02): at the end of each phase and turn, the player with the higher total OC of models within an area controls it; equal levels: neither. Scoring (D-084): in each player's own Command phase in battle rounds 2-5 they score each area they control: Centre 1 VP, own home 4 VP, enemy home 8 VP (\"vp\" per side). Kill VP: after battle round 5, 1 VP per full 25 points destroyed (D-076's count). M87 (D-086, chosen by the user 2026-11-12) tuned these numbers from M86's Centre 5, homes 2 / 4 and 1 VP per 50 points: with the bots playing for objectives the Tyranids held the Centre almost uncontested, and a small Centre keeps the game closest to even (M86's numbers are kept as tests/data/scenarios/m86_objectives_44x60.json). Result: a side with no models left loses at once (D-007); otherwise the most VP wins, equal VP is decided on points destroyed, and equal again is a draw. Every number of the mission is in the \"mission\" block, so it can be tuned here without code (M87). Only the unit points and loadouts are taken from the rosters (docs/datasheets/, Games Workshop copyright, not copied here)."
 }

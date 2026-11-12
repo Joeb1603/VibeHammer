@@ -29,7 +29,11 @@ namespace event = wh40k::core::event;
 
 namespace {
 
-GameState objectives() { return wh40k::core::load_scenario(repo_root() / kObjectiveScenario, repo_root()); }
+// The objective scenario as M86 shipped it (M87 tuned the shipped file's numbers, D-086): the labels and VP below are
+// M86's.
+constexpr const char* kM86Objectives = "tests/data/scenarios/m86_objectives_44x60.json";
+
+GameState objectives() { return wh40k::core::load_scenario(repo_root() / kM86Objectives, repo_root()); }
 
 }  // namespace
 

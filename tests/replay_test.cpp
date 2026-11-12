@@ -926,14 +926,17 @@ Replay m74_replay(bool& ok, std::string& problem) {
 // M86 (D-084): a short game on the objective scenario (a scenario-file replay). `ok` says whether the seed shows what
 // it is about: the Terminators take the Centre at the end of Side A's round-2 Movement phase, Side B scores its home
 // in its round-2 Command phase and Side A the Centre in its round-3 one; `problem`, the first refused step.
-constexpr const char* kM86Scenario = "data/scenarios/incursion_objectives_44x60.json";
+// M87 (D-086) tuned the shipped objective scenario's numbers; the replay plays the scenario as M86 shipped it (the test
+// fixture, the same file at M86).
+constexpr const char* kM86Scenario = "tests/data/scenarios/m86_objectives_44x60.json";
 constexpr std::uint64_t kM86Seed = 86;
 
 Replay m86_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
     r.description =
-        "M86: the objective scenario (data/scenarios/incursion_objectives_44x60.json; D-084, 14.02): the rosters "
+        "M86: the objective scenario as M86 shipped it (tests/data/scenarios/m86_objectives_44x60.json; D-084, 14.02): "
+        "the rosters "
         "armies with a 12\" Centre and a 6\" home per side. Round 1: the Chaos Terminator Squad (unit 3) advances "
         "straight north (5\" + the advance roll); every other Chaos Space Marine unit remains stationary. The east "
         "Genestealers (unit 13) move 8\" south; the rest of Side B remains stationary (its held-back Tyrant Guard and "

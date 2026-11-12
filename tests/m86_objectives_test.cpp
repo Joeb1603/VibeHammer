@@ -38,7 +38,10 @@ using wh40k::test::repo_root;
 
 namespace {
 
-constexpr const char* kObjectiveScenario = "data/scenarios/incursion_objectives_44x60.json";
+// M86's mission numbers (D-084 as decided: Centre 5, homes 2 / 4, 1 kill VP per 50 points). M87 tuned the shipped
+// data/scenarios/incursion_objectives_44x60.json (D-086); this fixture is that file as M86 shipped it, so these rule
+// tests keep their numbers.
+constexpr const char* kObjectiveScenario = "tests/data/scenarios/m86_objectives_44x60.json";
 constexpr std::size_t kCentre = 0;
 constexpr std::size_t kHomeA = 1;
 constexpr std::size_t kHomeB = 2;
