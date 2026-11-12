@@ -339,8 +339,25 @@ Each milestone is planned in detail in plan mode at the start of its own session
 
   The start screen's subtitle no longer repeats the side names when the scenario's name has them, and wraps when it
   is too wide (the new default's name was clipped).
-- **Arena:** ARENA_RESULTS
-- **Build and `ctest`:** CTEST_RESULTS
+- **Arena:** Release, 200 games each. Every run: 0 rejected, 0 reverted, 0 fallbacks, 0 unfinished.
+  - *Identity:* old binary (M85) against new, with `--per-game`.
+    - V1, both bot scenarios, Strike and the rosters: all 1,000 `game` lines identical.
+    - `--random-armies 1`, `--random-armies 1 --deploy hand` and the M73 lists now play the mission. In their 600
+      games every action and trace hash is identical, and so is every field but the final state (all 600 differ) and
+      the winner (23, 21 and 69 games changed result).
+    - That makes the M86 binary the reference for those three runs (`docs/dev/bot_arena.md`).
+  - *The objective scenario,* A first: B wins 185, A 15, no draws.
+    - Decided on VP: B 185, A 12. Decided on points (equal VP): A 3.
+    - Mean VP: objectives A 1.84 / B 14.53; kills A 7.36 / B 8.71.
+    - B scores mostly by sitting on its own home: 6.08 of its 9 units never come within 12" of an enemy. A's
+      Terminators walk off their home.
+    - With B first (`--first B`): B wins 171, A 29.
+  - *Random armies:* B wins 164 of 200, by hand 147. Mean VP: objectives A 4.17 / B 10.02, kills A 4.39 / B 8.22.
+  - *For M87:* objectives already give more VP than kills (14.5 vs 8.7 for B on the objective scenario), but the
+    holding side wins. This is the bot ignoring objectives, as M86 intended. M87's balance work starts here.
+- **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,324 of 1,324 passed (core 744, client 351, ai 229 when
+  run per suite). Screenshots under `xvfb-run`: the replay's last frame (the Centre in A's colour, B's home in B's, the VP
+  line) and the start screen with the new default.
 
 ---
 
