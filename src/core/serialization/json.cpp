@@ -262,6 +262,8 @@ void to_json(Json& j, const Unit& v) {
     // D-076: omitted at 0 (no points given), so older files are unchanged.
     if (v.points != 0) j["points"] = v.points;
     if (v.starting_wounds != 0) j["starting_wounds"] = v.starting_wounds;
+    // D-088 (M88): omitted when both are false (always without terrain), so older files are unchanged.
+    if (v.ranged_attacks != RangedAttackRecord{}) j["ranged_attacks"] = v.ranged_attacks;
 }
 void from_json(const Json& j, Unit& v) {
     j.at("id").get_to(v.id);
@@ -291,6 +293,8 @@ void from_json(const Json& j, Unit& v) {
     };
     v.points = whole("points");
     v.starting_wounds = whole("starting_wounds");
+    v.ranged_attacks = RangedAttackRecord{};
+    if (j.contains("ranged_attacks")) j.at("ranged_attacks").get_to(v.ranged_attacks);  // D-088
 }
 
 // ---- dice ----
@@ -422,6 +426,63 @@ void from_json(const Json& j, Mission& v) {
     j.at("objective_vp").get_to(v.objective_vp);
 }
 
+// ---- D-087 (M88): terrain (mm, like the rest of the state) ----
+void to_json(Json& j, const TerrainShape& v) {
+    if (v.is_circle()) {
+        j = Json{{"centre", v.centre}, {"diameter_mm", v.diameter_mm}};
+    } else {
+        j = Json{{"polygon", v.vertices}};
+    }
+}
+void from_json(const Json& j, TerrainShape& v) {
+    v = TerrainShape{};
+    if (j.contains("polygon")) {
+        if (j.contains("centre") || j.contains("diameter_mm")) {
+            throw DataError("state JSON: D-087: a terrain shape is a polygon or a circle, not both");
+        }
+        j.at("polygon").get_to(v.vertices);
+        if (v.vertices.empty()) throw DataError("state JSON: D-087: a terrain polygon needs vertices");
+        return;
+    }
+    j.at("centre").get_to(v.centre);
+    j.at("diameter_mm").get_to(v.diameter_mm);
+}
+void to_json(Json& j, TerrainCategory v) { j = std::string(terrain_category_name(v)); }
+void from_json(const Json& j, TerrainCategory& v) {
+    const std::optional<TerrainCategory> c = j.is_string() ? terrain_category_from_name(j.get<std::string>()) : std::nullopt;
+    if (!c) throw DataError("state JSON: D-087: unknown terrain category " + j.dump());
+    v = *c;
+}
+void to_json(Json& j, const TerrainFeature& v) {
+    j = Json{{"name", v.name}, {"category", v.category}, {"shape", v.shape}};
+    if (v.height_mm) j["height_mm"] = *v.height_mm;  // Dense features only
+}
+void from_json(const Json& j, TerrainFeature& v) {
+    j.at("name").get_to(v.name);
+    j.at("category").get_to(v.category);
+    j.at("shape").get_to(v.shape);
+    v.height_mm.reset();
+    if (j.contains("height_mm")) v.height_mm = j.at("height_mm").get<float>();
+}
+void to_json(Json& j, const TerrainArea& v) {
+    j = Json{{"name", v.name}, {"shape", v.shape}, {"features", v.features}};
+    if (v.objective) j["objective"] = *v.objective;  // 14.01: omitted for an area that isn't an objective
+}
+void from_json(const Json& j, TerrainArea& v) {
+    j.at("name").get_to(v.name);
+    j.at("shape").get_to(v.shape);
+    j.at("features").get_to(v.features);
+    v.objective.reset();
+    if (j.contains("objective")) v.objective = j.at("objective").get<std::string>();
+}
+void to_json(Json& j, const RangedAttackRecord& v) {
+    j = Json{{"this_turn", v.this_turn}, {"previous_turn", v.previous_turn}};
+}
+void from_json(const Json& j, RangedAttackRecord& v) {
+    j.at("this_turn").get_to(v.this_turn);
+    j.at("previous_turn").get_to(v.previous_turn);
+}
+
 void to_json(Json& j, const GameState& v) {
     j = Json{{"scenario_name", v.scenario_name},
              {"battlefield", v.battlefield},
@@ -440,6 +501,7 @@ void to_json(Json& j, const GameState& v) {
     if (v.mission) j["mission"] = *v.mission;  // D-084: omitted without a mission, so older files are unchanged
     // D-081: omitted when empty (every state but a deployment by hand), so older files are unchanged.
     if (!v.undeployed.empty()) j["undeployed"] = v.undeployed;
+    if (!v.terrain.empty()) j["terrain"] = v.terrain;  // D-087: omitted without terrain, so older files are unchanged
 }
 void from_json(const Json& j, GameState& v) {
     j.at("scenario_name").get_to(v.scenario_name);
@@ -472,6 +534,9 @@ void from_json(const Json& j, GameState& v) {
     check_undeployed(v);
     check_points_data(v, "state JSON");  // D-076: the points and their bounds (undeployed units included, D-081)
     check_mission_data(v, "state JSON");  // D-084
+    v.terrain.clear();
+    if (j.contains("terrain")) j.at("terrain").get_to(v.terrain);  // D-087 (M88)
+    check_terrain_data(v, "state JSON");
 }
 
 }  // namespace wh40k::core

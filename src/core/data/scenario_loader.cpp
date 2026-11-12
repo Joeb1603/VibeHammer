@@ -20,6 +20,7 @@
 #include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
+#include "core/state/terrain.hpp"
 
 namespace wh40k::core {
 
@@ -237,6 +238,92 @@ Mission parse_mission(const Json& j) {
     return m;
 }
 
+// D-087 (M88): a footprint in inches: "polygon_in": [[x, y], ...] (either winding; stored counter-clockwise) or
+// "circle_in": {"x", "y", "diameter"}. Exactly one; check_terrain_data checks the shape itself.
+TerrainShape parse_terrain_shape(const Json& j, const std::string& where) {
+    const bool polygon = j.contains("polygon_in");
+    const bool circle = j.contains("circle_in");
+    if (polygon == circle) fail(where + ": D-087: give exactly one of 'polygon_in' and 'circle_in'");
+    if (circle) {
+        const Json& c = j.at("circle_in");
+        const std::string cwhere = where + ".circle_in";
+        return circle_shape(Position{inches_to_mm(require_inches(c, "x", cwhere)), inches_to_mm(require_inches(c, "y", cwhere)),
+                                     0.0f},
+                            inches_to_mm(require_inches(c, "diameter", cwhere)));
+    }
+    const Json& poly = j.at("polygon_in");
+    if (!poly.is_array()) fail(where + ": D-087: 'polygon_in' must be an array of [x, y] points in inches");
+    std::vector<Position> vertices;
+    for (const Json& v : poly) {
+        if (!v.is_array() || v.size() != 2 || !v[0].is_number() || !v[1].is_number()) {
+            fail(where + ": D-087: each 'polygon_in' point is [x, y] in inches, not " + v.dump());
+        }
+        vertices.push_back(Position{inches_to_mm(v[0].get<float>()), inches_to_mm(v[1].get<float>()), 0.0f});
+    }
+    if (polygon_doubled_area(vertices) < 0.0) std::reverse(vertices.begin(), vertices.end());  // stored CCW
+    return polygon_shape(std::move(vertices));
+}
+
+// D-087 (M88): the "terrain" block, in inches like the rest of the file. An area linked to a mission objective
+// ("objective": its name) takes that objective's circle (14.01). check_terrain_data checks the rest once the units
+// are built.
+std::vector<TerrainArea> parse_terrain(const Json& j, const GameState& gs) {
+    const std::string where = "terrain";
+    if (!j.is_object()) fail(where + ": D-087: must be an object");
+    const Json& areas = require(j, "areas", where);
+    if (!areas.is_array()) fail(where + ": D-087: 'areas' must be an array");
+    std::vector<TerrainArea> out;
+    for (std::size_t i = 0; i < areas.size(); ++i) {
+        const Json& a = areas[i];
+        const std::string awhere = where + ".areas[" + std::to_string(i) + "]";
+        TerrainArea area;
+        const Json& name = require(a, "name", awhere);
+        if (!name.is_string()) fail(awhere + ": field 'name' must be a string");
+        area.name = name.get<std::string>();
+        if (a.contains("objective")) {
+            if (a.contains("polygon_in") || a.contains("circle_in")) {
+                fail(awhere + ": D-087: an area linked to an objective takes the objective's circle (no 'polygon_in' or "
+                              "'circle_in')");
+            }
+            const Json& o = a.at("objective");
+            if (!o.is_string()) fail(awhere + ": field 'objective' must be an objective's name");
+            area.objective = o.get<std::string>();
+            const ObjectiveArea* objective = nullptr;
+            if (gs.mission) {
+                for (const ObjectiveArea& obj : gs.mission->objectives) {
+                    if (obj.name == *area.objective) objective = &obj;
+                }
+            }
+            if (objective == nullptr) {
+                fail(awhere + ": D-087: no mission objective '" + *area.objective + "' to link the area to");
+            }
+            area.shape = circle_shape(objective->centre, objective->diameter_mm);
+        } else {
+            area.shape = parse_terrain_shape(a, awhere);
+        }
+        const Json& features = require(a, "features", awhere);
+        if (!features.is_array()) fail(awhere + ": D-087: 'features' must be an array");
+        for (std::size_t k = 0; k < features.size(); ++k) {
+            const Json& f = features[k];
+            const std::string fwhere = awhere + ".features[" + std::to_string(k) + "]";
+            TerrainFeature feature;
+            const Json& fname = require(f, "name", fwhere);
+            if (!fname.is_string()) fail(fwhere + ": field 'name' must be a string");
+            feature.name = fname.get<std::string>();
+            const Json& cat = require(f, "category", fwhere);
+            const std::optional<TerrainCategory> c =
+                cat.is_string() ? terrain_category_from_name(cat.get<std::string>()) : std::nullopt;
+            if (!c) fail(fwhere + ": D-087: unknown category " + cat.dump() + " (exposed, light or dense)");
+            feature.category = *c;
+            if (f.contains("height_in")) feature.height_mm = inches_to_mm(require_inches(f, "height_in", fwhere));
+            feature.shape = parse_terrain_shape(f, fwhere);
+            area.features.push_back(std::move(feature));
+        }
+        out.push_back(std::move(area));
+    }
+    return out;
+}
+
 GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& resolve) {
     GameState gs;
     gs.scenario_name = require(scenario, "name", "root").get<std::string>();
@@ -263,6 +350,7 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
         }
     }
     if (scenario.contains("mission")) gs.mission = parse_mission(scenario.at("mission"));
+    if (scenario.contains("terrain")) gs.terrain = parse_terrain(scenario.at("terrain"), gs);  // D-087 (M88)
 
     // D-081 (M74): optional; absent means the formations below (D-003). "alternating": every unit is set up by hand,
     // the sides alternating, before battle round 1 (GameState::undeployed).
@@ -349,6 +437,7 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
     check_unengaged(gs);
     check_points_data(gs, "scenario");  // D-076: the bound on the exact count (D-081: units to set up included)
     check_mission_data(gs, "scenario");  // D-084: the mission block and result "mission" go together, in range
+    check_terrain_data(gs, "scenario");  // D-087: the terrain, and no formation on a Light or Dense feature
     // D-081: every unit to set up by hand has a legal spot with nothing else on the battlefield (as a formation must be
     // a legal set-up, D-008, D-064). So the side that sets up first always sets up its first unit.
     for (const Side side : {Side::A, Side::B}) {
@@ -365,6 +454,14 @@ GameState build_game_state_impl(const Json& scenario, const DatasheetResolver& r
 }
 
 }  // namespace
+
+nlohmann::json load_terrain_block(const std::filesystem::path& scenario_path) {
+    const Json scenario = read_json_file(scenario_path);
+    if (!scenario.is_object() || !scenario.contains("terrain")) {
+        throw DataError("scenario " + scenario_path.generic_string() + ": D-087: no \"terrain\" block");
+    }
+    return scenario.at("terrain");
+}
 
 nlohmann::json load_mission_block(const std::filesystem::path& scenario_path) {
     const Json scenario = read_json_file(scenario_path);

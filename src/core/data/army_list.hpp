@@ -176,10 +176,13 @@ struct RandomArmyStats {
 // "deployment": "alternating" and no formations (the units are set up by hand); everything else is the same.
 // D-084 (M86): with `mission` (a scenario file's "mission" block, load_mission_block) the battle plays the objective
 // mission instead: "result": "mission" and that block. Without it (the default) the scenario is as before.
+// D-087 (M88): with `terrain` (a scenario file's "terrain" block, load_terrain_block) the battlefield has that terrain.
+// Without it (the default) the scenario is as before.
 [[nodiscard]] nlohmann::json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_turn,
                                                     const std::vector<Faction>& factions,
                                                     const DatasheetResolver& resolve,
                                                     DeploymentMode mode = DeploymentMode::Auto,
-                                                    const nlohmann::json* mission = nullptr);
+                                                    const nlohmann::json* mission = nullptr,
+                                                    const nlohmann::json* terrain = nullptr);
 
 }  // namespace wh40k::core

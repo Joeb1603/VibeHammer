@@ -5,8 +5,9 @@ V1 (M0–M13): Intercessor Squad vs Termagants, hotseat on a 24"x24" board, foll
 Since then: a bot opponent (D-054; one level since M85, D-085), the 60"x44" Strike scenario (D-064), the 44"x60"
 rosters scenario with oval bases and a points result (D-074, D-076), custom battles with an army builder and
 hand deployment (D-079, D-081, D-082), army-level teamwork for the bot (D-083), and objectives with a mission of our
-own, scored in VP (14.02, D-084; the default scenario since M86), which the bot plays for since M87 (D-086). The
-finished milestones are in `docs/plan_archive.md`.
+own, scored in VP (14.02, D-084), which the bot plays for since M87 (D-086), and 2D terrain (13, D-087–D-089: areas
+and features, cover, Hidden, obscuring and solid walls) on the objective battlefield, the default scenario since M88.
+The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
 inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its rules and acceptance criteria
@@ -120,7 +121,10 @@ Side                    active_side(const GameState&);                          
 
 ### Geometry
 - Units: `float` millimetres internally. `constexpr float MM_PER_INCH = 25.4f;`. Convert at the boundary: data files use inches, the UI shows inches.
-- Positions are 2D (x, y) on the battlefield plane. Vertical rules ("5\" vertically") are trivially satisfied in V1 (no terrain). Keep a `z` field defaulting to 0 so terrain can be added later.
+- Positions are 2D (x, y) on the battlefield plane. Terrain is 2D too (D-087, M88): areas and features are footprints
+  (convex polygons or circles, `geometry/terrain_shape.hpp`) with no floors, so `z` stays 0 and vertical rules ("5\"
+  vertically", 13.06 Moving Vertically, Plunging Fire) are not modelled (`TODO(z)`). Without terrain every terrain
+  check is skipped, so old scenarios play exactly as before.
 - Distances are measured edge-to-edge between bases (01.04): `center_distance - r1 - r2`, clamped at 0.
 - Bases are `struct Base { BaseShape shape; float diameter_mm; float length_mm; }`, round or oval (D-074). An oval
   model has a `facing_deg` (stored modulo 180, omitted from JSON at 0), and a move's path vertices can carry facings.

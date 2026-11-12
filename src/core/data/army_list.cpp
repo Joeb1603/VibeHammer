@@ -776,7 +776,8 @@ ArmyList random_army(const Faction& faction, const DatasheetResolver& resolve, s
 // ---- The battle ----
 
 Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_turn, const std::vector<Faction>& factions,
-                            const DatasheetResolver& resolve, DeploymentMode mode, const Json* mission) {
+                            const DatasheetResolver& resolve, DeploymentMode mode, const Json* mission,
+                            const Json* terrain) {
     if (const auto p = battle_problems(a, b); !p.empty()) throw DataError("custom battle: " + p.front());
     const Battlefield field = custom_field();
     Json sides = Json::object();
@@ -845,6 +846,13 @@ Json custom_battle_scenario(const ArmyList& a, const ArmyList& b, Side first_tur
         out["notes"] = out["notes"].get<std::string>() +
                        " D-084: played as the objective mission (objective areas, victory points; points destroyed "
                        "settle equal VP) instead of on points destroyed alone.";
+    }
+    if (terrain != nullptr) {
+        // D-087 (M88): the terrain scenario's terrain areas and features (an area may link to one of the mission's
+        // objectives, so a block with links needs that mission too; build_game_state checks it).
+        out["terrain"] = *terrain;
+        out["notes"] = out["notes"].get<std::string>() +
+                       " D-087: with terrain (2D areas and features: cover, Hidden, obscuring and solid walls).";
     }
     return out;
 }

@@ -69,6 +69,14 @@ struct TeamworkStats {
     double largest_cluster_share = 0.0;
     // M87 (D-086): under a mission, the VP each side scored at each objective area ([area][side], VictoryPointsScored).
     std::vector<std::array<int, 2>> area_vp;
+    // M88 (D-087-D-089), by the shooting side: its ranged weapon selections (ShootingStarted) and those whose target
+    // had the benefit of cover (13.08); and, at each of its Shoots, the enemy units within the unit's longest range
+    // that none of its models could see because of 13.09 Hidden or of 13.10 / 13.11 terrain (core's
+    // visibility_problem). Counted only on a battlefield with terrain.
+    std::array<int, 2> ranged_selections{};
+    std::array<int, 2> covered_selections{};
+    std::array<int, 2> refused_hidden{};
+    std::array<int, 2> refused_terrain{};
 };
 
 // Counts TeamworkStats from the accepted actions' events and the state after each one.
@@ -76,6 +84,9 @@ class TeamworkCounter {
 public:
     // The state before any action (the game started), then after every accepted action with that action's events.
     void observe(const std::vector<core::GameEvent>& events, const core::GameState& after);
+    // M88: the state just before `unit` shoots (a Shoot action about to be submitted): the targets refused for 13.09 or
+    // for terrain. Nothing without terrain.
+    void observe_shoot(const core::GameState& before, core::UnitId unit);
     // The statistics so far (a shooting phase still open counts as ended).
     [[nodiscard]] TeamworkStats stats() const;
 
@@ -203,6 +214,9 @@ struct ArmySource {
     // M86 (D-084): the objective mission its battles play (a scenario file's "mission" block; the arena's command line
     // gives it data/scenarios/incursion_objectives_44x60.json's). nullopt: decided on points destroyed (D-076).
     std::optional<nlohmann::json> mission;
+    // M88 (D-087): the terrain its battles are fought over (a scenario file's "terrain" block, the arena's --terrain).
+    // nullopt (the default): a bare battlefield, as before.
+    std::optional<nlohmann::json> terrain;
 };
 [[nodiscard]] ArmySource load_army_source(const std::filesystem::path& repo_root);
 

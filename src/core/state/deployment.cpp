@@ -18,6 +18,7 @@
 #include "core/geometry/pose.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
+#include "core/rules/terrain.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -75,12 +76,19 @@ struct OnBattlefield {
     Box reach;
 };
 
+// M88 (D-087): a Light or Dense feature, which no model may be set up on, with its box (padded).
+struct SolidFeature {
+    const TerrainFeature* feature = nullptr;
+    Box box;
+};
+
 // The battlefield seen by `side` setting a unit up: built once per query and shared by every check of that query.
 struct SetUpView {
     Side side = Side::A;
     Rect field;
     Rect zone;
     std::vector<OnBattlefield> units;  // the units in `units` with models, in state order
+    std::vector<SolidFeature> features;  // M88: empty without terrain
 };
 
 SetUpView make_view(const GameState& state, Side side) {
@@ -105,6 +113,14 @@ SetUpView make_view(const GameState& state, Side side) {
             }
         }
         v.units.push_back(std::move(t));
+    }
+    for (const TerrainArea& area : state.terrain) {
+        for (const TerrainFeature& f : area.features) {
+            if (!is_solid(f.category)) continue;
+            const Rect r = shape_bounds(f.shape);
+            v.features.push_back(SolidFeature{&f, Box{r.min_x - kBoxPadMm, r.min_y - kBoxPadMm, r.max_x + kBoxPadMm,
+                                                      r.max_y + kBoxPadMm}});
+        }
     }
     return v;
 }
@@ -175,6 +191,18 @@ bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>
             }
         }
     }
+    // M88 (D-087): not on a Light or Dense feature (03.01 Ending a Move, 13.06: ground level only in 2D).
+    std::vector<SetUpProblem> on_terrain;
+    for (const SolidFeature& f : v.features) {
+        if (!boxes_meet(boxes.block, f.box)) continue;
+        for (std::size_t i = 0; i < placed.size(); ++i) {
+            if (!boxes_meet(boxes.own[i], f.box) || !overlaps_shape(placed[i].pose(), f.feature->shape)) continue;
+            if (out == nullptr) return false;
+            on_terrain.push_back(SetUpProblem{"D-087 / 03.01: " + model_text(placed[i].id) +
+                                                  " would be set up on terrain feature " + feature_label(*f.feature),
+                                              {placed[i].id}});
+        }
+    }
     // 03.02: on the battlefield; D-009: wholly within its own deployment zone.
     for (const PosedModel& m : placed) {
         const BasePose p = m.pose();
@@ -220,11 +248,12 @@ bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>
         }
     }
     if (out != nullptr) {
-        for (auto* list : {&on_field, &within_unit, &on_models, &coherency, &engaged}) {
+        for (auto* list : {&on_field, &within_unit, &on_models, &on_terrain, &coherency, &engaged}) {
             out->insert(out->end(), list->begin(), list->end());
         }
     }
-    return on_field.empty() && within_unit.empty() && on_models.empty() && coherency.empty() && engaged.empty();
+    return on_field.empty() && within_unit.empty() && on_models.empty() && on_terrain.empty() && coherency.empty() &&
+           engaged.empty();
 }
 
 bool check_placed(const SetUpView& v, UnitId unit, const std::vector<PosedModel>& placed,

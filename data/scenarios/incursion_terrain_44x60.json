@@ -1,0 +1,534 @@
+{
+  "name": "Incursion terrain - Chaos Space Marines vs Tyranids (44x60 portrait)",
+  "battlefield": {
+    "width_in": 44,
+    "depth_in": 60
+  },
+  "battle_rounds": 5,
+  "first_turn": "A",
+  "result": "mission",
+  "mission": {
+    "first_scoring_round": 2,
+    "kill_vp": {
+      "points": 25,
+      "vp": 1
+    },
+    "objectives": [
+      {
+        "name": "Centre",
+        "x_in": 22,
+        "y_in": 30,
+        "diameter_in": 12,
+        "vp": {
+          "A": 1,
+          "B": 1
+        }
+      },
+      {
+        "name": "A home",
+        "x_in": 22,
+        "y_in": 6,
+        "diameter_in": 6,
+        "vp": {
+          "A": 4,
+          "B": 8
+        }
+      },
+      {
+        "name": "B home",
+        "x_in": 22,
+        "y_in": 54,
+        "diameter_in": 6,
+        "vp": {
+          "A": 8,
+          "B": 4
+        }
+      }
+    ]
+  },
+  "terrain": {
+    "areas": [
+      {
+        "name": "Centre",
+        "objective": "Centre",
+        "features": [
+          {
+            "name": "Centre ruin, south wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[17, 27], [23, 27], [23, 27.5], [17, 27.5]]
+          },
+          {
+            "name": "Centre ruin, west wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[17, 27.5], [17.5, 27.5], [17.5, 31], [17, 31]]
+          },
+          {
+            "name": "Centre ruin, north wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[21, 32.5], [27, 32.5], [27, 33], [21, 33]]
+          },
+          {
+            "name": "Centre ruin, east wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[26.5, 29], [27, 29], [27, 32.5], [26.5, 32.5]]
+          }
+        ]
+      },
+      {
+        "name": "A home",
+        "objective": "A home",
+        "features": [
+          {
+            "name": "A home crater",
+            "category": "exposed",
+            "circle_in": {"x": 22, "y": 6, "diameter": 4}
+          }
+        ]
+      },
+      {
+        "name": "B home",
+        "objective": "B home",
+        "features": [
+          {
+            "name": "B home crater",
+            "category": "exposed",
+            "circle_in": {"x": 22, "y": 54, "diameter": 4}
+          }
+        ]
+      },
+      {
+        "name": "South-west ruin",
+        "polygon_in": [[4, 18], [14, 18], [14, 24], [4, 24]],
+        "features": [
+          {
+            "name": "South-west ruin, north wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[4.5, 23], [13.5, 23], [13.5, 23.5], [4.5, 23.5]]
+          },
+          {
+            "name": "South-west ruin, west wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[4.5, 18.5], [5, 18.5], [5, 23], [4.5, 23]]
+          }
+        ]
+      },
+      {
+        "name": "North-east ruin",
+        "polygon_in": [[30, 36], [40, 36], [40, 42], [30, 42]],
+        "features": [
+          {
+            "name": "North-east ruin, south wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[30.5, 36.5], [39.5, 36.5], [39.5, 37], [30.5, 37]]
+          },
+          {
+            "name": "North-east ruin, east wall",
+            "category": "dense",
+            "height_in": 5,
+            "polygon_in": [[39, 37], [39.5, 37], [39.5, 41.5], [39, 41.5]]
+          }
+        ]
+      },
+      {
+        "name": "South-east barricades",
+        "polygon_in": [[30, 18], [38, 18], [38, 23], [30, 23]],
+        "features": [
+          {
+            "name": "South-east barricade, south",
+            "category": "light",
+            "polygon_in": [[31, 19.5], [35, 19.5], [35, 20], [31, 20]]
+          },
+          {
+            "name": "South-east barricade, north",
+            "category": "light",
+            "polygon_in": [[33, 21.5], [37, 21.5], [37, 22], [33, 22]]
+          }
+        ]
+      },
+      {
+        "name": "North-west barricades",
+        "polygon_in": [[6, 37], [14, 37], [14, 42], [6, 42]],
+        "features": [
+          {
+            "name": "North-west barricade, north",
+            "category": "light",
+            "polygon_in": [[9, 40], [13, 40], [13, 40.5], [9, 40.5]]
+          },
+          {
+            "name": "North-west barricade, south",
+            "category": "light",
+            "polygon_in": [[7, 38], [11, 38], [11, 38.5], [7, 38.5]]
+          }
+        ]
+      },
+      {
+        "name": "West craters",
+        "circle_in": {"x": 3.5, "y": 30, "diameter": 5},
+        "features": [
+          {
+            "name": "West crater",
+            "category": "exposed",
+            "circle_in": {"x": 3.5, "y": 30, "diameter": 3}
+          }
+        ]
+      },
+      {
+        "name": "East craters",
+        "circle_in": {"x": 40.5, "y": 30, "diameter": 5},
+        "features": [
+          {
+            "name": "East crater",
+            "category": "exposed",
+            "circle_in": {"x": 40.5, "y": 30, "diameter": 3}
+          }
+        ]
+      }
+    ]
+  },
+  "sides": {
+    "A": {
+      "name": "Chaos Space Marines",
+      "deployment_zone": {
+        "edge": "south",
+        "depth_in": 12
+      },
+      "units": [
+        {
+          "unit_file": "data/units/legionaries.json",
+          "points": 180,
+          "models": [
+            {
+              "type": "Aspiring Champion",
+              "count": 1,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "type": "Legionary w/ chainsword",
+              "count": 9,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 7,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/chaos_lord.json",
+          "points": 95,
+          "models": [
+            {
+              "type": "Chaos Lord",
+              "count": 1,
+              "weapons": [
+                "Plasma pistol",
+                "Astartes chainblade"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 13,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/chaos_terminator_squad.json",
+          "points": 370,
+          "models": [
+            {
+              "type": "Terminator Champion",
+              "count": 1,
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            },
+            {
+              "type": "Accursed weapon and combi-bolter",
+              "count": 9,
+              "weapons": [
+                "Combi-bolter",
+                "Accursed weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 20.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/havocs.json",
+          "points": 135,
+          "models": [
+            {
+              "type": "Havoc Champion",
+              "count": 1,
+              "weapons": [
+                "Plasma gun",
+                "Astartes chainsword"
+              ]
+            },
+            {
+              "type": "Havoc w/ lascannon",
+              "count": 4,
+              "weapons": [
+                "Havoc lascannon",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 29.5,
+            "depth_in": 3,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/legionaries.json",
+          "points": 180,
+          "models": [
+            {
+              "type": "Aspiring Champion",
+              "count": 1,
+              "weapons": [
+                "Bolt pistol",
+                "Astartes chainsword",
+                "Close combat weapon"
+              ]
+            },
+            {
+              "type": "Legionary w/ boltgun",
+              "count": 9,
+              "weapons": [
+                "Boltgun",
+                "Bolt pistol",
+                "Close combat weapon"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 37.5,
+            "anchor": "zone_front"
+          }
+        }
+      ]
+    },
+    "B": {
+      "name": "Tyranids",
+      "deployment_zone": {
+        "edge": "north",
+        "depth_in": 12
+      },
+      "units": [
+        {
+          "unit_file": "data/units/termagants.json",
+          "points": 55,
+          "models": [
+            {
+              "type": "Termagants",
+              "count": 10,
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 4,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/genestealers.json",
+          "points": 75,
+          "models": [
+            {
+              "type": "Genestealer",
+              "count": 5,
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 11,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/screamer_killer.json",
+          "points": 125,
+          "models": [
+            {
+              "type": "Screamer-killer",
+              "count": 1,
+              "weapons": [
+                "Bio-plasmic scream",
+                "Screamer-killer talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 16.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/tyrant_guard.json",
+          "points": 80,
+          "models": [
+            {
+              "type": "Tyrant Guard",
+              "count": 3,
+              "weapons": [
+                "Scything talons and rending claws"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 19.25,
+            "depth_in": 4,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/hive_tyrant.json",
+          "points": 195,
+          "models": [
+            {
+              "type": "Hive Tyrant",
+              "count": 1,
+              "weapons": [
+                "Monstrous bonesword and lash whip",
+                "Monstrous scything talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 22,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/tyrannofex.json",
+          "points": 170,
+          "models": [
+            {
+              "type": "Tyrannofex",
+              "count": 1,
+              "weapons": [
+                "Powerful limbs",
+                "Stinger salvoes",
+                "Fleshborer hive"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 24.75,
+            "depth_in": 4,
+            "facing_deg": 0,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/screamer_killer.json",
+          "points": 125,
+          "models": [
+            {
+              "type": "Screamer-killer",
+              "count": 1,
+              "weapons": [
+                "Bio-plasmic scream",
+                "Screamer-killer talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 27.5,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/genestealers.json",
+          "points": 75,
+          "models": [
+            {
+              "type": "Genestealer",
+              "count": 5,
+              "weapons": [
+                "Genestealers claws and talons"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 1,
+            "gap_in": 0,
+            "centre_x_in": 33,
+            "anchor": "zone_front"
+          }
+        },
+        {
+          "unit_file": "data/units/termagants.json",
+          "points": 55,
+          "models": [
+            {
+              "type": "Termagants",
+              "count": 10,
+              "weapons": [
+                "Fleshborer",
+                "Chitinous claws and teeth"
+              ]
+            }
+          ],
+          "formation": {
+            "ranks": 2,
+            "gap_in": 0,
+            "centre_x_in": 40,
+            "anchor": "zone_front"
+          }
+        }
+      ]
+    }
+  },
+  "notes": "M88 scenario (D-087, D-088, D-089; the layout agreed with the user 2026-11-12): incursion_objectives_44x60.json (the two New Recruit rosters, Incursion, on a 44\" wide by 60\" deep battlefield with 12\"-deep deployment zones on the short south (A) and north (B) edges, and M87's objective mission: Centre 1 VP, own home 4 VP, enemy home 8 VP from battle round 2, 1 kill VP per 25 points) plus 2D terrain, point-symmetric about the battlefield's centre (22\", 30\"). The three objective areas are terrain areas (14.01): the 12\" Centre holds a dense ruin, two L-shaped walls 5\" high and 0.5\" thick facing each other; each 6\" home holds an exposed 4\" crater (no solid feature in a deployment zone). A dense ruin (10\" x 6\", an L of 5\" walls open towards the near deployment zone) stands south-west and north-east, light barricades (8\" x 5\", two low walls each) south-east and north-west, and an exposed 3\" crater in a 5\" area on each long edge. Terrain is 2D (D-087): Exposed features block nothing; Light and Dense features are solid footprints no model may end a move on; only INFANTRY/BEASTS/SWARM/MOBILE models move through a Dense wall over 2\" (13.06). Areas holding Light or Dense features are obscuring (13.10), dense walls are solid (13.11), INFANTRY/BEASTS/SWARM models within an area have the benefit of cover (13.08, BS worsened by 1, D-089) and are hidden in an area with a dense feature unless they shot this turn or the last (13.09, 15\" detection range). Only the unit points and loadouts are taken from the rosters (docs/datasheets/, Games Workshop copyright, not copied here)."
+}

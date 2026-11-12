@@ -28,6 +28,7 @@ add_library(wh40k_core STATIC
     geometry/engagement.cpp
     geometry/oval.cpp
     geometry/path.cpp
+    geometry/terrain_shape.cpp
     geometry/visibility.cpp
     geometry/visibility_oval.cpp
     model/dice_expr.cpp
@@ -42,6 +43,7 @@ add_library(wh40k_core STATIC
     rules/mortal_wounds.cpp
     rules/move_types.cpp
     rules/shooting.cpp
+    rules/terrain.cpp
     rules/unit_strength.cpp
     serialization/engine_json.cpp
     serialization/flow_json.cpp
@@ -52,7 +54,8 @@ add_library(wh40k_core STATIC
     state/game_state.cpp
     state/objectives.cpp
     state/points_destroyed.cpp
-    state/queries.cpp)
+    state/queries.cpp
+    state/terrain.cpp)
 
 # Consumers include core headers as "core/....hpp".
 target_include_directories(wh40k_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

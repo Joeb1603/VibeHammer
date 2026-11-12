@@ -53,6 +53,9 @@ struct WeaponSelection {
     int hit_modifier = 0;
     // D-073: the rules behind hit_modifier (-1 each), for clients to explain. Omitted from JSON when empty.
     std::vector<HitModifierRule> hit_modifier_rules{};
+    // D-089 (M88): 13.08 the target has the benefit of cover against this model's attacks (decided here, at Select
+    // Targets): the attacks' BS is worsened by 1 (attacks.cpp). Omitted from JSON when false.
+    bool benefit_of_cover = false;
     friend bool operator==(const WeaponSelection&, const WeaponSelection&) = default;
 };
 

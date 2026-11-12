@@ -17,6 +17,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M73_Replay.DISABLED_RegenerateCustomBotGameReplay
 # and m77_custom_hand_deploy_bot_game.json (custom lists set up by hand, seed 1) likewise (M77):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay
+# and m88_terrain.json (the terrain scenario, seed 80: bot play with one scripted detour) likewise (M88):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M88_Replay.DISABLED_RegenerateTerrainReplay
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -35,3 +37,8 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   - `M77_Replay`: `m77_custom_hand_deploy_bot_game.json` is what the bot plays, its deployment by hand included.
   - The Teamwork batch (M80–M83, D-083) regenerated m68, m73 and m77 on purpose; m46 stayed byte-identical. (The tests
     that played the pre-batch games with `Generation::M77` went with the switch at M85, D-085.)
+- M88: `m88_terrain.json` is bot play on the terrain scenario from battle round 1 with one scripted move (a MONSTER's
+  two straight lines round a dense wall, 13.06; the bot itself detours from M89). It is checked by the engine replay
+  only (`M88_Replay` in `wh40k_tests` checks its cover, its detour and its hidden target with core alone), with no
+  `TheSavedFileMatchesTheGame` test, so bot changes leave it valid. Regenerate it only if the engine's terrain rules
+  change.

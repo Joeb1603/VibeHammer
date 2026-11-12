@@ -12,7 +12,7 @@
 //   reproducible; --menu 1 shows the start screen anyway (for screenshots).
 //   --steps n: in a new game, click the first decision button n times (for screenshots and smoke tests).
 //   --seed n: the dice seed for the first new game (M13; the panel can change it for later games).
-//   --scenario file: the scenario for new games (default data/scenarios/incursion_objectives_44x60.json, M86).
+//   --scenario file: the scenario for new games (default data/scenarios/incursion_terrain_44x60.json, M88).
 //   --dice n: 1 keeps the dice pop-ups the --steps rolls made (otherwise dropped), 2 also shows the first
 //             card's faces (M20, for screenshots).
 //   M39 (D-054): --bot: the sides the bot plays in the first game (default none: hotseat); --bot-speed sets its
@@ -97,6 +97,7 @@
 #include "session.hpp"
 #include "settings.hpp"
 #include "start_screen.hpp"
+#include "terrain_view.hpp"
 #include "timeline.hpp"
 #include "undo_groups.hpp"
 #include "unit_style.hpp"
@@ -133,12 +134,20 @@ const fs::path kReplayDir = kRepoRoot / "tests/replays";
 const fs::path kSavePath = kRepoRoot / "saves/game.json";              // gitignored
 
 // D-084 (M86): custom battles play the objective scenario's mission. If the file can't be read the builder keeps
-// none, and its battles are decided on points destroyed (D-076) as before.
+// none, and its battles are decided on points destroyed (D-076) as before. D-087 (M88): and they are fought over the
+// terrain scenario's terrain (its areas link to that mission's objectives by name); without a mission or the file,
+// none.
 void give_mission(ArmyBuilder& builder) {
     try {
         builder.load_mission(resolve_data_path(kRepoRoot, kObjectiveScenario));
     } catch (const std::exception&) {
         builder.set_mission(std::nullopt);
+    }
+    try {
+        if (builder.mission() == nullptr) throw std::runtime_error("no mission");
+        builder.load_terrain(resolve_data_path(kRepoRoot, kTerrainScenario));
+    } catch (const std::exception&) {
+        builder.set_terrain(std::nullopt);
     }
 }
 const fs::path kExportPath = kRepoRoot / "replays/exported_replay.json";  // gitignored
@@ -258,7 +267,8 @@ public:
             if (custom_setup_ && builder_) {
                 // M75 (D-082): a custom battle is rebuilt from its setup (the two lists, first turn, deployment).
                 const core::GameState initial =
-                    custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver(), builder_->mission());
+                    custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver(), builder_->mission(),
+                                        builder_->terrain());
                 start_session(GameSession::new_game(initial, settings_.seed));
                 status_ = "New game: " + initial.scenario_name + ", seed " + std::to_string(settings_.seed) + ". " +
                           players_text();
@@ -1568,15 +1578,35 @@ private:
             const bool inside = ring_contains(c, at);  // D-074 part 3: an oval's ring by its own outline
             if (inside && std::find(kinds.begin(), kinds.end(), c.kind) == kinds.end()) kinds.push_back(c.kind);
         }
-        if (kinds.empty()) return;
+        const std::vector<std::string> terrain = terrain_tooltip(state(), at);  // M88 (D-087)
+        if (kinds.empty() && terrain.empty()) return;
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
         for (const RingKind k : kinds) {
             ImGui::TextColored(to_imvec(ring_color(k)), "%s", std::string(ring_name(k)).c_str());
             ImGui::TextUnformatted(std::string(ring_meaning(k)).c_str());
         }
+        for (std::size_t i = 0; i < terrain.size(); ++i) {
+            if (i == 0 || terrain[i].rfind("  ", 0) != 0) {
+                ImGui::TextColored(ImVec4(0.85f, 0.8f, 0.6f, 1.0f), "%s", terrain[i].c_str());
+            } else {
+                ImGui::TextUnformatted(terrain[i].c_str());
+            }
+        }
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
+    }
+
+    // M88 (D-088): while picking a shooting target, why the hovered enemy unit can't be selected (13.09 Hidden, 13.10 /
+    // 13.11 terrain, range...), from the engine's own reasons.
+    std::optional<std::string> refused_target_text(core::UnitId target) {
+        if (!board_.picking_target() || board_.clickable(target)) return std::nullopt;
+        const ShotPlan* plan = board_.shot_plan();
+        if (plan == nullptr) return std::nullopt;
+        const core::Unit* shooter = state().find_unit(plan->unit());
+        const core::Unit* t = state().find_unit(target);
+        if (shooter == nullptr || t == nullptr || t->side == shooter->side) return std::nullopt;
+        return target_refusal_text(state(), plan->unit(), plan->type(), target);
     }
 
     void draw_tooltip(const HoveredModel& h) {
@@ -1595,6 +1625,11 @@ private:
         ImGui::TextUnformatted(stat_line(m.characteristics).c_str());  // D-034
         ImGui::Text("Position (%.2f\", %.2f\")", core::mm_to_inches(m.position.x), core::mm_to_inches(m.position.y));
         if (h.unit->battle_shocked) ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "Battle-shocked");
+        if (const std::optional<std::string> refused = refused_target_text(h.unit->id)) {  // M88
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+            ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.45f, 1.0f), "Can't be targeted: %s", refused->c_str());
+            ImGui::PopTextWrapPos();
+        }
         ImGui::TextDisabled("Right-click: datasheet");
         ImGui::EndTooltip();
     }
@@ -2375,6 +2410,19 @@ private:
                                   "after battle round %d; equal points is a draw. A destroyed unit counts its full "
                                   "points, a damaged one its points x wounds lost / starting wounds.",
                                   s.battle_rounds);
+            ImGui::Spacing();
+        }
+        // M88 (D-087): the terrain areas (hover the board for each one's rules).
+        if (const std::vector<std::string> terrain = terrain_summary(s); !terrain.empty()) {
+            ImGui::TextUnformatted("Terrain");
+            ImGui::SetItemTooltip("D-087 / 13: areas with light or dense features are obscuring (13.10); dense walls "
+                                  "block sight (13.11) and stop all but INFANTRY/BEASTS/SWARM/MOBILE (13.06 over 2\"); "
+                                  "no model ends a move on a light or dense feature. INFANTRY/BEASTS/SWARM within an "
+                                  "area have the benefit of cover (13.08) and in a dense one are hidden beyond 15\" "
+                                  "unless they shot this turn or last (13.09). Hover an area on the board for details.");
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            for (const std::string& line : terrain) ImGui::TextWrapped("%s", line.c_str());
+            ImGui::PopStyleColor();
             ImGui::Spacing();
         }
         // D-081: the units set up so far (in id order, as before; a unit that couldn't be set up is among them, with no

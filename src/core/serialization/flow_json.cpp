@@ -244,6 +244,7 @@ void to_json(Json& j, const WeaponSelection& v) {
              {"hit_modifier", v.hit_modifier}};
     put_opt(j, "declared_attacks", v.declared_attacks);
     if (!v.hit_modifier_rules.empty()) j["hit_modifier_rules"] = v.hit_modifier_rules;  // D-073
+    if (v.benefit_of_cover) j["benefit_of_cover"] = true;  // D-089 (M88): omitted when false
 }
 void from_json(const Json& j, WeaponSelection& v) {
     j.at("attacker").get_to(v.attacker);
@@ -256,6 +257,7 @@ void from_json(const Json& j, WeaponSelection& v) {
     j.at("hit_modifier").get_to(v.hit_modifier);
     v.hit_modifier_rules.clear();
     if (j.contains("hit_modifier_rules")) j.at("hit_modifier_rules").get_to(v.hit_modifier_rules);  // D-073
+    v.benefit_of_cover = j.contains("benefit_of_cover") && j.at("benefit_of_cover").get<bool>();  // D-089
 }
 
 void to_json(Json& j, const AttackProfile& v) {

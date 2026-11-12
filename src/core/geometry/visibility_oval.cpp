@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/geometry/oval.hpp"
+#include "core/geometry/terrain_shape.hpp"
 #include "core/geometry/units.hpp"
 #include "core/geometry/visibility.hpp"
 
@@ -345,6 +346,264 @@ bool has_line_of_sight(const PosedModel& observer, const PosedModel& observed, s
         }
     }
     return false;
+}
+
+
+// ---- M88 (D-088): terrain ----
+
+namespace {
+
+constexpr double kHalfWidthMm = kLineOfSightWidthMm / 2.0;
+
+// What can block a line of sight with terrain: model bases and terrain circles (widened by half the line's width, as
+// D-017's blockers) and terrain polygons (blocking a segment within half the width, less EPS_MM).
+struct TerrainBlockers {
+    std::vector<Shape> round;
+    std::vector<const TerrainShape*> polygons;
+};
+
+bool clear_of(Vec p, Vec q, const TerrainBlockers& b) {
+    if (!segment_clear(p, q, b.round)) return false;
+    for (const TerrainShape* s : b.polygons) {
+        if (segment_shape_distance(p, q, *s) < kHalfWidthMm - kEpsMm) return false;
+    }
+    return true;
+}
+
+// line_clear's stretch between the two bases, tested against `b`.
+bool line_clear_of(const Line& l, const Shape& from, const Shape& to, const TerrainBlockers& b) {
+    double a_lo = 0.0;
+    double a_hi = 0.0;
+    double b_lo = 0.0;
+    double b_hi = 0.0;
+    if (!chord(l, from, a_lo, a_hi) || !chord(l, to, b_lo, b_hi)) return false;
+    const Vec dir{-l.b, l.a};
+    const Vec foot{-l.a * l.c, -l.b * l.c};
+    double ta = 0.0;
+    double tb = 0.0;
+    if (a_hi <= b_lo) {
+        ta = a_hi;
+        tb = b_lo;
+    } else if (b_hi <= a_lo) {
+        ta = a_lo;
+        tb = b_hi;
+    } else {
+        ta = tb = 0.5 * (std::max(a_lo, b_lo) + std::min(a_hi, b_hi));
+    }
+    return clear_of(foot + dir * ta, foot + dir * tb, b);
+}
+
+// A point (a polygon vertex) as a circle of radius `grow`.
+Shape point_shape(Vec c, double grow) {
+    Shape s;
+    s.e.c = c;
+    s.e.a = 0.0;
+    s.e.b = 0.0;
+    s.grow = grow;
+    s.is_round = true;
+    return s;
+}
+
+// A terrain circle widened by `grow`.
+Shape circle_terrain_shape(const TerrainShape& t, double grow) {
+    Shape s;
+    s.e.c = oval_detail::to_vec(t.centre);
+    s.e.a = 0.5 * static_cast<double>(t.diameter_mm);
+    s.e.b = s.e.a;
+    s.grow = grow;
+    s.is_round = true;
+    return s;
+}
+
+// The terrain shapes that can matter for lines between `from` and `to`: within the bounding circles' reach of the
+// centre-to-centre segment, plus the line's width.
+std::vector<const TerrainShape*> near_terrain(const Shape& from, const Shape& to,
+                                              std::span<const TerrainShape* const> terrain) {
+    std::vector<const TerrainShape*> out;
+    const double reach = std::max(from.e.a, to.e.a) + 2.0 * kHalfWidthMm;
+    for (const TerrainShape* t : terrain) {
+        if (segment_shape_distance(from.e.c, to.e.c, *t) < reach) out.push_back(t);
+    }
+    return out;
+}
+
+// The two outer common tangent segments of circles (ca, ra) and (cb, rb), between their tangent points. False when one
+// circle holds the other.
+bool outer_tangent_segments(Vec ca, double ra, Vec cb, double rb, Vec (&seg)[2][2]) {
+    const Vec d = cb - ca;
+    const double len = length(d);
+    if (!(len > std::abs(ra - rb))) return false;
+    const Vec u = d * (1.0 / len);
+    const Vec w = perp(u);
+    const double s = (ra - rb) / len;
+    const double k = std::sqrt(std::max(0.0, 1.0 - s * s));
+    for (int i = 0; i < 2; ++i) {
+        const Vec n = u * s + w * (i == 0 ? k : -k);
+        seg[i][0] = ca + n * ra;
+        seg[i][1] = cb + n * rb;
+    }
+    return true;
+}
+
+// The early "no" (exact): `t`, widened by half the line's width less EPS_MM, misses both bounding circles but meets
+// both outer tangent segments. Then it holds a chord of the circles' hull that separates them, and every line from one
+// base to the other crosses it.
+bool cuts_hull(const Shape& from, const Shape& to, const TerrainShape& t) {
+    const double limit = kHalfWidthMm - kEpsMm;
+    if (point_shape_signed_distance(from.e.c, t) - from.e.a < limit) return false;
+    if (point_shape_signed_distance(to.e.c, t) - to.e.a < limit) return false;
+    Vec seg[2][2];
+    if (!outer_tangent_segments(from.e.c, from.e.a, to.e.c, to.e.a, seg)) return false;
+    return segment_shape_distance(seg[0][0], seg[0][1], t) < limit && segment_shape_distance(seg[1][0], seg[1][1], t) < limit;
+}
+
+// The polygon vertices near the centre-to-centre segment, as 0.5 mm circles (the corners of the widened polygons).
+void add_vertex_shapes(const Shape& from, const Shape& to, const std::vector<const TerrainShape*>& polygons,
+                       std::vector<Shape>& out) {
+    const double reach = std::max(from.e.a, to.e.a) + 2.0 * kHalfWidthMm;
+    for (const TerrainShape* t : polygons) {
+        for (const Position& v : t->vertices) {
+            const Vec c = oval_detail::to_vec(v);
+            if (point_segment_distance(c, from.e.c, to.e.c) < reach) out.push_back(point_shape(c, kHalfWidthMm));
+        }
+    }
+}
+
+}  // namespace
+
+bool has_line_of_sight(const PosedModel& observer, const PosedModel& observed, std::span<const PosedModel> blockers,
+                       std::span<const TerrainShape* const> terrain) {
+    const Shape from = shape_of(observer, 0.0);
+    const Shape to = shape_of(observed, 0.0);
+    const std::vector<const TerrainShape*> near_t = near_terrain(from, to, terrain);
+    if (near_t.empty()) return has_line_of_sight(observer, observed, blockers);  // no terrain near: as before
+
+    TerrainBlockers b;
+    const double reach = std::max(from.e.a, to.e.a) + kHalfWidthMm;
+    for (const PosedModel& m : blockers) {
+        const Shape s = shape_of(m, kHalfWidthMm);
+        if (point_segment_distance(s.e.c, from.e.c, to.e.c) < s.e.a + s.grow + reach) b.round.push_back(s);
+    }
+    for (const TerrainShape* t : near_t) {
+        if (t->is_circle()) {
+            b.round.push_back(circle_terrain_shape(*t, kHalfWidthMm));
+        } else {
+            b.polygons.push_back(t);
+        }
+    }
+    if (length(to.e.c - from.e.c) > 0.0 && line_clear_of(line_through(from.e.c, to.e.c), from, to, b)) return true;
+    for (const TerrainShape* t : near_t) {
+        if (cuts_hull(from, to, *t)) return false;
+    }
+    const std::vector<Vec> pa = sample_points(from);
+    const std::vector<Vec> pb = sample_points(to);
+    for (const Vec& p : pa) {
+        for (const Vec& q : pb) {
+            if (length(q - p) <= 0.0) continue;
+            if (line_clear_of(line_through(p, q), from, to, b)) return true;
+        }
+    }
+    std::vector<Shape> shapes{from, to};
+    shapes.insert(shapes.end(), b.round.begin(), b.round.end());
+    add_vertex_shapes(from, to, b.polygons, shapes);
+    std::vector<Line> lines;
+    for (std::size_t i = 0; i < shapes.size(); ++i) {
+        for (std::size_t j = i + 1; j < shapes.size(); ++j) {
+            lines.clear();
+            common_tangents(shapes[i], shapes[j], lines);
+            for (const Line& l : lines) {
+                if (line_clear_of(l, from, to, b)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+namespace {
+
+// The point of the base whose outward normal is the unit vector n (its support point along n).
+Vec boundary_point(const Shape& s, Vec n) {
+    const double du = dot(n, s.e.u);
+    const double dv = dot(n, s.e.v);
+    const double den = std::sqrt(s.e.a * s.e.a * du * du + s.e.b * s.e.b * dv * dv);
+    if (!(den > 0.0)) return s.e.c;
+    return s.e.c + s.e.u * (s.e.a * s.e.a * du / den) + s.e.v * (s.e.b * s.e.b * dv / den);
+}
+
+// A 1 mm line along `l` reaches point p from the observer `from`: the stretch from the observer's chord to p is clear.
+bool reaches(const Line& l, const Shape& from, Vec p, const TerrainBlockers& b) {
+    double lo = 0.0;
+    double hi = 0.0;
+    if (!chord(l, from, lo, hi)) return false;
+    const Vec dir{-l.b, l.a};
+    const Vec foot{-l.a * l.c, -l.b * l.c};
+    const double tp = dot(p - foot, dir);
+    if (tp >= lo && tp <= hi) return true;  // p is on the observer itself
+    const double te = tp > hi ? hi : lo;
+    return clear_of(foot + dir * te, p, b);
+}
+
+// The lines through p tangent to the circle (c, r), if p is outside it.
+void tangents_from_point(Vec p, Vec c, double r, std::vector<Line>& out) {
+    const Vec d = c - p;
+    const double dist = length(d);
+    if (!(dist > r)) return;
+    const double sin_a = r / dist;
+    const double cos_a = std::sqrt(std::max(0.0, 1.0 - sin_a * sin_a));
+    const Vec u = d * (1.0 / dist);
+    for (const double sgn : {1.0, -1.0}) {
+        const Vec dir{u.x * cos_a - sgn * u.y * sin_a, sgn * u.x * sin_a + u.y * cos_a};
+        out.push_back(line_through(p, p + dir));
+    }
+}
+
+}  // namespace
+
+bool fully_visible_past(const PosedModel& observer, const PosedModel& observed,
+                        std::span<const TerrainShape* const> terrain) {
+    const Shape from = shape_of(observer, 0.0);
+    const Shape to = shape_of(observed, 0.0);
+    const Vec towards = from.e.c - to.e.c;
+    const double dist = length(towards);
+    if (!(dist > 0.0)) return true;
+    const std::vector<const TerrainShape*> near_t = near_terrain(from, to, terrain);
+    if (near_t.empty()) return true;
+    TerrainBlockers b;
+    for (const TerrainShape* t : near_t) {
+        if (t->is_circle()) {
+            b.round.push_back(circle_terrain_shape(*t, kHalfWidthMm));
+        } else {
+            b.polygons.push_back(t);
+        }
+    }
+    const std::vector<Vec> observer_points = sample_points(from);
+    std::vector<Vec> corners;
+    for (const TerrainShape* t : b.polygons) {
+        for (const Position& v : t->vertices) corners.push_back(oval_detail::to_vec(v));
+    }
+    const Vec w = towards * (1.0 / dist);
+    std::vector<Line> lines;
+    // 06.01: every part facing the observer: 9 points, every 20 degrees of outward normal from -80 to 80.
+    for (int k = 0; k < 9; ++k) {
+        const Vec r = unit_at_deg(-80.0 + 20.0 * static_cast<double>(k));
+        const Vec n{w.x * r.x - w.y * r.y, w.x * r.y + w.y * r.x};  // w turned by the sample's angle
+        const Vec p = boundary_point(to, n);
+        lines.clear();
+        for (const Vec& q : observer_points) {
+            if (length(q - p) > 0.0) lines.push_back(line_through(p, q));
+        }
+        for (const Vec& c : corners) tangents_from_point(p, c, kHalfWidthMm, lines);
+        for (const Shape& s : b.round) tangents_from_point(p, s.e.c, s.e.a + s.grow, lines);
+        bool seen = false;
+        for (const Line& l : lines) {
+            if (reaches(l, from, p, b)) {
+                seen = true;
+                break;
+            }
+        }
+        if (!seen) return false;
+    }
+    return true;
 }
 
 }  // namespace wh40k::core

@@ -22,6 +22,7 @@
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/mortal_wounds.hpp"
+#include "core/rules/terrain.hpp"
 #include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
@@ -162,6 +163,10 @@ struct MoveGeometry {
     bool has_closest = false;
     std::string focus_name;
     std::string with_text;  // " with Legionaries 5 and Havocs 4"
+    // M88 (D-087): the Light and Dense features no model ends a move on, and the Dense features over 2" this unit's
+    // models can't move through (13.06). Empty without terrain, so every check below is as before.
+    std::vector<core::TerrainShape> no_end;
+    std::vector<core::TerrainShape> uncrossable;
 };
 
 std::optional<MoveGeometry> geometry_of(const GameState& origin, const MoveTeam* team = nullptr) {
@@ -228,7 +233,26 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin, const MoveTeam*
     for (const core::PosedModel& o : g.others) g.other_radius.push_back(avoid_radius_mm(o.base));
     g.all_round = std::all_of(g.bases.begin(), g.bases.end(),
                               [](const core::Base& b) { return b.shape == core::BaseShape::Round; });
+    for (const core::TerrainArea& a : origin.terrain) {  // M88
+        for (const core::TerrainFeature& f : a.features) {
+            if (core::is_solid(f.category)) g.no_end.push_back(f.shape);
+            if (core::blocks_move(f, *u)) g.uncrossable.push_back(f.shape);
+        }
+    }
     return g;
+}
+
+// M88 (D-087): model i's base at `p` (an oval keeps its facing through the move): the engine's own test, exact.
+core::BasePose avoid_pose(const MoveGeometry& g, std::size_t i, const Position& p) {
+    return core::BasePose{p, g.bases[i], g.facings[i]};
+}
+
+// M88 (D-087), 03.01 Ending a Move: model i's base at `p` is on no Light or Dense feature.
+bool off_terrain(const MoveGeometry& g, std::size_t i, const Position& p) {
+    for (const core::TerrainShape& f : g.no_end) {
+        if (core::overlaps_shape(avoid_pose(g, i, p), f)) return false;
+    }
+    return true;
 }
 
 // D-074 part 3: by the base's half extents at its facing (round: its radius both ways, as before).
@@ -243,6 +267,11 @@ bool on_battlefield(const MoveGeometry& g, std::size_t i, const Position& p) {
 // through enemy models that aren't MONSTER/VEHICLE models (ends_ok still keeps it off them and out of Engagement
 // Range).
 bool segment_clear(const MoveGeometry& g, std::size_t i, const Position& a, const Position& b) {
+    // M88 (D-087), 13.06: no straight line through a Dense feature the model can't move through (the engine's test;
+    // any move type, a Desperate Escape included).
+    for (const core::TerrainShape& f : g.uncrossable) {
+        if (core::translation_crosses_shape(avoid_pose(g, i, a), b, f)) return false;
+    }
     if (g.through_enemies) return true;
     const float r = g.radius[i];
     const bool passes = g.any_passes && g.passes_infantry[i];
@@ -259,6 +288,7 @@ bool segment_clear(const MoveGeometry& g, std::size_t i, const Position& a, cons
 bool ends_ok(const MoveGeometry& g, const std::vector<Position>& ends) {
     for (std::size_t i = 0; i < ends.size(); ++i) {
         if (!on_battlefield(g, i, ends[i])) return false;
+        if (!off_terrain(g, i, ends[i])) return false;  // M88
         const float r = g.radius[i];
         for (std::size_t k = 0; k < g.enemies.size(); ++k) {
             // avoid_gap_mm (base_distance's formula with the circumscribed radii)
@@ -402,7 +432,7 @@ std::optional<std::vector<core::action::ProposeModelMove>> slot_proposals(const 
             const float step = g.radius[i] * 2.0f + kParkMm;
             for (const client::UnitVector& d : client::kDirections16) {
                 const Position p{g.starts[i].x + d.x * step, g.starts[i].y + d.y * step, g.starts[i].z};
-                if (!on_battlefield(g, i, p) || core::more_than(step, g.max_mm[i]) ||
+                if (!on_battlefield(g, i, p) || core::more_than(step, g.max_mm[i]) || !off_terrain(g, i, p) ||
                     !segment_clear(g, i, g.starts[i], p) || !free_at(i, p, true)) {
                     continue;
                 }

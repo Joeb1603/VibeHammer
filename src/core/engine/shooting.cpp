@@ -54,6 +54,8 @@ void apply_details(GameState& state, Side, const action::Shoot& a, DiceSource&, 
     std::vector<WeaponSelection> selections = make_weapon_selections(state, u, a.type, a.shots);
     const AttackContext context = shooting_context(state, u);
     u.phase_flags.selected_to_shoot = true;  // 10.02 Select Unit
+    // D-088 (M88): the unit makes ranged attacks this turn (13.09 Hidden reads it; kept only with terrain).
+    if (!state.terrain.empty()) u.ranged_attacks.this_turn = true;
     // 10.04-10.06 After Shooting (not eligible to start an action) is not tracked: actions (16) are not
     // in V1.
     events.push_back(event::ShootingStarted{a.unit, a.type, selections});

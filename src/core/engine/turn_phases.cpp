@@ -97,6 +97,11 @@ void on_leave_stage(GameState& state, Events& events) {
             update_objective_control(state, false, events);  // 14.02: and at the end of each turn
             for (Unit& u : state.units) {
                 u.turn_flags = UnitTurnFlags{};  // effects that last "until the end of the turn" end
+                if (!state.terrain.empty()) {
+                    // D-088 (M88): 13.09 "this turn" becomes "the previous turn".
+                    u.ranged_attacks.previous_turn = u.ranged_attacks.this_turn;
+                    u.ranged_attacks.this_turn = false;
+                }
             }
             events.push_back(event::TurnEnded{state.flow.battle_round, side});  // 07.02
             break;

@@ -21,7 +21,8 @@ inline constexpr float kNearestSpotMaxMm = 1.0f * core::MM_PER_INCH;
 // it (01.04) but not on it (as auto_fight_move's contact nudge).
 inline constexpr float kFixNudgeMm = 0.005f;
 
-// Why a drop is outside the region (the first that applies, in this order).
+// Why a drop is outside the region (the first that applies, in this order: through an enemy model, through terrain,
+// on a model, on terrain, too far, off the battlefield, not closer).
 enum class DropProblem {
     CannotMove,         // the region is empty: no distance left, or the model can't be moved
     ThroughEnemyModel,  // its straight line meets an enemy model's base (03.01, D-044)
@@ -29,6 +30,8 @@ enum class DropProblem {
     TooFar,             // further than the distance left (03.01 and the move's limit)
     OffBattlefield,     // the base is not wholly on the battlefield (03.01)
     NotCloser,          // a charge, pile-in or consolidation that doesn't end closer (11.04, 12.03, 12.08)
+    ThroughTerrain,     // M88: its straight line passes through a Dense feature it can't move through (13.06)
+    OnTerrain,          // M88: it ends on a Light or Dense feature (03.01, D-087)
 };
 
 // The region a drop is fixed into: `region` (model_region or unit_region) without its Engagement Range

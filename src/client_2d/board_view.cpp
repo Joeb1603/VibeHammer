@@ -10,6 +10,7 @@
 #include "core/geometry/units.hpp"
 #include "core/state/queries.hpp"
 #include "phase_track.hpp"
+#include "terrain_view.hpp"
 
 namespace wh40k::client {
 
@@ -170,6 +171,82 @@ void draw_objectives(const core::GameState& state, const BoardCamera& cam, float
     }
 }
 
+// M88 (D-087): terrain colours: areas a faint wash with a dashed-looking outline; features filled by category
+// (Exposed a dusty brown, Light a light grey, Dense a dark stone grey with a light rim).
+const Color kAreaFill{150, 140, 110, 255};
+const Color kAreaEdge{205, 195, 160, 255};
+const Color kExposedFill{120, 96, 64, 255};
+const Color kLightFill{150, 150, 145, 255};
+const Color kDenseFill{78, 74, 70, 255};
+const Color kDenseEdge{190, 185, 175, 255};
+
+// A convex polygon or a circle (world mm) filled on the screen.
+void fill_terrain_shape(const BoardCamera& cam, const core::TerrainShape& shape, Color colour) {
+    if (shape.is_circle()) {
+        DrawCircleV(cam.to_screen(shape.centre), cam.to_px(shape.diameter_mm * 0.5f), colour);
+        return;
+    }
+    std::vector<Vector2> fan;
+    fan.reserve(shape.vertices.size() + 1);
+    for (const core::Position& p : shape.vertices) fan.push_back(cam.to_screen(p));
+    fan.push_back(fan.front());
+    rlDisableBackfaceCulling();  // the screen's y runs down, so the world's counter-clockwise outline turns round
+    DrawTriangleFan(fan.data(), static_cast<int>(fan.size()), colour);
+    rlEnableBackfaceCulling();
+}
+
+void outline_terrain_shape(const BoardCamera& cam, const core::TerrainShape& shape, float thick_px, Color colour) {
+    if (shape.is_circle()) {
+        const float r = cam.to_px(shape.diameter_mm * 0.5f);
+        DrawRing(cam.to_screen(shape.centre), std::max(0.0f, r - 0.5f * thick_px), r + 0.5f * thick_px, 0.0f, 360.0f,
+                 96, colour);
+        return;
+    }
+    draw_world_loop(cam, shape.vertices, thick_px, colour);
+}
+
+// M88: the terrain areas (a faint wash, outlined; an obscuring area more strongly) under the objectives, and the features
+// over them (drawn by draw_terrain_features).
+void draw_terrain_areas(const core::GameState& state, const BoardCamera& cam, float ui_scale) {
+    for (const TerrainMark& m : terrain_marks(state)) {
+        if (!m.is_area) continue;
+        fill_terrain_shape(cam, m.shape, ColorAlpha(kAreaFill, m.obscuring ? 0.22f : 0.12f));
+        outline_terrain_shape(cam, m.shape, 1.5f * ui_scale, ColorAlpha(kAreaEdge, m.obscuring ? 0.75f : 0.45f));
+    }
+}
+
+void draw_terrain_features(const core::GameState& state, const BoardCamera& cam, float ui_scale) {
+    for (const TerrainMark& m : terrain_marks(state)) {
+        if (m.is_area) continue;
+        switch (m.category) {
+            case core::TerrainCategory::Exposed:
+                fill_terrain_shape(cam, m.shape, ColorAlpha(kExposedFill, 0.55f));
+                outline_terrain_shape(cam, m.shape, 1.0f * ui_scale, ColorAlpha(kExposedFill, 0.9f));
+                break;
+            case core::TerrainCategory::Light:
+                fill_terrain_shape(cam, m.shape, kLightFill);
+                outline_terrain_shape(cam, m.shape, 1.0f * ui_scale, ColorAlpha(BLACK, 0.6f));
+                break;
+            case core::TerrainCategory::Dense:
+                fill_terrain_shape(cam, m.shape, kDenseFill);
+                outline_terrain_shape(cam, m.shape, 1.5f * ui_scale, kDenseEdge);
+                break;
+        }
+    }
+    // The areas' names, at the top of each area (objective areas carry the objective's label already).
+    const int size = 10 * std::max(1, static_cast<int>(std::lround(1.4f * ui_scale)));
+    for (const core::TerrainArea& a : state.terrain) {
+        if (a.objective) continue;
+        const core::Rect b = core::shape_bounds(a.shape);
+        const Vector2 top = cam.to_screen(0.5f * (b.min_x + b.max_x), b.max_y);
+        const int w = MeasureText(a.name.c_str(), size);
+        const int tx = static_cast<int>(std::lround(top.x)) - w / 2;
+        const int ty = static_cast<int>(std::lround(top.y)) + 2;
+        DrawText(a.name.c_str(), tx + 1, ty + 1, size, ColorAlpha(BLACK, 0.8f));
+        DrawText(a.name.c_str(), tx, ty, size, ColorAlpha(kAreaEdge, 0.95f));
+    }
+}
+
 }  // namespace
 
 void fill_base(const BoardCamera& cam, const core::BasePose& pose, Color colour, float grow_px) {
@@ -245,8 +322,10 @@ void draw_board(const core::GameState& state, const BoardCamera& cam,
         // M76: the zone a side is setting a unit up in, more strongly (D-082 part 2).
         DrawRectangleRec(cam.to_screen(zone), ColorAlpha(side_color(side), highlighted_zone == side ? 0.34f : 0.18f));
     }
-    draw_objectives(state, cam, ui_scale);  // D-084 (M86)
+    draw_terrain_areas(state, cam, ui_scale);  // M88 (D-087)
+    draw_objectives(state, cam, ui_scale);     // D-084 (M86)
     draw_grid(state.battlefield, cam);
+    draw_terrain_features(state, cam, ui_scale);  // M88: over the grid, under the bases
     DrawRectangleLinesEx(cam.to_screen(board), 2.0f, kEdge);
     if (highlighted_zone) {
         const core::Rect zone = core::zone_rect(state.battlefield, state.side(*highlighted_zone).deployment_zone);

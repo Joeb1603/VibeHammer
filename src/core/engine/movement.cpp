@@ -24,6 +24,7 @@
 #include "core/rules/fight.hpp"
 #include "core/rules/leadership.hpp"
 #include "core/rules/mortal_wounds.hpp"
+#include "core/rules/terrain.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -362,9 +363,16 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
         enemies = posed_enemy_models(state, u.side);
     }
     const std::vector<PosedModel> friends = posed_friendly_models(state, u.side);
-    const PosedPathContext context{Rect{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm}, friends,
-                                   enemies, mv.mode == FallBackMode::DesperateEscape,  // 09.07 While Moving
-                                   passable};
+    // M88 (D-087): 13.06 Dense features the model can't move through, and 03.01 the Light and Dense features it can't
+    // end on (empty without terrain).
+    const PathFeatures features = path_features(state, u);
+    const PosedPathContext context{Rect{0.0f, 0.0f, state.battlefield.width_mm, state.battlefield.depth_mm},
+                                   friends,
+                                   enemies,
+                                   mv.mode == FallBackMode::DesperateEscape,  // 09.07 While Moving
+                                   passable,
+                                   features.uncrossable,
+                                   features.no_end};
     for (const PathViolation& v : check_model_path(a.model, m->base, path.points, path.kernel_facings, context)) {
         r.reasons.push_back(v.reason);
     }
@@ -540,6 +548,29 @@ std::optional<float> closer_before(const BasePose& start, float facing, const Un
 
 }  // namespace
 
+bool reach_terrain_contains(const ReachTerrain& t, const Position& centre) {
+    const Position c{centre.x - t.offset.x, centre.y - t.offset.y, 0.0f};
+    return shape_signed_distance(BasePose{c, t.mover_base, t.mover_facing_deg}, t.shape) < t.threshold_mm;
+}
+
+Position reach_terrain_centre(const ReachTerrain& t) {
+    const Position p = shape_inner_point(t.shape);
+    return Position{p.x + t.offset.x, p.y + t.offset.y, 0.0f};
+}
+
+float reach_terrain_inner_radius_mm(const ReachTerrain& t) {
+    const Position p = shape_inner_point(t.shape);
+    const double inradius = -point_shape_signed_distance(oval_detail::to_vec(p), t.shape);
+    return inscribed_radius(t.mover_base) + static_cast<float>(std::max(0.0, inradius)) + t.threshold_mm;
+}
+
+float reach_terrain_outer_radius_mm(const ReachTerrain& t) {
+    const Position p = shape_inner_point(t.shape);
+    float far = t.shape.is_circle() ? t.shape.diameter_mm * 0.5f : 0.0f;
+    for (const Position& v : t.shape.vertices) far = std::max(far, centre_distance(p, v));
+    return circumscribed_radius(t.mover_base) + far + t.threshold_mm;
+}
+
 bool reach_shape_contains(const ReachShape& shape, const Position& centre) {
     return signed_base_distance(BasePose{centre, shape.mover_base, shape.mover_facing_deg}, shape.obstacle) <
            shape.threshold_mm;
@@ -634,6 +665,24 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model, float
                 reach.forbidden.push_back(ReachCircle{o.position, touching, false, o.id});  // 03.01: not on it
             } else {
                 reach.forbidden_shapes.push_back(area.shape(o, 0.0f, false));
+            }
+        }
+    }
+    // M88 (D-087): the terrain features. 03.01 / 13.06: no move ends on a Light or Dense feature; 13.06: a Dense
+    // feature over 2" tall stops a model that can't move through it (its straight lines and, for an oval, its turn).
+    for (std::size_t a = 0; a < state.terrain.size(); ++a) {
+        const std::vector<TerrainFeature>& features = state.terrain[a].features;
+        for (std::size_t f = 0; f < features.size(); ++f) {
+            const TerrainFeature& feature = features[f];
+            if (is_solid(feature.category)) {
+                reach.forbidden_terrain.push_back(ReachTerrain{m->base, facing, feature.shape, Position{}, 0.0f, a, f});
+            }
+            if (blocks_move(feature, *u)) {
+                reach.blocking_terrain.push_back(
+                    ReachTerrain{m->base, facing, feature.shape, Position{}, -EPS_MM, a, f});
+                if (turn != 0.0 && !reach.turn_blocked) {
+                    reach.turn_blocked = rotation_against_shape(turning, turn_to, feature.shape).blocked;
+                }
             }
         }
     }
@@ -772,6 +821,15 @@ std::vector<std::string> move_end_problems(const GameState& state) {
                     out.push_back("03.01: " + detail::unit_label(u.id) + "'s model " + std::to_string(m.id.v) +
                                   " is on model " + std::to_string(o.id.v));
                 }
+            }
+        }
+    }
+    // M88 (D-087), 03.01 Ending a Move: no model in the unit is partway through a Light or Dense feature.
+    if (!state.terrain.empty()) {
+        for (const Model& m : u.models) {
+            if (const std::optional<FeatureRef> f = solid_feature_under(state, pose_of(m))) {
+                out.push_back("03.01: " + detail::unit_label(u.id) + "'s model " + std::to_string(m.id.v) +
+                              " is partway through terrain feature " + feature_label(feature_of(state, *f)));
             }
         }
     }

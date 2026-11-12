@@ -10,6 +10,7 @@
 #include "core/geometry/coherency.hpp"  // PlacedModel
 #include "core/geometry/pose.hpp"       // PosedModel
 #include "core/geometry/primitives.hpp"
+#include "core/geometry/terrain_shape.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -28,6 +29,11 @@ enum class PathViolationKind : std::uint8_t {
     // D-074 (M64): an oval's turn in place (03.01 Rotating a Model) hits an enemy model or crosses the edge.
     TurnCrossesEnemyModel,
     TurnLeavesBattlefield,
+    // M88 (D-087): 13.06 a model that can't move through a Dense feature over 2" tall crosses one (a straight line or,
+    // for an oval, a turn), or 03.01 Ending a Move: it ends partway through a Light or Dense feature.
+    CrossesTerrain,
+    TurnCrossesTerrain,
+    EndsOnTerrain,
 };
 
 struct PathViolation {
@@ -59,6 +65,13 @@ struct PathContext {
                                                           std::span<const Position> points,
                                                           const PathContext& context);
 
+// M88 (D-087): a terrain feature a move must respect, with its name for the reasons (e.g. "'Ruin wall' (dense, 5\"
+// tall)"). The shape is the caller's.
+struct PathFeature {
+    const TerrainShape* shape = nullptr;
+    std::string label;
+};
+
 // D-074 (M64): PathContext for posed models.
 struct PosedPathContext {
     Rect battlefield;
@@ -66,6 +79,11 @@ struct PosedPathContext {
     std::span<const PosedModel> enemy;
     bool may_move_through_enemy_models = false;
     std::span<const PosedModel> passable_enemy{};
+    // M88 (D-087): 13.06 the features the model can't move through (Dense, over 2" tall, for a model that isn't
+    // INFANTRY/BEASTS/SWARM/MOBILE; a Desperate Escape too), and 03.01 the features it can't end on (Light and Dense).
+    // Empty without terrain: the result is as before.
+    std::span<const PathFeature> uncrossable{};
+    std::span<const PathFeature> no_end{};
 };
 
 // D-074 (M64): check_model_path for a base of any shape with a facing at each path point.
@@ -76,8 +94,11 @@ struct PosedPathContext {
 // - Each turn and each straight line is checked against the enemy models (rotation_against_base,
 //   translation_crosses) and the battlefield edge (rotation_against_edge, wholly_within); the end against every model
 //   (bases_overlap, D-027). A turn that hits reports TurnCrossesEnemyModel / TurnLeavesBattlefield for segment i.
-// - A round base ignores facings: its result is exactly check_model_path's above (the same checks, violations and
-//   reasons, in the same order).
+// - A round base ignores facings: without terrain its result is exactly check_model_path's above (the same checks,
+//   violations and reasons, in the same order).
+// - M88 (D-087): after those, each turn and straight line against every `uncrossable` feature (rotation_against_shape,
+//   translation_crosses_shape; CrossesTerrain / TurnCrossesTerrain, one report per feature) and the end against every
+//   `no_end` feature (overlaps_shape; EndsOnTerrain).
 [[nodiscard]] std::vector<PathViolation> check_model_path(ModelId mover, const Base& base,
                                                           std::span<const Position> points,
                                                           std::span<const float> facings,

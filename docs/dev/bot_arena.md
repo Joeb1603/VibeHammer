@@ -24,6 +24,9 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   Since M86 (D-084) these battles play the objective mission, its block read from
   `data/scenarios/incursion_objectives_44x60.json`, as custom battles do in the client. `--mission <scenario file>`
   (M87) reads the block from another scenario instead (for tuning the mission's numbers); with `--scenario` it exits 2.
+  `--terrain <scenario file>` (M88, D-087) fights these battles over that scenario's terrain block (e.g.
+  `data/scenarios/incursion_terrain_44x60.json`, whose areas link to the mission's objectives); without it the
+  battlefield is bare as before, and with `--scenario` it exits 2 (a scenario has its own terrain).
 
 It exits 1 on any rejected action, reverted move or unfinished game, and 2 on a bad flag (`--a` / `--b` included: they
 went with the levels).
@@ -58,6 +61,11 @@ the rosters at the default weights, and the four mission runs (the objective sce
 M73 lists) with `--weights objective=0,objective_approach=0,objective_fire=0`, all identical to the M86 binary (M87:
 1,800 of 1,800 games). With the default weights the M87 binary is the reference for the four mission runs.
 
+M88 (D-087–D-089) changes nothing without terrain. All nine runs (the eight above and the objective scenario) at the
+default weights were identical to the M87 binary (1,800 of 1,800 games). The M88 binary is the next reference. The
+terrain scenario (`incursion_terrain_44x60.json`) and the terrain runs (`--terrain`) are new; M89 changes them on
+purpose.
+
 ## Deployment and the summary
 
 - The deployment step only exists in a scenario with `"deployment": "alternating"` (D-081). The bot sets up by M77's
@@ -72,3 +80,9 @@ M73 lists) with `--weights objective=0,objective_approach=0,objective_fire=0`, a
 - M87 (D-086) adds, for a mission scenario, each area's mean VP per side, and for every scenario the largest melee: at
   each Fight phase's start, the most units (both sides) in one connected group of engagements, as a count and as a share
   of the units on the battlefield (each game's maximum, averaged).
+- M88 (D-087–D-089) adds, on a battlefield with terrain, the `terrain (M88)` line, by the shooting side:
+  - the ranged weapon selections whose target had the benefit of cover (13.08), as a count and a share;
+  - per game, the enemy units within a shooting unit's longest range that none of its models could see because they
+    were hidden (13.09), or because of obscuring areas or dense walls (13.10 / 13.11), counted before each Shoot.
+
+  The `--per-game` line is unchanged.

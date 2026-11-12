@@ -57,6 +57,13 @@ struct EffectLine {
 // MONSTER/VEHICLE target), and one when D-011 caps `net`, the attacks' whole hit roll modifier ([HEAVY] included).
 [[nodiscard]] std::vector<EffectLine> hit_modifier_lines(std::span<const core::WeaponSelection> selections, int net);
 
+// M88 (D-089): 13.08 Benefit of Cover on these selections (one weapon profile with skill `skill`, before cover): one
+// line when any of them has it, "Benefit of cover: BS 3+ worsened to 4+ (13.08)" (with "(n of N models)" when only some
+// do). Nothing for [TORRENT] (no BS) or when none has it.
+[[nodiscard]] std::vector<EffectLine> cover_lines(std::span<const core::WeaponSelection> selections,
+                                                  std::optional<int> skill);
+[[nodiscard]] HelpEntry benefit_of_cover_help();
+
 // D-073: help for 17.01 / 17.03 (the MONSTER and VEHICLE keywords' rules in this game).
 [[nodiscard]] HelpEntry monsters_moving_help();
 [[nodiscard]] HelpEntry engaged_monster_target_help();

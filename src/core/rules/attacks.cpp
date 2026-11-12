@@ -271,6 +271,10 @@ std::vector<AttackBatch> gather_attack_batches(const GameState& state,
         const WeaponProfile& wp = selected_profile(state, sel);
         AttackProfile profile = make_attack_profile(wp, context);
         profile.hit_modifier += sel.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
+        // 13.08 (D-089): worsen the BS characteristic of the attack by 1 (3+ becomes 4+). The characteristic, not the
+        // hit roll, so D-011's cap doesn't apply; [TORRENT] has no BS. Part of the profile, so D-006 keeps attacks with
+        // and without cover in separate batches.
+        if (sel.benefit_of_cover && profile.skill) *profile.skill += 1;
         const SelectionDice dice = selection_dice(wp, sel, context);
 
         if (std::find(target_order.begin(), target_order.end(), sel.target) == target_order.end()) {

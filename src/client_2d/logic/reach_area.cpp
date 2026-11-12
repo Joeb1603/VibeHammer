@@ -201,18 +201,44 @@ Interval convex_ends(const Holds& holds, float lo, float hi, float in_lo, float 
     return out;
 }
 
+// A convex set the rows meet in one interval: a ReachShape (D-074 part 3) or, M88, a ReachTerrain. The same
+// arithmetic for both, so the shapes' rows are as before.
+struct ShapeSet {
+    const core::ReachShape& s;
+    [[nodiscard]] core::Position centre() const { return s.obstacle.position; }
+    [[nodiscard]] float outer() const { return core::reach_shape_outer_radius_mm(s); }
+    [[nodiscard]] float inner() const { return core::reach_shape_inner_radius_mm(s); }
+    [[nodiscard]] bool holds(const core::Position& p) const { return shape_holds(s, p); }
+    [[nodiscard]] float signed_at(const core::Position& p) const {
+        return core::signed_base_distance(core::BasePose{p, s.mover_base, s.mover_facing_deg}, s.obstacle);
+    }
+};
+
+struct TerrainSet {
+    const core::ReachTerrain& t;
+    [[nodiscard]] core::Position centre() const { return core::reach_terrain_centre(t); }
+    [[nodiscard]] float outer() const { return core::reach_terrain_outer_radius_mm(t); }
+    [[nodiscard]] float inner() const { return core::reach_terrain_inner_radius_mm(t); }
+    [[nodiscard]] bool holds(const core::Position& p) const { return terrain_holds(t, p); }
+    [[nodiscard]] float signed_at(const core::Position& p) const {
+        const core::Position c{p.x - t.offset.x, p.y - t.offset.y, 0.0f};
+        return core::shape_signed_distance(core::BasePose{c, t.mover_base, t.mover_facing_deg}, t.shape);
+    }
+};
+
 // The part of row `y` (within [x0, x1]) in `shape`: one interval or none (the shape is convex).
-std::optional<Interval> shape_on_row(const core::ReachShape& shape, float y, float x0, float x1, float tol) {
-    const float outer = core::reach_shape_outer_radius_mm(shape) + 1.0f;
-    const core::Position c = shape.obstacle.position;
+template <typename Set>
+std::optional<Interval> set_on_row(const Set& shape, float y, float x0, float x1, float tol) {
+    const float outer = shape.outer() + 1.0f;
+    const core::Position c = shape.centre();
     const float dy = y - c.y;
     if (!(outer > 0.0f) || std::fabs(dy) >= outer) return std::nullopt;
     const float ko = std::sqrt(outer * outer - dy * dy);
     const float lo = std::max(x0, c.x - ko);
     const float hi = std::min(x1, c.x + ko);
     if (!(lo < hi)) return std::nullopt;
-    const auto holds = [&](float x) { return shape_holds(shape, core::Position{x, y, 0.0f}); };
-    const float inner = core::reach_shape_inner_radius_mm(shape) - 2.0f * kDiscMarginMm;
+    const auto holds = [&](float x) { return shape.holds(core::Position{x, y, 0.0f}); };
+    const float inner = shape.inner() - 2.0f * kDiscMarginMm;
     float in_lo = 0.0f;
     float in_hi = 0.0f;
     if (inner > 0.0f && std::fabs(dy) < inner) {
@@ -221,11 +247,7 @@ std::optional<Interval> shape_on_row(const core::ReachShape& shape, float y, flo
         in_hi = c.x + ki;
     } else {
         // The signed distance is convex along the row: its least value, by golden section.
-        const auto f = [&](float x) {
-            return core::signed_base_distance(core::BasePose{core::Position{x, y, 0.0f}, shape.mover_base,
-                                                             shape.mover_facing_deg},
-                                              shape.obstacle);
-        };
+        const auto f = [&](float x) { return shape.signed_at(core::Position{x, y, 0.0f}); };
         constexpr float kGolden = 0.6180339887f;
         float a = c.x - ko;
         float b = c.x + ko;
@@ -268,6 +290,14 @@ std::optional<Interval> shape_on_row(const core::ReachShape& shape, float y, flo
     return convex_ends(holds, lo, hi, in_lo, in_hi, tol);
 }
 
+std::optional<Interval> shape_on_row(const core::ReachShape& shape, float y, float x0, float x1, float tol) {
+    return set_on_row(ShapeSet{shape}, y, x0, x1, tol);
+}
+
+std::optional<Interval> terrain_on_row(const core::ReachTerrain& terrain, float y, float x0, float x1, float tol) {
+    return set_on_row(TerrainSet{terrain}, y, x0, x1, tol);
+}
+
 // The hull of shadow_on_row's pieces (the disc's shadow on the row is one interval), within [x0, x1].
 std::optional<Interval> disc_shadow_on_row(const core::Position& from, const core::Position& centre, float radius, float y,
                                            float x0, float x1) {
@@ -286,27 +316,45 @@ std::optional<Interval> disc_shadow_on_row(const core::Position& from, const cor
     return Interval{lo, hi};
 }
 
+// A shadow (D-044) of a ShapeSet or TerrainSet: `from`, its set and the shadow's own test.
+struct ShapeShadowSet {
+    const ShapeShadow& s;
+    [[nodiscard]] core::Position from() const { return s.from; }
+    [[nodiscard]] ShapeSet set() const { return ShapeSet{s.shape}; }
+    [[nodiscard]] bool holds(const core::Position& p) const { return shadow_holds(s, p); }
+};
+
+struct TerrainShadowSet {
+    const TerrainShadow& s;
+    [[nodiscard]] core::Position from() const { return s.from; }
+    [[nodiscard]] TerrainSet set() const { return TerrainSet{s.terrain}; }
+    [[nodiscard]] bool holds(const core::Position& p) const { return terrain_shadow_holds(s, p); }
+};
+
 // The part of row `y` (within [x0, x1]) in a shape's shadow: one interval or none (the shadow is convex).
-std::optional<Interval> shape_shadow_on_row(const ShapeShadow& s, float y, float x0, float x1, float tol) {
-    const core::Position c = s.shape.obstacle.position;
-    const float outer = core::reach_shape_outer_radius_mm(s.shape) + 1.0f;
-    const std::optional<Interval> bracket = disc_shadow_on_row(s.from, c, outer, y, x0, x1);
+template <typename ShadowSet>
+std::optional<Interval> set_shadow_on_row(const ShadowSet& s, float y, float x0, float x1, float tol) {
+    const auto set = s.set();
+    const core::Position from = s.from();
+    const core::Position c = set.centre();
+    const float outer = set.outer() + 1.0f;
+    const std::optional<Interval> bracket = disc_shadow_on_row(from, c, outer, y, x0, x1);
     if (!bracket) return std::nullopt;
     const float lo = bracket->first;
     const float hi = bracket->second;
-    const auto holds = [&](float x) { return shadow_holds(s, core::Position{x, y, 0.0f}); };
+    const auto holds = [&](float x) { return s.holds(core::Position{x, y, 0.0f}); };
     std::optional<Interval> known;
-    const float inner = core::reach_shape_inner_radius_mm(s.shape) - 2.0f * kDiscMarginMm;
+    const float inner = set.inner() - 2.0f * kDiscMarginMm;
     if (inner > 0.0f) {
-        if (core::centre_distance(s.from, c) < inner) return Interval{lo, hi};  // every line from there meets it
-        known = disc_shadow_on_row(s.from, c, inner, y, lo, hi);
+        if (core::centre_distance(from, c) < inner) return Interval{lo, hi};  // every line from there meets it
+        known = disc_shadow_on_row(from, c, inner, y, lo, hi);
     }
     if (!known) {
         // Beyond the centre, on the line from `from` through it: in the shadow (the centre is in the shape).
-        const float ry = c.y - s.from.y;
+        const float ry = c.y - from.y;
         if (std::fabs(ry) > 1e-6f) {
-            const float t = (y - s.from.y) / ry;
-            const float x = s.from.x + t * (c.x - s.from.x);
+            const float t = (y - from.y) / ry;
+            const float x = from.x + t * (c.x - from.x);
             if (t >= 1.0f && x >= lo && x <= hi && holds(x)) known = Interval{x, x};
         }
     }
@@ -323,6 +371,27 @@ std::optional<Interval> shape_shadow_on_row(const ShapeShadow& s, float y, float
     const float in_lo = std::max(known->first, lo);
     const float in_hi = std::min(known->second, hi);
     return convex_ends(holds, lo, hi, in_lo, in_hi, tol);
+}
+
+std::optional<Interval> shape_shadow_on_row(const ShapeShadow& s, float y, float x0, float x1, float tol) {
+    return set_shadow_on_row(ShapeShadowSet{s}, y, x0, x1, tol);
+}
+
+std::optional<Interval> terrain_shadow_on_row(const TerrainShadow& s, float y, float x0, float x1, float tol) {
+    return set_shadow_on_row(TerrainShadowSet{s}, y, x0, x1, tol);
+}
+
+core::ReachTerrain shifted(core::ReachTerrain t, float dx, float dy) {
+    t.offset.x += dx;
+    t.offset.y += dy;
+    return t;
+}
+
+TerrainShadow shifted(TerrainShadow s, float dx, float dy) {
+    s.from.x += dx;
+    s.from.y += dy;
+    s.terrain = shifted(s.terrain, dx, dy);
+    return s;
 }
 
 }  // namespace
@@ -356,6 +425,41 @@ bool shadow_holds(const ShapeShadow& s, const core::Position& p) {
     // line is (shrinking a convex base commutes with sweeping it, D-074 part 1).
     if (shape.threshold_mm == -core::EPS_MM) return core::translation_crosses(start, p, shape.obstacle);
     return core::translation_signed_distance(start, p, shape.obstacle) < shape.threshold_mm;
+}
+
+bool terrain_holds(const core::ReachTerrain& terrain, const core::Position& p) {
+    const core::Position c = core::reach_terrain_centre(terrain);
+    const float dx = p.x - c.x;
+    const float dy = p.y - c.y;
+    const float d2 = dx * dx + dy * dy;
+    const float outer = core::reach_terrain_outer_radius_mm(terrain) + kDiscMarginMm;
+    if (!(outer > 0.0f) || d2 > outer * outer) return false;
+    const float inner = core::reach_terrain_inner_radius_mm(terrain) - kDiscMarginMm;
+    if (inner > 0.0f && d2 < inner * inner) return true;
+    return core::reach_terrain_contains(terrain, p);
+}
+
+bool terrain_shadow_holds(const TerrainShadow& s, const core::Position& p) {
+    const core::ReachTerrain& t = s.terrain;
+    const float outer = core::reach_terrain_outer_radius_mm(t) + kDiscMarginMm;
+    if (!(outer > 0.0f)) return false;
+    const float d = point_segment_distance(core::reach_terrain_centre(t), s.from, p);
+    if (d > outer) return false;
+    const float inner = core::reach_terrain_inner_radius_mm(t) - kDiscMarginMm;
+    if (inner > 0.0f && d < inner) return true;
+    const core::Position from{s.from.x - t.offset.x, s.from.y - t.offset.y, 0.0f};
+    const core::Position to{p.x - t.offset.x, p.y - t.offset.y, 0.0f};
+    const core::BasePose start{from, t.mover_base, t.mover_facing_deg};
+    // 13.06: the engine's own test for move_reach's blocking threshold (-EPS); for another threshold (an inset
+    // region, D-052) the swept base's least signed distance along the line, as for a ShapeShadow.
+    if (t.threshold_mm == -core::EPS_MM) return core::translation_crosses_shape(start, to, t.shape);
+    const float margin = t.threshold_mm + core::EPS_MM;  // translation_crosses_shape tests -EPS: shift the shape
+    if (!(margin > 0.0f)) return core::translation_crosses_shape(start, to, t.shape);
+    // A grown base (by `margin`) crosses the shape exactly when the base comes within `margin` of crossing it.
+    core::BasePose grown = start;
+    grown.base.diameter_mm += 2.0f * margin;
+    if (grown.base.shape == core::BaseShape::Oval) grown.base.length_mm += 2.0f * margin;
+    return core::translation_crosses_shape(grown, to, t.shape);
 }
 
 float point_segment_distance(const core::Position& p, const core::Position& a, const core::Position& b) {
@@ -401,6 +505,9 @@ ReachRegion model_region(const core::MoveReach& reach) {
     region.inside_any_shapes = reach.required_any_shapes;
     region.outside_shapes = reach.forbidden_shapes;
     for (const core::ReachShape& b : reach.blocking_shapes) region.outside_shape_shadows.push_back(ShapeShadow{reach.from, b});
+    // M88 (D-087): the Light and Dense features, and the shadows of the Dense ones the model can't move through.
+    region.outside_terrain = reach.forbidden_terrain;
+    for (const core::ReachTerrain& t : reach.blocking_terrain) region.outside_terrain_shadows.push_back(TerrainShadow{reach.from, t});
     region.empty = reach.immobile || !(reach.remaining_mm > 0.0f) || reach.turn_blocked;
     return region;
 }
@@ -444,6 +551,11 @@ ReachRegion unit_region(const core::GameState& state, core::UnitId unit, const c
             if (!own_unit(sh.model)) region.outside_shapes.push_back(shifted(sh, dx, dy));
         }
         for (const ShapeShadow& s : own.outside_shape_shadows) region.outside_shape_shadows.push_back(shifted(s, dx, dy));
+        // M88: every model's terrain (no feature is one of the unit's own).
+        for (const core::ReachTerrain& t : own.outside_terrain) region.outside_terrain.push_back(shifted(t, dx, dy));
+        for (const TerrainShadow& s : own.outside_terrain_shadows) {
+            region.outside_terrain_shadows.push_back(shifted(s, dx, dy));
+        }
     }
     region.empty = first;
     return region;
@@ -510,6 +622,16 @@ std::vector<ReachSpan> reach_spans(const ReachRegion& region, float y_step_mm) {
                 subtract(parts, in->first, in->second);
             }
         }
+        for (const core::ReachTerrain& t : region.outside_terrain) {  // M88
+            if (parts.empty()) break;
+            const Interval e = extent(parts);
+            if (const auto in = terrain_on_row(t, y, e.first, e.second, tol)) subtract(parts, in->first, in->second);
+        }
+        for (const TerrainShadow& s : region.outside_terrain_shadows) {
+            if (parts.empty()) break;
+            const Interval e = extent(parts);
+            if (const auto in = terrain_shadow_on_row(s, y, e.first, e.second, tol)) subtract(parts, in->first, in->second);
+        }
         for (const Interval& p : parts) {
             if (p.first < p.second) out.push_back(ReachSpan{y, p.first, p.second});
         }
@@ -551,6 +673,16 @@ ReachRegion trimmed_region(const ReachRegion& region) {
         const float line = std::max(reach, core::centre_distance(centre, s.from));
         return core::centre_distance(centre, s.shape.obstacle.position) >
                line + core::reach_shape_outer_radius_mm(s.shape) + kMarginMm;
+    });
+    // M88: a terrain area lies inside its outer disc too.
+    std::erase_if(out.outside_terrain, [&](const core::ReachTerrain& t) {
+        return core::centre_distance(centre, core::reach_terrain_centre(t)) >
+               reach + core::reach_terrain_outer_radius_mm(t) + kMarginMm;
+    });
+    std::erase_if(out.outside_terrain_shadows, [&](const TerrainShadow& s) {
+        const float line = std::max(reach, core::centre_distance(centre, s.from));
+        return core::centre_distance(centre, core::reach_terrain_centre(s.terrain)) >
+               line + core::reach_terrain_outer_radius_mm(s.terrain) + kMarginMm;
     });
     return out;
 }
@@ -672,6 +804,12 @@ bool in_region(const ReachRegion& region, const core::Position& p) {
     }
     for (std::size_t i = 0; i < region.outside_shape_shadows.size(); ++i) {
         if (shadow_holds(region.outside_shape_shadows[i], p)) return false;
+    }
+    for (std::size_t i = 0; i < region.outside_terrain.size(); ++i) {  // M88
+        if (terrain_holds(region.outside_terrain[i], p)) return false;
+    }
+    for (std::size_t i = 0; i < region.outside_terrain_shadows.size(); ++i) {
+        if (terrain_shadow_holds(region.outside_terrain_shadows[i], p)) return false;
     }
     return true;
 }

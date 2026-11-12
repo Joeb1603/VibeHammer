@@ -28,12 +28,23 @@ struct ShapeShadow {
     core::ReachShape shape;
 };
 
+// M88 (D-087): the shadow of a blocking terrain feature (13.06, a Dense feature over 2" tall the model can't move
+// through): the points p whose straight line from `from` passes through it (core::translation_crosses_shape for the
+// moving base, as move_reach's -EPS threshold). On each ray from `from` it is everything beyond the ray's first point
+// in the feature's area; the set is convex.
+struct TerrainShadow {
+    core::Position from;
+    core::ReachTerrain terrain;
+};
+
 // A point is in the region when it is inside `bounds`, inside every `inside_all` circle, inside at least
 // one circle of every `inside_any` group, outside every `outside_all` circle and in no `outside_shadows`.
 // D-074 part 3 (M66): the pairs that aren't round to round (an oval mover, or an oval other model) come as core's
 // ReachShapes (D-074 part 2): `inside_any_shapes` is empty (no group has a shape) or holds one group per `inside_any`
 // group (group i is inside_any[i] and inside_any_shapes[i] together); a point must be outside every `outside_shapes`
 // shape and in no `outside_shape_shadows`. Round-only regions have none, so they are tested exactly as before.
+// M88 (D-087): a point must also be outside every `outside_terrain` area (core's ReachTerrain: not ending on a Light or
+// Dense feature) and in no `outside_terrain_shadows`. Without terrain they are empty.
 struct ReachRegion {
     core::Rect bounds;
     std::vector<core::ReachCircle> inside_all;
@@ -44,8 +55,11 @@ struct ReachRegion {
     std::vector<std::vector<core::ReachShape>> inside_any_shapes;
     std::vector<core::ReachShape> outside_shapes;
     std::vector<ShapeShadow> outside_shape_shadows;
+    std::vector<core::ReachTerrain> outside_terrain;      // M88
+    std::vector<TerrainShadow> outside_terrain_shadows;  // M88
     [[nodiscard]] bool has_shapes() const noexcept {
-        return !inside_any_shapes.empty() || !outside_shapes.empty() || !outside_shape_shadows.empty();
+        return !inside_any_shapes.empty() || !outside_shapes.empty() || !outside_shape_shadows.empty() ||
+               !outside_terrain.empty() || !outside_terrain_shadows.empty();
     }
 };
 
@@ -58,6 +72,13 @@ struct ReachRegion {
 // D-074 part 3: whether `p` is in the shadow (the straight line from its `from` to `p` meets the shape), deciding by
 // the shape's inner and outer discs first.
 [[nodiscard]] bool shadow_holds(const ShapeShadow& shadow, const core::Position& p);
+
+// M88: whether `p` is in the terrain area (core::reach_terrain_contains), deciding by its inner and outer discs first.
+[[nodiscard]] bool terrain_holds(const core::ReachTerrain& terrain, const core::Position& p);
+
+// M88: whether `p` is in the terrain shadow (the straight line from its `from` to `p` passes through the feature),
+// deciding by the feature's inner and outer discs first.
+[[nodiscard]] bool terrain_shadow_holds(const TerrainShadow& shadow, const core::Position& p);
 
 // Where one model's next drag can be dropped: its next straight line (from where it is now, up to the
 // distance it has left), within core's limits. Empty if it can't be moved.
