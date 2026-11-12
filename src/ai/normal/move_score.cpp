@@ -11,6 +11,7 @@
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/units.hpp"
 #include "core/rules/charge.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/points_destroyed.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
@@ -99,6 +100,9 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
     s.in_enemy_half_range = enemy_half > 0.0f && core::within(s.gap_mm, enemy_half);
 
     ScoreLine line = ctx.new_line();
+    // M87 (D-086): what is left of us now, and after the enemy's next turn on the line (read only).
+    const double us_now = line.us();
+    double us_left = us_now;
     // D-066 (M56): the other enemy units (none with one enemy unit: then nothing below changes).
     const bool others = ctx.other_count() > 0;
     if (engaged_stay) {
@@ -110,7 +114,7 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         if (ctx.supported()) line.allies_hit(ctx.team()->support_now);
         OtherThreat threat;
         if (others) threat = ctx.other_threat(plan.positions, std::nullopt);
-        s.hold = ctx.engaged_line(line, 1.0, &s.p_survive, others ? &threat : nullptr) - s.shoot_now;
+        s.hold = ctx.engaged_line(line, 1.0, &s.p_survive, others ? &threat : nullptr, &us_left) - s.shoot_now;
         s.enemy_reply = "fights on or falls back";
     } else {
         double share = 0.0;
@@ -149,14 +153,17 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         OtherThreat threat;
         if (others) threat = ctx.other_threat(plan.positions, other);
         const OtherThreat* tp = others ? &threat : nullptr;
-        double hold_total =
-            ctx.hold_line(line, gap_after, our_centroid, &s.enemy_reply, &s.p_enemy_charge, &s.p_survive, tp);
+        double hold_total = ctx.hold_line(line, gap_after, our_centroid, &s.enemy_reply, &s.p_enemy_charge,
+                                          &s.p_survive, tp, false, &us_left);
         // D-083 part 2 (M80): the focus answers one of the group's members in its reach; this unit's share of its
         // reply (the rest of the time it answers a partner, and only the other enemy units reply to us).
         s.reply_share = ctx.supported() ? ctx.reply_share(s.gap_mm) : 1.0;
         if (s.reply_share < 1.0) {
-            const double elsewhere = ctx.hold_line(line, gap_after, our_centroid, nullptr, nullptr, nullptr, tp, true);
+            double left_elsewhere = us_now;
+            const double elsewhere =
+                ctx.hold_line(line, gap_after, our_centroid, nullptr, nullptr, nullptr, tp, true, &left_elsewhere);
             hold_total = s.reply_share * hold_total + (1.0 - s.reply_share) * elsewhere;
+            us_left = s.reply_share * us_left + (1.0 - s.reply_share) * left_elsewhere;
         }
         s.hold = hold_total - s.shoot_now;
         if (allow.charge) {
@@ -243,6 +250,13 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         s.cohesion = ctx.cohesion_term(plan.positions);
         s.total += s.approach + s.cohesion;
     }
+    // M87 (D-086): the objective terms, under a mission only (added only then, so every other score is the same sum).
+    if (const std::optional<ObjectiveOutlook>& o = ctx.objectives()) {
+        const double survive = us_now > 0.0 ? us_left / us_now : 0.0;
+        const ObjectiveTerms t = objective_terms(*o, ctx.origin(), us, plan.positions, survive);
+        s.objective = t.deny + t.score;
+        s.total += s.objective;
+    }
     return s;
 }
 
@@ -262,6 +276,11 @@ const core::Unit* followed_focus(const ArmyPlan& plan, const core::GameState& or
 }
 
 }  // namespace
+
+bool objectives_on(const core::GameState& state, const MoveWeights& weights) {
+    return state.mission.has_value() &&
+           (weights.objective > 0.0 || weights.objective_approach > 0.0 || weights.objective_fire > 0.0);
+}
 
 // ---- the context ----
 
@@ -364,7 +383,14 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 const core::PointsTally tally = core::points_destroyed(origin);
                 const std::int64_t ours_pts = tally.destroyed[core::side_index(us_.side)];
                 const std::int64_t theirs_pts = tally.destroyed[1 - core::side_index(us_.side)];
-                const double result = ours_pts > theirs_pts ? 1.0 : ours_pts < theirs_pts ? -1.0 : 0.0;
+                double result = ours_pts > theirs_pts ? 1.0 : ours_pts < theirs_pts ? -1.0 : 0.0;
+                if (objectives_on(origin, weights_)) {
+                    // M87 (D-086): under the mission the result is on victory points (D-084), equal VP on points.
+                    const core::VpTally vp = core::vp_tally(origin);
+                    const int ours_vp = vp.total[core::side_index(us_.side)];
+                    const int theirs_vp = vp.total[1 - core::side_index(us_.side)];
+                    if (ours_vp != theirs_vp) result = ours_vp > theirs_vp ? 1.0 : -1.0;
+                }
                 survival_weight_ *= 1.0 + result;
             } else {
                 survival_weight_ = 0.0;
@@ -398,13 +424,43 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
             }
             others_.push_back(std::move(x));
         }
+        // M87 (D-086): the objective areas (under a mission only).
+        const bool on = objectives_on(origin, weights_);
+        if (on) {
+            objectives_ = objective_outlook(origin, us_, *plan, turns_, weights_.objective);
+            area_spots_ = true;
+        }
+        const AreaSet* area = on && weights_.objective_approach > 0.0 ? plan->area_of(us_.id) : nullptr;
         if (focus != nullptr) {
             make_team(*plan, *focus, line_focus);
+        } else if (area != nullptr && !start_engaged_) {
+            make_area_approach(*plan, *area);
         } else if (plan != nullptr && plan->active && weights_.approach_alone > 0.0 &&
                    !start_engaged_) {
             make_lone_approach(*e);
         }
     }
+}
+
+// M87 (D-086): a unit that follows no group and that the plan sends to an area heads for it beyond its Move, instead of
+// closing on its closest enemy unit (whose line it keeps: no partners, no support). Within its Move the objective
+// terms decide.
+void MoveScoreContext::make_area_approach(const ArmyPlan& plan, const AreaSet& set) {
+    if (!origin_.mission || set.area >= origin_.mission->objectives.size() || !enemy_) return;
+    const core::ObjectiveArea& area = origin_.mission->objectives[set.area];
+    MoveTeam t;
+    t.focus = enemy_->id;
+    t.line = false;
+    t.area = set.area;
+    t.area_centre = area.centre;
+    t.area_radius_mm = area.diameter_mm * 0.5f;
+    t.area_value = vp_share(origin_) * static_cast<double>(area.vp[core::side_index(us_.side)]);
+    t.area_text = area.name + " (" + area_role(origin_, plan, set) + ")";
+    t.start_gap_mm = centroid_gap_mm(positions_of(us_), area);
+    const float m = us_threat_.move_mm;
+    t.per_turn_mm = m > 0.0f ? m + kMeanAdvanceMm : 0.0f;
+    t.reach_mm = m;
+    team_ = std::move(t);
 }
 
 // D-083 part 5 (M83): a unit that follows no group closes on its closest enemy unit beyond the line's horizon (where
@@ -502,6 +558,14 @@ void MoveScoreContext::make_team(const ArmyPlan& plan, const core::Unit& focus, 
 double MoveScoreContext::approach_term(const std::vector<core::Position>& positions,
                                        std::optional<float> line_gap_mm) const {
     if (!team_ || !(team_->per_turn_mm > 0.0f) || team_->mode == AttackMode::Engaged) return 0.0;
+    if (team_->area && origin_.mission && *team_->area < origin_.mission->objectives.size()) {
+        // M87 (D-086): towards the plan's area, beyond our Move.
+        const float g = centroid_gap_mm(positions, origin_.mission->objectives[*team_->area]);
+        const auto area_turns = [&](float x) {
+            return static_cast<double>(std::max(0.0f, x - team_->reach_mm) / team_->per_turn_mm);
+        };
+        return weights_.objective_approach * team_->area_value * (area_turns(team_->start_gap_mm) - area_turns(g));
+    }
     float gap_mm = kFar;
     if (team_->alone && line_gap_mm) {
         gap_mm = *line_gap_mm;  // the focus is the line's enemy: enemy_gaps measured the same pairs
@@ -798,12 +862,13 @@ double MoveScoreContext::our_next_turn(const ScoreLine& line, float gap_mm) {
 }
 
 double MoveScoreContext::enemy_turn_from(const ScoreLine& line, float from_mm, float to_mm, double* p_charge,
-                                         double* p_survive, const OtherThreat* others) {
+                                         double* p_survive, const OtherThreat* others, double* us_left) {
     const bool heavy = keeps_heavy(from_mm - to_mm);
     ScoreLine y = line;
     y.next_half_turn();
     y.they_hit(ranged_rate(false, core::ShootingType::Normal, heavy, to_mm));
     if (others != nullptr) y.others_hit(others->unengaged);  // D-066: the other enemy units' replies
+    if (us_left != nullptr) *us_left = y.us();
     const double w = survival_weight_;
     double shot_survive = 1.0 - enemy_ranged_wipe(core::ShootingType::Normal, heavy, to_mm);
     if (others != nullptr) shot_survive *= others->survive;
@@ -819,6 +884,7 @@ double MoveScoreContext::enemy_turn_from(const ScoreLine& line, float from_mm, f
     ScoreLine c = y;
     c.they_hit(melee_rate(false));
     c.we_hit(melee_rate(true));
+    const double charged_left = c.us();  // M87 (D-086): after their fight, before our next turn
     if (turns_ >= 2) {
         c.next_half_turn();
         if (supported()) c.allies_hit(team_->support_next);  // D-083 part 2: our partners' volleys
@@ -830,14 +896,16 @@ double MoveScoreContext::enemy_turn_from(const ScoreLine& line, float from_mm, f
     const double charged = c.value() + w * charge_survive;
     const bool charges = charged < nocharge;
     if (p_survive != nullptr) *p_survive = (1.0 - p) * shot_survive + p * (charges ? charge_survive : shot_survive);
+    if (us_left != nullptr) *us_left = (1.0 - p) * y.us() + p * (charges ? charged_left : y.us());
     return (1.0 - p) * nocharge + p * std::min(charged, nocharge);
 }
 
 double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const core::Position& our_centroid,
                                    std::string* reply, double* p_enemy_charge, double* p_survive,
-                                   const OtherThreat* others, bool reply_elsewhere) {
+                                   const OtherThreat* others, bool reply_elsewhere, double* us_left) {
     if (p_enemy_charge != nullptr) *p_enemy_charge = 0.0;
     if (p_survive != nullptr) *p_survive = 1.0;
+    if (us_left != nullptr) *us_left = line.us();
     const double w = survival_weight_;
     if (turns_ == 0 || !enemy_) {
         if (reply != nullptr) *reply = "the game ends";
@@ -854,6 +922,7 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
             survive *= others->survive;
         }
         if (p_survive != nullptr) *p_survive = survive;
+        if (us_left != nullptr) *us_left = y.us();
         return our_next_turn(y, gap_mm) + w * survive;
     }
     if (enemy_engaged_elsewhere_ || gap_mm >= kFar) {
@@ -873,9 +942,11 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
             y.others_hit(others->unengaged);
             survive *= others->survive;
             if (p_survive != nullptr) *p_survive = survive;
+            if (us_left != nullptr) *us_left = y.us();
             return our_next_turn(y, gap_mm >= kFar ? kFar : gap_mm) + w * survive;
         }
         if (p_survive != nullptr) *p_survive = survive;
+        if (us_left != nullptr) *us_left = y.us();
         return our_next_turn(y, gap_mm >= kFar ? kFar : gap_mm) + w * survive;
     }
     const float m = them_threat_.move_mm;
@@ -883,37 +954,42 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
     std::string best_reply;
     double best_p = 0.0;
     double best_survive = 1.0;
+    double best_left = line.us();
     bool first = true;
-    const auto consider = [&](double v, const char* what, double p, double survive) {
+    const auto consider = [&](double v, const char* what, double p, double survive, double left) {
         if (first || v < best - 1e-12) {
             best = v;
             best_reply = what;
             best_p = p;
             best_survive = survive;
+            best_left = left;
             first = false;
         }
     };
     {  // stay and shoot ([HEAVY]), then charge if the roll can cover the gap
         double p = 0.0;
         double survive = 1.0;
-        const double v = enemy_turn_from(line, gap_mm, gap_mm, &p, &survive, others);
-        consider(v, p > 0.0 ? "stays, shoots and charges" : "stays and shoots", p, survive);
+        double left = 0.0;
+        const double v = enemy_turn_from(line, gap_mm, gap_mm, &p, &survive, others, &left);
+        consider(v, p > 0.0 ? "stays, shoots and charges" : "stays and shoots", p, survive, left);
     }
     if (m > 0.0f) {
         const float half = them_threat_.max_range_mm * 0.5f;
         if (half > 0.0f && half < gap_mm && gap_mm - half <= m) {
             double p = 0.0;
             double survive = 1.0;
+            double left = 0.0;
             const double v = enemy_turn_from(line, gap_mm, std::max(half - 0.01f * core::MM_PER_INCH, kCloseGapMm), &p,
-                                             &survive, others);
-            consider(v, "closes to half range", p, survive);
+                                             &survive, others, &left);
+            consider(v, "closes to half range", p, survive, left);
         }
         const float close = std::max(gap_mm - m, kCloseGapMm);
         if (close < gap_mm) {
             double p = 0.0;
             double survive = 1.0;
-            const double v = enemy_turn_from(line, gap_mm, close, &p, &survive, others);
-            consider(v, p > 0.0 ? "closes and charges" : "closes and shoots", p, survive);
+            double left = 0.0;
+            const double v = enemy_turn_from(line, gap_mm, close, &p, &survive, others, &left);
+            consider(v, p > 0.0 ? "closes and charges" : "closes and shoots", p, survive, left);
         }
         // Advance (09.06): [ASSAULT] weapons only, no charge.
         if (them_threat_.max_assault_range_mm > 0.0f) {
@@ -928,7 +1004,7 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
             if (others != nullptr) y.others_hit(others->unengaged);
             double survive = 1.0 - enemy_ranged_wipe(core::ShootingType::Assault, false, adv);
             if (others != nullptr) survive *= others->survive;
-            consider(our_next_turn(y, adv) + w * survive, "advances and shoots", 0.0, survive);
+            consider(our_next_turn(y, adv) + w * survive, "advances and shoots", 0.0, survive, y.us());
         }
         // Keep away from us, as far as the battlefield lets it.
         std::vector<core::Position> theirs;
@@ -942,23 +1018,25 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
             if (others != nullptr) y.others_hit(others->unengaged);
             double survive = 1.0 - enemy_ranged_wipe(core::ShootingType::Normal, keeps_heavy(room), away);
             if (others != nullptr) survive *= others->survive;
-            consider(our_next_turn(y, away) + w * survive, "keeps away and shoots", 0.0, survive);
+            consider(our_next_turn(y, away) + w * survive, "keeps away and shoots", 0.0, survive, y.us());
         }
     }
     if (reply != nullptr) *reply = best_reply;
     if (p_enemy_charge != nullptr) *p_enemy_charge = best_p;
     if (p_survive != nullptr) *p_survive = best_survive;
+    if (us_left != nullptr) *us_left = best_left;
     return best;
 }
 
 double MoveScoreContext::engaged_line(const ScoreLine& line, double our_fighters, double* p_survive,
-                                      const OtherThreat* others) {
+                                      const OtherThreat* others, double* us_left) {
     ScoreLine c = line;
     // Our fight now: Fights First after a charge (11.04), or we select first (12.04).
     c.we_hit(melee_rate(true) * std::clamp(our_fighters, 0.0, 1.0));
     c.they_hit(melee_rate(false));
     const double w = survival_weight_;
     const double now_survive = 1.0 - enemy_melee_wipe();
+    if (us_left != nullptr) *us_left = c.us();
     if (turns_ < 1 || !enemy_) {
         if (p_survive != nullptr) *p_survive = now_survive;
         return c.value() + w * now_survive;
@@ -972,6 +1050,7 @@ double MoveScoreContext::engaged_line(const ScoreLine& line, double our_fighters
     if (others != nullptr) stay.others_hit(others->engaged);
     stay.they_hit(melee_rate(false));
     stay.we_hit(melee_rate(true));
+    const double stay_left = stay.us();  // M87 (D-086): after their turn
     if (turns_ >= 2) {
         stay.next_half_turn();
         if (supported()) stay.allies_hit(team_->support_next);  // D-083 part 2: our partners' volleys
@@ -987,13 +1066,16 @@ double MoveScoreContext::engaged_line(const ScoreLine& line, double our_fighters
     }
     const double fight_on = stay.value() + w * on_survive;
     double fall_back = fight_on;
+    double away_left = stay_left;
     if (them_threat_.move_mm > 0.0f) {
         ScoreLine away = c;
         away.next_half_turn();
         if (others != nullptr) away.others_hit(others->unengaged);  // it fell back: we stand unengaged
+        away_left = away.us();
         fall_back = our_next_turn(away, them_threat_.move_mm) + w * away_survive;
     }
     if (p_survive != nullptr) *p_survive = fall_back < fight_on ? away_survive : on_survive;
+    if (us_left != nullptr) *us_left = fall_back < fight_on ? away_left : stay_left;
     return std::min(fight_on, fall_back);
 }
 

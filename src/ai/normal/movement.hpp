@@ -55,8 +55,12 @@ inline constexpr std::size_t kAdvanceEstimateMoves =
 // D-083 part 2 (M80): `team`, the unit's group (MoveScoreContext::team()): its directions and formations line up on the
 // focus instead of the closest enemy unit, a few spots beside the nearest partner are added, and the labels name the
 // focus and the partners. nullptr: the candidates as before.
+// M87 (D-086): a team with an area (MoveTeam::area) lines them up on the area instead, and the labels name it.
+// `area_spots` (MoveScoreContext::area_spots(), under a mission): a few spots on each objective area the move can reach
+// and on the team's area are appended (a translation straight at the area's centre, as far as the move goes, and a line
+// abreast there facing the closest enemy unit; two ranks too when the centre is within the move).
 [[nodiscard]] std::vector<MoveCandidate> move_candidates(const core::GameState& origin,
-                                                         const MoveTeam* team = nullptr);
+                                                         const MoveTeam* team = nullptr, bool area_spots = false);
 
 // D-075 (M66): the proposals that move each model of the move in progress in `origin` (no model moved yet) straight to
 // `ends` (unit order), as a formation's are made: an order in which no model ends on one still to move (D-027), a cycle

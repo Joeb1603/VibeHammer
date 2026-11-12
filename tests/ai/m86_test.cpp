@@ -1,6 +1,7 @@
 // M86 (D-084): the bot on the objective mission. It ignores the objectives here (M87 plays for them) and plays a
 // mission like the points rule (kills count, and settle equal VP), so it plays the objective scenario exactly as the
-// rosters. The arena counts the VP, and its custom and random battles can play the mission.
+// rosters. The arena counts the VP, and its custom and random battles can play the mission. M87 (D-086): with both
+// objective weights 0 the bot still plays so.
 
 #include <gtest/gtest.h>
 
@@ -38,11 +39,16 @@ std::string field(const std::string& line, const std::string& key) {
 
 }  // namespace
 
-TEST(M86_Bot, TheBotPlaysTheObjectiveScenarioExactlyAsTheRosters) {
+TEST(M86_Bot, WithoutObjectiveWeightsTheBotPlaysTheObjectiveScenarioExactlyAsTheRosters) {
     // The same armies and dice: the same actions (the bot ignores the objectives and scores kills as under the points
     // rule), so only the final state differs (the mission, its control and VP, and the result).
+    // M87 (D-086): the bot now plays for the objectives; with both objective weights 0 it plays as at M86, which this
+    // test keeps (M87_Regression checks that the default weights don't).
+    BotConfig m86;
+    m86.move.objective = 0.0;
+    m86.move.objective_approach = 0.0;
     const PerGameReport rosters = run_per_game(wh40k::test::load_rosters_scenario(), 1, 1, BotConfig{}, BotConfig{});
-    const PerGameReport mission = run_per_game(objectives(), 1, 1, BotConfig{}, BotConfig{});
+    const PerGameReport mission = run_per_game(objectives(), 1, 1, m86, m86);
     EXPECT_TRUE(rosters.clean);
     EXPECT_TRUE(mission.clean);
     EXPECT_FALSE(field(mission.text, "actions").empty());

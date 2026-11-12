@@ -73,11 +73,34 @@ struct PlanGroup {
     friend bool operator==(const PlanGroup&, const PlanGroup&) = default;
 };
 
+// M87 (D-086): a unit the plan sends to an objective area.
+struct AreaMember {
+    core::UnitId unit;
+    int arrival = kNoArrival;  // our turns until it can be within range (0: by the end of this turn's move)
+    int oc = 0;                // its OC (all its models)
+    friend bool operator==(const AreaMember&, const AreaMember&) = default;
+};
+
+// M87 (D-086): an area set: the units the plan sends to hold, take or contest one objective area (D-084), 1 to 3 of
+// them, chosen by the scorings they make there (its VP for us at the VP rate, times the chance that their OC beats the
+// enemy's at each of our scorings, three at most) and, for those arriving this turn, the enemy scoring they deny.
+struct AreaSet {
+    std::size_t area = 0;              // index into Mission::objectives
+    std::vector<AreaMember> members;   // in unit order
+    double value = 0.0;                // the scorings made and denied, in shares
+    double risk = 0.0;                 // the members' strengths (what is left of them), summed
+    double chance = 0.0;               // P(we control it at our first scoring after the set arrives)
+    double deny = 0.0;                 // the part of `value` that denies the enemy's next scoring
+    [[nodiscard]] const AreaMember* member(core::UnitId unit) const;
+    friend bool operator==(const AreaSet&, const AreaSet&) = default;
+};
+
 struct UnitPlan {
     core::UnitId unit;
     std::optional<core::UnitId> focus;   // the group's target, else the closest enemy unit (nullopt: none)
     std::vector<core::UnitId> partners;  // the group's other members, in unit order (empty: unassigned)
     std::optional<std::size_t> group;    // index into ArmyPlan::groups
+    std::optional<std::size_t> area;     // M87 (D-086): index into ArmyPlan::areas (nullopt: no area set)
     friend bool operator==(const UnitPlan&, const UnitPlan&) = default;
 };
 
@@ -86,8 +109,12 @@ struct ArmyPlan {
     bool active = false;           // false: the no-op plan (closest enemy unit, no partners for every unit)
     std::vector<UnitPlan> units;   // the side's units with models, in unit order
     std::vector<PlanGroup> groups;  // in the order they were assigned
+    // M87 (D-086): under a mission, in our turn, the area sets for the units no group took (in the order they were
+    // assigned); empty otherwise. `active` is about the groups only.
+    std::vector<AreaSet> areas;
     [[nodiscard]] const UnitPlan* find(core::UnitId unit) const;
     [[nodiscard]] const PlanGroup* group_of(core::UnitId unit) const;
+    [[nodiscard]] const AreaSet* area_of(core::UnitId unit) const;
     friend bool operator==(const ArmyPlan&, const ArmyPlan&) = default;
 };
 
@@ -123,7 +150,15 @@ struct JointExchange {
 
 // "Legionaries 1 + Legionaries 5 on Screamer-killer 1 (joint +0.22, apart +0.00, reply on Legionaries 1); ..." or "no
 // group pays" / "no plan".
+// M87 (D-086): then each area set: "; Termagants 1 to hold B home (+0.73, 97%)" (its value and its chance of control at
+// our first scoring after it arrives).
 [[nodiscard]] std::string describe(const core::GameState& state, const ArmyPlan& plan);
+// The groups' part alone (describe before M87).
+[[nodiscard]] std::string describe_groups(const core::GameState& state, const ArmyPlan& plan);
+// M87 (D-086): "hold" (we control the area now), "contest" (the set's value is mostly the enemy scoring it denies) or
+// "take"; and one set's text, "Termagants 1 + Termagants 9 to take Centre (+1.10, 64%)".
+[[nodiscard]] const char* area_role(const core::GameState& state, const ArmyPlan& plan, const AreaSet& set);
+[[nodiscard]] std::string describe_area(const core::GameState& state, const ArmyPlan& plan, const AreaSet& set);
 // For one unit's reasons: "with Legionaries 5 on Screamer-killer 1 (joint +0.22, apart +0.00)", or "" without partners.
 [[nodiscard]] std::string describe_unit(const core::GameState& state, const ArmyPlan& plan, core::UnitId unit);
 

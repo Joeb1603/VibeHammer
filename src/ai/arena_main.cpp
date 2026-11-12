@@ -8,7 +8,8 @@
 //   didn't finish within the step cap (default 5000); 2 for a bad flag. --trace plays the one game with that
 //   seed and prints every bot decision, its reason and (M44) its time instead. --weights (for tuning) overrides the
 //   move score's weights (normal::MoveWeights, normal/move_score.hpp) for both sides, --weights-a / --weights-b for one
-//   side (applied in the order given): delay, survival, edge, coherency, approach, cohesion, follow, approach_alone.
+//   side (applied in the order given): delay, survival, edge, coherency, approach, cohesion, follow, approach_alone,
+//   objective, objective_approach, objective_fire (M87, D-086; all 0: a mission game plays exactly as before M87).
 //   --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
 //   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
@@ -21,6 +22,9 @@
 // M74 (D-081): --deploy hand|auto (default auto), for --army-a / --army-b / --random-armies only: hand has the bots
 //   set the units up in the deployment step (alternating, the side taking the second turn first); auto places them
 //   by the auto-layout as before. With a scenario (which fixes its own deployment) it exits 2.
+// M87 (D-086): --mission <scenario file>, for --army-a / --army-b / --random-armies only: the scenario whose mission block
+//   the battles play (default data/scenarios/incursion_objectives_44x60.json, M86); for tuning the mission's numbers.
+//   With --scenario it exits 2.
 
 #include <cstdio>
 #include <exception>
@@ -68,6 +72,12 @@ void apply_weights(const std::string& text, wh40k::ai::normal::MoveWeights& w) {
             w.follow = d;
         } else if (key == "approach_alone") {  // D-083 part 5 (M83)
             w.approach_alone = d;
+        } else if (key == "objective") {  // M87 (D-086)
+            w.objective = d;
+        } else if (key == "objective_approach") {
+            w.objective_approach = d;
+        } else if (key == "objective_fire") {
+            w.objective_fire = d;
         } else {
             throw std::invalid_argument("unknown weight");
         }
@@ -96,6 +106,7 @@ int main(int argc, char** argv) {
     std::optional<wh40k::core::Side> first;
     bool random_armies = false;
     std::optional<wh40k::core::DeploymentMode> deploy;  // M74 (D-081)
+    std::optional<std::string> mission;                 // M87 (D-086)
     for (int i = 1; i < argc; i += 2) {
         const std::string key = argv[i];
         if (i + 1 >= argc) {
@@ -120,6 +131,8 @@ int main(int argc, char** argv) {
             } else if (key == "--deploy") {
                 if (value != "hand" && value != "auto") throw std::invalid_argument("not hand or auto");
                 deploy = value == "hand" ? wh40k::core::DeploymentMode::Hand : wh40k::core::DeploymentMode::Auto;
+            } else if (key == "--mission") {
+                mission = value;
             } else if (key == "--random-armies") {
                 const int v = std::stoi(value);
                 if (v != 0 && v != 1) throw std::invalid_argument("not 0 or 1");
@@ -165,6 +178,11 @@ int main(int argc, char** argv) {
                              "its own deployment)\n");
         return 2;
     }
+    if (mission && !armies && !random_armies) {
+        std::fprintf(stderr, "wh40k_bot_arena: --mission needs --army-a, --army-b or --random-armies (a scenario has its "
+                             "own mission)\n");
+        return 2;
+    }
     const wh40k::core::DeploymentMode deploy_mode = deploy.value_or(wh40k::core::DeploymentMode::Auto);
     try {
         const fs::path root(WH40K_REPO_ROOT);
@@ -178,7 +196,9 @@ int main(int argc, char** argv) {
             namespace core = wh40k::core;
             auto loaded = wh40k::ai::load_army_source(root);
             // M86 (D-084): custom and random battles play the objective scenario's mission, as in the client.
-            loaded.mission = core::load_mission_block(root / "data/scenarios/incursion_objectives_44x60.json");
+            // M87 (D-086): --mission names another scenario to read the block from.
+            loaded.mission =
+                core::load_mission_block(mission ? in_repo(*mission) : root / "data/scenarios/incursion_objectives_44x60.json");
             const auto source = std::make_shared<wh40k::ai::ArmySource>(std::move(loaded));
             const core::Side first_turn = first.value_or(core::Side::A);
             if (random_armies) {

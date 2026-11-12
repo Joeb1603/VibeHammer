@@ -94,6 +94,26 @@ EngagementSnapshot engagement_snapshot(const core::GameState& state) {
         });
         if (lone) out.lone[core::side_index(u.side)].push_back(u.id);
     }
+    // M87 (D-086): connected groups of engagements (union-find over the units, a link per engaged pair).
+    std::vector<std::size_t> root(units.size());
+    for (std::size_t i = 0; i < units.size(); ++i) root[i] = i;
+    const auto find = [&](std::size_t i) {
+        while (root[i] != i) i = root[i] = root[root[i]];
+        return i;
+    };
+    for (std::size_t i = 0; i < units.size(); ++i) {
+        if (!units[i].models.empty()) ++out.on_battlefield;
+        for (const core::UnitId eid : engaged[i]) {
+            for (std::size_t j = 0; j < units.size(); ++j) {
+                if (units[j].id == eid) root[find(i)] = find(j);
+            }
+        }
+    }
+    std::vector<int> size(units.size(), 0);
+    for (std::size_t i = 0; i < units.size(); ++i) {
+        if (!engaged[i].empty()) ++size[find(i)];
+    }
+    for (const int n : size) out.largest_cluster = std::max(out.largest_cluster, n);
     return out;
 }
 
@@ -131,9 +151,18 @@ void TeamworkCounter::observe(const std::vector<core::GameEvent>& events, const 
                     for (const core::UnitId id : snap.ganged_up[s]) insert_id(ganged_[s], id.v);
                     stats_.ganged_units[s] = static_cast<int>(ganged_[s].size());
                 }
+                stats_.largest_cluster = std::max(stats_.largest_cluster, snap.largest_cluster);  // M87
+                if (snap.on_battlefield > 0) {
+                    stats_.largest_cluster_share =
+                        std::max(stats_.largest_cluster_share, static_cast<double>(snap.largest_cluster) /
+                                                                   static_cast<double>(snap.on_battlefield));
+                }
             }
         } else if (std::holds_alternative<core::event::PhaseEnded>(e)) {
             flush_shooting();
+        } else if (const auto* vp = std::get_if<core::event::VictoryPointsScored>(&e)) {  // M87 (D-086)
+            if (stats_.area_vp.size() <= vp->objective) stats_.area_vp.resize(vp->objective + 1, std::array<int, 2>{});
+            stats_.area_vp[vp->objective][core::side_index(vp->side)] += vp->vp;
         } else if (const auto* sh = std::get_if<core::event::ShootingStarted>(&e)) {
             const core::Unit* u = after.find_unit(sh->unit);
             if (u == nullptr) continue;
@@ -344,6 +373,15 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
             r.teamwork.first_engagement_round[s] += t.first_engagement_round[s];
             if (t.first_engagement_round[s] > 0) ++r.engaged_games[s];
         }
+        // M87 (D-086)
+        r.teamwork.largest_cluster += g.teamwork.largest_cluster;
+        r.teamwork.largest_cluster_share += g.teamwork.largest_cluster_share;
+        if (r.teamwork.area_vp.size() < g.teamwork.area_vp.size()) {
+            r.teamwork.area_vp.resize(g.teamwork.area_vp.size(), std::array<int, 2>{});
+        }
+        for (std::size_t i = 0; i < g.teamwork.area_vp.size(); ++i) {
+            for (std::size_t s = 0; s < 2; ++s) r.teamwork.area_vp[i][s] += g.teamwork.area_vp[i][s];
+        }
     }
     if (!r.games.empty()) {
         const double n = static_cast<double>(r.games.size());
@@ -481,6 +519,18 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
         std::snprintf(buf, sizeof buf, "mean points destroyed by the end (D-077): A %.2f, B %.2f\n",
                       r.mean_points_destroyed[0], r.mean_points_destroyed[1]);
         out += buf;
+        if (scenario.mission) {  // M87 (D-086): the mean VP each side scored at each area
+            const double n = r.games.empty() ? 1.0 : static_cast<double>(r.games.size());
+            std::string areas;
+            for (std::size_t i = 0; i < scenario.mission->objectives.size(); ++i) {
+                const int va = i < r.teamwork.area_vp.size() ? r.teamwork.area_vp[i][0] : 0;
+                const int vb = i < r.teamwork.area_vp.size() ? r.teamwork.area_vp[i][1] : 0;
+                std::snprintf(buf, sizeof buf, "%s%s A %.2f / B %.2f", areas.empty() ? "" : "; ",
+                              scenario.mission->objectives[i].name.c_str(), va / n, vb / n);
+                areas += buf;
+            }
+            out += "mean objective VP by area (M87): " + areas + "\n";
+        }
     }
     if (scenario.result_rule == core::ResultRule::PointsDestroyed) {  // M67 (D-076): only for such a scenario
         std::snprintf(buf, sizeof buf,
@@ -519,6 +569,11 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                       static_cast<int>(r.games.size()) - r.engaged_games[0],
                       ratio(t.first_engagement_round[1], r.engaged_games[1]),
                       static_cast<int>(r.games.size()) - r.engaged_games[1]);
+        out += buf;
+        std::snprintf(buf, sizeof buf,
+                      "largest melee (M87), per game: the most units in one connected group of engagements at a Fight "
+                      "phase's start %.2f, as a share of the units on the battlefield %.3f\n",
+                      t.largest_cluster / n, t.largest_cluster_share / n);
         out += buf;
     }
     std::string coherency;  // M43: which games lost models to coherency (for --trace)

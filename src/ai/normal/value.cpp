@@ -50,6 +50,23 @@ double share_weight(const core::GameState& state, const core::Unit& unit) {
     return static_cast<double>(unit.points) * static_cast<double>(counted) / static_cast<double>(total);
 }
 
+double vp_share(const core::GameState& state) {
+    if (!state.mission) return 0.0;
+    std::int64_t total = 0;
+    std::int64_t counted = 0;
+    for (const core::Unit& u : state.units) {
+        if (u.points <= 0) return 0.0;
+        total += u.points;
+        ++counted;
+    }
+    if (total <= 0 || counted == 0) return 0.0;
+    const double mean = static_cast<double>(total) / static_cast<double>(counted);
+    const core::Mission& m = *state.mission;
+    const double points_per_vp =
+        static_cast<double>(m.kill_points) / static_cast<double>(m.kill_vp > 0 ? m.kill_vp : 1);
+    return points_per_vp / mean;
+}
+
 double unit_share(const core::GameState& state, const core::Unit& unit, double model_equivalents) {
     const double share = model_equivalents / static_cast<double>(strength_of(unit));
     const double w = share_weight(state, unit);

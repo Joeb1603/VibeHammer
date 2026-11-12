@@ -18,6 +18,7 @@ add_library(wh40k_ai STATIC
     normal/move_score.cpp
     normal/movement.cpp
     normal/normal_bot.cpp
+    normal/objectives.cpp
     normal/shooting.cpp
     normal/value.cpp
     simulator.cpp

@@ -26,6 +26,12 @@ namespace wh40k::ai::normal {
 // a battle of one datasheet a side keeps 1 too.
 [[nodiscard]] double share_weight(const core::GameState& state, const core::Unit& unit);
 
+// M87 (D-086): what one victory point of the D-084 mission is worth in shares: the points destroyed one kill VP stands
+// for (kill_points / kill_vp; kill_points when kill VP is 0) over the mean points of every unit (both sides, destroyed
+// ones too, as share_weight). Then a side's share margin plus its objective VP x this rate is its VP margin in shares.
+// 0 without a mission, or when a unit has no points.
+[[nodiscard]] double vp_share(const core::GameState& state);
+
 // `model_equivalents` of `unit` as a share of its starting strength, times its share_weight (D-077).
 [[nodiscard]] double unit_share(const core::GameState& state, const core::Unit& unit, double model_equivalents);
 

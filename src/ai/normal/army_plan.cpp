@@ -12,6 +12,8 @@
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/state/queries.hpp"
+#include "normal/charge.hpp"
+#include "normal/objectives.hpp"
 #include "normal/value.hpp"
 #include "unit_style.hpp"
 
@@ -136,7 +138,11 @@ public:
     [[nodiscard]] const std::vector<std::size_t>& ours() const noexcept { return ours_; }
     [[nodiscard]] const std::vector<std::size_t>& theirs() const noexcept { return theirs_; }
     [[nodiscard]] int turns() const noexcept { return turns_; }
+    // M87 (D-086): the battle round of our turn 0, and a unit's threat ranges.
+    [[nodiscard]] int first_round() const noexcept { return first_round_; }
+    [[nodiscard]] const analysis::ThreatRanges& threat(std::size_t k) const { return units_[k].threat; }
     [[nodiscard]] const core::Unit& unit(std::size_t k) const { return *units_[k].unit; }
+    [[nodiscard]] std::size_t unit_count() const noexcept { return units_.size(); }
     [[nodiscard]] double left(std::size_t k) const { return units_[k].left; }
     [[nodiscard]] bool engaged(std::size_t k) const { return !units_[k].engaged_with.empty(); }
     [[nodiscard]] std::optional<std::size_t> index(core::UnitId id) const {
@@ -584,6 +590,232 @@ std::optional<Choice> best_group(Planner& p, std::size_t e, const std::vector<st
     return chosen;
 }
 
+// ---- M87 (D-086): area sets ----
+
+// One area as the area pass sees it.
+struct AreaView {
+    std::size_t index = 0;               // into Mission::objectives
+    int fixed = 0;                       // our units outside the pool, where they stand
+    int them_now = 0;                    // the enemy's level of control now
+    std::vector<LevelPmf> reach;         // [k]: the enemy's level at the end of its k-th turn from now (k >= 1)
+    std::vector<int> arrival;            // per planner unit index (ours): our turns until within range
+};
+
+// A candidate set for one area.
+struct AreaChoice {
+    std::size_t area = 0;                // index into the views
+    std::vector<std::size_t> members;    // planner indices, unit order
+    double value = 0.0;
+    double deny = 0.0;
+    double risk = 0.0;
+    double chance = 0.0;
+    double key = 0.0;                    // value per risk
+};
+
+class AreaPass {
+public:
+    AreaPass(Planner& p, const core::GameState& gs, core::Side side) : p_(p), gs_(gs) {
+        const core::Mission& m = *gs.mission;
+        rate_ = vp_share(gs);
+        ours_ = core::side_index(side);
+        first_scoring_ = m.first_scoring_round;
+        theirs_scores_ = next_scorings(gs, side, turns_left(gs)).theirs;
+        const int turns = p.turns();
+        const std::size_t n = m.objectives.size();
+        for (std::size_t i = 0; i < n; ++i) {
+            AreaView v;
+            v.index = i;
+            v.reach.assign(static_cast<std::size_t>(std::max(1, turns)), LevelPmf{});
+            v.arrival.assign(p.unit_count(), kNoArrival);
+            views_.push_back(std::move(v));
+        }
+        // The enemy: its level now, and by its k-th turn from now (the turns before advancing, M + the D6's mean, then
+        // this one's move), each unit in one place (one_place).
+        for (const std::size_t e : p.theirs()) {
+            const core::Unit& eu = p.unit(e);
+            const int oc = unit_oc(eu);
+            std::vector<float> gaps(n, 0.0f);
+            std::vector<bool> in_range(n, false);
+            for (std::size_t i = 0; i < n; ++i) {
+                views_[i].them_now += oc_within(eu, m.objectives[i]);
+                gaps[i] = area_gap_mm(eu, m.objectives[i]);
+                in_range[i] = core::within(gaps[i], 0.0f);
+            }
+            if (oc <= 0) continue;
+            const analysis::ThreatRanges& th = p.threat(e);
+            const float per_turn = th.move_mm > 0.0f ? th.move_mm + kMeanAdvanceMm : 0.0f;
+            for (int k = 1; k < turns; ++k) {
+                std::vector<double> pk(n, 0.0);
+                for (std::size_t i = 0; i < n; ++i) {
+                    pk[i] = p.engaged(e) ? (in_range[i] ? 1.0 : 0.0)
+                                         : p_reaches_area(th, std::max(0.0f, gaps[i] - static_cast<float>(k - 1) * per_turn));
+                }
+                one_place(pk, in_range);
+                for (std::size_t i = 0; i < n; ++i) views_[i].reach[static_cast<std::size_t>(k)].add(oc, pk[i]);
+            }
+        }
+        for (std::size_t i = 0; i < n; ++i) {
+            const core::ObjectiveArea& area = m.objectives[i];
+            AreaView& v = views_[i];
+            for (const std::size_t u : p.ours()) {
+                const float gap = area_gap_mm(p.unit(u), area);
+                for (int j = 0; j < turns; ++j) {
+                    if (core::within(gap, p.travel(u, j))) {
+                        v.arrival[u] = j;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    [[nodiscard]] std::vector<AreaView>& views() { return views_; }
+
+    // The value of `members` (planner indices) on view `v`: the scorings they make over its fixed level, from the
+    // first one after the set's earliest arrival, three at most; and the enemy's next scoring the members arriving this
+    // turn deny.
+    [[nodiscard]] AreaChoice evaluate(std::size_t vi, const std::vector<std::size_t>& members) const {
+        const AreaView& v = views_[vi];
+        const core::ObjectiveArea& area = gs_.mission->objectives[v.index];
+        const double vp_us = rate_ * static_cast<double>(area.vp[ours_]);
+        const double vp_them = rate_ * static_cast<double>(area.vp[1 - ours_]);
+        AreaChoice c;
+        c.area = vi;
+        c.members = members;
+        int first = kNoArrival;
+        int now = 0;
+        for (const std::size_t u : members) {
+            first = std::min(first, v.arrival[u]);
+            if (v.arrival[u] == 0) now += unit_oc(p_.unit(u));
+            c.risk += p_.left(u);
+        }
+        const int turns = p_.turns();
+        int counted = 0;
+        bool first_scoring = true;
+        for (int k = first + 1; k < turns && counted < kPlanVolleys; ++k) {
+            if (p_.first_round() + k < first_scoring_) continue;  // our turn k's round scores nothing yet
+            int level = v.fixed;
+            for (const std::size_t u : members) {
+                if (v.arrival[u] <= k - 1) level += unit_oc(p_.unit(u));
+            }
+            const LevelPmf& r = v.reach[static_cast<std::size_t>(k)];
+            const double gain = r.p_below(level) - r.p_below(v.fixed);
+            if (first_scoring) c.chance = r.p_below(level);
+            first_scoring = false;
+            c.value += vp_us * gain;
+            ++counted;
+        }
+        if (theirs_scores_ && v.them_now > v.fixed && now > 0) {
+            const double without = 1.0;
+            const double with = v.them_now > v.fixed + now ? 1.0 : 0.0;
+            c.deny = vp_them * (without - with);
+            c.value += c.deny;
+        }
+        c.key = c.risk > 0.0 ? c.value / c.risk : c.value;
+        return c;
+    }
+
+private:
+    Planner& p_;
+    const core::GameState& gs_;
+    double rate_ = 0.0;
+    std::size_t ours_ = 0;
+    int first_scoring_ = 1;
+    bool theirs_scores_ = false;
+    std::vector<AreaView> views_;
+};
+
+// The best set for view `vi` from the candidates (their order is the tie-break): per size (1 to kMaxGroupSize), the best
+// value per risk; the smallest size with a set worth more than kMinPlanValue, a bigger one only if its best set is worth
+// kMinPlanGain more.
+std::optional<AreaChoice> best_area_set(const AreaPass& pass, std::size_t vi, const std::vector<std::size_t>& candidates) {
+    std::optional<AreaChoice> chosen;
+    for (std::size_t size = 1; size <= kMaxGroupSize && size <= candidates.size(); ++size) {
+        std::optional<AreaChoice> here;
+        std::vector<bool> pick(candidates.size(), false);
+        std::fill(pick.begin(), pick.begin() + static_cast<std::ptrdiff_t>(size), true);
+        do {
+            std::vector<std::size_t> g;
+            for (std::size_t k = 0; k < candidates.size(); ++k) {
+                if (pick[k]) g.push_back(candidates[k]);
+            }
+            std::sort(g.begin(), g.end());  // unit order
+            AreaChoice c = pass.evaluate(vi, g);
+            if (!(c.value > kMinPlanValue)) continue;
+            if (!here || c.key > here->key + 1e-12) here = std::move(c);
+        } while (std::prev_permutation(pick.begin(), pick.end()));
+        if (!here) continue;
+        if (!chosen || here->value > chosen->value + kMinPlanGain) chosen = std::move(here);
+    }
+    return chosen;
+}
+
+// M87 (D-086): under a mission, in our turn after our Command phase's scoring, the units no group took are sent to
+// objective areas, greedily by value per risk, at most one set per area and one area per unit.
+void assign_areas(Planner& p, const core::GameState& gs, core::Side side, ArmyPlan& plan) {
+    if (!gs.mission || gs.mission->objectives.empty() || core::turn_side(gs) != side) return;
+    const core::Stage stage = gs.flow.stage;
+    if (stage <= core::Stage::StartOfCommandPhase || stage >= core::Stage::GameOver) return;
+    if (p.turns() <= 0 || !(vp_share(gs) > 0.0)) return;
+    AreaPass pass(p, gs, side);
+    std::vector<std::size_t> pool;
+    for (const std::size_t u : p.ours()) {
+        const UnitPlan* up = plan.find(p.unit(u).id);
+        const bool grouped = up != nullptr && up->group.has_value();
+        if (!grouped && !p.engaged(u) && unit_oc(p.unit(u)) > 0) pool.push_back(u);
+    }
+    for (AreaView& v : pass.views()) {
+        const core::ObjectiveArea& area = gs.mission->objectives[v.index];
+        for (const std::size_t u : p.ours()) {
+            if (std::find(pool.begin(), pool.end(), u) == pool.end()) v.fixed += oc_within(p.unit(u), area);
+        }
+    }
+    std::vector<std::size_t> open;
+    for (std::size_t i = 0; i < pass.views().size(); ++i) open.push_back(i);
+    for (;;) {
+        std::optional<AreaChoice> best;
+        for (const std::size_t vi : open) {
+            const AreaView& v = pass.views()[vi];
+            // Candidates: the pool units that arrive soonest, then the most OC per strength, then unit order.
+            std::vector<std::tuple<int, double, std::size_t>> c;
+            for (const std::size_t u : pool) {
+                const int a = v.arrival[u];
+                if (a >= p.turns()) continue;
+                const double per = static_cast<double>(unit_oc(p.unit(u))) / std::max(1e-9, p.left(u));
+                c.emplace_back(a, -per, u);
+            }
+            std::stable_sort(c.begin(), c.end());
+            if (c.size() > kPlanCandidates) c.resize(kPlanCandidates);
+            std::vector<std::size_t> candidates;
+            for (const auto& entry : c) candidates.push_back(std::get<2>(entry));
+            std::optional<AreaChoice> here = best_area_set(pass, vi, candidates);
+            if (here && (!best || here->key > best->key + 1e-12)) best = std::move(here);
+        }
+        if (!best) break;
+        const AreaView& v = pass.views()[best->area];
+        AreaSet set;
+        set.area = v.index;
+        set.value = best->value;
+        set.deny = best->deny;
+        set.risk = best->risk;
+        set.chance = best->chance;
+        for (const std::size_t u : best->members) {
+            AreaMember m;
+            m.unit = p.unit(u).id;
+            m.arrival = v.arrival[u];
+            m.oc = unit_oc(p.unit(u));
+            set.members.push_back(m);
+            pool.erase(std::remove(pool.begin(), pool.end(), u), pool.end());
+        }
+        open.erase(std::remove(open.begin(), open.end(), best->area), open.end());
+        const std::size_t index = plan.areas.size();
+        for (UnitPlan& up : plan.units) {
+            if (set.member(up.unit) != nullptr) up.area = index;
+        }
+        plan.areas.push_back(std::move(set));
+    }
+}
+
 std::string signed2(double v) {
     char buf[32];
     std::snprintf(buf, sizeof buf, "%+.2f", v);
@@ -608,6 +840,13 @@ const PlanMember* PlanGroup::member(core::UnitId unit) const {
     return nullptr;
 }
 
+const AreaMember* AreaSet::member(core::UnitId unit) const {
+    for (const AreaMember& m : members) {
+        if (m.unit == unit) return &m;
+    }
+    return nullptr;
+}
+
 const UnitPlan* ArmyPlan::find(core::UnitId unit) const {
     for (const UnitPlan& u : units) {
         if (u.unit == unit) return &u;
@@ -620,6 +859,11 @@ const PlanGroup* ArmyPlan::group_of(core::UnitId unit) const {
     return u != nullptr && u->group && *u->group < groups.size() ? &groups[*u->group] : nullptr;
 }
 
+const AreaSet* ArmyPlan::area_of(core::UnitId unit) const {
+    const UnitPlan* u = find(unit);
+    return u != nullptr && u->area && *u->area < areas.size() ? &areas[*u->area] : nullptr;
+}
+
 ArmyPlan no_plan(const core::GameState& state, core::Side side) { return noop_plan(state, side); }
 
 ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side) {
@@ -627,7 +871,15 @@ ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, cor
     const core::GameState& gs = *in.state;
     ArmyPlan plan = noop_plan(gs, side);
     // D-083 part 1: no plan before the battle, with fewer than two of our units, or with no turn left.
-    if (plan.units.size() < 2) return plan;
+    if (plan.units.size() < 2) {
+        // M87 (D-086): a last unit still gets an area under a mission.
+        if (gs.mission && !plan.units.empty() && gs.flow.stage != core::Stage::NotStarted &&
+            gs.flow.stage != core::Stage::Deploy) {
+            Planner p(cache, gs, side);
+            assign_areas(p, gs, side, plan);
+        }
+        return plan;
+    }
     if (gs.flow.stage == core::Stage::NotStarted || gs.flow.stage == core::Stage::Deploy) return plan;
     Planner p(cache, gs, side);
     if (p.turns() <= 0 || p.theirs().empty()) return plan;
@@ -694,6 +946,7 @@ ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, cor
         }
         plan.groups.push_back(std::move(g));
     }
+    assign_areas(p, gs, side, plan);  // M87 (D-086): after the groups, which it leaves as they are
     return plan;
 }
 
@@ -743,7 +996,35 @@ JointExchange joint_exchange(analysis::OddsCache& cache, const core::GameState& 
     return out;
 }
 
+const char* area_role(const core::GameState& state, const ArmyPlan& plan, const AreaSet& set) {
+    if (state.mission && set.area < state.mission->objectives.size() &&
+        state.mission->objectives[set.area].controller == plan.side) {
+        return "hold";
+    }
+    return set.deny > 0.0 && set.deny * 2.0 >= set.value ? "contest" : "take";
+}
+
+std::string describe_area(const core::GameState& state, const ArmyPlan& plan, const AreaSet& set) {
+    std::string s;
+    for (std::size_t i = 0; i < set.members.size(); ++i) {
+        if (i > 0) s += " + ";
+        s += client::unit_display_name(state, set.members[i].unit);
+    }
+    const std::string name = state.mission && set.area < state.mission->objectives.size()
+                                 ? state.mission->objectives[set.area].name
+                                 : "an area";
+    char chance[32];
+    std::snprintf(chance, sizeof chance, "%.0f%%", 100.0 * set.chance);
+    return s + " to " + area_role(state, plan, set) + " " + name + " (" + signed2(set.value) + ", " + chance + ")";
+}
+
 std::string describe(const core::GameState& state, const ArmyPlan& plan) {
+    std::string s = describe_groups(state, plan);
+    for (const AreaSet& a : plan.areas) s += "; " + describe_area(state, plan, a);
+    return s;
+}
+
+std::string describe_groups(const core::GameState& state, const ArmyPlan& plan) {
     if (!plan.active) return "no plan";
     if (plan.groups.empty()) return "no group pays";
     std::string s;

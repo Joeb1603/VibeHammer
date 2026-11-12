@@ -81,6 +81,7 @@
 #include "core/rules/shooting_types.hpp"
 #include "core/state/game_state.hpp"
 #include "normal/army_plan.hpp"
+#include "normal/objectives.hpp"
 #include "normal/value.hpp"
 
 namespace wh40k::ai::normal {
@@ -106,7 +107,19 @@ struct MoveWeights {
     // D-083 part 5 (M83): x the turns saved towards the closest enemy unit beyond the line's horizon, for a unit that
     // follows no group and whose reach (Move plus its longest range, at least 7") is no shorter than that unit's.
     double approach_alone = 0.05;
+    // M87 (D-086), under a mission only (with both 0 a mission game plays exactly as before M87): x the VP rate
+    // (vp_share) on the objective terms, the enemy scoring a move denies and ours it holds through the enemy's turn ...
+    double objective = 1.0;
+    // ... and x an area's value per scoring (VP x vp_share) x the turns saved towards the area the plan sends a unit
+    // with no group to, beyond its Move.
+    double objective_approach = 0.1;
+    // ... and in the Shooting phase, x the enemy scorings the shooting helps deny (ShootingAim, shooting.hpp).
+    double objective_fire = 0.0;
 };
+
+// M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or
+// objective_fire) above 0.
+[[nodiscard]] bool objectives_on(const core::GameState& state, const MoveWeights& weights);
 
 struct MoveScore {
     // Components (unit shares, ours positive); total is their sum.
@@ -118,6 +131,7 @@ struct MoveScore {
     double tie_break = 0.0;  // a side winning the exchange prefers to be closer, a losing side further (1e-5 per inch)
     double approach = 0.0;   // D-083 part 2 (M80): a unit with partners only
     double cohesion = 0.0;
+    double objective = 0.0;  // M87 (D-086): the objective terms (the enemy scoring denied, ours held), under a mission
     double total = 0.0;
     // What the reason says.
     float gap_mm = 0.0f;               // edge to edge, the closest pair after the move
@@ -221,6 +235,13 @@ struct MoveTeam {
     // D-083 part 5 (M83): no group: the approach term alone (MoveWeights::approach_alone) towards the closest enemy
     // unit, which the line follows as before; no partners, no support.
     bool alone = false;
+    // M87 (D-086): no group, and an area set in the plan: the approach heads for the area instead (centroid to its edge,
+    // MoveWeights::objective_approach); the line stays the closest enemy unit's (`focus`), with no partners.
+    std::optional<std::size_t> area;  // index into Mission::objectives
+    core::Position area_centre;
+    float area_radius_mm = 0.0f;
+    double area_value = 0.0;  // one scoring of it for us, in shares (VP x vp_share)
+    std::string area_text;    // "Centre (take)"
 };
 
 // Everything the score needs about the position before the move: the two units, their threat ranges and rates,
@@ -275,14 +296,16 @@ public:
     // our models' centroid at `our_centroid`. `reply` / `p_enemy_charge` get the enemy's reply. D-066: `others`, the
     // other enemy units' threat, if any.
     // D-083 part 2 (M80): `reply_elsewhere`, the focus replies to a partner, not to us (the shared reply).
+    // M87 (D-086): `us_left`, what is left of our unit after the enemy's turn on the chosen reply (read only: no value
+    // changes).
     [[nodiscard]] double hold_line(const ScoreLine& line, float gap_mm, const core::Position& our_centroid,
                                    std::string* reply = nullptr, double* p_enemy_charge = nullptr,
                                    double* p_survive = nullptr, const OtherThreat* others = nullptr,
-                                   bool reply_elsewhere = false);
+                                   bool reply_elsewhere = false, double* us_left = nullptr);
     // The units engaged after our charge (or a combat we stay in): our fight now (`our_fighters`: the share of
     // our models that fight, we strike first), then their turn (they fight on or fall back) and ours.
     [[nodiscard]] double engaged_line(const ScoreLine& line, double our_fighters = 1.0, double* p_survive = nullptr,
-                                      const OtherThreat* others = nullptr);
+                                      const OtherThreat* others = nullptr, double* us_left = nullptr);
 
     // ---- D-066 (M56): the enemy units other than enemy() ----
     [[nodiscard]] std::size_t other_count() const noexcept { return others_.size(); }
@@ -315,6 +338,10 @@ public:
     [[nodiscard]] bool supported() const noexcept { return team_ && team_->line && team_->synced; }
     [[nodiscard]] double cohesion_term(const std::vector<core::Position>& positions) const;
     [[nodiscard]] double reply_share(float gap_mm) const;
+    // M87 (D-086): the objective areas as this move sees them (nullopt: no mission, objective weight 0, or no scoring
+    // ahead), and whether the candidates add spots on the areas (objectives_on).
+    [[nodiscard]] const std::optional<ObjectiveOutlook>& objectives() const noexcept { return objectives_; }
+    [[nodiscard]] bool area_spots() const noexcept { return area_spots_; }
 
 private:
     struct RateKey {
@@ -327,7 +354,8 @@ private:
     [[nodiscard]] std::uint64_t band_of(bool ours, float gap_mm) const;
     [[nodiscard]] double our_next_turn(const ScoreLine& line, float gap_mm);
     [[nodiscard]] double enemy_turn_from(const ScoreLine& line, float from_mm, float to_mm, double* p_charge,
-                                         double* p_survive, const OtherThreat* others = nullptr);
+                                         double* p_survive, const OtherThreat* others = nullptr,
+                                         double* us_left = nullptr);
     // P(the enemy's whole-unit shooting / melee / close-quarters shooting wipes out our unit as it is now).
     [[nodiscard]] double enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm);
     [[nodiscard]] double enemy_melee_wipe();
@@ -412,6 +440,10 @@ private:
     void make_team(const ArmyPlan& plan, const core::Unit& focus, bool line);
     void make_lone_approach(const core::Unit& closest);
     std::optional<MoveTeam> team_;
+    // M87 (D-086)
+    void make_area_approach(const ArmyPlan& plan, const AreaSet& set);
+    std::optional<ObjectiveOutlook> objectives_;
+    bool area_spots_ = false;
 };
 
 // The whole-turn score of ending the move at `plan` (cheap: every candidate gets one).

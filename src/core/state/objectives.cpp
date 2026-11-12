@@ -25,9 +25,17 @@ BasePose area_pose(const ObjectiveArea& area) {
 
 }  // namespace
 
-bool model_within_objective(const Model& model, const ObjectiveArea& area) {
+float objective_gap_mm(const BasePose& pose, const ObjectiveArea& area) {
+    return base_distance(pose, area_pose(area));
+}
+
+bool within_objective(const BasePose& pose, const ObjectiveArea& area) {
     // D-009: any part of the base within the area, i.e. the closest parts of the base and the area at most 0 apart.
-    return within(base_distance(pose_of(model), area_pose(area)), 0.0f);
+    return within(objective_gap_mm(pose, area), 0.0f);
+}
+
+bool model_within_objective(const Model& model, const ObjectiveArea& area) {
+    return within_objective(pose_of(model), area);
 }
 
 std::array<int, 2> level_of_control(const GameState& state, const ObjectiveArea& area) {

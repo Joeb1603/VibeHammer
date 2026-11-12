@@ -14,7 +14,10 @@
 #include "core/geometry/distance.hpp"
 #include "core/state/queries.hpp"
 #include "analysis/threat.hpp"
+#include "core/state/objectives.hpp"
 #include "normal/army_plan.hpp"
+#include "normal/charge.hpp"
+#include "normal/objectives.hpp"
 #include "normal/value.hpp"
 
 namespace wh40k::ai::normal {
@@ -234,6 +237,11 @@ std::string aim_notes(const core::GameState& state, const ShootingChoice& choice
     if (choice.concentrated) {
         text += ", concentrated on " + client::unit_display_name(state, *choice.concentrated) + " (a split is worth no more)";
     }
+    for (const analysis::TargetOutcome& o : choice.outcomes) {  // M87 (D-086)
+        if (const std::optional<std::size_t> a = aim.held_area(o.target); a && state.mission) {
+            text += ", to contest " + state.mission->objectives[*a].name;
+        }
+    }
     return text;
 }
 
@@ -295,14 +303,14 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
 }
 
 std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
-                                              const std::vector<core::GameAction>& legal) {
+                                              const std::vector<core::GameAction>& legal, double objective_fire) {
     // D-083 part 3 (M81): focus fire, for the side shooting.
     std::optional<ShootingAim> aim;
     for (const core::GameAction& a : legal) {
         const auto* shoot = std::get_if<core::action::Shoot>(&a);
         const core::Unit* u = shoot != nullptr ? state.find_unit(shoot->unit) : nullptr;
         if (u == nullptr) continue;
-        aim.emplace(cache, state, u->side);
+        aim.emplace(cache, state, u->side, objective_fire);
         break;
     }
     if (aim && !aim->active()) aim.reset();
@@ -331,7 +339,8 @@ std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const 
 
 // ---- D-083 part 3 (M81): focus fire ----
 
-ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side)
+ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
+                         double objective_fire)
     : cache_(&cache), state_(&state), side_(side) {
     std::array<int, 2> units{};
     for (const core::Unit& u : state.units) {
@@ -347,6 +356,46 @@ ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& stat
     for (const PlanGroup& g : plan.groups) {
         if (std::find(focus_.begin(), focus_.end(), g.target) == focus_.end()) focus_.push_back(g.target);
     }
+    // M87 (D-086): the areas the enemy would score after our turn, as things stand.
+    if (objective_fire > 0.0 && state.mission && next_scorings(state, side, turns_left(state)).theirs) {
+        const double rate = vp_share(state) * objective_fire;
+        const std::size_t theirs = 1 - core::side_index(side);
+        for (std::size_t i = 0; i < state.mission->objectives.size(); ++i) {
+            const core::ObjectiveArea& area = state.mission->objectives[i];
+            const std::array<int, 2> levels = core::level_of_control(state, area);
+            const int lead = levels[theirs] - levels[1 - theirs];
+            if (lead > 0 && area.vp[theirs] > 0) leads_.push_back(Lead{i, lead, rate * area.vp[theirs]});
+        }
+    }
+}
+
+std::optional<std::size_t> ShootingAim::held_area(core::UnitId target) const {
+    const core::Unit* t = state_ != nullptr ? state_->find_unit(target) : nullptr;
+    if (t == nullptr || !state_->mission) return std::nullopt;
+    for (const Lead& l : leads_) {
+        if (oc_within(*t, state_->mission->objectives[l.area]) > 0) return l.area;
+    }
+    return std::nullopt;
+}
+
+double ShootingAim::objective_bonus(std::span<const analysis::TargetOutcome> outcomes) const {
+    if (leads_.empty() || state_ == nullptr || !state_->mission) return 0.0;
+    double b = 0.0;
+    for (const Lead& l : leads_) {
+        // The OC the declaration takes off the enemy's level there: each target's OC in range times the share of its
+        // models expected destroyed; credit in proportion to the lead it closes (all of it: the scoring denied).
+        double lost = 0.0;
+        for (const analysis::TargetOutcome& o : outcomes) {
+            const core::Unit* t = state_->find_unit(o.target);
+            if (t == nullptr || t->models.empty()) continue;
+            const int in_range = oc_within(*t, state_->mission->objectives[l.area]);
+            if (in_range == 0) continue;
+            lost += static_cast<double>(in_range) *
+                    std::min(1.0, o.outcome.models_destroyed / static_cast<double>(t->models.size()));
+        }
+        b += l.value * std::min(1.0, lost / static_cast<double>(l.lead));
+    }
+    return b;
 }
 
 bool ShootingAim::focus(core::UnitId target) const {
@@ -397,7 +446,7 @@ double ShootingAim::bonus(std::span<const analysis::TargetOutcome> outcomes) con
         b += finish_turns_ * reply(o.target) * o.outcome.models_destroyed / models;
         if (focus(o.target)) b += kFocusWeight * unit_share(*state_, *t, o.outcome.model_equivalents);
     }
-    return b;
+    return b + objective_bonus(outcomes);
 }
 
 double order_value(analysis::OddsCache& cache, std::span<const analysis::VolleyBatch> volley,

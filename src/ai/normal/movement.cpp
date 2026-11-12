@@ -22,6 +22,7 @@
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/mortal_wounds.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "directions.hpp"
 #include "normal/defense.hpp"
@@ -104,6 +105,7 @@ Position centroid_of(const std::vector<Position>& ps) {
 // D-083 part 2 (M80): " with Legionaries 5", " with Havocs 4 and Legionaries 5", " with A, B and C"; " alone" for a
 // unit that closes in on its closest enemy unit without a group (part 5, M83).
 std::string with_text(const GameState& gs, const MoveTeam& team) {
+    if (team.area) return {};          // M87 (D-086): the area's text names it
     if (team.alone) return " alone";  // D-083 part 5 (M83): no group, closing in on the closest enemy unit
     std::string out;
     for (std::size_t i = 0; i < team.partners.size(); ++i) {
@@ -116,6 +118,7 @@ std::string with_text(const GameState& gs, const MoveTeam& team) {
 // "Screamer-killer 3 with Legionaries 5" (nothing without a team).
 std::string team_text(const GameState& gs, const MoveTeam* team) {
     if (team == nullptr) return {};
+    if (team->area) return team->area_text;  // M87 (D-086): "Centre (take)"
     return client::unit_display_name(gs, team->focus) + with_text(gs, *team);
 }
 
@@ -154,6 +157,9 @@ struct MoveGeometry {
     // D-083 part 2 (M80): a unit with partners lines up on its focus (enemy_centroid is the focus's), and its labels
     // name the focus and the partners.
     bool teamed = false;
+    // M87 (D-086): the closest enemy unit's centroid (enemy_centroid is the area's centre for a unit heading for one).
+    Position closest_centroid;
+    bool has_closest = false;
     std::string focus_name;
     std::string with_text;  // " with Legionaries 5 and Havocs 4"
 };
@@ -202,7 +208,16 @@ std::optional<MoveGeometry> geometry_of(const GameState& origin, const MoveTeam*
         g.enemy_centroid = centroid_of(ps);
         g.has_enemy = true;
     }
-    if (focus != nullptr) {
+    g.closest_centroid = g.enemy_centroid;
+    g.has_closest = g.has_enemy;
+    if (team != nullptr && team->area) {
+        // M87 (D-086): a unit heading for an area lines its directions and formations up on the area's centre.
+        g.enemy_centroid = team->area_centre;
+        g.has_enemy = true;
+        g.teamed = true;
+        g.focus_name = team->area_text;
+        g.with_text.clear();
+    } else if (focus != nullptr) {
         g.teamed = true;
         g.focus_name = client::unit_display_name(origin, focus->id);
         g.with_text = with_text(origin, *team);
@@ -641,6 +656,7 @@ std::string position_text(const GameState& gs, core::UnitId unit, const MoveScor
                                         : ", outside its likely charge range";
     }
     if (s.p_charge > 0.0) out += ", charge odds " + percent(s.p_charge);
+    if (s.objective != 0.0) out += ", objectives " + signed_value(s.objective);  // M87 (D-086)
     return out;
 }
 
@@ -681,7 +697,7 @@ std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState
         }
     }
     MoveScoreContext ctx(cache, *states[widest], unit, weights, plan);
-    const std::vector<MoveCandidate> cands = move_candidates(*states[widest], ctx.team());
+    const std::vector<MoveCandidate> cands = move_candidates(*states[widest], ctx.team(), ctx.area_spots());
     const std::vector<Ranked> ranked = rank(ctx, core::MoveType::Advance, cands);
     Option opt;
     opt.start = start;
@@ -723,7 +739,7 @@ double hazard_wounds_per_model(const core::Unit& unit) {
 // 03.03) and the move would have to be reset (a UnitMoveReverted): Hard's escape_stands (D-067), for Normal. Failing and
 // passing faces come from make_hazard_rolls itself.
 bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side side, const GameAction& escape,
-                   const core::Unit& unit) {
+                   const core::Unit& unit, const MoveWeights& weights) {
     std::optional<int> fail;
     std::optional<int> pass;
     for (int face = 1; face <= 6; ++face) {
@@ -752,7 +768,11 @@ bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side s
         }
         const GameState& after = sim.state();
         if (!after.pending || !std::holds_alternative<core::decision::MoveModels>(after.pending->kind)) continue;
-        if (standing_moves(cache, after, MoveWeights{}, 1, kMaxSimulatedMoves).empty()) return false;
+        // M87 (D-086): the default weights, but the objective ones as the caller plays them (with both 0, as before M87).
+        MoveWeights guard{};
+        guard.objective = weights.objective;
+        guard.objective_approach = weights.objective_approach;
+        if (standing_moves(cache, after, guard, 1, kMaxSimulatedMoves).empty()) return false;
     }
     return true;
 }
@@ -825,11 +845,32 @@ void beside_partner(const MoveGeometry& g, const MoveTeam& team, std::vector<Mov
     }
 }
 
+// M87 (D-086): spots on an objective area: the unit translated straight at its centre (as far as the move goes), and a
+// line abreast at that point facing the closest enemy unit (two ranks too when the centre is within the move).
+void area_spots_for(const MoveGeometry& g, const core::ObjectiveArea& area, std::vector<MoveCandidate>& out) {
+    const Position c0 = centroid_of(g.starts);
+    const float dx = area.centre.x - c0.x;
+    const float dy = area.centre.y - c0.y;
+    const float len = std::sqrt(dx * dx + dy * dy);
+    if (!(len > 0.1f * kIn) || !(g.unit_max_mm > 0.0f)) return;
+    const float t = std::min(len, g.unit_max_mm);
+    const client::UnitVector d{dx / len, dy / len};
+    if (std::optional<MoveCandidate> c = translation(g, d, t)) out.push_back(std::move(*c));
+    if (!g.has_closest) return;
+    MoveGeometry facing = g;  // formations face the closest enemy unit, standing on the area
+    facing.enemy_centroid = g.closest_centroid;
+    const Position spot{c0.x + d.x * t, c0.y + d.y * t, 0.0f};
+    if (std::optional<MoveCandidate> c = formation(facing, 1, 0.0f, spot)) out.push_back(std::move(*c));
+    if (!core::more_than(len, g.unit_max_mm)) {
+        if (std::optional<MoveCandidate> c = formation(facing, 2, 0.0f, spot)) out.push_back(std::move(*c));
+    }
+}
+
 }  // namespace
 
 // ---- candidates ----
 
-std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTeam* team) {
+std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTeam* team, bool area_spots) {
     std::vector<MoveCandidate> out;
     const std::optional<MoveGeometry> geo = geometry_of(origin, team);
     if (!geo) return out;
@@ -899,6 +940,19 @@ std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTe
         }
     }
     if (g.teamed) beside_partner(g, *team, out);
+    if (area_spots && origin.mission) {
+        // M87 (D-086): the team's area, and every area the move can reach (a model's base within range of it).
+        const core::Unit* u = origin.find_unit(g.unit);
+        for (std::size_t i = 0; i < origin.mission->objectives.size(); ++i) {
+            const core::ObjectiveArea& area = origin.mission->objectives[i];
+            bool reach = team != nullptr && team->area == i;
+            for (std::size_t k = 0; !reach && k < g.starts.size() && u != nullptr; ++k) {
+                const float gap = core::objective_gap_mm(core::BasePose{g.starts[k], g.bases[k], g.facings[k]}, area);
+                reach = core::within(gap, g.unit_max_mm);
+            }
+            if (reach) area_spots_for(g, area, out);
+        }
+    }
     return out;
 }
 
@@ -915,7 +969,7 @@ std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const Game
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
     MoveScoreContext ctx(cache, origin, u->id, weights, plan);
-    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team());
+    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team(), ctx.area_spots());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     return choose(ctx, origin, u->side, cands, ranked, decision_seed(origin), true);
 }
@@ -927,7 +981,7 @@ std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameSt
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return out;
     MoveScoreContext ctx(cache, origin, u->id, weights);
-    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team());
+    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team(), ctx.area_spots());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     const std::uint64_t seed = decision_seed(origin);
     std::size_t tried = 0;
@@ -1078,7 +1132,7 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     // (escape_stands); otherwise the next best option. Checked only for the escape that would be made, so every other
     // decision (and its reason) is as before.
     std::optional<std::size_t> vetoed;
-    if (options[best].start == escape && options.size() > 1 && !escape_stands(cache, gs, side, escape, u)) {
+    if (options[best].start == escape && options.size() > 1 && !escape_stands(cache, gs, side, escape, u, weights)) {
         vetoed = best;
         best = *best_of(best);
     }

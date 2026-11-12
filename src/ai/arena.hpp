@@ -34,6 +34,10 @@ struct EngagementSnapshot {
     // (edge to edge, unit_distance; an engaged unit is within 2", so "engaged with it or within 12" of it" is the same),
     // in GameState order, each unit once.
     std::array<std::vector<core::UnitId>, 2> lone;
+    // M87 (D-086), the blob measure: the most units (both sides) in one connected group of engagements (a unit engaged
+    // with another links them), and the units on the battlefield with models.
+    int largest_cluster = 0;
+    int on_battlefield = 0;
 };
 [[nodiscard]] EngagementSnapshot engagement_snapshot(const core::GameState& state);
 
@@ -59,6 +63,12 @@ struct TeamworkStats {
     std::array<int, 2> units{};
     std::array<int, 2> never_within_12{};
     std::array<int, 2> first_engagement_round{};
+    // M87 (D-086), not by side: the game's largest connected group of engaged units at a Fight phase's start, in units
+    // and as a share of the units then on the battlefield (each its maximum over the game).
+    int largest_cluster = 0;
+    double largest_cluster_share = 0.0;
+    // M87 (D-086): under a mission, the VP each side scored at each objective area ([area][side], VictoryPointsScored).
+    std::vector<std::array<int, 2>> area_vp;
 };
 
 // Counts TeamworkStats from the accepted actions' events and the state after each one.

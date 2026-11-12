@@ -44,7 +44,10 @@ public:
     ShootingAim() = default;
     // The aim of `side` (the side shooting) in `state` (the army plan's group targets are its focus targets). `cache`
     // and `state` must outlive it.
-    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side);
+    // M87 (D-086): `objective_fire` (MoveWeights::objective_fire, under a mission; 0: none), the weight of the enemy
+    // scorings the shooting helps deny: losses among an enemy unit within range of an area it would score at the end of
+    // our turn, as a share of the OC it is ahead by, times that area's VP at the VP rate.
+    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side, double objective_fire = 0.0);
     [[nodiscard]] bool active() const noexcept { return active_; }
     // The bonus of a declaration with these outcomes (unit shares; 0 when inactive).
     [[nodiscard]] double bonus(std::span<const analysis::TargetOutcome> outcomes) const;
@@ -52,6 +55,9 @@ public:
     // at its strength now; 0 if the enemy has no turn left).
     [[nodiscard]] double reply(core::UnitId target) const;
     [[nodiscard]] bool focus(core::UnitId target) const;
+    // M87 (D-086): the objective part of bonus() alone, and whether `target` holds an area the enemy is ahead on.
+    [[nodiscard]] double objective_bonus(std::span<const analysis::TargetOutcome> outcomes) const;
+    [[nodiscard]] std::optional<std::size_t> held_area(core::UnitId target) const;
 
 private:
     analysis::OddsCache* cache_ = nullptr;
@@ -61,6 +67,13 @@ private:
     double finish_turns_ = 0.0;  // the enemy's turns left after the shooting side's turn, at most kFinishTurns
     std::vector<core::UnitId> focus_;
     mutable std::vector<std::pair<core::UnitId, double>> replies_;  // computed on first use, unit order of first use
+    // M87 (D-086): per area the enemy is ahead on with a scoring to come: (index, their lead in OC, its value in shares)
+    struct Lead {
+        std::size_t area = 0;
+        int lead = 0;
+        double value = 0.0;
+    };
+    std::vector<Lead> leads_;
 };
 
 struct ShootingChoice {
@@ -84,8 +97,10 @@ struct ShootingChoice {
 // From the Shoot decision's legal actions: the unit, type and declaration worth the most, or nullopt when no
 // offered Shoot is worth anything (end the step). D-083 part 3 (M81): with focus fire active (ShootingAim), the values
 // with its bonus, and a unit shooting at a focus target first.
+// M87 (D-086): `objective_fire`, the aim's objective weight (0: none).
 [[nodiscard]] std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
-                                                            const std::vector<core::GameAction>& legal);
+                                                            const std::vector<core::GameAction>& legal,
+                                                            double objective_fire = 0.0);
 
 // The value of `volley` resolved in `order` (indices into it) against `target`, in model equivalents.
 [[nodiscard]] double order_value(analysis::OddsCache& cache, std::span<const analysis::VolleyBatch> volley,

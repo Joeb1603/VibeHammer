@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/geometry/pose.hpp"
 #include "core/model/unit.hpp"
 #include "core/state/game_state.hpp"
 #include "core/state/mission.hpp"
@@ -26,6 +27,10 @@ inline constexpr int kMaxKillPoints = 100000;  // the points per kill VP step
 // i.e. while any part of its base is within the area. The area is a circle, so this is the base's edge-to-edge
 // distance to a round "base" the size of the area, at most 0 (EPS_MM tolerance). Works for round and oval bases.
 [[nodiscard]] bool model_within_objective(const Model& model, const ObjectiveArea& area);
+// The same for a base at any pose (M87: the bot tests a planned move's end positions), and the gap behind it: the
+// edge-to-edge distance between the base and the area (0 when they overlap).
+[[nodiscard]] bool within_objective(const BasePose& pose, const ObjectiveArea& area);
+[[nodiscard]] float objective_gap_mm(const BasePose& pose, const ObjectiveArea& area);
 
 // 14.02: each player's level of control over the area: the sum of the OC characteristics of their models within range
 // of it. A model with OC '-' (including every model of a battle-shocked unit, 01.07) adds nothing.
