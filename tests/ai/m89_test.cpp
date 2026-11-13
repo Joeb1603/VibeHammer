@@ -442,7 +442,7 @@ TEST(M89_Arena, TheSummaryHasTheCoverLineOnTerrainOnly) {
 
 namespace {
 
-constexpr std::uint64_t kCoverSeed = 0;  // chosen by M89_Replay.DISABLED_SearchCoverSeed
+constexpr std::uint64_t kCoverSeed = 2;  // chosen by M89_Replay.DISABLED_SearchCoverSeed
 constexpr const char* kCoverFile = "m89_cover_bot_game.json";
 
 std::filesystem::path cover_replay_path() { return std::filesystem::path(WH40K_REPLAY_DIR) / kCoverFile; }

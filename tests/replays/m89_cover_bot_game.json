@@ -1,0 +1,6938 @@
+{
+  "description": "M89: a whole game played by the bot on both sides of the terrain scenario (data/scenarios/incursion_terrain_44x60.json, D-087-D-089) with dice seed 2: the bot plays for cover (D-090): its units take cover in terrain areas (13.08), hide from shooters beyond 15\" (13.09) and its monsters go round dense walls they can't cross (13.06). Replaying it needs only the engine.",
+  "expect": {
+    "battle_round": 5,
+    "models": [
+      {
+        "model": 1,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 709.6441040039063,
+        "y_mm": 156.20372009277344
+      },
+      {
+        "model": 2,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 741.6441040039063,
+        "y_mm": 156.20372009277344
+      },
+      {
+        "model": 3,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 773.6441040039063,
+        "y_mm": 156.20372009277344
+      },
+      {
+        "model": 4,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 805.6441040039063,
+        "y_mm": 156.20372009277344
+      },
+      {
+        "model": 5,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 837.6441040039063,
+        "y_mm": 156.20372009277344
+      },
+      {
+        "model": 6,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 709.6441040039063,
+        "y_mm": 124.20372009277344
+      },
+      {
+        "model": 7,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 741.6441040039063,
+        "y_mm": 124.20372009277344
+      },
+      {
+        "model": 8,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 773.6441040039063,
+        "y_mm": 124.20372009277344
+      },
+      {
+        "model": 9,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 805.6441040039063,
+        "y_mm": 124.20372009277344
+      },
+      {
+        "model": 10,
+        "unit": 1,
+        "wounds_remaining": 2,
+        "x_mm": 837.6441040039063,
+        "y_mm": 124.20372009277344
+      },
+      {
+        "model": 11,
+        "unit": 2,
+        "wounds_remaining": 5,
+        "x_mm": 673.7471313476563,
+        "y_mm": 153.0042266845703
+      },
+      {
+        "model": 14,
+        "unit": 3,
+        "wounds_remaining": 2,
+        "x_mm": 500.56890869140625,
+        "y_mm": 185.399169921875
+      },
+      {
+        "model": 15,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 540.5689086914063,
+        "y_mm": 185.399169921875
+      },
+      {
+        "model": 16,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 580.56884765625,
+        "y_mm": 185.399169921875
+      },
+      {
+        "model": 17,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 420.56890869140625,
+        "y_mm": 145.399169921875
+      },
+      {
+        "model": 18,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 460.56890869140625,
+        "y_mm": 145.399169921875
+      },
+      {
+        "model": 19,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 500.56890869140625,
+        "y_mm": 145.399169921875
+      },
+      {
+        "model": 20,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 540.5689086914063,
+        "y_mm": 145.399169921875
+      },
+      {
+        "model": 21,
+        "unit": 3,
+        "wounds_remaining": 3,
+        "x_mm": 580.56884765625,
+        "y_mm": 145.399169921875
+      },
+      {
+        "model": 22,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 733.4381713867188,
+        "y_mm": 69.5382080078125
+      },
+      {
+        "model": 23,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 773.4381713867188,
+        "y_mm": 69.5382080078125
+      },
+      {
+        "model": 24,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 813.4381713867188,
+        "y_mm": 69.5382080078125
+      },
+      {
+        "model": 25,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 853.4381713867188,
+        "y_mm": 69.5382080078125
+      },
+      {
+        "model": 26,
+        "unit": 4,
+        "wounds_remaining": 3,
+        "x_mm": 893.4381713867188,
+        "y_mm": 69.5382080078125
+      },
+      {
+        "model": 34,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 859.43310546875,
+        "y_mm": 196.82305908203125
+      },
+      {
+        "model": 35,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 891.43310546875,
+        "y_mm": 196.82305908203125
+      },
+      {
+        "model": 36,
+        "unit": 5,
+        "wounds_remaining": 2,
+        "x_mm": 923.43310546875,
+        "y_mm": 196.82305908203125
+      },
+      {
+        "model": 37,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 18.229537963867188,
+        "y_mm": 1481.1650390625
+      },
+      {
+        "model": 38,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 46.72953796386719,
+        "y_mm": 1481.1650390625
+      },
+      {
+        "model": 39,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 75.22953796386719,
+        "y_mm": 1481.1650390625
+      },
+      {
+        "model": 40,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 103.72956848144531,
+        "y_mm": 1481.1650390625
+      },
+      {
+        "model": 41,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 132.2295684814453,
+        "y_mm": 1481.1650390625
+      },
+      {
+        "model": 42,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 18.229537963867188,
+        "y_mm": 1509.6650390625
+      },
+      {
+        "model": 43,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 46.72953796386719,
+        "y_mm": 1509.6650390625
+      },
+      {
+        "model": 44,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 75.22953796386719,
+        "y_mm": 1509.6650390625
+      },
+      {
+        "model": 45,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 103.72956848144531,
+        "y_mm": 1509.6650390625
+      },
+      {
+        "model": 46,
+        "unit": 6,
+        "wounds_remaining": 1,
+        "x_mm": 132.2295684814453,
+        "y_mm": 1509.6650390625
+      },
+      {
+        "model": 47,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 911.148193359375,
+        "y_mm": 453.1744384765625
+      },
+      {
+        "model": 48,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 943.148193359375,
+        "y_mm": 453.1744384765625
+      },
+      {
+        "model": 49,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 975.148193359375,
+        "y_mm": 453.1744384765625
+      },
+      {
+        "model": 50,
+        "unit": 7,
+        "wounds_remaining": 2,
+        "x_mm": 1007.148193359375,
+        "y_mm": 453.1744384765625
+      },
+      {
+        "model": 51,
+        "unit": 7,
+        "wounds_remaining": 1,
+        "x_mm": 1039.148193359375,
+        "y_mm": 453.1744384765625
+      },
+      {
+        "model": 53,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 649.4580078125,
+        "y_mm": 1410.7177734375
+      },
+      {
+        "model": 54,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 699.4580078125,
+        "y_mm": 1410.7177734375
+      },
+      {
+        "model": 55,
+        "unit": 9,
+        "wounds_remaining": 4,
+        "x_mm": 749.4580078125,
+        "y_mm": 1410.7177734375
+      },
+      {
+        "model": 56,
+        "unit": 10,
+        "wounds_remaining": 10,
+        "x_mm": 344.5135498046875,
+        "y_mm": 628.60595703125
+      },
+      {
+        "model": 57,
+        "unit": 11,
+        "wounds_remaining": 5,
+        "x_mm": 470.3653564453125,
+        "y_mm": 837.169189453125
+      },
+      {
+        "model": 58,
+        "unit": 12,
+        "wounds_remaining": 6,
+        "x_mm": 550.904296875,
+        "y_mm": 743.5369873046875
+      },
+      {
+        "model": 63,
+        "unit": 13,
+        "wounds_remaining": 2,
+        "x_mm": 792.5386352539063,
+        "y_mm": 1002.8466186523438
+      },
+      {
+        "model": 64,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 372.5877685546875,
+        "y_mm": 1504.27734375
+      },
+      {
+        "model": 65,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 430.56689453125,
+        "y_mm": 1505.8323974609375
+      },
+      {
+        "model": 66,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 488.5460510253906,
+        "y_mm": 1507.387451171875
+      },
+      {
+        "model": 69,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 401.57733154296875,
+        "y_mm": 1505.0548095703125
+      },
+      {
+        "model": 70,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 459.5564880371094,
+        "y_mm": 1506.60986328125
+      },
+      {
+        "model": 71,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 517.53564453125,
+        "y_mm": 1508.1649169921875
+      },
+      {
+        "model": 72,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 546.5252075195313,
+        "y_mm": 1508.9425048828125
+      },
+      {
+        "model": 73,
+        "unit": 14,
+        "wounds_remaining": 1,
+        "x_mm": 575.5147705078125,
+        "y_mm": 1509.719970703125
+      }
+    ],
+    "result": {
+      "points": {
+        "battle_round": 5,
+        "denominator": 240,
+        "destroyed": [
+          88890,
+          50960
+        ],
+        "display": [
+          "370.38",
+          "212.33"
+        ]
+      },
+      "reason": "D-084: battle round 5 has ended with both sides on the battlefield; victory points: Side A 30 (16 objectives + 14 kills), Side B 27 (19 objectives + 8 kills); Side A wins on victory points",
+      "vp": {
+        "kills": [
+          14,
+          8
+        ],
+        "objectives": [
+          16,
+          19
+        ],
+        "total": [
+          30,
+          27
+        ]
+      },
+      "winner": "A"
+    },
+    "stage": "GameOver"
+  },
+  "format": 1,
+  "initial": {
+    "scenario": "data/scenarios/incursion_terrain_44x60.json",
+    "seed": 2
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 27,
+        "path": [
+          {
+            "x": 708.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 32,
+        "path": [
+          {
+            "x": 708.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 28,
+        "path": [
+          {
+            "x": 740.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 33,
+        "path": [
+          {
+            "x": 740.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 29,
+        "path": [
+          {
+            "x": 772.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 30,
+        "path": [
+          {
+            "x": 804.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 772.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 804.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 31,
+        "path": [
+          {
+            "x": 836.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 836.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 440.70001220703125,
+            "y": 462.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 480.70001220703125,
+            "y": 462.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 520.7000122070313,
+            "y": 462.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 560.7000122070313,
+            "y": 462.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 600.7000122070313,
+            "y": 462.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 440.70001220703125,
+            "y": 422.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 480.70001220703125,
+            "y": 422.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 520.7000122070313,
+            "y": 422.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 560.7000122070313,
+            "y": 422.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 600.7000122070313,
+            "y": 422.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 495.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 495.79998779296875,
+            "y": 256.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 463.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 463.79998779296875,
+            "y": 256.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 431.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 431.79998779296875,
+            "y": 256.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 399.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 399.79998779296875,
+            "y": 256.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 367.79998779296875,
+            "y": 288.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 367.79998779296875,
+            "y": 256.79998779296875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 398.2410888671875,
+            "y": 120.53421020507813,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 642.3591918945313,
+            "y": 181.6592254638672,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 682.3591918945313,
+            "y": 181.6592254638672,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 722.3591918945313,
+            "y": 181.6592254638672,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 25,
+        "path": [
+          {
+            "x": 762.3591918945313,
+            "y": 181.6592254638672,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 26,
+        "path": [
+          {
+            "x": 802.3591918945313,
+            "y": 181.6592254638672,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 23,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 943.5200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 62,
+        "path": [
+          {
+            "x": 911.5200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 61,
+        "path": [
+          {
+            "x": 879.5200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 60,
+        "path": [
+          {
+            "x": 847.5200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 59,
+        "path": [
+          {
+            "x": 815.5200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 58,
+        "path": [
+          {
+            "x": 581.8580932617188,
+            "y": 982.6015014648438,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 56,
+        "path": [
+          {
+            "x": 461.598388671875,
+            "y": 1014.5345458984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 52,
+        "path": [
+          {
+            "x": 419.1000061035156,
+            "y": 908.5999755859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 382.2806396484375,
+            "y": 1329.066162109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 350.2806396484375,
+            "y": 1329.066162109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 318.2806396484375,
+            "y": 1329.066162109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 286.2806396484375,
+            "y": 1329.066162109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 47,
+        "path": [
+          {
+            "x": 254.28062438964844,
+            "y": 1329.066162109375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 69,
+        "path": [
+          {
+            "x": 713.8426513671875,
+            "y": 1328.386962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 64,
+        "path": [
+          {
+            "x": 713.8426513671875,
+            "y": 1299.886962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 70,
+        "path": [
+          {
+            "x": 742.3426513671875,
+            "y": 1328.386962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 65,
+        "path": [
+          {
+            "x": 742.3426513671875,
+            "y": 1299.886962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 71,
+        "path": [
+          {
+            "x": 770.8426513671875,
+            "y": 1328.386962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 66,
+        "path": [
+          {
+            "x": 770.8426513671875,
+            "y": 1299.886962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 72,
+        "path": [
+          {
+            "x": 799.3426513671875,
+            "y": 1328.386962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 67,
+        "path": [
+          {
+            "x": 799.3426513671875,
+            "y": 1299.886962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 73,
+        "path": [
+          {
+            "x": 827.8426513671875,
+            "y": 1328.386962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 68,
+        "path": [
+          {
+            "x": 827.8426513671875,
+            "y": 1299.886962890625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 387.20001220703125,
+            "y": 1233.449951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 46,
+        "path": [
+          {
+            "x": 387.20001220703125,
+            "y": 1261.949951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 358.70001220703125,
+            "y": 1233.449951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 358.70001220703125,
+            "y": 1261.949951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 39,
+        "path": [
+          {
+            "x": 330.1999816894531,
+            "y": 1233.449951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 330.1999816894531,
+            "y": 1261.949951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 301.6999816894531,
+            "y": 1233.449951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 301.6999816894531,
+            "y": 1261.949951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 273.1999816894531,
+            "y": 1233.449951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 273.1999816894531,
+            "y": 1261.949951171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 427.2167053222656,
+            "y": 1350.6600341796875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 477.2167053222656,
+            "y": 1350.6600341796875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 527.2166748046875,
+            "y": 1350.6600341796875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 57,
+        "path": [
+          {
+            "x": 628.6499633789063,
+            "y": 1126.7999267578125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 52,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Assault",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 323.3673095703125,
+            "y": 373.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 323.3673095703125,
+            "y": 413.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 363.3673095703125,
+            "y": 373.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 363.3673095703125,
+            "y": 413.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 403.3673095703125,
+            "y": 373.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 403.3673095703125,
+            "y": 413.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 443.3673095703125,
+            "y": 373.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 443.3673095703125,
+            "y": 413.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 483.3673095703125,
+            "y": 373.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 483.3673095703125,
+            "y": 413.9991760253906,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 31,
+        "path": [
+          {
+            "x": 963.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 963.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 30,
+        "path": [
+          {
+            "x": 931.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 931.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 29,
+        "path": [
+          {
+            "x": 899.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 899.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 28,
+        "path": [
+          {
+            "x": 867.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 33,
+        "path": [
+          {
+            "x": 867.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 27,
+        "path": [
+          {
+            "x": 835.8948974609375,
+            "y": 468.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 32,
+        "path": [
+          {
+            "x": 835.8948974609375,
+            "y": 436.40509033203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 583.2814331054688,
+            "y": 45.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 551.2814331054688,
+            "y": 45.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 519.2814331054688,
+            "y": 45.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 583.2814331054688,
+            "y": 77.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 487.28143310546875,
+            "y": 45.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 551.2814331054688,
+            "y": 77.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 455.28143310546875,
+            "y": 45.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 519.2814331054688,
+            "y": 77.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 487.28143310546875,
+            "y": 77.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 455.28143310546875,
+            "y": 77.60113525390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 642.3591918945313,
+            "y": 105.459228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 682.3591918945313,
+            "y": 105.459228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 722.3591918945313,
+            "y": 105.459228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 25,
+        "path": [
+          {
+            "x": 762.3591918945313,
+            "y": 105.459228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 26,
+        "path": [
+          {
+            "x": 802.3591918945313,
+            "y": 105.459228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 339.5747375488281,
+            "y": 96.23381042480469,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 13,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 16,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 17,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 18,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 19,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 20,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 21,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          52
+        ],
+        "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 23,
+            "profile_index": 0,
+            "target": 14,
+            "weapon_index": 0
+          },
+          {
+            "model": 24,
+            "profile_index": 0,
+            "target": 14,
+            "weapon_index": 0
+          },
+          {
+            "model": 25,
+            "profile_index": 0,
+            "target": 11,
+            "weapon_index": 0
+          },
+          {
+            "model": 26,
+            "profile_index": 0,
+            "target": 11,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 1,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          57
+        ],
+        "target": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          68,
+          67,
+          66,
+          65,
+          64,
+          73,
+          72,
+          71,
+          70,
+          69
+        ],
+        "target": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 28,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 29,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 30,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 31,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 52,
+        "path": [
+          {
+            "x": 351.05889892578125,
+            "y": 744.334228515625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 58,
+        "path": [
+          {
+            "x": 480.77996826171875,
+            "y": 890.8200073242188,
+            "z": 0.0
+          },
+          {
+            "x": 470.5156555175781,
+            "y": 824.945556640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 59,
+        "path": [
+          {
+            "x": 752.0200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 60,
+        "path": [
+          {
+            "x": 784.0200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 61,
+        "path": [
+          {
+            "x": 816.0200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 62,
+        "path": [
+          {
+            "x": 848.0200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 880.0200805664063,
+            "y": 1036.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 56,
+        "path": [
+          {
+            "x": 394.17999267578125,
+            "y": 825.0199584960938,
+            "z": 0.0
+          },
+          {
+            "x": 394.5941467285156,
+            "y": 805.58984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 57,
+        "path": [
+          {
+            "x": 657.8104248046875,
+            "y": 1056.4002685546875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 46,
+        "path": [
+          {
+            "x": 481.066162109375,
+            "y": 1300.83056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 481.066162109375,
+            "y": 1272.33056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 452.566162109375,
+            "y": 1300.83056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 452.566162109375,
+            "y": 1272.33056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 424.0661315917969,
+            "y": 1300.83056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 39,
+        "path": [
+          {
+            "x": 424.0661315917969,
+            "y": 1272.33056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 395.5661315917969,
+            "y": 1300.83056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 395.5661315917969,
+            "y": 1272.33056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 367.0661315917969,
+            "y": 1300.83056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 367.0661315917969,
+            "y": 1272.33056640625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 69,
+        "path": [
+          {
+            "x": 564.976806640625,
+            "y": 1390.0491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 64,
+        "path": [
+          {
+            "x": 564.976806640625,
+            "y": 1361.5491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 70,
+        "path": [
+          {
+            "x": 593.476806640625,
+            "y": 1390.0491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 65,
+        "path": [
+          {
+            "x": 593.476806640625,
+            "y": 1361.5491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 71,
+        "path": [
+          {
+            "x": 621.976806640625,
+            "y": 1390.0491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 66,
+        "path": [
+          {
+            "x": 621.976806640625,
+            "y": 1361.5491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 72,
+        "path": [
+          {
+            "x": 650.476806640625,
+            "y": 1390.0491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 73,
+        "path": [
+          {
+            "x": 678.976806640625,
+            "y": 1390.0491943359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 687.3456420898438,
+            "y": 1202.7041015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 655.3456420898438,
+            "y": 1202.7041015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 623.3456420898438,
+            "y": 1202.7041015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 591.3456420898438,
+            "y": 1202.7041015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 47,
+        "path": [
+          {
+            "x": 559.3456420898438,
+            "y": 1202.7041015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 415.4834289550781,
+            "y": 1355.5201416015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 465.4834289550781,
+            "y": 1355.5201416015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 515.4833984375,
+            "y": 1355.5201416015625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 52,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 57,
+            "profile_index": 0,
+            "target": 5,
+            "weapon_index": 1
+          },
+          {
+            "model": 57,
+            "profile_index": 0,
+            "target": 5,
+            "weapon_index": 2
+          }
+        ],
+        "type": "Normal",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          32,
+          28,
+          27,
+          33,
+          29,
+          34,
+          30,
+          35,
+          31,
+          36
+        ],
+        "target": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "indices": [
+          0,
+          1,
+          2,
+          4,
+          5,
+          7,
+          8,
+          13,
+          14,
+          18,
+          20
+        ],
+        "kind": "RerollWoundRolls"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          28,
+          27,
+          33,
+          29,
+          34,
+          30,
+          35,
+          31,
+          36
+        ],
+        "target": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 58,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          13,
+          12,
+          14,
+          15,
+          16,
+          18,
+          17,
+          19,
+          20,
+          21
+        ],
+        "target": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 531.9680786132813,
+            "y": 256.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 491.9681091308594,
+            "y": 256.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 451.9681091308594,
+            "y": 256.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 531.9680786132813,
+            "y": 296.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 411.9681091308594,
+            "y": 256.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 491.9681091308594,
+            "y": 296.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 371.9681091308594,
+            "y": 256.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 451.9681091308594,
+            "y": 296.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 13,
+        "path": [
+          {
+            "x": 411.9681091308594,
+            "y": 296.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 12,
+        "path": [
+          {
+            "x": 371.9681091308594,
+            "y": 296.6664733886719,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 31,
+        "path": [
+          {
+            "x": 972.8751831054688,
+            "y": 477.3853454589844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 30,
+        "path": [
+          {
+            "x": 940.8751831054688,
+            "y": 477.3853454589844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 972.8751831054688,
+            "y": 445.3853454589844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 29,
+        "path": [
+          {
+            "x": 908.8751831054688,
+            "y": 477.3853454589844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 940.8751831054688,
+            "y": 445.3853454589844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 908.8751831054688,
+            "y": 445.3853454589844,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 487.20648193359375,
+            "y": 134.05751037597656,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 691.0444946289063,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 691.0444946289063,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 659.0444946289063,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 627.0444946289063,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 659.0444946289063,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 595.0444946289063,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 627.0444946289063,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 563.0444946289063,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 595.0444946289063,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 563.0444946289063,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 24,
+            "profile_index": 0,
+            "target": 11,
+            "weapon_index": 0
+          },
+          {
+            "model": 25,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 26,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 1,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          52
+        ],
+        "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          57
+        ],
+        "target": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 12,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 13,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 14,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 16,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 17,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 18,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 19,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 20,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 21,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          52
+        ],
+        "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 29,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 30,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 31,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 34,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 35,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 36,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 52,
+        "path": [
+          {
+            "x": 308.6470947265625,
+            "y": 641.943115234375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 56,
+        "path": [
+          {
+            "x": 232.9495391845703,
+            "y": 643.9452514648438,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 58,
+        "path": [
+          {
+            "x": 485.09588623046875,
+            "y": 860.1453857421875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 59,
+        "path": [
+          {
+            "x": 752.0200805664063,
+            "y": 909.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 60,
+        "path": [
+          {
+            "x": 784.0200805664063,
+            "y": 909.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 61,
+        "path": [
+          {
+            "x": 816.0200805664063,
+            "y": 909.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 62,
+        "path": [
+          {
+            "x": 848.0200805664063,
+            "y": 909.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 880.0200805664063,
+            "y": 909.2454833984375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 57,
+        "path": [
+          {
+            "x": 686.9708862304688,
+            "y": 986.0006713867188,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 912.7861328125,
+            "y": 961.439453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 880.7861328125,
+            "y": 961.439453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 848.7861328125,
+            "y": 961.439453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 816.7861328125,
+            "y": 961.439453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 47,
+        "path": [
+          {
+            "x": 784.7861328125,
+            "y": 961.439453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 299.0250244140625,
+            "y": 1108.0648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 327.5250244140625,
+            "y": 1108.0648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 39,
+        "path": [
+          {
+            "x": 356.0250244140625,
+            "y": 1108.0648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 299.0250244140625,
+            "y": 1136.5648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 384.5250549316406,
+            "y": 1108.0648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 327.5250244140625,
+            "y": 1136.5648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 413.0250549316406,
+            "y": 1108.0648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 356.0250244140625,
+            "y": 1136.5648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 384.5250549316406,
+            "y": 1136.5648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 46,
+        "path": [
+          {
+            "x": 413.0250549316406,
+            "y": 1136.5648193359375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 69,
+        "path": [
+          {
+            "x": 471.11065673828125,
+            "y": 1428.9298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 64,
+        "path": [
+          {
+            "x": 471.11065673828125,
+            "y": 1400.4298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 70,
+        "path": [
+          {
+            "x": 499.61065673828125,
+            "y": 1428.9298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 65,
+        "path": [
+          {
+            "x": 499.61065673828125,
+            "y": 1400.4298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 71,
+        "path": [
+          {
+            "x": 528.1106567382813,
+            "y": 1428.9298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 66,
+        "path": [
+          {
+            "x": 528.1106567382813,
+            "y": 1400.4298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 72,
+        "path": [
+          {
+            "x": 556.6106567382813,
+            "y": 1428.9298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 73,
+        "path": [
+          {
+            "x": 585.1106567382813,
+            "y": 1428.9298095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 415.4834289550781,
+            "y": 1177.7200927734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 465.4834289550781,
+            "y": 1177.7200927734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 515.4833984375,
+            "y": 1177.7200927734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 57,
+            "profile_index": 0,
+            "target": 5,
+            "weapon_index": 1
+          },
+          {
+            "model": 57,
+            "profile_index": 0,
+            "target": 5,
+            "weapon_index": 2
+          }
+        ],
+        "type": "Normal",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          29,
+          30,
+          31,
+          34,
+          35,
+          36
+        ],
+        "target": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "indices": [
+          0,
+          3,
+          5,
+          7,
+          11,
+          12,
+          15
+        ],
+        "kind": "RerollWoundRolls"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          30,
+          31,
+          34,
+          35,
+          36
+        ],
+        "target": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 52,
+            "profile_index": 0,
+            "target": 3,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          13,
+          12,
+          14,
+          17,
+          15,
+          18,
+          19,
+          16,
+          20,
+          21
+        ],
+        "target": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 371.9681091308594,
+            "y": 28.066482543945313,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 411.9681091308594,
+            "y": 28.066482543945313,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 451.9681091308594,
+            "y": 28.066482543945313,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 491.9681091308594,
+            "y": 28.066482543945313,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 531.9680786132813,
+            "y": 28.066482543945313,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 451.9681091308594,
+            "y": 68.06648254394531,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 491.9681091308594,
+            "y": 68.06648254394531,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 531.9680786132813,
+            "y": 68.06648254394531,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 801.1121215820313,
+            "y": 337.6222839355469,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 833.1121215820313,
+            "y": 337.6222839355469,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 865.1121215820313,
+            "y": 337.6222839355469,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 767.2445068359375,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 767.2445068359375,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 735.2445068359375,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 735.2445068359375,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 703.2445068359375,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 703.2445068359375,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 671.2445068359375,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 671.2445068359375,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 639.2445068359375,
+            "y": 185.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 639.2445068359375,
+            "y": 153.36419677734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 557.6060791015625,
+            "y": 104.89703369140625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 606.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 646.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 686.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 25,
+        "path": [
+          {
+            "x": 726.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 26,
+        "path": [
+          {
+            "x": 766.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 22,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 23,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          },
+          {
+            "model": 24,
+            "profile_index": 0,
+            "target": 8,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          52
+        ],
+        "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 34,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 35,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          },
+          {
+            "model": 36,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 59,
+        "path": [
+          {
+            "x": 664.5386352539063,
+            "y": 698.046630859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 60,
+        "path": [
+          {
+            "x": 696.5386352539063,
+            "y": 698.046630859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 61,
+        "path": [
+          {
+            "x": 728.5386352539063,
+            "y": 698.046630859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 62,
+        "path": [
+          {
+            "x": 760.5386352539063,
+            "y": 698.046630859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 792.5386352539063,
+            "y": 698.046630859375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 58,
+        "path": [
+          {
+            "x": 485.09588623046875,
+            "y": 809.3453979492188,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 56,
+        "path": [
+          {
+            "x": 164.90841674804688,
+            "y": 808.2110595703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 57,
+        "path": [
+          {
+            "x": 686.9708862304688,
+            "y": 898.1920776367188,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 1039.148193359375,
+            "y": 656.3744506835938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 1007.148193359375,
+            "y": 656.3744506835938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 975.148193359375,
+            "y": 656.3744506835938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 943.148193359375,
+            "y": 656.3744506835938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 47,
+        "path": [
+          {
+            "x": 911.148193359375,
+            "y": 656.3744506835938,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 83.49888610839844,
+            "y": 1352.0909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 83.49888610839844,
+            "y": 1323.5909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 111.99888610839844,
+            "y": 1352.0909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 111.99888610839844,
+            "y": 1323.5909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 140.49888610839844,
+            "y": 1352.0909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 39,
+        "path": [
+          {
+            "x": 140.49888610839844,
+            "y": 1323.5909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 168.99891662597656,
+            "y": 1352.0909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 168.99891662597656,
+            "y": 1323.5909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 46,
+        "path": [
+          {
+            "x": 197.49891662597656,
+            "y": 1352.0909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 197.49891662597656,
+            "y": 1323.5909423828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 632.8161010742188,
+            "y": 1129.1192626953125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 582.8161010742188,
+            "y": 1129.1192626953125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 532.8161010742188,
+            "y": 1129.1192626953125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 64,
+        "path": [
+          {
+            "x": 435.9108581542969,
+            "y": 1385.849609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 69,
+        "path": [
+          {
+            "x": 435.9108581542969,
+            "y": 1414.349609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 65,
+        "path": [
+          {
+            "x": 464.4108581542969,
+            "y": 1385.849609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 70,
+        "path": [
+          {
+            "x": 464.4108581542969,
+            "y": 1414.349609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 66,
+        "path": [
+          {
+            "x": 492.9108581542969,
+            "y": 1385.849609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 71,
+        "path": [
+          {
+            "x": 492.9108581542969,
+            "y": 1414.349609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 72,
+        "path": [
+          {
+            "x": 521.4108276367188,
+            "y": 1414.349609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 73,
+        "path": [
+          {
+            "x": 549.9108276367188,
+            "y": 1414.349609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 36,
+        "path": [
+          {
+            "x": 923.43310546875,
+            "y": 196.82305908203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 35,
+        "path": [
+          {
+            "x": 891.43310546875,
+            "y": 196.82305908203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 34,
+        "path": [
+          {
+            "x": 859.43310546875,
+            "y": 196.82305908203125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 10,
+        "path": [
+          {
+            "x": 837.6441040039063,
+            "y": 124.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 5,
+        "path": [
+          {
+            "x": 837.6441040039063,
+            "y": 156.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 9,
+        "path": [
+          {
+            "x": 805.6441040039063,
+            "y": 124.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 4,
+        "path": [
+          {
+            "x": 805.6441040039063,
+            "y": 156.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 8,
+        "path": [
+          {
+            "x": 773.6441040039063,
+            "y": 124.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 3,
+        "path": [
+          {
+            "x": 773.6441040039063,
+            "y": 156.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 7,
+        "path": [
+          {
+            "x": 741.6441040039063,
+            "y": 124.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 2,
+        "path": [
+          {
+            "x": 741.6441040039063,
+            "y": 156.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 6,
+        "path": [
+          {
+            "x": 709.6441040039063,
+            "y": 124.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 1,
+        "path": [
+          {
+            "x": 709.6441040039063,
+            "y": 156.20372009277344,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 11,
+        "path": [
+          {
+            "x": 673.7471313476563,
+            "y": 153.0042266845703,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 26,
+        "path": [
+          {
+            "x": 893.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 25,
+        "path": [
+          {
+            "x": 853.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 24,
+        "path": [
+          {
+            "x": 813.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 23,
+        "path": [
+          {
+            "x": 773.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 22,
+        "path": [
+          {
+            "x": 733.4381713867188,
+            "y": 69.5382080078125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 16,
+        "path": [
+          {
+            "x": 580.56884765625,
+            "y": 185.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 15,
+        "path": [
+          {
+            "x": 540.5689086914063,
+            "y": 185.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 14,
+        "path": [
+          {
+            "x": 500.56890869140625,
+            "y": 185.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 21,
+        "path": [
+          {
+            "x": 580.56884765625,
+            "y": 145.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 20,
+        "path": [
+          {
+            "x": 540.5689086914063,
+            "y": 145.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 19,
+        "path": [
+          {
+            "x": 500.56890869140625,
+            "y": 145.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 18,
+        "path": [
+          {
+            "x": 460.56890869140625,
+            "y": 145.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 17,
+        "path": [
+          {
+            "x": 420.56890869140625,
+            "y": 145.399169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 14,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 15,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 16,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 17,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 18,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 19,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 20,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          },
+          {
+            "model": 21,
+            "profile_index": 0,
+            "target": 13,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          59,
+          60,
+          61,
+          62,
+          63
+        ],
+        "target": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 34,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 35,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          },
+          {
+            "model": 36,
+            "profile_index": 0,
+            "target": 7,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "batch": 0,
+        "kind": "SelectAttackBatch"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          51,
+          50,
+          49,
+          48,
+          47
+        ],
+        "target": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "Shoot",
+        "shots": [
+          {
+            "model": 26,
+            "profile_index": 0,
+            "target": 12,
+            "weapon_index": 0
+          }
+        ],
+        "type": "Normal",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "OrderCasualties",
+        "priority": [
+          58
+        ],
+        "target": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 47,
+        "path": [
+          {
+            "x": 911.148193359375,
+            "y": 453.1744384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 48,
+        "path": [
+          {
+            "x": 943.148193359375,
+            "y": 453.1744384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 49,
+        "path": [
+          {
+            "x": 975.148193359375,
+            "y": 453.1744384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 50,
+        "path": [
+          {
+            "x": 1007.148193359375,
+            "y": 453.1744384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 51,
+        "path": [
+          {
+            "x": 1039.148193359375,
+            "y": 453.1744384765625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 63,
+        "path": [
+          {
+            "x": 792.5386352539063,
+            "y": 1002.8466186523438,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 58,
+        "path": [
+          {
+            "x": 550.904296875,
+            "y": 743.5369873046875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 57,
+        "path": [
+          {
+            "x": 465.77996826171875,
+            "y": 905.8200073242188,
+            "z": 0.0
+          },
+          {
+            "x": 470.3653564453125,
+            "y": 837.169189453125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 56,
+        "path": [
+          {
+            "x": 344.5135498046875,
+            "y": 628.60595703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 55,
+        "path": [
+          {
+            "x": 749.4580078125,
+            "y": 1410.7177734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 54,
+        "path": [
+          {
+            "x": 699.4580078125,
+            "y": 1410.7177734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 53,
+        "path": [
+          {
+            "x": 649.4580078125,
+            "y": 1410.7177734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Advance",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 42,
+        "path": [
+          {
+            "x": 18.229537963867188,
+            "y": 1509.6650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 43,
+        "path": [
+          {
+            "x": 46.72953796386719,
+            "y": 1509.6650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 44,
+        "path": [
+          {
+            "x": 75.22953796386719,
+            "y": 1509.6650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 37,
+        "path": [
+          {
+            "x": 18.229537963867188,
+            "y": 1481.1650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 45,
+        "path": [
+          {
+            "x": 103.72956848144531,
+            "y": 1509.6650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 38,
+        "path": [
+          {
+            "x": 46.72953796386719,
+            "y": 1481.1650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 46,
+        "path": [
+          {
+            "x": 132.2295684814453,
+            "y": 1509.6650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 39,
+        "path": [
+          {
+            "x": 75.22953796386719,
+            "y": 1481.1650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 40,
+        "path": [
+          {
+            "x": 103.72956848144531,
+            "y": 1481.1650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 41,
+        "path": [
+          {
+            "x": 132.2295684814453,
+            "y": 1481.1650390625,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "Normal",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 69,
+        "path": [
+          {
+            "x": 401.57733154296875,
+            "y": 1505.0548095703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 70,
+        "path": [
+          {
+            "x": 459.5564880371094,
+            "y": 1506.60986328125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 71,
+        "path": [
+          {
+            "x": 517.53564453125,
+            "y": 1508.1649169921875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 72,
+        "path": [
+          {
+            "x": 546.5252075195313,
+            "y": 1508.9425048828125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 73,
+        "path": [
+          {
+            "x": 575.5147705078125,
+            "y": 1509.719970703125,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 64,
+        "path": [
+          {
+            "x": 372.5877685546875,
+            "y": 1504.27734375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 65,
+        "path": [
+          {
+            "x": 430.56689453125,
+            "y": 1505.8323974609375,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "ProposeModelMove",
+        "model": 66,
+        "path": [
+          {
+            "x": 488.5460510253906,
+            "y": 1507.387451171875,
+            "z": 0.0
+          }
+        ]
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndShootStep"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclareCharge",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "EndChargeStep"
+      },
+      "side": "B"
+    }
+  ]
+}
