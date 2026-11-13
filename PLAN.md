@@ -546,8 +546,9 @@ two-leg move inside the bot game (the bot itself detours from M89); "random armi
 
 ---
 
-## M89: The bot plays for cover
-**Effort:** `high` · **Plan mode:** done (design approved 2026-11-12; D-090)
+## M89: The bot plays for cover ✅ (done; the head-to-head target open)
+**Effort:** `high` · **Plan mode:** done (design approved 2026-11-12; D-090; finishing with the 55% target open was the
+user's choice, 2026-11-13)
 
 > The bot values terrain (D-090). Bot and arena only: no rule, engine, state or file-format change. Read 13.08–13.11,
 > D-087–D-089 and D-090 first.
@@ -602,6 +603,43 @@ two-leg move inside the bot game (the bot itself detours from M89); "random armi
   binary as the reference); README and the CLAUDE.md overview line. Screenshot under `xvfb-run`.
 - **Build** and full `ctest` green.
 
+**Results** (2026-11-13, D-090's "In code", Tuning and Final numbers)
+- **The bot:**
+  - `TerrainSight`: sight for hypothetical positions, lines estimated by three parallel lines (core's exact search took
+    70% of the time). It agrees with core on 3,985 of 4,000 pairs.
+  - The reply's and our shots' terrain in the move score.
+  - Candidates into cover, hiding, behind obscuring areas and round walls.
+  - Hand deployment into cover.
+  - All gated on terrain and `cover` > 0.
+- **Arena:** the `cover` key and the `cover (M89)` line.
+- **Acceptance** (Release arena):
+
+  | Item | Number | Target | |
+  |---|---|---|---|
+  | head-to-head, M89 against M88 (4 x 100) | 214 of 400 (53.5%), confirmed 213 (53.3%) on seeds 101–200; M88 against M88 200 | at least 55% | open (the user's choice) |
+  | the enemy's selections into cover, M89 units as targets | Chaos 34.7% / 25.2% (M88 21.5% / 19.5%); Tyranids 58.9% / 47.5% (70.6% / 51.4%), but refused as Hidden 3.74 / 5.35 a game (0.08 / 0.95) | up | met for the Chaos Space Marines; the Tyranids hide instead |
+  | Chaos Space Marines' wins, M89 against M89 | terrain scenario 21.0% (A first) / 34.5% (B first) (M88 25.0% / 38.5%); random armies `--terrain` 17.0% auto / 17.0% hand (18.5% / 18.5%) | recorded | |
+  | identity: the nine runs at the defaults, the four terrain runs at `cover=0` | identical to the M88 binary, every `game` line (2,600 games) | identical | met |
+  | clean runs, p95 | no rejected action, reverted move, fallback or unfinished game; p95 28 ms (Chaos) / 16 ms (Tyranids), random armies 18 ms | 0; at most 33 ms | met |
+  | replays | every old replay byte-identical (m88's generator pinned to `cover=0`); new m89 | | met |
+
+- **Why the target is open:**
+  - Nearly all the gain is the bot knowing which enemies its models will see. The reply's terrain and the new
+    candidates are within the noise, and charge odds round walls were worse (193).
+  - The army plan, which picks the groups' targets, is still terrain-blind (D-090's open list).
+- **Tests:** `tests/ai/m89_test.cpp`:
+  - `M89_Sight`, `M89_Odds`;
+  - `M89_MoveScore` (cover 0 and no terrain bit-identical, the blend halfway, Hidden only without shooting);
+  - `M89_Candidates` (the Hive Tyrant's detour), `M89_Deploy`;
+  - `M89_Regression` (the terrain scenario at `cover=0` as at M88), `M89_Arena`, `M89_Replay`.
+
+  Changed: `M88_Replay`'s generator plays the bot at `cover=0`.
+- **Replay:** `tests/replays/m89_cover_bot_game.json` (seed 2, a whole game, the Chaos Space Marines win):
+  - 3 two-leg detours by the bot;
+  - 43 shots into cover;
+  - 8 hidden units refused to a shooter.
+- **Build and `ctest`:** see the commit. A full game by mouse on Windows stays a manual check for the user.
+
 ---
 
 ## Later (post-V1, rough order)
@@ -609,9 +647,11 @@ two-leg move inside the bot game (the bot itself detours from M89); "random armi
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
-1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89. Still to do: the z axis (13.06
-   Moving Vertically and upper surfaces, 13.11 gaps above 3", 22.05 Plunging Fire), Stealth (24.33, left out of M88 by
-   the user's choice), and a terrain editor for custom battles.
+1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89 (D-090). Still to do: the z axis
+   (13.06 Moving Vertically and upper surfaces, 13.11 gaps above 3", 22.05 Plunging Fire), Stealth (24.33, left out of
+   M88 by the user's choice), and a terrain editor for custom battles. Left open from M89: the head-to-head target
+   (53.4% against 55%), the army plan's terrain-blind group rates, holding fire on purpose to stay hidden, and charge
+   odds round walls (D-090's open list).
 2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084), the bot in M87 (D-086). This enables
    Objective Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state
    only). Left open from M87: the objective scenario's balance (the Chaos Space Marines win about a third: the Tyranids'
