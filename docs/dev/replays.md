@@ -19,6 +19,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M77_Replay.DISABLED_RegenerateCustomHandDeployBotGameReplay
 # and m88_terrain.json (the terrain scenario, seed 80: bot play with one scripted detour) likewise (M88):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M88_Replay.DISABLED_RegenerateTerrainReplay
+# and m89_cover_bot_game.json (the terrain scenario, a whole bot game playing for cover) likewise (M89):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M89_Replay.DISABLED_RegenerateCoverBotGameReplay
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -41,4 +43,8 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   two straight lines round a dense wall, 13.06; the bot itself detours from M89). It is checked by the engine replay
   only (`M88_Replay` in `wh40k_tests` checks its cover, its detour and its hidden target with core alone), with no
   `TheSavedFileMatchesTheGame` test, so bot changes leave it valid. Regenerate it only if the engine's terrain rules
-  change.
+  change. Since M89 (D-090) its generator plays the bot at `cover` 0 (the M88 bot), so regenerating it gives the same
+  file.
+- M89: `m89_cover_bot_game.json` is a whole bot game on the terrain scenario, the bot playing for cover (D-090): shots
+  into cover, a hidden unit refused to a shooter, and the bot's own two-leg moves round a wall. `M89_Replay` replays it
+  with core alone, and its `TheSavedFileMatchesTheGame` checks that it is what the bot plays now.

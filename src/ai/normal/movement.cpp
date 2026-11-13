@@ -1216,7 +1216,7 @@ std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTe
             if (reach) area_spots_for(g, area, out);
         }
     }
-    if (cover_spots && !origin.terrain.empty() && !m89_off("cand")) {
+    if (cover_spots && !origin.terrain.empty()) {
         // M89 (D-090): after every other candidate, so their order is unchanged.
         if (const core::Unit* u = origin.find_unit(g.unit)) {
             cover_spots_for(origin, g, *u, area_spots && origin.mission, out);

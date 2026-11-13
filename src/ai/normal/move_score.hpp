@@ -129,8 +129,6 @@ struct MoveWeights {
 [[nodiscard]] bool objectives_on(const core::GameState& state, const MoveWeights& weights);
 // M89 (D-090): the terrain terms are on: the battlefield has terrain and the cover weight is above 0.
 [[nodiscard]] bool cover_on(const core::GameState& state, const MoveWeights& weights);
-// TEMP M89 tuning: WH40K_M89_OFF holds "cand", "shoot", "reply", "deploy".
-[[nodiscard]] bool m89_off(const char* what);
 
 struct MoveScore {
     // Components (unit shares, ours positive); total is their sum.

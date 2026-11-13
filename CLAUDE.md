@@ -6,7 +6,8 @@ Since then: a bot opponent (D-054; one level since M85, D-085), the 60"x44" Stri
 rosters scenario with oval bases and a points result (D-074, D-076), custom battles with an army builder and
 hand deployment (D-079, D-081, D-082), army-level teamwork for the bot (D-083), and objectives with a mission of our
 own, scored in VP (14.02, D-084), which the bot plays for since M87 (D-086), and 2D terrain (13, D-087–D-089: areas
-and features, cover, Hidden, obscuring and solid walls) on the objective battlefield, the default scenario since M88.
+and features, cover, Hidden, obscuring and solid walls) on the objective battlefield, the default scenario since M88,
+which the bot plays for cover since M89 (D-090).
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
