@@ -257,7 +257,10 @@ TerrainReplay play_terrain_replay(std::uint64_t seed) {
     out.replay.initial.scenario = kTerrainScenario;
     out.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(out.replay, repo_root()));
-    std::array<Bot, 2> bots{Bot(BotConfig{}), Bot(BotConfig{})};
+    // M89 (D-090): the M88 bot, which doesn't value terrain (cover 0 plays exactly as before M89).
+    BotConfig m88;
+    m88.move.cover = 0.0;
+    std::array<Bot, 2> bots{Bot(m88), Bot(m88)};
     wh40k::client::AutoSettings autos;
     autos.skip_empty_steps = true;
     autos.auto_allocate = false;

@@ -6,7 +6,9 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "analysis/odds.hpp"
@@ -15,12 +17,16 @@
 #include "bot.hpp"
 #include "core/data/scenario_loader.hpp"
 #include "core/engine/engine.hpp"
+#include "core/engine/replay.hpp"
 #include "core/geometry/terrain_shape.hpp"
 #include "core/geometry/visibility.hpp"
 #include "core/rules/terrain.hpp"
 #include "deploy_policy.hpp"
 #include "normal/move_score.hpp"
 #include "normal/movement.hpp"
+#include "core/serialization/engine_json.hpp"
+#include "core/serialization/json.hpp"
+#include "session.hpp"
 #include "simulator.hpp"
 #include "support/engine_helpers.hpp"
 #include "support/monster_fixtures.hpp"
@@ -430,4 +436,126 @@ TEST(M89_Arena, TheSummaryHasTheCoverLineOnTerrainOnly) {
     const GameState rosters = wh40k::test::load_rosters_scenario();
     EXPECT_EQ(format_arena(run_arena(rosters, 0, 1, BotConfig{}, BotConfig{}), rosters).find("cover (M89)"),
               std::string::npos);
+}
+
+// ==== The M89 replay: tests/replays/m89_cover_bot_game.json ====
+
+namespace {
+
+constexpr std::uint64_t kCoverSeed = 0;  // chosen by M89_Replay.DISABLED_SearchCoverSeed
+constexpr const char* kCoverFile = "m89_cover_bot_game.json";
+
+std::filesystem::path cover_replay_path() { return std::filesystem::path(WH40K_REPLAY_DIR) / kCoverFile; }
+
+struct CoverGame {
+    Replay replay;
+    GameRecord record;
+    int detours = 0;  // the bot's two-leg moves round a wall (D-090)
+    int covered = 0;  // ranged weapon selections whose target had the benefit of cover (13.08)
+    int hidden = 0;   // enemy units refused to a shooter because they were hidden (13.09)
+};
+
+// A whole game played by the bot on both sides of the terrain scenario, through GameSession (every action validated,
+// the client's automatic skips included), as M87's; replaying it needs only core.
+CoverGame play_cover_bot_game(std::uint64_t seed = kCoverSeed) {
+    CoverGame g;
+    g.replay.description =
+        "M89: a whole game played by the bot on both sides of the terrain scenario "
+        "(data/scenarios/incursion_terrain_44x60.json, D-087-D-089) with dice seed " +
+        std::to_string(seed) +
+        ": the bot plays for cover (D-090): its units take cover in terrain areas (13.08), hide from shooters beyond "
+        "15\" (13.09) and its monsters go round dense walls they can't cross (13.06). Replaying it needs only the "
+        "engine.";
+    g.replay.initial.scenario = kTerrainScenario;
+    g.replay.initial.seed = seed;
+    wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
+    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000);
+    g.replay.steps = session.history();
+    g.replay.expect = replay_expectation(session.state());
+    for (const ReplayStep& st : g.replay.steps) {
+        if (const auto* p = std::get_if<action::ProposeModelMove>(&st.action); p != nullptr && p->path.size() == 2) {
+            ++g.detours;
+        }
+    }
+    g.covered = g.record.teamwork.covered_selections[0] + g.record.teamwork.covered_selections[1];
+    g.hidden = g.record.teamwork.refused_hidden[0] + g.record.teamwork.refused_hidden[1];
+    return g;
+}
+
+}  // namespace
+
+TEST(M89_Replay, TheCoverBotGameReplaysToItsResultWithCoreOnly) {
+    const Replay saved = load_replay(cover_replay_path());
+    ASSERT_TRUE(saved.initial.scenario.has_value());
+    EXPECT_EQ(*saved.initial.scenario, kTerrainScenario);
+    EXPECT_EQ(saved.initial.seed, kCoverSeed);
+    const ReplayResult first = run_replay(saved, repo_root());
+    ASSERT_TRUE(first.ok()) << "step " << *first.failed_step << ": " << first.reasons.front();
+    EXPECT_EQ(replay_expectation(first.final_state), saved.expect);
+    const ReplayResult second = run_replay(saved, repo_root());
+    ASSERT_TRUE(second.ok());
+    EXPECT_EQ(first.final_state, second.final_state);  // deterministic
+    ASSERT_TRUE(first.final_state.result.has_value());
+    // What it shows: shots into cover, and a move in two legs (the bot's own detour round a wall).
+    int covered = 0;
+    for (const GameEvent& e : first.events) {
+        if (const auto* sh = std::get_if<event::ShootingStarted>(&e)) {
+            for (const WeaponSelection& sel : sh->selections) covered += sel.benefit_of_cover ? 1 : 0;
+        }
+    }
+    EXPECT_GT(covered, 0);
+    int detours = 0;
+    for (const ReplayStep& st : saved.steps) {
+        if (const auto* p = std::get_if<action::ProposeModelMove>(&st.action); p != nullptr && p->path.size() == 2) {
+            ++detours;
+        }
+    }
+    EXPECT_GT(detours, 0);
+}
+
+TEST(M89_Replay, TheSavedFileMatchesTheGame) {
+    // The bot with the replay's seed plays exactly the saved game now (D-054), with nothing rejected, reverted or
+    // answered by the fallback, and it shows a hidden unit refused to a shooter (13.09).
+    const Replay saved = load_replay(cover_replay_path());
+    const CoverGame g = play_cover_bot_game();
+    EXPECT_TRUE(g.record.finished);
+    EXPECT_EQ(g.record.rejected, 0u);
+    EXPECT_EQ(g.record.reverted, 0u);
+    EXPECT_EQ(g.record.fallbacks, 0u);
+    EXPECT_GT(g.hidden, 0);
+    ASSERT_EQ(saved.steps.size(), g.replay.steps.size());
+    for (std::size_t i = 0; i < saved.steps.size(); ++i) {
+        ASSERT_EQ(Json(saved.steps[i]).dump(), Json(g.replay.steps[i]).dump()) << "step " << i;
+    }
+    EXPECT_EQ(Json(saved).dump(2), Json(g.replay).dump(2));
+}
+
+// Writes tests/replays/m89_cover_bot_game.json. Run on purpose only:
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M89_Replay.DISABLED_RegenerateCoverBotGameReplay
+TEST(M89_Replay, DISABLED_RegenerateCoverBotGameReplay) {
+    const CoverGame g = play_cover_bot_game();
+    ASSERT_TRUE(g.record.finished);
+    ASSERT_EQ(g.record.rejected, 0u);
+    ASSERT_EQ(g.record.reverted, 0u);
+    ASSERT_EQ(g.record.fallbacks, 0u);
+    ASSERT_GT(g.detours, 0);
+    ASSERT_GT(g.covered, 0);
+    ASSERT_GT(g.hidden, 0);
+    const ReplayResult r = run_replay(g.replay, repo_root());
+    ASSERT_TRUE(r.ok()) << "step " << *r.failed_step << ": " << r.reasons.front();
+    if (::testing::Test::HasFailure()) return;  // never overwrite the committed replay with a broken game
+    save_replay(g.replay, cover_replay_path());
+}
+
+// Prints, per seed, what the game shows (run on purpose):
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M89_Replay.DISABLED_SearchCoverSeed
+TEST(M89_Replay, DISABLED_SearchCoverSeed) {
+    for (std::uint64_t seed = 1; seed <= 30; ++seed) {
+        const CoverGame g = play_cover_bot_game(seed);
+        if (g.detours == 0 || g.hidden == 0 || !g.record.finished) continue;
+        std::printf("seed %llu: steps %zu, detours %d, covered %d, hidden refused %d, winner %s\n",
+                    static_cast<unsigned long long>(seed), g.replay.steps.size(), g.detours, g.covered, g.hidden,
+                    g.record.winner ? (*g.record.winner == Side::A ? "A" : "B") : "-");
+        std::fflush(stdout);
+    }
 }

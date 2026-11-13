@@ -17,7 +17,9 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   `approach`, `cohesion`, `follow` and `approach_alone`; any other key exits 2. The header line names each side's weights
   ("default" when none are given). M87 (D-086) adds `objective`, `objective_approach` and `objective_fire`: the objective
   terms, the approach to an area and the shooting at enemy holders, under a mission only; with all three 0 a mission
-  game plays exactly as at M86.
+  game plays exactly as at M86. M89 (D-090) adds `cover`, 0 to 1 (another value exits 2): how far the move
+  score believes what terrain does to its shots, on a battlefield with terrain only. At 0 a terrain game plays exactly
+  as at M88, so the M88 bot is `--weights-a cover=0` (or `--weights-b`).
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -66,6 +68,12 @@ default weights were identical to the M87 binary (1,800 of 1,800 games). The M88
 terrain scenario (`incursion_terrain_44x60.json`) and the terrain runs (`--terrain`) are new; M89 changes them on
 purpose.
 
+M89 (D-090) changes play only on a battlefield with terrain. The proof: the nine runs above at the default weights,
+and the four terrain runs (the terrain scenario with `--first A` and with `--first B`, `--random-armies 1 --terrain
+data/scenarios/incursion_terrain_44x60.json` with `--deploy auto` and `--deploy hand`) at `--weights cover=0`, all
+identical to the M88 binary. At the default weights the M89 binary is the reference for the four terrain runs; add
+them to the set from M89 on.
+
 ## Deployment and the summary
 
 - The deployment step only exists in a scenario with `"deployment": "alternating"` (D-081). The bot sets up by M77's
@@ -86,3 +94,6 @@ purpose.
     were hidden (13.09), or because of obscuring areas or dense walls (13.10 / 13.11), counted before each Shoot.
 
   The `--per-game` line is unchanged.
+- M89 (D-090) adds, on a battlefield with terrain, the `cover (M89)` line: the same counts as the `terrain (M88)` line
+  read by the target's side (the enemy's ranged weapon selections into each side's units that had cover, and each
+  side's units refused to an enemy shooter for Hidden or for terrain, per game). The `--per-game` line is unchanged.

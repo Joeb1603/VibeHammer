@@ -103,8 +103,12 @@ behind each step.
   - **Objectives:** on a mission the bot plays for the areas. Its army plan sends the units that no group needs to
     hold, take or contest an area, choosing the cheapest units with enough OC. Moves count the VP they deny the enemy
     at the end of the bot's turn and the VP they hold through the enemy's turn.
+  - **Cover:** on terrain the bot judges each move by what terrain does to the shots. It counts which enemies its
+    models could see from where they end, the cover its targets have, and the cover and line of sight it has itself
+    against the enemy's reply. Its infantry moves into terrain areas and hides in ruins. Its monsters go round walls
+    they can't cross, and in hand deployment its infantry sets up in cover where it can.
 
-**Not yet:** terrain heights (floors, climbing, Plunging Fire) and Stealth, the bot seeking cover (M89), missions
+**Not yet:** terrain heights (floors, climbing, Plunging Fire) and Stealth, missions
 beyond the one objective mission, stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
 `PLAN.md` lists what comes next.

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <stdexcept>
 
 #include "analysis/charge_odds.hpp"
@@ -289,16 +288,6 @@ const core::Unit* followed_focus(const ArmyPlan& plan, const core::GameState& or
 bool objectives_on(const core::GameState& state, const MoveWeights& weights) {
     return state.mission.has_value() &&
            (weights.objective > 0.0 || weights.objective_approach > 0.0 || weights.objective_fire > 0.0);
-}
-
-std::size_t m89_samples() {
-    const char* e = std::getenv("WH40K_M89_SAMPLES");
-    return e != nullptr ? static_cast<std::size_t>(std::atoi(e)) : analysis::kSightSamples;
-}
-
-bool m89_off(const char* what) {
-    const char* e = std::getenv("WH40K_M89_OFF");
-    return e != nullptr && std::string(e).find(what) != std::string::npos;
 }
 
 bool cover_on(const core::GameState& state, const MoveWeights& weights) {
@@ -774,7 +763,7 @@ MoveScoreContext::TerrainSide MoveScoreContext::terrain_side(const core::Unit& u
         t.area_cover = t.area_cover && ok;
         at.push_back(models[k].position);
     }
-    t.samples = analysis::sight_samples(at, centroid_of(positions_of(us_)), m89_samples());
+    t.samples = analysis::sight_samples(at, centroid_of(positions_of(us_)));
     return t;
 }
 std::pair<bool, bool> MoveScoreContext::our_view(const core::BasePose& at, const std::vector<core::PosedModel>& models,
@@ -823,7 +812,7 @@ bool MoveScoreContext::moved_visible(float to_mm) const {
 MoveScoreContext::ReplyFacts MoveScoreContext::begin_reply(const std::vector<core::Position>& positions, bool shoots) {
     ReplyFacts f;
     reply_ = Reply{};
-    if (!sight_ || positions.size() != us_.models.size() || us_.models.empty() || m89_off("reply")) return f;
+    if (!sight_ || positions.size() != us_.models.size() || us_.models.empty()) return f;
     reply_.active = true;
     reply_.area_cover = us_takes_cover_;
     std::vector<core::BasePose> all;
@@ -835,7 +824,7 @@ MoveScoreContext::ReplyFacts MoveScoreContext::begin_reply(const std::vector<cor
     // attacks this turn (its previous turn then) nor in the enemy's turn before it shoots.
     const bool may_hide = us_takes_cover_ && !shoots;
     reply_.all_hidden = may_hide;
-    for (const std::size_t i : analysis::sight_samples(positions, enemy_centroid_, m89_samples())) {
+    for (const std::size_t i : analysis::sight_samples(positions, enemy_centroid_)) {
         reply_.poses.push_back(all[i]);
         const std::uint32_t mask = sight_->mask_at(all[i]);
         reply_.masks.push_back(mask);
@@ -843,12 +832,10 @@ MoveScoreContext::ReplyFacts MoveScoreContext::begin_reply(const std::vector<cor
         reply_.hidden.push_back(hidden ? 1 : 0);
         reply_.all_hidden = reply_.all_hidden && hidden;
     }
-    if (enemy_ && !m89_off("stays")) {
+    if (enemy_) {
         const std::pair<bool, bool> v = stays_view(enemy_models_, enemy_side_);
         reply_.stay_visible = v.first;
         reply_.stay_cover = v.second;
-    } else if (enemy_) {
-        reply_.stay_cover = reply_.area_cover;
     }
     f.in_cover = reply_.area_cover || (reply_.stay_visible && reply_.stay_cover);
     f.hidden = reply_.all_hidden;
@@ -926,7 +913,7 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
         };
         const analysis::Volley& plain = volley_of(false);
         volley.insert(volley.end(), plain.begin(), plain.end());
-        if (sight_ && band != 0 && !m89_off("shoot")) {
+        if (sight_ && band != 0) {
             // M89 (D-090): this model's view of the enemy unit from its end position (13.08-13.11).
             const std::pair<bool, bool> v =
                 our_view(core::BasePose{positions[i], m.base, m.facing_deg}, enemy_models_, enemy_side_);
@@ -937,7 +924,7 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
         }
     }
     if (half_range_models != nullptr) *half_range_models = half;
-    if (sight_ && !m89_off("shoot")) {
+    if (sight_) {
         // M89 (D-090): blended with the terrain-blind volley (only the terrain one at cover 1).
         const analysis::AttackOutcome t = analysis::expected_outcome(cache_, seen, enemy_snap_);
         analysis::AttackOutcome o = t;
@@ -1365,7 +1352,7 @@ double MoveScoreContext::our_shooting_at_other(std::size_t index, const std::vec
     if (!any) return 0.0;  // out of range of every weapon
     // M89 (D-090): each model's view of it (1 + visible x 2 + cover; 0 out of range), under cover_on only.
     std::vector<std::uint8_t> views;
-    if (sight_ && !m89_off("shoot")) {
+    if (sight_) {
         views.assign(us_.models.size(), 0);
         for (std::size_t i = 0; i < us_.models.size(); ++i) {
             if (bands[i] == 0) continue;
@@ -1416,7 +1403,7 @@ double MoveScoreContext::our_shooting_at_other(std::size_t index, const std::vec
         return hit->second;
     };
     std::pair<double, double> r;
-    if (sight_ && !m89_off("shoot")) {
+    if (sight_) {
         r = shots(views);
         if (cover_w_ < 1.0) {
             const std::pair<double, double> p = shots({});
@@ -1500,7 +1487,7 @@ OtherThreat MoveScoreContext::other_threat(const std::vector<core::Position>& po
         // M89 (D-090): where it stands, its view of us; once it moves it sees us again (unless we are hidden beyond 15")
         // and only our area cover holds.
         std::pair<bool, bool> stays{true, false};
-        if (reply_.active) stays = m89_off("stays") ? std::pair{true, reply_.area_cover} : stays_view(o.models, o.terrain);
+        if (reply_.active) stays = stays_view(o.models, o.terrain);
         for (std::size_t k = 0; k < ends.size(); ++k) {
             const float end = ends[k];
             std::pair<double, double> r = other_ranged(o, keeps_heavy(g - end), end);
