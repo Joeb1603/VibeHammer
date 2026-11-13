@@ -88,7 +88,15 @@ struct DeployAssessment {
 
 // The answer to `side`'s pending DeployUnits by the M77 heuristic (see the file comment), from `legal`
 // (legal_actions); nullopt for any other decision.
+// M89 (D-090): `cover` (cover_on: terrain and the cover weight above 0): for a unit that takes cover (13.08: INFANTRY,
+// BEASTS, SWARM) the candidates are stably sorted by their cover count first (each model within a terrain area 1, within
+// one with a Dense feature 2, 13.09), M77's order breaking ties; with no enemy unit set up yet they face the centre of
+// the enemy deployment zone. With `cover` false, or no terrain, the heuristic is M77's.
 [[nodiscard]] std::optional<PolicyResult> heuristic_deploy_policy(const core::GameState& state, core::Side side,
-                                                                  const std::vector<core::GameAction>& legal);
+                                                                  const std::vector<core::GameAction>& legal,
+                                                                  bool cover = false);
+// M89 (D-090): the cover count of a set-up: per model within a terrain area 1, within one with a Dense feature 2 (0 for a
+// unit that doesn't take cover).
+[[nodiscard]] int deploy_cover_count(const core::GameState& state, const core::action::DeployUnit& a);
 
 }  // namespace wh40k::ai

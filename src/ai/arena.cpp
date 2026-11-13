@@ -641,6 +641,17 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                           t.refused_hidden[0] / n, t.refused_hidden[1] / n, t.refused_terrain[0] / n,
                           t.refused_terrain[1] / n);
             out += buf;
+            // M89 (D-090): the same counts by the target's side (the enemy's selections into its units).
+            std::snprintf(buf, sizeof buf,
+                          "cover (M89), by target side: enemy ranged weapon selections into cover A %d of %d (%.1f%%) / "
+                          "B %d of %d (%.1f%%); its units refused to an enemy shooter per game for Hidden A %.2f / B "
+                          "%.2f, for obscuring or dense terrain A %.2f / B %.2f\n",
+                          t.covered_selections[1], t.ranged_selections[1],
+                          100.0 * ratio(t.covered_selections[1], t.ranged_selections[1]), t.covered_selections[0],
+                          t.ranged_selections[0], 100.0 * ratio(t.covered_selections[0], t.ranged_selections[0]),
+                          t.refused_hidden[1] / n, t.refused_hidden[0] / n, t.refused_terrain[1] / n,
+                          t.refused_terrain[0] / n);
+            out += buf;
         }
     }
     std::string coherency;  // M43: which games lost models to coherency (for --trace)

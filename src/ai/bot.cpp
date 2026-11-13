@@ -68,7 +68,7 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
             memo_.clear();
             // D-081: the set-up step is answered before the policy, by the M77 heuristic (D-085: M74's Auto-place spots
             // in id order when the heuristic has no answer).
-            std::optional<PolicyResult> deploy = heuristic_deploy_policy(state, side, legal);
+            std::optional<PolicyResult> deploy = heuristic_deploy_policy(state, side, legal, normal::cover_on(state, config_.move));
             if (!deploy) deploy = deploy_policy(state, side, legal);
             if (deploy) {
                 chosen = std::move(deploy);

@@ -834,7 +834,7 @@ void PositionProbe::set_moved(core::UnitId unit, const core::UnitTurnFlags& flag
 Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const core::Unit& target,
                           const ShotContext& context) {
     Volley volley;
-    if (target.models.empty()) return volley;
+    if (target.models.empty() || !context.visible) return volley;  // M89 (D-090): 13.09-13.11, not visible
     // D-077 (M68): who is engaged (04.02, 10.06, 17.03). With the default context (an unengaged target, close-quarters
     // shooting at the unit engaged with) and no MONSTER/VEHICLE on either side nothing below changes the M67 volley.
     const EngagementFacts facts = facts_of(context, target);
@@ -864,6 +864,8 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
                 sel.target_models_at_selection = static_cast<int>(target.models.size());  // 24.05
                 core::AttackProfile ap = core::make_attack_profile(p, attack);
                 ap.hit_modifier += hit_modifier_of(facts, mv_model, p);  // D-077: 10.06 and 17.03, as the engine adds them
+                // M89 (D-090): 13.08 Benefit of Cover worsens the BS by 1 (D-089, as gather_attack_batches).
+                if (context.target_cover && ap.skill) *ap.skill += 1;
                 const core::SelectionDice sd = core::selection_dice(p, sel, attack);
                 std::vector<core::DiceExpr> random;
                 if (sd.random) random.push_back(*sd.random);  // D-069

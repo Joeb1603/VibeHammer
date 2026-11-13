@@ -290,6 +290,10 @@ private:
 //   target, each except a [CLOSE-QUARTERS] weapon at a unit the shooter is engaged with, added to the profile's hit
 //   modifier as the engine adds them (D-073); core's make_hit_rolls applies D-011's cap.
 // - `hazard_rate`: as best_shooting's (0: not priced).
+// M89 (D-090), terrain (the move score's hypothetical shots; the engine's own paths judge it themselves):
+// - `target_cover`: the target has the benefit of cover (13.08): every profile's BS is worsened by 1 (D-089, as the
+//   engine's gather_attack_batches; [TORRENT] has no BS);
+// - `visible`: false when no model of the attacker can see the target (13.09-13.11): no volley.
 // The defaults are the M67 context: an unengaged target, close-quarters shooting at the unit engaged with.
 struct ShotContext {
     core::ShootingType type = core::ShootingType::Normal;
@@ -298,6 +302,8 @@ struct ShotContext {
     bool target_engaged = false;
     bool elsewhere = false;
     double hazard_rate = 0.0;
+    bool target_cover = false;  // M89 (D-090)
+    bool visible = true;        // M89 (D-090)
 };
 
 // Each model's best usable ranged weapons against `target` in `context` (24.07: its [CLOSE-QUARTERS] weapons or

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
 
 #include "analysis/charge_odds.hpp"
@@ -113,6 +114,7 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         // D-083 part 2 (M80): the synced partners' volleys on the focus this turn.
         if (ctx.supported()) line.allies_hit(ctx.team()->support_now);
         OtherThreat threat;
+        ctx.begin_reply(plan.positions, true);  // M89 (D-090): close-quarters shooting is a ranged attack (13.09)
         if (others) threat = ctx.other_threat(plan.positions, std::nullopt);
         s.hold = ctx.engaged_line(line, 1.0, &s.p_survive, others ? &threat : nullptr, &us_left) - s.shoot_now;
         s.enemy_reply = "fights on or falls back";
@@ -150,6 +152,12 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         const auto k = static_cast<std::size_t>(std::floor(models_destroyed + 1e-9));
         const float gap_after = k < gaps.size() ? gaps[k] : kFar;
         const core::Position our_centroid = centroid_of(plan.positions);
+        // M89 (D-090): how we stand against the enemy's reply (nothing without cover_on). A unit that shoots this turn
+        // isn't hidden in the enemy's turn (13.09: it made ranged attacks in the previous turn).
+        const MoveScoreContext::ReplyFacts facts = ctx.begin_reply(plan.positions, share > 0.0 || other.has_value());
+        s.in_cover = facts.in_cover;
+        s.hidden = facts.hidden;
+        s.unseen = facts.unseen;
         OtherThreat threat;
         if (others) threat = ctx.other_threat(plan.positions, other);
         const OtherThreat* tp = others ? &threat : nullptr;
@@ -199,6 +207,7 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
         if (other) s.shoot_now += other->share;  // D-066: the other unit's losses, after the closest one's line
     }
 
+    ctx.end_reply();
     // Board-edge room: backed against an edge, the unit can't keep away next turn (scaled by the enemy's shooting).
     if (!engaged_stay && ctx.turns() >= 2 && ctx.our_threat().move_mm > 0.0f) {  // we move again in the horizon
         const float room = ctx.room_away(plan.positions, true, ctx.enemy_centroid());
@@ -280,6 +289,20 @@ const core::Unit* followed_focus(const ArmyPlan& plan, const core::GameState& or
 bool objectives_on(const core::GameState& state, const MoveWeights& weights) {
     return state.mission.has_value() &&
            (weights.objective > 0.0 || weights.objective_approach > 0.0 || weights.objective_fire > 0.0);
+}
+
+std::size_t m89_samples() {
+    const char* e = std::getenv("WH40K_M89_SAMPLES");
+    return e != nullptr ? static_cast<std::size_t>(std::atoi(e)) : analysis::kSightSamples;
+}
+
+bool m89_off(const char* what) {
+    const char* e = std::getenv("WH40K_M89_OFF");
+    return e != nullptr && std::string(e).find(what) != std::string::npos;
+}
+
+bool cover_on(const core::GameState& state, const MoveWeights& weights) {
+    return !state.terrain.empty() && weights.cover > 0.0;
 }
 
 // ---- the context ----
@@ -396,6 +419,13 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 survival_weight_ = 0.0;
             }
         }
+        // M89 (D-090): terrain, under cover_on only.
+        if (cover_on(origin, weights_)) {
+            sight_ = std::make_shared<analysis::TerrainSight>(origin);
+            cover_w_ = std::clamp(weights_.cover, 0.0, 1.0);
+            us_takes_cover_ = core::takes_cover_and_hides(us_);
+            enemy_side_ = terrain_side(*e, enemy_models_);
+        }
         // D-066 (M56): every other enemy unit, in unit order.
         for (const core::Unit* o : enemy_units(origin, us_.side)) {
             if (o->id == e->id) continue;
@@ -422,6 +452,7 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
                 const analysis::Volley mv = analysis::unit_melee_volley(cache_, *o, us_, x.rate_them);
                 x.melee_wipe = analysis::expected_outcome(cache_, mv, analysis::snapshot_of(us_)).p_wipe();
             }
+            if (sight_) x.terrain = terrain_side(*o, x.models);
             others_.push_back(std::move(x));
         }
         // M87 (D-086): the objective areas (under a mission only).
@@ -643,13 +674,15 @@ std::uint64_t MoveScoreContext::band_of(bool ours, float gap_mm) const {
     return band;
 }
 
-double MoveScoreContext::ranged_rate(bool ours, core::ShootingType type, bool heavy, float gap_mm) {
+double MoveScoreContext::ranged_rate(bool ours, core::ShootingType type, bool heavy, float gap_mm, bool cover) {
     if (!enemy_) return 0.0;
-    const RateKey key{ours, static_cast<int>(type), heavy, band_of(ours, gap_mm)};
+    const RateKey key{ours, static_cast<int>(type), heavy, band_of(ours, gap_mm), cover};
     if (const auto it = rates_.find(key); it != rates_.end()) return it->second;
     const core::Unit& a = ours ? us_ : *enemy_;
     const core::Unit& t = ours ? *enemy_ : us_;
-    const analysis::Volley v = analysis::unit_ranged_volley(cache_, a, t, shot(ours, type, heavy, gap_mm));
+    analysis::ShotContext c = shot(ours, type, heavy, gap_mm);
+    c.target_cover = cover;  // M89 (D-090): 13.08
+    const analysis::Volley v = analysis::unit_ranged_volley(cache_, a, t, c);
     const double share =
         unit_share(origin_, t, analysis::expected_outcome(cache_, v, analysis::snapshot_of(t)).model_equivalents);
     rates_.emplace(key, share);
@@ -689,11 +722,13 @@ std::pair<double, double> MoveScoreContext::enemy_elsewhere_shooting(float gap_m
     return out;
 }
 
-double MoveScoreContext::enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm) {
+double MoveScoreContext::enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm, bool cover) {
     if (!enemy_ || us_.models.empty()) return 0.0;
-    const RateKey key{false, static_cast<int>(type), heavy, band_of(false, gap_mm)};
+    const RateKey key{false, static_cast<int>(type), heavy, band_of(false, gap_mm), cover};
     if (const auto it = wipes_.find(key); it != wipes_.end()) return it->second;
-    const analysis::Volley v = analysis::unit_ranged_volley(cache_, *enemy_, us_, shot(false, type, heavy, gap_mm));
+    analysis::ShotContext c = shot(false, type, heavy, gap_mm);
+    c.target_cover = cover;  // M89 (D-090): 13.08
+    const analysis::Volley v = analysis::unit_ranged_volley(cache_, *enemy_, us_, c);
     const double p = analysis::expected_outcome(cache_, v, analysis::snapshot_of(us_)).p_wipe();
     wipes_.emplace(key, p);
     return p;
@@ -721,10 +756,136 @@ double MoveScoreContext::enemy_engaged_wipe() {
     return *engaged_wipe_;
 }
 
+// ---- M89 (D-090): terrain ----
+
+MoveScoreContext::TerrainSide MoveScoreContext::terrain_side(const core::Unit& unit,
+                                                             const std::vector<core::PosedModel>& models) {
+    TerrainSide t;
+    if (!sight_) return t;
+    const bool takes_cover = core::takes_cover_and_hides(unit);
+    t.area_cover = !models.empty();
+    std::vector<core::Position> at;
+    for (std::size_t k = 0; k < models.size(); ++k) {
+        const std::uint32_t mask = sight_->mask_at(models[k].pose());
+        t.masks.push_back(mask);
+        t.hidden.push_back(k < unit.models.size() && sight_->hidden_now(unit, unit.models[k]) ? 1 : 0);
+        const bool ok = takes_cover && mask != 0;
+        t.area_ok.push_back(ok ? 1 : 0);
+        t.area_cover = t.area_cover && ok;
+        at.push_back(models[k].position);
+    }
+    t.samples = analysis::sight_samples(at, centroid_of(positions_of(us_)), m89_samples());
+    return t;
+}
+std::pair<bool, bool> MoveScoreContext::our_view(const core::BasePose& at, const std::vector<core::PosedModel>& models,
+                                                 const TerrainSide& side) {
+    // 06.01 with 13.09-13.11 from one of our models (no model blockers), and 13.08 against its attacks: every target
+    // model takes cover within an area or is not fully visible to it (on the sampled models).
+    const std::uint32_t mask = sight_->mask_at(at);
+    bool visible = false;
+    bool cover = true;
+    for (const std::size_t j : side.samples) {
+        const bool need_full = !side.area_ok[j];
+        const analysis::SightLine l =
+            sight_->line(at, mask, models[j].pose(), side.masks[j], side.hidden[j] != 0, need_full);
+        visible = visible || l.visible;
+        if (need_full && l.fully_visible) cover = false;
+    }
+    return {visible, side.area_cover || (visible && cover)};
+}
+
+std::pair<bool, bool> MoveScoreContext::stays_view(const std::vector<core::PosedModel>& models,
+                                                   const TerrainSide& side) {
+    // Some sampled model of theirs sees some sampled model of ours; cover against the closest one's attacks.
+    bool visible = false;
+    bool cover = true;
+    for (std::size_t s = 0; s < side.samples.size(); ++s) {
+        const std::size_t j = side.samples[s];
+        const core::BasePose from = models[j].pose();
+        for (std::size_t i = 0; i < reply_.poses.size(); ++i) {
+            const bool ok = us_takes_cover_ && reply_.masks[i] != 0;
+            const bool need_full = s == 0 && !ok;
+            if (visible && !need_full) continue;
+            const analysis::SightLine l =
+                sight_->line(from, side.masks[j], reply_.poses[i], reply_.masks[i], reply_.hidden[i] != 0, need_full);
+            visible = visible || l.visible;
+            if (need_full && l.fully_visible) cover = false;
+        }
+    }
+    return {visible, reply_.area_cover || cover};
+}
+
+bool MoveScoreContext::moved_visible(float to_mm) const {
+    // An enemy unit that moves sees us again (D-090), unless we are hidden and it is still beyond 15" (13.09).
+    return !(reply_.all_hidden && core::more_than(to_mm, core::kDetectionRangeMm));
+}
+
+MoveScoreContext::ReplyFacts MoveScoreContext::begin_reply(const std::vector<core::Position>& positions, bool shoots) {
+    ReplyFacts f;
+    reply_ = Reply{};
+    if (!sight_ || positions.size() != us_.models.size() || us_.models.empty() || m89_off("reply")) return f;
+    reply_.active = true;
+    reply_.area_cover = us_takes_cover_;
+    std::vector<core::BasePose> all;
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        all.push_back(core::BasePose{positions[i], us_.models[i].base, us_.models[i].facing_deg});
+        reply_.area_cover = reply_.area_cover && sight_->mask_at(all.back()) != 0;
+    }
+    // 13.09 in the enemy's turn: it takes cover and hides, within an area with a Dense feature, and made no ranged
+    // attacks this turn (its previous turn then) nor in the enemy's turn before it shoots.
+    const bool may_hide = us_takes_cover_ && !shoots;
+    reply_.all_hidden = may_hide;
+    for (const std::size_t i : analysis::sight_samples(positions, enemy_centroid_, m89_samples())) {
+        reply_.poses.push_back(all[i]);
+        const std::uint32_t mask = sight_->mask_at(all[i]);
+        reply_.masks.push_back(mask);
+        const bool hidden = may_hide && sight_->dense(mask);
+        reply_.hidden.push_back(hidden ? 1 : 0);
+        reply_.all_hidden = reply_.all_hidden && hidden;
+    }
+    if (enemy_ && !m89_off("stays")) {
+        const std::pair<bool, bool> v = stays_view(enemy_models_, enemy_side_);
+        reply_.stay_visible = v.first;
+        reply_.stay_cover = v.second;
+    } else if (enemy_) {
+        reply_.stay_cover = reply_.area_cover;
+    }
+    f.in_cover = reply_.area_cover || (reply_.stay_visible && reply_.stay_cover);
+    f.hidden = reply_.all_hidden;
+    f.unseen = !reply_.stay_visible;
+    return f;
+}
+
+double MoveScoreContext::reply_rate(core::ShootingType type, bool heavy, float to_mm, bool stays) {
+    const double plain = ranged_rate(false, type, heavy, to_mm);
+    if (!reply_.active) return plain;
+    const bool visible = stays ? reply_.stay_visible : moved_visible(to_mm);
+    const bool cover = stays ? reply_.stay_cover : reply_.area_cover;
+    const double terrain = !visible ? 0.0 : cover ? ranged_rate(false, type, heavy, to_mm, true) : plain;
+    return blend(plain, terrain);
+}
+
+double MoveScoreContext::reply_wipe(core::ShootingType type, bool heavy, float to_mm, bool stays) {
+    const double plain = enemy_ranged_wipe(type, heavy, to_mm);
+    if (!reply_.active) return plain;
+    const bool visible = stays ? reply_.stay_visible : moved_visible(to_mm);
+    const bool cover = stays ? reply_.stay_cover : reply_.area_cover;
+    const double terrain = !visible ? 0.0 : cover ? enemy_ranged_wipe(type, heavy, to_mm, true) : plain;
+    return blend(plain, terrain);
+}
+
+double MoveScoreContext::our_rate(core::ShootingType type, bool heavy, float gap_mm) {
+    const double plain = ranged_rate(true, type, heavy, gap_mm);
+    if (!sight_ || !enemy_side_.area_cover) return plain;
+    // M89 (D-090): the enemy's cover from standing within an area holds wherever we shoot from (13.08).
+    return blend(plain, ranged_rate(true, type, heavy, gap_mm, true));
+}
+
 double MoveScoreContext::our_shooting(const std::vector<core::Position>& positions, core::ShootingType type, bool heavy,
                                       analysis::AttackOutcome* outcome, int* half_range_models) {
     if (!enemy_ || positions.size() != us_.models.size()) return 0.0;
     analysis::Volley volley;
+    analysis::Volley seen;  // M89 (D-090): the volley as terrain lets it be (under cover_on only)
     int half = 0;
     for (std::size_t i = 0; i < us_.models.size(); ++i) {
         const core::Model& m = us_.models[i];
@@ -749,19 +910,47 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
         // 04.02: not while it is engaged with a friendly unit (D-077, 17.03: unless it is a MONSTER/VEHICLE, at -1).
         if (enemy_engaged_elsewhere_ && !enemy_mv_) continue;
         const std::uint64_t band = band_of(true, gap);
-        const auto key = std::make_tuple(i, static_cast<int>(type), heavy, band);
-        auto it = model_volleys_.find(key);
-        if (it == model_volleys_.end()) {
-            core::Unit one = us_;
-            one.models = {m};
-            one.models.front().position = positions[i];
-            analysis::ShotContext context = shot(true, type, heavy, gap);
-            context.target_engaged = enemy_engaged_elsewhere_;  // D-077: 17.03
-            it = model_volleys_.emplace(key, analysis::unit_ranged_volley(cache_, one, *enemy_, context)).first;
+        const auto volley_of = [&](bool cover) -> const analysis::Volley& {
+            const auto key = std::make_tuple(i, static_cast<int>(type), heavy, band, cover);
+            auto it = model_volleys_.find(key);
+            if (it == model_volleys_.end()) {
+                core::Unit one = us_;
+                one.models = {m};
+                one.models.front().position = positions[i];
+                analysis::ShotContext context = shot(true, type, heavy, gap);
+                context.target_engaged = enemy_engaged_elsewhere_;  // D-077: 17.03
+                context.target_cover = cover;                       // M89 (D-090): 13.08
+                it = model_volleys_.emplace(key, analysis::unit_ranged_volley(cache_, one, *enemy_, context)).first;
+            }
+            return it->second;
+        };
+        const analysis::Volley& plain = volley_of(false);
+        volley.insert(volley.end(), plain.begin(), plain.end());
+        if (sight_ && band != 0 && !m89_off("shoot")) {
+            // M89 (D-090): this model's view of the enemy unit from its end position (13.08-13.11).
+            const std::pair<bool, bool> v =
+                our_view(core::BasePose{positions[i], m.base, m.facing_deg}, enemy_models_, enemy_side_);
+            if (v.first) {
+                const analysis::Volley& t = v.second ? volley_of(true) : plain;
+                seen.insert(seen.end(), t.begin(), t.end());
+            }
         }
-        volley.insert(volley.end(), it->second.begin(), it->second.end());
     }
     if (half_range_models != nullptr) *half_range_models = half;
+    if (sight_ && !m89_off("shoot")) {
+        // M89 (D-090): blended with the terrain-blind volley (only the terrain one at cover 1).
+        const analysis::AttackOutcome t = analysis::expected_outcome(cache_, seen, enemy_snap_);
+        analysis::AttackOutcome o = t;
+        double share = unit_share(origin_, *enemy_, t.model_equivalents);
+        if (cover_w_ < 1.0) {
+            const analysis::AttackOutcome p = analysis::expected_outcome(cache_, volley, enemy_snap_);
+            share = blend(unit_share(origin_, *enemy_, p.model_equivalents), share);
+            o.models_destroyed = blend(p.models_destroyed, t.models_destroyed);
+            o.model_equivalents = blend(p.model_equivalents, t.model_equivalents);
+        }
+        if (outcome != nullptr) *outcome = o;
+        return share;
+    }
     const analysis::AttackOutcome o = analysis::expected_outcome(cache_, volley, enemy_snap_);
     if (outcome != nullptr) *outcome = o;
     return unit_share(origin_, *enemy_, o.model_equivalents);
@@ -846,7 +1035,7 @@ double MoveScoreContext::our_next_turn(const ScoreLine& line, float gap_mm) {
     for (std::size_t i = 0; i < ends.size(); ++i) {
         const float end = ends[i];
         ScoreLine z = y;
-        if (gap_mm < kFar) z.we_hit(ranged_rate(true, core::ShootingType::Normal, keeps_heavy(gap_mm - end), end));
+        if (gap_mm < kFar) z.we_hit(our_rate(core::ShootingType::Normal, keeps_heavy(gap_mm - end), end));
         const double nocharge = z.value();
         const double p = gap_mm < kFar ? analysis::p_charge_roll_covers(end) : 0.0;
         double v = nocharge;
@@ -864,13 +1053,14 @@ double MoveScoreContext::our_next_turn(const ScoreLine& line, float gap_mm) {
 double MoveScoreContext::enemy_turn_from(const ScoreLine& line, float from_mm, float to_mm, double* p_charge,
                                          double* p_survive, const OtherThreat* others, double* us_left) {
     const bool heavy = keeps_heavy(from_mm - to_mm);
+    const bool stays = from_mm == to_mm;  // M89 (D-090): its models where they stand
     ScoreLine y = line;
     y.next_half_turn();
-    y.they_hit(ranged_rate(false, core::ShootingType::Normal, heavy, to_mm));
+    y.they_hit(reply_rate(core::ShootingType::Normal, heavy, to_mm, stays));
     if (others != nullptr) y.others_hit(others->unengaged);  // D-066: the other enemy units' replies
     if (us_left != nullptr) *us_left = y.us();
     const double w = survival_weight_;
-    double shot_survive = 1.0 - enemy_ranged_wipe(core::ShootingType::Normal, heavy, to_mm);
+    double shot_survive = 1.0 - reply_wipe(core::ShootingType::Normal, heavy, to_mm, stays);
     if (others != nullptr) shot_survive *= others->survive;
     const double nocharge = our_next_turn(y, to_mm) + w * shot_survive;
     const double p = analysis::p_charge_roll_covers(to_mm);
@@ -1000,9 +1190,9 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
             const float adv = std::max(gap_mm - mean, kCloseGapMm);
             ScoreLine y = line;
             y.next_half_turn();
-            y.they_hit(ranged_rate(false, core::ShootingType::Assault, false, adv));
+            y.they_hit(reply_rate(core::ShootingType::Assault, false, adv, false));
             if (others != nullptr) y.others_hit(others->unengaged);
-            double survive = 1.0 - enemy_ranged_wipe(core::ShootingType::Assault, false, adv);
+            double survive = 1.0 - reply_wipe(core::ShootingType::Assault, false, adv, false);
             if (others != nullptr) survive *= others->survive;
             consider(our_next_turn(y, adv) + w * survive, "advances and shoots", 0.0, survive, y.us());
         }
@@ -1014,9 +1204,9 @@ double MoveScoreContext::hold_line(const ScoreLine& line, float gap_mm, const co
             const float away = gap_mm + room;
             ScoreLine y = line;
             y.next_half_turn();
-            y.they_hit(ranged_rate(false, core::ShootingType::Normal, keeps_heavy(room), away));
+            y.they_hit(reply_rate(core::ShootingType::Normal, keeps_heavy(room), away, false));
             if (others != nullptr) y.others_hit(others->unengaged);
-            double survive = 1.0 - enemy_ranged_wipe(core::ShootingType::Normal, keeps_heavy(room), away);
+            double survive = 1.0 - reply_wipe(core::ShootingType::Normal, keeps_heavy(room), away, false);
             if (others != nullptr) survive *= others->survive;
             consider(our_next_turn(y, away) + w * survive, "keeps away and shoots", 0.0, survive, y.us());
         }
@@ -1092,8 +1282,8 @@ std::uint64_t MoveScoreContext::other_band(const Other& o, float gap_mm) const {
 }
 
 // Its whole-unit shooting at us across `gap_mm` (Normal shooting): (share of our unit, P(it wipes us out)).
-std::pair<double, double> MoveScoreContext::other_ranged(Other& o, bool heavy, float gap_mm) {
-    const std::pair<bool, std::uint64_t> key{heavy, other_band(o, gap_mm)};
+std::pair<double, double> MoveScoreContext::other_ranged(Other& o, bool heavy, float gap_mm, bool cover) {
+    const std::tuple<bool, std::uint64_t, bool> key{heavy, other_band(o, gap_mm), cover};
     if (const auto it = o.ranged.find(key); it != o.ranged.end()) return it->second;
     std::pair<double, double> v{0.0, 0.0};
     if (!us_.models.empty()) {
@@ -1102,6 +1292,7 @@ std::pair<double, double> MoveScoreContext::other_ranged(Other& o, bool heavy, f
         c.heavy = heavy;
         c.gap_mm = gap_mm;
         c.hazard_rate = o.rate_them;  // D-077
+        c.target_cover = cover;       // M89 (D-090): 13.08
         const analysis::Volley volley = analysis::unit_ranged_volley(cache_, o.unit, us_, c);
         if (!volley.empty()) {
             const analysis::AttackOutcome out = analysis::expected_outcome(cache_, volley, analysis::snapshot_of(us_));
@@ -1172,34 +1363,70 @@ double MoveScoreContext::our_shooting_at_other(std::size_t index, const std::vec
         any = any || bands[i] != 0;
     }
     if (!any) return 0.0;  // out of range of every weapon
-    const auto key = std::make_tuple(static_cast<int>(type), heavy, bands);
-    auto hit = o.our_shots.find(key);
-    if (hit == o.our_shots.end()) {
-        analysis::Volley volley;
+    // M89 (D-090): each model's view of it (1 + visible x 2 + cover; 0 out of range), under cover_on only.
+    std::vector<std::uint8_t> views;
+    if (sight_ && !m89_off("shoot")) {
+        views.assign(us_.models.size(), 0);
         for (std::size_t i = 0; i < us_.models.size(); ++i) {
-            const auto vkey = std::make_tuple(i, static_cast<int>(type), heavy, bands[i]);
-            auto it = o.our_volleys.find(vkey);
-            if (it == o.our_volleys.end()) {
-                core::Unit one = us_;
-                one.models = {us_.models[i]};
-                one.models.front().position = positions[i];
-                analysis::ShotContext c;
-                c.type = type;
-                c.heavy = heavy;
-                c.gap_mm = gaps[i];
-                c.target_engaged = o.engaged;  // D-077: 17.03 (an engaged MONSTER/VEHICLE)
-                c.hazard_rate = o.rate_us;
-                it = o.our_volleys.emplace(vkey, analysis::unit_ranged_volley(cache_, one, o.unit, c)).first;
-            }
-            volley.insert(volley.end(), it->second.begin(), it->second.end());
+            if (bands[i] == 0) continue;
+            const std::pair<bool, bool> v = our_view(
+                core::BasePose{positions[i], us_.models[i].base, us_.models[i].facing_deg}, o.models, o.terrain);
+            views[i] = static_cast<std::uint8_t>(1 + (v.first ? 2 : 0) + (v.second ? 1 : 0));
         }
-        const analysis::AttackOutcome out = analysis::expected_outcome(cache_, volley, o.snap);
-        hit = o.our_shots
-                  .emplace(key, std::make_pair(unit_share(origin_, o.unit, out.model_equivalents), out.models_destroyed))
-                  .first;
     }
-    if (outcome != nullptr) outcome->models_destroyed = hit->second.second;
-    return hit->second.first;
+    const auto model_volley = [&](std::size_t i, bool cover) -> const analysis::Volley& {
+        const auto vkey = std::make_tuple(i, static_cast<int>(type), heavy, bands[i], cover);
+        auto it = o.our_volleys.find(vkey);
+        if (it == o.our_volleys.end()) {
+            core::Unit one = us_;
+            one.models = {us_.models[i]};
+            one.models.front().position = positions[i];
+            analysis::ShotContext c;
+            c.type = type;
+            c.heavy = heavy;
+            c.gap_mm = gaps[i];
+            c.target_engaged = o.engaged;  // D-077: 17.03 (an engaged MONSTER/VEHICLE)
+            c.hazard_rate = o.rate_us;
+            c.target_cover = cover;  // M89 (D-090): 13.08
+            it = o.our_volleys.emplace(vkey, analysis::unit_ranged_volley(cache_, one, o.unit, c)).first;
+        }
+        return it->second;
+    };
+    // (share, models destroyed) of the volley terrain-blind (`with` empty) or as `with` lets each model shoot.
+    const auto shots = [&](const std::vector<std::uint8_t>& with) -> std::pair<double, double> {
+        const auto key = std::make_tuple(static_cast<int>(type), heavy, bands, with);
+        auto hit = o.our_shots.find(key);
+        if (hit == o.our_shots.end()) {
+            analysis::Volley volley;
+            for (std::size_t i = 0; i < us_.models.size(); ++i) {
+                bool cover = false;
+                if (!with.empty()) {
+                    if (with[i] < 3) continue;  // out of range, or it can't see the unit
+                    cover = with[i] == 4;  // visible and covered
+                }
+                const analysis::Volley& v = model_volley(i, cover);
+                volley.insert(volley.end(), v.begin(), v.end());
+            }
+            const analysis::AttackOutcome out = analysis::expected_outcome(cache_, volley, o.snap);
+            hit = o.our_shots
+                      .emplace(key,
+                               std::make_pair(unit_share(origin_, o.unit, out.model_equivalents), out.models_destroyed))
+                      .first;
+        }
+        return hit->second;
+    };
+    std::pair<double, double> r;
+    if (sight_ && !m89_off("shoot")) {
+        r = shots(views);
+        if (cover_w_ < 1.0) {
+            const std::pair<double, double> p = shots({});
+            r = {blend(p.first, r.first), blend(p.second, r.second)};
+        }
+    } else {
+        r = shots({});
+    }
+    if (outcome != nullptr) outcome->models_destroyed = r.second;
+    return r.first;
 }
 
 std::optional<OtherShot> MoveScoreContext::better_other_shot(const std::vector<core::Position>& positions,
@@ -1270,8 +1497,20 @@ OtherThreat MoveScoreContext::other_threat(const std::vector<core::Position>& po
         }
         double worst = -1.0;
         double worst_wipe = 0.0;
-        for (const float end : ends) {
-            const std::pair<double, double> r = other_ranged(o, keeps_heavy(g - end), end);
+        // M89 (D-090): where it stands, its view of us; once it moves it sees us again (unless we are hidden beyond 15")
+        // and only our area cover holds.
+        std::pair<bool, bool> stays{true, false};
+        if (reply_.active) stays = m89_off("stays") ? std::pair{true, reply_.area_cover} : stays_view(o.models, o.terrain);
+        for (std::size_t k = 0; k < ends.size(); ++k) {
+            const float end = ends[k];
+            std::pair<double, double> r = other_ranged(o, keeps_heavy(g - end), end);
+            if (reply_.active) {
+                const bool visible = k == 0 ? stays.first : moved_visible(end);
+                const bool cover = k == 0 ? stays.second : reply_.area_cover;
+                std::pair<double, double> t{0.0, 0.0};
+                if (visible) t = cover ? other_ranged(o, keeps_heavy(g - end), end, true) : r;
+                r = {blend(r.first, t.first), blend(r.second, t.second)};
+            }
             const double p = analysis::p_charge_roll_covers(end);
             const double loss = r.first + p * o.melee;
             if (loss > worst + 1e-12) {
