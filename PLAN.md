@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M83 are done. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M89 are done. Their full text (prompts, acceptance checks, results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -124,523 +124,156 @@ Open items still carried are listed under "Later" below.
 | M81 | Focus fire and joint charges (Normal) |
 | M82 | Hard on the army plan |
 | M83 | Tuning, replays, docs, pull request |
+| M84 | Docs housekeeping |
+| M85 | One bot |
+| M86 | Objectives and a mission |
+| M87 | The bot plays for objectives (open items) |
+| M88 | Terrain in 2D |
+| M89 | The bot plays for cover (open items) |
 
 ---
 
-## M84: Docs housekeeping ✅ (done)
-**Effort:** `medium` · **Plan mode:** yes (agreed 2026-11-11)
+## Rules gaps, then the bot on terrain and objectives (M90–M91)
 
-> Cut the tokens every session spends on reading docs. Split `docs/decisions.md` into one file per decision
-> (`docs/decisions/D-NNN.md`) with an index; move the finished milestones to `docs/plan_archive.md`; move
-> reference material out of `CLAUDE.md` into `docs/dev/`; `/clear` between every milestone, batches included.
-> Docs only: no code, data or replay changes.
+Agreed with the user on 2026-11-13, after M89. The user asked for more work on terrain and objectives, the rules
+gaps and the bot, with M89's 55% bar for the bot.
+- **M90** closes two rules gaps that objectives and terrain left open:
+  - 12.08 Objective Consolidation. Missions have existed since M86, but `consolidation_mode` still says "V1 has none
+    (D-022)". In m87's replay at step 550, a unit in the Centre after its fight gets no Consolidate decision.
+  - 24.18 [IGNORES COVER]. It is the only reason the Flamers and the Heavy flamer are refused.
+- **M91** takes the open bot items of D-090 and D-086.
+- Each milestone is planned in detail in plan mode at the start of its own session.
+- **Not in the batch:**
+  - Stealth (24.33): the Genestealers list it only because the fetch tool ignores BSData's Chameleonic condition
+    (D-070).
+  - Terrain layouts or an editor for custom battles.
+  - The scenario's balance.
+  - Charge odds round walls (tried in M89, and worse).
+
+## M90: Objective Consolidation and [IGNORES COVER]
+**Effort:** `high` · **Plan mode:** yes
+
+> Read 12.07–12.08, 14.01–14.02, 24.18, 13.08, D-009, D-022, D-071, D-084 and D-089 first. Ask if anything is
+> ambiguous, and record the readings in a new D-091.
+> - **12.08 Objective Consolidation:**
+>   - *The mode:* `consolidation_mode` (`rules/fight.cpp`) returns Objective when the unit is unengaged, no enemy unit
+>     is within 3", and one or more objective areas are within 3". Measure to the area's closest part (14.01; D-009).
+>   - *The choice:* the player selects one of those areas. `StartConsolidation`, `ConsolidationStarted` and
+>     `MoveInProgress` gain an optional objective field, omitted when empty, so old files stay byte-identical.
+>     `state_hash` takes it.
+>   - *While moving:* each moved model ends within range of the area, or closer to it. "If possible" is left to the
+>     player (`TODO(if-possible)`).
+>   - *After moving:* the unit is within range.
+>   - `move_reach` and `move_end_problems` check both.
+> - **24.18 [IGNORES COVER]:**
+>   - `ability::IgnoresCover`, which does not split attack batches.
+>   - `make_weapon_selections` clears `benefit_of_cover` for such a profile.
+>   - The Flamer (Legionaries, Havocs) and the Heavy flamer (Chaos Terminators) become pickable in the builder and in
+>     random armies. They are [TORRENT], so their odds don't change.
+> - **Client:**
+>   - The consolidation UI offers the areas.
+>   - The Auto move (M34) aims at the area.
+>   - The "too small to matter" skip (M31) measures the gap to the area.
+>   - The action, event and log text name the area.
+>   - The ability gets its help text.
+> - **Bot:**
+>   - It answers the new option legally, in Normal and in the defaults: an Auto move onto the area, taken when it adds
+>     models within range. Weighing it with the objective terms comes in M91.
+>   - `unit_ranged_volley` ignores `ShotContext::target_cover` for an [IGNORES COVER] profile.
 
 **Acceptance**
-- Splitting is lossless: the decision files (with the index's note) rebuild the old `decisions.md` byte for byte, and
-  the archive holds every finished milestone verbatim.
-- `CLAUDE.md` shrinks from 31 KB to about 18 KB (the rest is rules every task needs), `PLAN.md` is under 25 KB,
-  `docs/decisions.md` under 15 KB.
-- Every index link resolves; every block moved out of `CLAUDE.md` is in a `docs/dev/` file.
-- Only `.md` files change, so no build or `ctest` run is needed (the docs-only exception added to `CLAUDE.md`).
-
----
-
-## One bot, objectives, and the bot playing for them (M85–M87)
-
-Agreed with the user on 2026-11-11, after a rosters game (Hard Tyranids) where the monsters rushed in alone and the
-infantry backed off to its own edge. With points destroyed as the only score, staying out of range is often the best
-move, and three bot levels plus the hidden M55/M77 copies make every bot change expensive. So: one bot (Normal),
-objectives with a mission of our own (D-084: objectives first, kills still count), then the bot plays for them.
-Each milestone is planned in detail in plan mode at the start of its own session and built in that session.
-
-## M85: One bot ✅ (done)
-**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11; design approved 2026-11-11)
-
-> Reduce the bots to one, Normal. Tag the current commit `bots-three-levels` and push the tag, so the old bots stay
-> recoverable from git. Delete Easy (`baseline_bot`), Hard (`src/ai/hard/`), the hidden levels `easy-m55`,
-> `normal-m55`, `normal-m77` and `hard-m77`, `src/ai/generation.hpp` and every `Generation::` / `pre_teamwork` branch;
-> Normal keeps its current (post-Teamwork) behaviour. The client loses the level choice on the start screen and in
-> settings (a settings file that still names a level loads and ignores it). The arena's `--a` / `--b` drop the levels
-> and `--weights` tunes Normal. The Easy/Hard replays (m45, m47, m58, m70, m75) and their tests go (kept in git under
-> the tag). A new decision records the move to one bot (amends D-054). CLAUDE.md, `docs/dev/bot_arena.md`,
-> `docs/dev/replays.md` and README follow.
-
-**Acceptance**
-- Normal's replays m46, m68, m73 and m77 are byte-identical and their `TheSavedFileMatchesTheGame` checks pass; core
-  replays are untouched.
-- `--per-game` for Normal vs Normal on V1, both bot scenarios, Strike, the rosters and random armies is identical
-  before and after.
-- Every deleted test is listed in the Results, by name, with the code it tested. No test of code that stays is
-  deleted or weakened.
-- `package.ps1`'s bot smoke test passes. Build and full `ctest` green.
-
-**Results** (2026-11-11, D-085)
-- **Tag:** `bots-three-levels` on b24c689, pushed. Easy, Hard, `generation.hpp`, their tests and replays are there.
-- **Design as agreed in plan mode, with three findings:**
-  - Normal sent every decision it had no answer for to Easy's policy. That code moved verbatim, its reasons too, to
-    `src/ai/normal/defaults.*` (`normal::default_answer`); only the M55 branches went.
-  - The client already ignores unknown flags (`launch_options.hpp`). So `--bot-level`, removed, is ignored like any
-    other unknown flag; it does not exit 2 (the plan's question assumed it would).
-  - The army plan's no-op answer is exposed as `normal::no_plan`, since it is what `Generation::M77` read. M80, M81
-    and M83 keep their "with and without partners" comparisons through it, instead of losing them.
-- **Arena:** `--a` / `--b` are gone (exit 2). `--weights` sets both sides' `normal::MoveWeights`, and `--weights-a` /
-  `--weights-b` set one side's. Checked: explicit default weights reproduce the default games, and another weight for
-  one side changes play.
-- **Identity:** Release `--per-game 1`, 200 games each, old binary (`--a normal --b normal`) against new. V1, both bot
-  scenarios, Strike, the rosters, random armies (auto and hand deployment) and the M73 lists all match: 1,600 of 1,600
-  `game` lines identical (actions, final state and trace hashes).
-- **Replays:** m46, m68, m73 and m77 are byte-identical, and their `TheSavedFileMatchesTheGame` tests pass. Core
-  replays are untouched. m45, m47, m58, m70 and m75 are deleted.
-- **Removed from shared code** (nothing else called them):
-  - `normal::furthest_standing_move`;
-  - the shooting's given army plan (`choose_shooting` / `ShootingAim` `plan`);
-  - `AttackOutcome::wounds_left_pmf`;
-  - `bot_log`'s Hard parsing (`drop_hard_block`, `WinDrawLoss`, `ReasonSummary::odds`);
-  - `uses_deploy_heuristic`, `effective_level`, `chain_tables_built`, `share_chain_cache`;
-  - `BotLevel`, with the settings, save and CLI level keys.
-- **Tests kept, changed or moved:**
-  - *Easy's single-decision checks:* now the defaults' answer (`tests/ai/default_choice.hpp`; M46, M47, M56, M60–M63,
-    M66, M68).
-  - *M74's deployment policy:* called directly (M74).
-  - *Games Easy or Hard played:* now the bot on the same seeds (M39–M43, M46, M54, M56, M60–M63, M66–M68, M72–M74,
-    M77). M42's grid still compares with the default charge move.
-  - *The M68/M80 Desperate Escape position:* only the pre-batch bots reached it, so it is kept as
-    `tests/data/states/m68_desperate_escape.json`.
-  - *M56's threat test:* keeps M55's end (17.6" from Squad 1) as a number.
-  - *M45's bot game:* the whole-game check now plays the bot (no file).
-  - *M75:* keeps the builder's scenario checks.
-  - *Client:* settings and saves that name a level load and drop it (M38, M39). `--bot-level` is ignored (M61).
-- **Renamed** (same checks, minus the removed levels):
-  - M39_Arena.FortySeededEasyGames… → FortySeededGames…, EasyGamesUseTheBoard… → GamesUseTheBoard…
-  - M41_Arena.…AsWellAsEasyInBothSeats → NormalPlaysCleanGames
-  - M43_Arena.NormalMovementWinsSooner… → NormalMovementPlaysCleanGamesThatTheSpaceMarinesWin
-  - M46_PileIn / M46_Consolidate NormalAndHard… → Normal…; M46_Easy → M46_Defaults
-  - M47_Easy ×2 → M47_Defaults; M56_Easy ×4 → M56_Defaults
-  - M60–M63 and M66 EveryLevel… / EasyAndNormal… → TheBotAndItsDefaults… / TheBot…
-  - M68_Games → TheBotPlaysTheRostersClean, DISABLED_FortyGamesPlayTheRostersClean
-  - M72 / M73 …AtEasy / …AtEveryLevel → …Clean
-  - M74_Bots EasySetsUp… → M74sPolicySetsUp…, HandDeployedEasyGames… → GamesHandDeployedByM74sPolicy…
-  - M75_Replay.TheBuilderBattleReplaysThroughBattleRoundOne → M75_Builder.TheScenarioFileStartsTheBuildersBattle
-  - M77_BotDeploy.HandDeployedGamesAtNormalAndHard… → HandDeployedGamesFinishClean
-  - M79_ArmyPlan.TheM77Switch… → BeforeTheBattleThereIsNoPlan (its not-started part)
-  - client M39_Settings.BotLevelAndSpeedKeys → BotSpeedKeys
-  - New: M38_Settings.AnOldFileWithABotLevelLoadsAndIgnoresIt.
-- **Deleted** (96; each tested only removed code):
-  - *Hard's evaluator, lookahead, chain cache, budgets and decisions* (`src/ai/hard/`):
-    - every M44 test but M44_Scenarios: Evaluator ×6, MonteCarlo, NeverPeeksAtDice, Levels, PlayForTheDraw, Arena,
-      Diagnostics ×3;
-    - all of M57 (12), M69 (18) and M82 (11: Evaluator ×3, Hard, Regression, Diagnostics ×4, and Rollouts, whose
-      given-plan parameter went);
-    - M47_Hard.TheDefaultOrderIsAFourthCasualtyCandidate;
-    - M61_Rollouts.TheLookaheadAnswersTheDecisionOnItsScratchCopies;
-    - M63_Bots.DISABLED_HardGamesOnTheMonsterFixtureAreClean;
-    - M66_Bots.HardDecidesLegallyAtTheTyrannofexsDecisions, DISABLED_HardPlaysTheTyrannofexClean;
-    - M73_HardGuard ×4;
-    - M77_BotDeploy.HardDeploysAsNormalAndBuildsNoTables;
-    - M83_Hard.RanksItsMovesWithoutTheLoneApproach;
-    - M45_BotLog's Hard parsing ×4 (HardMoveReasonKeepsTheMoveAndItsOdds, HardAdvanceDropsTheScoreAndKeepsTheRoll,
-      TheChosenOptionsOddsAreShownForACharge, ARuleNumberBeforeHardsBlockStays). The Advance's score drop is now
-      checked in NormalReasonsLoseTheirScoresAndExtraClauses.
-  - *The level dispatch:* M39_Levels.EveryLevelIsBuiltAndHardIsItsOwnLevel.
-  - *Generation (M55 / M77):*
-    - M42_ChargeTargets.ChargesBothUnitsWhenTheTargetAloneCannotBeEngaged (Normal at M55);
-    - M56_Regression.TheM55SwitchPlaysAsM55;
-    - M78_Regression.TheM77LevelsMatchThePreBatchHashes;
-    - M80_Regression.TheCurrentLevelsDifferFromM77OnTheRosters;
-    - the pre-batch replay checks M58_Replay.ThePreBatchGameIsAWipeOutInBattleRoundThree,
-      M68_Replay.ThePreBatchGameShootsSuperchargedAndFightsOnBothSides,
-      M70_Replay.ThePreBatchGameFightsAndLosesAUnitOnBothSides and
-      M73_Replay.ThePreBatchGameShootsAndFightsOnBothSides.
-  - *Easy as a player:* M47_Arena.EasyTermagantsKeepCoherency.
-  - *The deleted replays:*
-    - M45_Replay.DISABLED_RegenerateBotGameReplay;
-    - M47_Replay ×4 (TheDefaultCasualtiesGame…, TheSavedFileMatchesTheGame, DISABLED_Regenerate…, DISABLED_PrintSeeds);
-    - M58_Replay ×4 besides the pre-batch one;
-    - M70_Replay ×6 besides the pre-batch one (BotsWithChainCachesOfTheirOwnPlayTheSameActions was Hard's shared
-      cache);
-    - M75_Replay.TheSavedFileMatchesTheGame and DISABLED_SearchBuilderBattleSeed.
-  - The exact list: the TEST names at `bots-three-levels` and not at M85's commit, less the renames above.
-- **Debug time:**
-  - Games Easy played in a second or two now take Normal's time: the ai tests took about 20 minutes in Debug.
-  - M68_Games was cut from 8 roster games to 4 (105 s), and M67_Arena from 5 to 3 (82 s).
-  - The other converted game tests keep their seeds (M60 86 s, M66 83 s, M62 73 s, M61 67 s).
-- **Package and client:**
-  - `package.ps1`'s smoke tests pass (bot-steps 5 of 5).
-  - The start screen's Bot section shows only Speed.
-  - `ctest` (all suites) is green.
+- **Rule tests** (ScriptedDice, inch coordinates):
+  - `R12_08_*`:
+    - the modes' precedence;
+    - an area at 2.9" and at 3.1";
+    - only an area within 3" may be chosen;
+    - a model that ends further from the area is refused;
+    - the unit must end within range;
+    - without a mission, play is as before.
+  - D-022's test updated (a mission now changes the outcome).
+  - `R24_18_*`: a fixture weapon without [TORRENT] keeps its BS against a target in cover.
+  - JSON round-trip tests for every new field. An old action, event or state without them loads and saves byte for
+    byte.
+- **Client tests** `M90_*`: the offer, the Auto move, the skip, the text, and the builder offering the flamers.
+- **AI tests** `M90_*`: objective consolidation answered legally, and a game with a flamer that plays clean.
+- **Replays:**
+  - Core replays stay byte-identical.
+  - `m87_objectives_bot_game.json` is regenerated on purpose, since it now meets a Consolidate decision at step 550.
+    Re-search its seed if its checks need it.
+  - Every other replay stays byte-identical.
+  - New: `tests/replays/m90_objective_consolidation.json`, scripted on the objective scenario.
+- **Arena** (Release, 200 games each):
+  - V1, both bot scenarios, Strike and the rosters are identical to the M89 binary.
+  - The mission and terrain runs change on purpose. Record the objective consolidations a game and the win rates. The
+    M90 binary becomes their reference.
+  - Every run is clean: no rejected action, reverted move, fallback or unfinished game.
 - **Docs:**
-  - D-085 is added, with "Amended / Superseded by D-085" notes on D-054, D-066, D-067, D-078, D-080 and D-083.
-  - CLAUDE.md, README, `docs/dev/bot_arena.md` (rewritten, with the identity set), `docs/dev/replays.md`,
-    `docs/dev/client_flags.md` and `package.ps1`'s README are updated.
-  - The Hard and `normal-m77` open items are removed from Later.
-
----
-
-## M86: Objectives and a mission ✅ (done)
-**Effort:** `high` · **Plan mode:** yes (agreed 2026-11-11; design approved 2026-11-12)
-
-> Objective areas and control (14.02 Level of Control: the OC of models within range, compared at the end of each
-> phase and turn, ties uncontrolled; 14.03 Secured Objectives as state only, nothing secures yet). An objective area is
-> a terrain objective with no terrain effects (no terrain yet); read 13 and 14 first, use D-009 for "within", and ask
-> if anything is ambiguous. Control is part of `GameState`. The mission is D-084, as a scenario option
-> `"result": "mission"` with every number in the scenario file, so balancing never needs code. New scenario
-> `data/scenarios/incursion_objectives_44x60.json` (the rosters armies plus the three areas); custom battles get the
-> same mission and areas. Client: areas drawn with their controller's colour, VP per side in the sidebar, the result
-> line names VP, and the objective scenario is the start screen's default. The bot ignores objectives here.
-
-**Acceptance**
-- Rule-named tests for 14.02 and 14.03 and for D-084's scoring and result (ScriptedDice); state round-trip tests for
-  every new field.
-- A replay of a short objective game under `tests/replays/`; every old replay byte-identical; old scenarios unchanged.
-- The bot plays the objective scenario and custom battles to the end with no rejected action (arena, 200 games).
-- Build and full `ctest` green.
-
-**Results** (2026-11-12, D-084's "Implemented" note)
-- **Design as agreed in plan mode.** The user chose two points there:
-  - the arena's random and army-list battles play the mission, as the client's custom battles do;
-  - the bot scores a mission like the points rule.
-
-  Core's `custom_battle_scenario` keeps the old battle unless it is given the mission block, so the m73, m75 and m77
-  fixtures and replays didn't change.
-- **Core:**
-  - `state/mission.hpp` (`Mission`, `ObjectiveArea`);
-  - `state/objectives.*` (within range, level of control, `determine_control`, `controlling_units`, kill VP, the VP
-    tally, the data checks);
-  - `engine/objectives.cpp` (the checks at every phase end and turn end, and the Command phase scoring);
-  - the result in `advance.cpp`;
-  - two events: `ObjectiveControlChanged` (14.02) and `VictoryPointsScored` (D-084);
-  - `VpTally` on `GameResult` and `GameOver`;
-  - the loader's `"mission"` block and `load_mission_block`.
-- **Scenario:** `data/scenarios/incursion_objectives_44x60.json`, the rosters plus the three areas, and the client's
-  new default. Both homes are controlled from the first check:
-  - A's by the Terminators' back rank (their two ranks reach 8.85" from the edge);
-  - B's by the held-back Tyrant Guard and Tyrannofex.
-
-  For M87.
-- **Tests:** 31 core tests (`R14_02_LevelOfControl` ×9, `R14_03_SecuredObjectives` ×4, `D084_Scoring` ×4,
-  `D084_KillVp`, `D084_Result` ×4, `D007_GameEnd.AWipeOutStillWinsAtOnceUnderTheMission`, `D084_Scenario` ×4,
-  `D084_CustomBattle`, `D084_Json` ×4), `D084_Replay`, 6 client tests (`M86_*`) and 4 ai tests (`M86_*`).
-- **Tests changed, none weakened:**
-  - `D076_Loader.MalformedPointsOrResultAreRefused` and `D076_Json.MalformedPointsInAStateAreRefused`: the refusal now
-    lists both values.
-  - `Serialization.EveryEventKindRoundTrips`: the two new events.
-  - `M38_Settings.DefaultsMatchThePlan`: the new default scenario.
-- **Replay:** `tests/replays/m86_objectives.json` (scripted, seed 86):
-  - the Terminators advance in round 1 and take the Centre in round 2;
-  - Side B scores its home (2 VP), then Side A the Centre (5 VP);
-  - it stops at Side A's round-3 Movement phase.
-
-  Every other replay came out byte-identical, and the old scenarios are unchanged.
-- **Client:**
-  - areas on the board in their controller's colour, labelled above the area;
-  - the VP line in the Game panel;
-  - VP in the victory pop-up and the log;
-  - the builder's text names the mission.
-
-  The start screen's subtitle no longer repeats the side names when the scenario's name has them, and wraps when it
-  is too wide (the new default's name was clipped).
-- **Arena:** Release, 200 games each. Every run: 0 rejected, 0 reverted, 0 fallbacks, 0 unfinished.
-  - *Identity:* old binary (M85) against new, with `--per-game`.
-    - V1, both bot scenarios, Strike and the rosters: all 1,000 `game` lines identical.
-    - `--random-armies 1`, `--random-armies 1 --deploy hand` and the M73 lists now play the mission. In their 600
-      games every action and trace hash is identical, and so is every field but the final state (all 600 differ) and
-      the winner (23, 21 and 69 games changed result).
-    - That makes the M86 binary the reference for those three runs (`docs/dev/bot_arena.md`).
-  - *The objective scenario,* A first: B wins 185, A 15, no draws.
-    - Decided on VP: B 185, A 12. Decided on points (equal VP): A 3.
-    - Mean VP: objectives A 1.84 / B 14.53; kills A 7.36 / B 8.71.
-    - B scores mostly by sitting on its own home: 6.08 of its 9 units never come within 12" of an enemy. A's
-      Terminators walk off their home.
-    - With B first (`--first B`): B wins 171, A 29.
-  - *Random armies:* B wins 164 of 200, by hand 147. Mean VP: objectives A 4.17 / B 10.02, kills A 4.39 / B 8.22.
-  - *For M87:* objectives already give more VP than kills (14.5 vs 8.7 for B on the objective scenario), but the
-    holding side wins. This is the bot ignoring objectives, as M86 intended. M87's balance work starts here.
-- **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,324 of 1,324 passed (core 744, client 351, ai 229 when
-  run per suite). Screenshots under `xvfb-run`: the replay's last frame (the Centre in A's colour, B's home in B's, the VP
-  line) and the start screen with the new default.
-
----
-
-## M87: The bot plays for objectives ✅ (done; balance and holding back open)
-**Effort:** `xhigh` · **Plan mode:** yes (agreed 2026-11-11; design approved 2026-11-12; the mission's numbers chosen by
-the user 2026-11-12)
-
-> The army plan assigns groups to objective areas (take, hold, contest), weighing each area's VP, distance and
-> threat, as well as to enemy units. A unit without a group heads for an area instead of holding back (replacing
-> `make_lone_approach` in `src/ai/normal/move_score.cpp`). Objective terms go into the move score. Tune the bot, and the
-> mission's numbers in the scenario file (VP, area sizes, home distance), with the Release arena on the objective
-> scenario and random armies, 200 games a seat.
-
-**Acceptance**
-- Each seat wins 40–60% in Normal vs Normal on the objective scenario and on random armies.
-- Objectives give more VP than kills on average.
-- "Units never within 12"" and lone engagements well down from M83; no single blob (gang-up and contact metrics). If
-  it still blobs, the fallback is three middle areas (left, centre, right) instead of one.
-- Changes to play on the non-objective scenarios are recorded; Normal's replays regenerated on purpose if they change.
-- Build and full `ctest` green.
-
-Read in plan mode (2026-11-12): "each seat" is each side over 400 games, 200 with each side going first; the mission
-stays symmetric, and a random-army gap is recorded open; "well down" is a third fewer units never within 12" and a
-quarter fewer lone engagements (both sides together); a blob is a game whose largest connected group of engaged units
-averages half the units on the battlefield or more.
-
-**Results** (2026-11-12, D-086; D-084's Tuned note)
-- **The bot** (D-086): area sets in the army plan (after the groups, which they leave as they were); the objective terms
-  in the move score (the enemy scoring a move denies at the end of our turn, ours it holds through the enemy's turn,
-  at the VP rate `vp_share`; the enemy's level a distribution, each enemy unit in one place); a unit with an area and no
-  group heads for it (it replaces the lone approach for such a unit); spots on the areas among the candidates; the last
-  unit weighed on the VP result. Gated on a mission and the objective weights (`objective` 1, `objective_approach` 0.1,
-  `objective_fire` 0): without a mission, or with all three 0, play is M86's.
-- **The mission** (the user's choice after the tuning table in D-084's note): Centre 1 VP, own home 4, enemy home 8,
-  1 kill VP per 25 points (was Centre 5, homes 2 / 4, 1 per 50). M86's numbers are kept as
-  `tests/data/scenarios/m86_objectives_44x60.json` for the D-084 rule tests, the M86 replay and the client's M86 checks.
-- **Acceptance** (Release arena, seeds 1–200, confirmed on 201–400):
-
-  | Item | Number | Target | |
-  |---|---|---|---|
-  | Chaos Space Marines' wins, objective scenario | 30.8% / 33.5% (M86's numbers with the new bot: 1.2%) | 40–60% | open |
-  | Chaos Space Marines' wins, random armies | 23.0% / 18.2% (before any mission 24.5%) | 40–60% | open (agreed) |
-  | objective VP against kill VP a game | 33.6 vs 31.5 (objective scenario), 32.0 vs 25.2 (random armies) | more from objectives | met |
-  | units never within 12", both sides | 7.76 (M83 7.74), random armies 5.86 (5.70) | a third fewer | open |
-  | lone engagements, both sides | 1.32 (1.61), random armies 1.27 (1.40) | a quarter fewer | open (down 18% / 9%) |
-  | no single blob | the largest melee 0.17 of the units on the battlefield | under half | met |
-  | identity: V1, both bot scenarios, Strike, the rosters; the mission runs with the objective weights 0 on M86's block | identical to M86, every `game` line | identical | met |
-  | replays | m46, m68, m73, m77 byte-identical; m86 regenerated (its scenario path only); new m87 | | met |
-  | clean runs | no rejected action, reverted move, fallback or unfinished game | 0 | met |
-
-- **Why balance is open:** the Tyranids out-control the Chaos Space Marines (67 OC against 56, Termagants OC 20 for 55
-  points), so every Centre that counts goes to them; only a Centre worth nothing reached 57.5%. The bot's weights
-  moved nothing beyond the noise (D-086).
-- **Tests:** `tests/ai/m87_test.cpp` (the VP rate, who scores next, the enemy's level, the terms, area sets,
-  candidates, the approach and its reason, the promise, the last unit, a fresh bot against the memo, the arena's new
-  lines, the tuned mission, the M86 regression pins, the replay). Changed: `M86_Bot` is pinned to the objective weights
-  0 (its premise, the bot ignoring objectives, holds only then); the M86 tests read the fixture.
-- **Replay:** `tests/replays/m87_objectives_bot_game.json` (seed 29: each side holds its home, both score the Centre,
-  fights on both sides; the Tyranids win on VP).
-- **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,348 of 1,348 passed. Identity: all 9 runs (1,800
-  games) identical to the M86 binary. Screenshot under `xvfb-run` (seed 29, round 3): both homes held, the Terminators
-  contesting the Centre. A full game by mouse on Windows stays a manual check for the user.
-
----
-
-## Terrain, and the bot playing for cover (M88–M89)
-
-Agreed with the user on 2026-11-12 (both milestones approved together as a batch, in M88's plan mode). Terrain is
-2D: areas and features are footprints on the battlefield plane, with no floors, vertical moves or Plunging Fire
-(D-087). A new default scenario puts terrain on the objective battlefield: the three objective areas become terrain
-areas (14.01), with a dense ruin at the Centre. Without terrain nothing changes: old scenarios, replays, state files
-and the bot's identity set stay byte-identical. Each milestone starts in a fresh session.
-
-## M88: Terrain in 2D ✅ (done)
-**Effort:** `xhigh` · **Plan mode:** done (design approved 2026-11-12; D-087, D-088, D-089)
-
-> Implement terrain as designed in D-087 (areas and features, Exposed / Light / Dense, the scenario format,
-> movement and set-up), D-088 (13.10 obscuring areas, 13.11 Solid as a Dense feature's whole footprint, 13.09 Hidden
-> with its 15" detection range and the ranged-attacks record, 06.01 Fully Visible) and D-089 (13.08 Benefit of cover;
-> worsening BS by 1, the working assumption). Read 13, 03.01 and 06.01 and those three decisions first.
-> - **Core:**
->   - the terrain types in `GameState::terrain`;
->   - shape geometry in `geometry/terrain_shape.*` (a convex polygon support in D-074's GJK);
->   - a terrain-aware `has_line_of_sight` overload and `fully_visible_past`;
->   - the rules queries in `rules/terrain.*`;
->   - shooting's visibility and cover;
->   - the skill worsened in `attacks.cpp`;
->   - path, move-end, `move_reach` and set-up checks;
->   - the loader's `"terrain"` block, `load_terrain_block`, and `custom_battle_scenario`'s terrain argument.
-> - **Scenario:** `data/scenarios/incursion_terrain_44x60.json` with the agreed layout (below), as the start screen's
->   default.
-> - **Client:** draw areas and features, explain cover, Hidden and obscured targets, shade terrain in the move reach,
->   and give custom battles the terrain block.
-> - **Bot:** plays legally around terrain (its candidates never end on features, and monsters' lines don't cross
->   Dense walls over 2"). It does not value terrain yet (M89). Arena `--terrain <scenario>`.
-
-**The layout** (point-symmetric about (22", 30"); south is y = 0; exact coordinates finalised in code, every formation
-clear of solid features):
-
-| Area | Shape | Features |
-|---|---|---|
-| Centre (objective) | circle (22, 30), 12" | two Dense walls 5" high, 0.5" thick, L-shaped (x 17–23 / y 27–27.5 and x 17–17.5 / y 27–31), and the mirror image |
-| A home / B home (objectives) | circles (22, 6) / (22, 54), 6" | an Exposed crater, 4" (no solid feature in a deployment zone) |
-| SW ruin / NE ruin | rectangles x 4–14, y 18–24 / x 30–40, y 36–42 | two Dense walls 5" high, L-shaped, open towards the near deployment zone |
-| SE barricades / NW barricades | rectangles x 30–38, y 18–23 / x 6–14, y 37–42 | two Light low walls each |
-| W craters / E craters | circles (3.5, 30) / (40.5, 30), 5" | an Exposed crater, 3" |
-
-**Acceptance**
-- **Tests:** rule-named tests (ScriptedDice, inch coordinates) for 13.01 validation, 13.06 paths and ends, 13.08 cover
-  (both conditions, BS 3+ to 4+, an unmodified 6 still hits, [TORRENT], separate batches), 13.09 Hidden (14.9" against
-  15.1", shooting ends it for this turn and the next), 13.10, 13.11 and 06.01 Fully Visible. Also D-087–D-089 cases and
-  state round-trip tests for every new field, including an old state with no terrain key.
-- **Replay:** `tests/replays/m88_terrain.json`, path-based on the new scenario, from round 1 of bot play. It includes a
-  shot with cover, a monster going round a wall and a hidden unit. It is checked by the engine replay only, so M89's
-  bot changes don't invalidate it.
-- **Unchanged:** every old replay byte-identical; old scenarios unchanged; the identity set (`docs/dev/bot_arena.md`)
-  identical to the M87 binary, every `game` line.
-- **Clean arena runs:** the terrain scenario (200 games with each side going first) and random armies with
-  `--terrain` (200 + 200), with no rejected action, reverted move, fallback or unfinished game. Record the win rates, the
-  share of ranged attacks with cover, the targets refused for Hidden or obscuring, and the p95 decision time (target: at
-  most twice M87's).
-- **Screenshot** under `xvfb-run` on the terrain scenario.
-- **Build** and full `ctest` green.
-- **Docs:** D-087–D-089 marked implemented, with what was chosen in code; CLAUDE.md (the overview line; geometry: terrain
-  is 2D, z stays 0); README; `docs/dev/bot_arena.md`; `docs/dev/replays.md`.
-
-Read in M88's implementation session (2026-11-12, the user's choices): the replay's monster detour is one scripted
-two-leg move inside the bot game (the bot itself detours from M89); "random armies with `--terrain` (200 + 200)" is
-`--deploy auto` and `--deploy hand`, 200 games each.
-
-**Results** (2026-11-12; D-087–D-089 "In code")
-- **Core.**
-  - `geometry/terrain_shape.*`: convex polygons and circles; exact round-base formulas; GJK with a polygon support for
-    ovals.
-  - `state/terrain.*`: the types and `check_terrain_data`.
-  - `rules/terrain.*`: `TerrainView`, `model_visible`, `visibility_problem`, `benefit_of_cover` and `path_features`.
-  - The terrain line-of-sight overload and `fully_visible_past` (`visibility_oval.cpp`).
-  - Path checks, `move_end_problems`, `move_reach`'s `ReachTerrain`s, and set-up.
-  - Shooting's visibility, refusal reasons and cover; the BS worsened in `gather_attack_batches`.
-  - The ranged-attacks record; the loader's `"terrain"` block, `load_terrain_block`, and `custom_battle_scenario`'s
-    terrain argument.
-- **Scenario.** `data/scenarios/incursion_terrain_44x60.json` (the agreed layout; the start screen's default).
-- **Client.**
-  - The board draws areas and features.
-  - Hovering an area explains its rules; the Game panel lists the terrain.
-  - A greyed target's tooltip gives the engine's reason (13.09, 13.10 / 13.11).
-  - The weapon menu and the hit card show the cover line.
-  - The move reach and drop fixing avoid features and walls' shadows.
-  - Custom battles take the terrain block.
-- **Bot.** Its move candidates use the engine's terrain tests (no end on a feature, no line through an uncrossable
-  wall). The state hash takes the terrain and the record behind tags. It does not value terrain (M89).
-- **Arena.** `--terrain <scenario>`, and the `terrain (M88)` summary line.
-- **Acceptance** (Release arena, seeds 1–200):
-
-  | Item | Number | Target | |
-  |---|---|---|---|
-  | clean runs: the terrain scenario with A first, and with B first; random armies `--terrain`, auto and hand | 800 games: no rejected action, reverted move, fallback or unfinished game | 0 | met |
-  | Chaos Space Marines' wins, terrain scenario | 25.0% (A first) / 38.5% (B first); M87's objective scenario 32.0% (A first) | recorded | |
-  | Chaos Space Marines' wins, random armies with terrain | 18.5% auto / 18.5% hand | recorded | |
-  | ranged selections with the benefit of cover | terrain scenario A 70.6% / 51.4%, B 21.5% / 19.5%; random armies A 52.0% / 49.9%, B 25.1% / 26.9% | recorded | |
-  | enemy units in range refused per game | Hidden: terrain scenario A 0.08 / 0.95, B 0.00 / 0.01; random armies 0.17–0.34. Obscuring or dense terrain: terrain scenario A 13.2 / 15.9, B 1.7 / 1.5; random armies 6.8–13.1 | recorded | |
-  | p95 decision time | terrain scenario 16.6 / 16.1 ms against M87's 12.7 ms on the objective scenario (1.3x); random armies with terrain 12.4 ms | at most 2x | met |
-  | identity set (`docs/dev/bot_arena.md`) and the objective scenario | identical to the M87 binary, every `game` line (1,800 of 1,800 games) | identical | met |
-  | replays | every old replay byte-identical; new `m88_terrain.json` | | met |
-
-  The Hidden counts are low because the bot doesn't value terrain yet: its units seldom stand in a dense area
-  without shooting while the enemy has them in range. M89 changes that.
-- **Tests.**
-  - `tests/m88_terrain_test.cpp`: 13.01, 13.06, 13.08–13.11, 06.01 Fully Visible, D-087–D-089, the geometry, the
-    redundancy property, and the replay checked with core only.
-  - `tests/client/m88_test.cpp`: the board, the shoot reasons, the cover line, the reach and drop fixing, the builder
-    and the default.
-  - `tests/ai/m88_test.cpp`: candidates, a clean game, the arena line, the state hash, and the replay's regeneration
-    and seed search.
-  - Changed: `M86_Settings` and `M38_Settings` repointed at the new default (by design, as M86 repointed M38).
-    `M12_NoRulesInTheClient` allows the client logic `core/rules/terrain.hpp`'s read-only queries (D-024).
-- **Replay.** `tests/replays/m88_terrain.json` (seed 80), battle rounds 1–3:
-  - the Hive Tyrant's scripted detour round the east end of the south-west ruin's north wall, in battle round 3;
-  - shots into cover;
-  - two targets refused because they were hidden.
-
-  It stops at the first decision of battle round 4 and is checked by the engine replay only.
-- **Build and `ctest`.** Linux Debug build clean; full `ctest` 1,402 of 1,402 passed. Screenshots under `xvfb-run`
-  of the replay at steps 200 (battle round 2) and 271 (just after the detour). A full game by mouse on Windows stays a manual check
-  for the user.
-
----
-
-## M89: The bot plays for cover ✅ (done; the head-to-head target open)
-**Effort:** `high` · **Plan mode:** done (design approved 2026-11-12; D-090; finishing with the 55% target open was the
-user's choice, 2026-11-13)
-
-> The bot values terrain (D-090). Bot and arena only: no rule, engine, state or file-format change. Read 13.08–13.11,
-> D-087–D-089 and D-090 first.
-> - **Gate and weight:** `MoveWeights::cover` (default 1, an arena `--weights` key, 0 to 1; outside exits 2) and
->   `cover_on` (terrain present and `cover` above 0). Each terrain-aware rate is `(1 - cover) x plain + cover x
->   terrain` (a target that can't be seen: terrain rate 0). With the gate off no terrain code runs, so terrain-free
->   play and `cover=0` play are the M88 bot's, bit for bit.
-> - **Sight for hypothetical positions:** `src/ai/analysis/terrain_sight.*` (`TerrainSight`), over one
->   `core::TerrainView`: masks for any pose, area cover, could-hide, sees (Hidden beyond 15"), unit sees (up to
->   `kSightSamples` = 3 models a side, with a box pre-test), not fully visible. Model blockers are ignored.
-> - **`analysis::ShotContext`:** `target_cover` (BS worsened by 1, as `attacks.cpp`) and `visible` (false: no volley),
->   defaulting to today's values.
-> - **The enemy's reply** (`score_impl` → `hold_line`, `enemy_turn_from`, `other_threat`), per plan: area cover holds
->   at every end; the "stays" end uses visibility and cover from the enemy's current models; an end where it moves sees
->   again, except a hidden unit while the end gap is over 15". Hidden only when the plan makes no ranged attack this
->   turn (`shoot_now` 0; holding fire on purpose stays open). `RateKey`, `wipes_` and `Other::ranged` key on cover.
->   `our_next_turn` gets the enemy's area cover where it stands.
-> - **Our shots in the cheap score** (`our_shooting`, `our_shooting_at_other`): a model that can't see the target
->   unit adds no volley; the target's cover from its area or from not being fully visible; the volley keys gain cover.
-> - **Candidates** (appended after D-086's area spots): cover spots in every reachable area (a unit that takes cover),
->   hidden spots in an area with a Dense feature (offset away from the closest enemy), and a two-leg detour round a
->   blocking polygon's inflated silhouette corners for models that can't cross it.
-> - **Hand deployment:** with cover on, M77's candidates sorted (stably) by the models with area cover (a Dense area
->   counts double) for a unit that takes cover; the first unit set up faces the enemy zone's centre.
-> - **Arena:** a `cover (M89)` line on terrain battlefields, by target side (the selections into cover, the Hidden
->   refusals). The `--per-game` line is unchanged.
-> - **Terrain-blind, recorded open in D-090:** the army plan, threat tables, charges, fights, `ShootingAim::reply`, our
->   next turn's visibility, model blockers, detours round circles.
-
-**Acceptance**
-- **Head-to-head** (the user's reading, 2026-11-12): on the terrain scenario the M89 bot (default weights) against the
-  M88 bot (`cover=0`): `--weights-a cover=1 --weights-b cover=0` and the reverse, each with `--first A` and `--first B`,
-  100 games each (seeds 1–100). The M89 bot wins at least 55% of the 400 games; confirmed on seeds 101–200.
-- **Into cover:** against `cover=0`, the share of the enemy's ranged selections into cover goes up, and so do the
-  Hidden refusals of the bot's units.
-- **Recorded:** the Chaos Space Marines' wins on the terrain scenario (M89 on both sides, A first and B first) and on
-  random armies with `--terrain` (auto and hand); the tuning (`cover` 0.5 / 1, `kSightSamples` 2 / 3 / 4, each
-  candidate kind on or off) in D-090.
-- **Identity:** the nine identity runs at the default weights identical to the M88 binary; the four terrain runs (the
-  terrain scenario A first and B first, random armies `--terrain` auto and hand) with `--weights cover=0` identical to
-  the M88 binary. Every `game` line.
-- **Clean runs:** no rejected action, reverted move, fallback or unfinished game; p95 decision time at most twice
-  M88's (16.6 ms).
-- **Tests:** `tests/ai/m89_test.cpp`: `M89_Sight`, `M89_Odds`, `M89_MoveScore` (cover off and no terrain bit-identical;
-  the blend at 0.5 halfway), `M89_Candidates` (the Hive Tyrant's detour), `M89_Deploy`, `M89_Arena`, `M89_Regression`
-  (the terrain scenario with `cover=0` plays as at M88), `M89_Replay`. Tests pinning terrain-scenario play at the
-  default weights are pinned to `cover=0`, as M87 pinned `M86_Bot`.
-- **Replay:** `tests/replays/m89_cover_bot_game.json`, a bot game on the terrain scenario with a unit taking cover, a
-  hidden unit and the bot's own detour; checked with core only and `TheSavedFileMatchesTheGame`. Every older replay
-  byte-identical.
-- **Docs:** D-090 with the design and the tuning; PLAN.md Results; `docs/dev/bot_arena.md` (the key, the line, the M89
-  binary as the reference); README and the CLAUDE.md overview line. Screenshot under `xvfb-run`.
+  - D-091;
+  - notes on D-022, D-069 and D-071;
+  - CLAUDE.md's list of implemented abilities;
+  - `docs/dev/bot_arena.md`.
 - **Build** and full `ctest` green.
 
-**Results** (2026-11-13, D-090's "In code", Tuning and Final numbers)
-- **The bot:**
-  - `TerrainSight`: sight for hypothetical positions, lines estimated by three parallel lines (core's exact search took
-    70% of the time). It agrees with core on 3,985 of 4,000 pairs.
-  - The reply's and our shots' terrain in the move score.
-  - Candidates into cover, hiding, behind obscuring areas and round walls.
-  - Hand deployment into cover.
-  - All gated on terrain and `cover` > 0.
-- **Arena:** the `cover` key and the `cover (M89)` line.
-- **Acceptance** (Release arena):
+---
 
-  | Item | Number | Target | |
-  |---|---|---|---|
-  | head-to-head, M89 against M88 (4 x 100) | 212 of 400 (53.0%), confirmed 222 (55.5%) on seeds 101–200: 434 of 800 (54.3%); M88 against M88 200 | at least 55% | open (the user's choice) |
-  | the enemy's selections into cover, M89 units as targets | Chaos 34.3% / 25.2% (M88 21.5% / 19.5%); Tyranids 51.2% / 36.2% (70.6% / 51.4%), but refused as Hidden 3.77 / 5.63 a game (0.08 / 0.95) | up | met for the Chaos Space Marines; the Tyranids hide instead |
-  | Chaos Space Marines' wins, M89 against M89 | terrain scenario 21.0% (A first) / 34.5% (B first) (M88 25.0% / 38.5%); random armies `--terrain` 17.0% auto / 17.0% hand (18.5% / 18.5%) | recorded | |
-  | identity: the nine runs at the defaults, the four terrain runs at `cover=0` | identical to the M88 binary, every `game` line (2,600 games) | identical | met |
-  | clean runs, p95 | no rejected action, reverted move, fallback or unfinished game; p95 29 ms (Chaos) / 16 ms (Tyranids), random armies 18 ms | 0; at most 33 ms | met |
-  | replays | every old replay byte-identical (m88's generator pinned to `cover=0`); new m89 | | met |
+## M91: The bot plays terrain and objectives in every phase
+**Effort:** `xhigh` · **Plan mode:** yes
 
-- **Why the target is open:**
-  - Nearly all the gain is the bot knowing which enemies its models will see. The reply's terrain and the new
-    candidates are within the noise, and charge odds round walls were worse (193).
-  - The army plan, which picks the groups' targets, is still terrain-blind (D-090's open list).
-- **Tests:** `tests/ai/m89_test.cpp`:
-  - `M89_Sight`, `M89_Odds`;
-  - `M89_MoveScore` (cover 0 and no terrain bit-identical, the blend halfway, Hidden only without shooting);
-  - `M89_Candidates` (the Hive Tyrant's detour), `M89_Deploy`;
-  - `M89_Regression` (the terrain scenario at `cover=0` as at M88), `M89_Arena`, `M89_Replay`.
+> Bot and arena only: no rule, engine, state or file-format change. Read 13.08–13.11, 12.05–12.08, 14.02, D-083,
+> D-086, D-090 and D-091 first.
+>
+> Each feature sits behind a `MoveWeights` key (arena `--weights`), gated like `objectives_on` and `cover_on`, with
+> nothing computed when it is off. A feature is kept only if it measures better; the tuning goes in a new D-092.
+> - **The army plan with terrain:**
+>   - `Planner::ranged` (`army_plan.cpp`) gives a target that stands in a terrain area the benefit of cover
+>     (`ShotContext::target_cover`), both ways: our volleys and its reply.
+>   - A shoot track that doesn't move uses whether its shooters see the target now.
+>   - The cache keys carry the cover bit.
+>   - One `TerrainSight` per decision is shared by the plan and the move score, threaded through `army_plan`'s five
+>     callers.
+> - **Holding fire to stay hidden (13.09):** a hidden unit passes when its best volley is worth less than the reply it
+>   avoids by staying hidden. The move score's Hidden then counts for a plan that holds fire on purpose.
+> - **Objectives in charges:**
+>   - `charged_value` and `hold_value` (`charge.cpp`) add the objective terms at the charge's end positions. That
+>     includes engaging an enemy unit that holds an area.
+>   - `decide_charge*` take the weights.
+> - **Objectives in pile-ins and consolidations:**
+>   - The pile-in gain and `consolidation_score` (`normal/fight.cpp`) add the objective terms.
+>   - The outlook covers the enemy's turn too: control at the end of its turn is what we score next.
+> - **`ShootingAim::reply`** gets cover and visibility.
 
-  Changed: `M88_Replay`'s generator plays the bot at `cover=0`.
-- **Replay:** `tests/replays/m89_cover_bot_game.json` (seed 2, a whole game, the Chaos Space Marines win):
-  - 3 two-leg detours by the bot;
-  - 43 shots into cover;
-  - 8 hidden units refused to a shooter.
-- **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,418 of 1,418 passed. Screenshot under `xvfb-run` of
-  the replay at step 167 (Screamer-killer 7 going round the Centre's dense walls; Chaos units in the south-east
-  barricades and south-west ruin). A full game by mouse on Windows stays a manual check for the user.
+**Acceptance**
+- **Head-to-head on the terrain scenario:** the M91 bot (defaults) against the M90 bot (the new keys at 0).
+  - Run `--weights-a ...` and the reverse, each with `--first A` and `--first B`, 100 games each (seeds 1–100).
+  - The M91 bot wins at least 55% of the 400 games, confirmed on seeds 101–200.
+- **Recorded:**
+  - the same head-to-head on the objective scenario and on random armies with `--terrain`;
+  - the Chaos Space Marines' wins with M91 on both sides;
+  - objective VP against kill VP;
+  - units never within 12" and lone engagements;
+  - Hidden refusals, holds of fire and objective consolidations a game.
+- **Identity:**
+  - V1, both bot scenarios, Strike and the rosters at the defaults are identical to the M90 binary.
+  - The mission and terrain runs with the new keys at 0 are identical to the M90 binary.
+- **Clean runs:** no rejected action, reverted move, fallback or unfinished game. The p95 decision time is at most
+  twice M90's.
+- **Tests** in `tests/ai/m91_test.cpp`:
+  - `M91_ArmyPlan`, `M91_HoldFire`, `M91_Charge`, `M91_FightMoves`;
+  - `M91_Regression` (the keys at 0 play as M90), `M91_Arena`, `M91_Replay`.
+
+  Tests that pin mission or terrain play at the defaults are pinned to the keys at 0, as M87 and M89 did.
+- **Replay:** `tests/replays/m91_bot_game.json` on the terrain scenario.
+  - It contains a charge onto an area, an objective consolidation, and a unit holding fire while hidden.
+  - It is checked with core only and with `TheSavedFileMatchesTheGame`.
+  - Older replays stay byte-identical (the m87 and m89 generators are pinned to the keys at 0 if needed).
+- **Docs:**
+  - D-092 (the design, the tuning, the final numbers);
+  - the D-086 and D-090 open lists;
+  - PLAN.md Results;
+  - `docs/dev/bot_arena.md` (the keys, the reference binary);
+  - the README and the CLAUDE.md overview line;
+  - a screenshot under `xvfb-run`.
+- **Build** and full `ctest` green.
 
 ---
 
@@ -651,14 +284,16 @@ user's choice, 2026-11-13)
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89 (D-090). Still to do: the z axis
    (13.06 Moving Vertically and upper surfaces, 13.11 gaps above 3", 22.05 Plunging Fire), Stealth (24.33, left out of
-   M88 by the user's choice), and a terrain editor for custom battles. Left open from M89: the head-to-head target
-   (54.3% against 55%), the army plan's terrain-blind group rates, holding fire on purpose to stay hidden, and charge
-   odds round walls (D-090's open list).
+   M88 by the user's choice; the Genestealers list it only because the fetch tool ignores BSData's Chameleonic
+   condition, D-070), and a terrain editor for custom battles. Left open from M89: charge odds round walls (D-090's
+   open list). M91 takes the rest (the head-to-head target, the army plan's terrain-blind group rates, holding fire
+   to stay hidden).
 2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084), the bot in M87 (D-086). This enables
-   Objective Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state
-   only). Left open from M87: the objective scenario's balance (the Chaos Space Marines win about a third: the Tyranids'
-   OC takes the Centre; an asymmetric mission, other armies or terrain are the levers), units holding back (about as at
-   M83), and the bot's charges, pile-ins and consolidations still ignore the areas.
+   Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state only). Left open from
+   M87: the objective scenario's balance (the Chaos Space Marines win about a third: the Tyranids' OC takes the
+   Centre; an asymmetric mission, other armies or terrain are the levers) and units holding back (about as at M83).
+   M90 adds Objective Consolidation (12.08), and M91 has the bot's charges, pile-ins and consolidations weigh the
+   areas.
    - **Bot personalities** (after M87): Aggressive (values kills and charges, takes risks) and Tactical (values
      objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).

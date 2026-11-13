@@ -20,7 +20,7 @@ inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its 
 CLAUDE.md                 this file
 README.md                 overview for people visiting the repo (play, build, layout)
 PLAN.md                   current and upcoming milestones, with acceptance criteria
-docs/plan_archive.md      the finished milestones M0–M83, verbatim
+docs/plan_archive.md      the finished milestones M0–M89, verbatim
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
 docs/datasheets/          the two New Recruit army rosters behind rosters_44x60.json (GW copyright: private repo only)
