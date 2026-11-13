@@ -638,7 +638,9 @@ user's choice, 2026-11-13)
   - 3 two-leg detours by the bot;
   - 43 shots into cover;
   - 8 hidden units refused to a shooter.
-- **Build and `ctest`:** see the commit. A full game by mouse on Windows stays a manual check for the user.
+- **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,418 of 1,418 passed. Screenshot under `xvfb-run` of
+  the replay at step 167 (Screamer-killer 7 going round the Centre's dense walls; Chaos units in the south-east
+  barricades and south-west ruin). A full game by mouse on Windows stays a manual check for the user.
 
 ---
 
