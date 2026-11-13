@@ -998,6 +998,16 @@ void cover_spots_for(const GameState& origin, const MoveGeometry& g, const core:
     }
 }
 
+// A trig-free stand-in for the angle of (x, y) (D-054: no trigonometry in the bot), in (-2, 2] instead of (-pi, pi]: the
+// "diamond angle", monotonic in the angle, 0 along +x and positive to its left.
+float diamond_angle(float y, float x) {
+    const float ax = std::fabs(x);
+    const float ay = std::fabs(y);
+    if (!(ax + ay > 0.0f)) return 0.0f;
+    const float a = x >= 0.0f ? y / (ax + ay) : (y >= 0.0f ? 2.0f - y / (ax + ay) : -2.0f - y / (ax + ay));
+    return a;
+}
+
 // M89 (D-090): models that can't cross a Dense feature (13.06) go round it: when the straight move towards the line's
 // enemy (or area) is blocked by such a polygon, a two-leg path via each of its two silhouette corners (pushed out by
 // the largest base's avoid radius + 0.3"), then on towards the enemy for the rest of the move (as far as it goes).
@@ -1035,7 +1045,7 @@ void detours_for(const MoveGeometry& g, std::vector<MoveCandidate>& out) {
         for (std::size_t v = 0; v < nv; ++v) {
             const float vx = f->vertices[v].x - c0.x;
             const float vy = f->vertices[v].y - c0.y;
-            const float angle = std::atan2(-d.y * vx + d.x * vy, vx * d.x + vy * d.y);  // left positive
+            const float angle = diamond_angle(-d.y * vx + d.x * vy, vx * d.x + vy * d.y);  // left positive
             if (!left || angle > best_l) {
                 best_l = angle;
                 left = v;
