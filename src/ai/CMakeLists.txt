@@ -3,6 +3,7 @@
 add_library(wh40k_ai STATIC
     analysis/charge_odds.cpp
     analysis/odds.cpp
+    analysis/terrain_sight.cpp
     analysis/threat.cpp
     arena.cpp
     bot.cpp

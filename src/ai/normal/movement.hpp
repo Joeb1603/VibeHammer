@@ -59,8 +59,12 @@ inline constexpr std::size_t kAdvanceEstimateMoves =
 // `area_spots` (MoveScoreContext::area_spots(), under a mission): a few spots on each objective area the move can reach
 // and on the team's area are appended (a translation straight at the area's centre, as far as the move goes, and a line
 // abreast there facing the closest enemy unit; two ranks too when the centre is within the move).
+// M89 (D-090): `cover_spots` (MoveScoreContext::cover_spots(), on a battlefield with terrain): spots in cover in each
+// terrain area the move can reach (a unit that takes cover), a hidden line abreast in an area with a Dense feature,
+// spots behind each obscuring area, and detours round a Dense polygon the unit can't cross, appended after the others.
 [[nodiscard]] std::vector<MoveCandidate> move_candidates(const core::GameState& origin,
-                                                         const MoveTeam* team = nullptr, bool area_spots = false);
+                                                         const MoveTeam* team = nullptr, bool area_spots = false,
+                                                         bool cover_spots = false);
 
 // D-075 (M66): the proposals that move each model of the move in progress in `origin` (no model moved yet) straight to
 // `ends` (unit order), as a formation's are made: an order in which no model ends on one still to move (D-027), a cycle

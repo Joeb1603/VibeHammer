@@ -67,12 +67,14 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
 
 #include "analysis/odds.hpp"
+#include "analysis/terrain_sight.hpp"
 #include "analysis/threat.hpp"
 #include "core/geometry/coherency.hpp"
 #include "core/geometry/oval.hpp"
@@ -115,11 +117,20 @@ struct MoveWeights {
     double objective_approach = 0.1;
     // ... and in the Shooting phase, x the enemy scorings the shooting helps deny (ShootingAim, shooting.hpp).
     double objective_fire = 0.0;
+    // M89 (D-090), on a battlefield with terrain only (at 0 it plays exactly as before M89): how far the move score
+    // believes what terrain does to its hypothetical shots (13.08 cover, 13.09 Hidden, 13.10 / 13.11 sight), 0 to 1:
+    // each such rate is (1 - cover) x the terrain-blind rate + cover x the terrain rate. Above 0 the candidates also
+    // take spots in cover, hidden spots and detours, and hand deployment prefers cover.
+    double cover = 1.0;
 };
 
 // M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or
 // objective_fire) above 0.
 [[nodiscard]] bool objectives_on(const core::GameState& state, const MoveWeights& weights);
+// M89 (D-090): the terrain terms are on: the battlefield has terrain and the cover weight is above 0.
+[[nodiscard]] bool cover_on(const core::GameState& state, const MoveWeights& weights);
+// TEMP M89 tuning: WH40K_M89_OFF holds "cand", "shoot", "reply", "deploy".
+[[nodiscard]] bool m89_off(const char* what);
 
 struct MoveScore {
     // Components (unit shares, ours positive); total is their sum.
@@ -142,6 +153,11 @@ struct MoveScore {
     bool in_enemy_half_range = false;  // within half the enemy's longest range
     std::string enemy_reply;           // its best reply: "stays and shoots", "closes and charges", ...
     bool refined = false;              // from the simulated state (refine_move_score)
+    // M89 (D-090), under cover_on only (for the reason): the unit has the benefit of cover against the closest enemy
+    // unit's reply where it stands, is hidden from it in its turn, or can't be seen by it from where it stands now.
+    bool in_cover = false;
+    bool hidden = false;
+    bool unseen = false;
     // D-083 part 2 (M80), a unit that follows its group: its focus when the line follows it, and the share of the
     // focus's reply counted on it (1: it stands alone; 1/k: it shares the reply with k - 1 synced partners in its reach).
     std::optional<core::UnitId> focus;
@@ -277,8 +293,9 @@ public:
     [[nodiscard]] ScoreLine new_line() const;
 
     // ---- the pieces score_move_plan is made of (shares of the target unit at full strength) ----
-    // A whole unit's shooting across a unit gap (the enemy's reply, our next turn).
-    [[nodiscard]] double ranged_rate(bool ours, core::ShootingType type, bool heavy, float gap_mm);
+    // A whole unit's shooting across a unit gap (the enemy's reply, our next turn). M89 (D-090): `cover`, the target
+    // has the benefit of cover (13.08).
+    [[nodiscard]] double ranged_rate(bool ours, core::ShootingType type, bool heavy, float gap_mm, bool cover = false);
     [[nodiscard]] double melee_rate(bool ours);
     [[nodiscard]] double close_quarters_rate(bool ours);
     // Our shooting this turn from `positions`, each model at its own gap; `outcome` gets the exact outcome.
@@ -342,6 +359,19 @@ public:
     // ahead), and whether the candidates add spots on the areas (objectives_on).
     [[nodiscard]] const std::optional<ObjectiveOutlook>& objectives() const noexcept { return objectives_; }
     [[nodiscard]] bool area_spots() const noexcept { return area_spots_; }
+    // M89 (D-090): the terrain terms are on (cover_on), so the candidates add cover and hidden spots and detours.
+    [[nodiscard]] bool cover_spots() const noexcept { return sight_ != nullptr; }
+    // M89 (D-090): how our unit at `positions` stands against the enemy's reply in its next turn, for the rates below
+    // until end_reply (score_move_plan sets it per plan; nothing happens without cover_on). `shoots`: the plan makes
+    // ranged attacks this turn (then our unit is not hidden in the enemy's turn, 13.09). Returns the closest enemy
+    // unit's view of us, for the reason.
+    struct ReplyFacts {
+        bool in_cover = false;
+        bool hidden = false;
+        bool unseen = false;
+    };
+    ReplyFacts begin_reply(const std::vector<core::Position>& positions, bool shoots);
+    void end_reply() { reply_ = Reply{}; }
 
 private:
     struct RateKey {
@@ -349,6 +379,7 @@ private:
         int type;
         bool heavy;
         std::uint64_t band;
+        bool cover = false;  // M89 (D-090)
         friend auto operator<=>(const RateKey&, const RateKey&) = default;
     };
     [[nodiscard]] std::uint64_t band_of(bool ours, float gap_mm) const;
@@ -357,7 +388,16 @@ private:
                                          double* p_survive, const OtherThreat* others = nullptr,
                                          double* us_left = nullptr);
     // P(the enemy's whole-unit shooting / melee / close-quarters shooting wipes out our unit as it is now).
-    [[nodiscard]] double enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm);
+    [[nodiscard]] double enemy_ranged_wipe(core::ShootingType type, bool heavy, float gap_mm, bool cover = false);
+    // M89 (D-090): the enemy's reply on us (closest enemy) at `to_mm`, `stays` its models where they stand: the rate and
+    // P(it wipes us out), blended for terrain while a reply is begun (else exactly the terrain-blind calls).
+    [[nodiscard]] double reply_rate(core::ShootingType type, bool heavy, float to_mm, bool stays);
+    [[nodiscard]] double reply_wipe(core::ShootingType type, bool heavy, float to_mm, bool stays);
+    // Our whole unit's shooting at enemy() in our next turn, the enemy's area cover where it stands blended in.
+    [[nodiscard]] double our_rate(core::ShootingType type, bool heavy, float gap_mm);
+    [[nodiscard]] double blend(double plain, double terrain) const noexcept {
+        return (1.0 - cover_w_) * plain + cover_w_ * terrain;
+    }
     [[nodiscard]] double enemy_melee_wipe();
     [[nodiscard]] double enemy_engaged_wipe();
 
@@ -402,8 +442,41 @@ private:
     std::map<RateKey, double> rates_;
     std::array<std::optional<double>, 2> melee_;
     std::array<std::optional<double>, 2> cq_;
-    // (model index, shooting type, heavy, band) -> that model's best volley alone
-    std::map<std::tuple<std::size_t, int, bool, std::uint64_t>, analysis::Volley> model_volleys_;
+    // (model index, shooting type, heavy, band, cover) -> that model's best volley alone
+    std::map<std::tuple<std::size_t, int, bool, std::uint64_t, bool>, analysis::Volley> model_volleys_;
+
+    // M89 (D-090): terrain, under cover_on only (sight_ null otherwise: nothing below is used).
+    // An enemy unit's models as the sight tests see them (where they stand now).
+    struct TerrainSide {
+        std::vector<std::uint32_t> masks;  // each model's areas
+        std::vector<char> hidden;          // 13.09 now
+        std::vector<char> area_ok;         // it takes cover and is within an area (13.08's first condition)
+        bool area_cover = false;           // every model area_ok: cover against every attacker
+        std::vector<std::size_t> samples;  // the models sampled against our unit (its start centroid)
+    };
+    [[nodiscard]] TerrainSide terrain_side(const core::Unit& unit, const std::vector<core::PosedModel>& models);
+    // Our model at `at` looking at a unit `side` describes: (some sampled model visible, the target has cover).
+    [[nodiscard]] std::pair<bool, bool> our_view(const core::BasePose& at, const std::vector<core::PosedModel>& models,
+                                                 const TerrainSide& side);
+    // The enemy unit `models` / `side` looking at our unit as reply_ holds it, from where it stands: (visible, cover).
+    [[nodiscard]] std::pair<bool, bool> stays_view(const std::vector<core::PosedModel>& models, const TerrainSide& side);
+    // Visible and covered at an end the enemy moved to (gap `to_mm`).
+    [[nodiscard]] bool moved_visible(float to_mm) const;
+    struct Reply {
+        bool active = false;
+        bool area_cover = false;   // every model of ours takes cover within an area
+        bool all_hidden = false;   // every sampled model of ours is hidden in the enemy's turn
+        std::vector<core::BasePose> poses;  // our sampled models
+        std::vector<std::uint32_t> masks;
+        std::vector<char> hidden;
+        bool stay_visible = true;  // the closest enemy unit, where it stands
+        bool stay_cover = false;
+    };
+    std::shared_ptr<analysis::TerrainSight> sight_;
+    double cover_w_ = 0.0;
+    bool us_takes_cover_ = false;
+    TerrainSide enemy_side_;
+    Reply reply_;
 
     // D-066: an enemy unit other than enemy(), with its rates against us and ours against it.
     struct Other {
@@ -422,16 +495,20 @@ private:
         double melee = 0.0;         // its melee on us, shares of our unit
         double cq = 0.0;            // its close-quarters shooting on us
         double melee_wipe = 0.0;    // P(its melee wipes us out)
-        std::map<std::pair<bool, std::uint64_t>, std::pair<double, double>> ranged;  // (heavy, band) -> (rate, wipe)
+        // (heavy, band, cover) -> (rate, wipe)
+        std::map<std::tuple<bool, std::uint64_t, bool>, std::pair<double, double>> ranged;
         // D-077: band -> its shooting at us while we are an engaged MONSTER/VEHICLE (17.03, at -1): (rate, wipe)
         std::map<std::uint64_t, std::pair<double, double>> at_engaged_us;
-        // (model index, shooting type, heavy, our band) -> that model's best volley at it
-        std::map<std::tuple<std::size_t, int, bool, std::uint64_t>, analysis::Volley> our_volleys;
-        // (shooting type, heavy, every model's band) -> (share, models destroyed)
-        std::map<std::tuple<int, bool, std::vector<std::uint64_t>>, std::pair<double, double>> our_shots;
+        // (model index, shooting type, heavy, our band, cover) -> that model's best volley at it
+        std::map<std::tuple<std::size_t, int, bool, std::uint64_t, bool>, analysis::Volley> our_volleys;
+        // (shooting type, heavy, every model's band, M89: every model's sight, empty terrain-blind) -> (share, models
+        // destroyed)
+        std::map<std::tuple<int, bool, std::vector<std::uint64_t>, std::vector<std::uint8_t>>, std::pair<double, double>>
+            our_shots;
+        TerrainSide terrain;  // M89 (D-090), under cover_on
     };
     [[nodiscard]] std::uint64_t other_band(const Other& o, float gap_mm) const;
-    [[nodiscard]] std::pair<double, double> other_ranged(Other& o, bool heavy, float gap_mm);
+    [[nodiscard]] std::pair<double, double> other_ranged(Other& o, bool heavy, float gap_mm, bool cover = false);
     // D-077: its shooting at us while we are an engaged MONSTER/VEHICLE (17.03, at -1), cached by band.
     [[nodiscard]] std::pair<double, double> other_at_engaged_us(Other& o, float gap_mm);
     [[nodiscard]] float gap_to_other(const Other& o, const std::vector<core::Position>& positions) const;

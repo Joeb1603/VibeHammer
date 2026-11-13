@@ -10,6 +10,7 @@
 #include "analysis/threat.hpp"
 #include "bounds.hpp"
 #include "core/geometry/units.hpp"
+#include "core/rules/terrain.hpp"
 #include "core/state/deployment.hpp"
 #include "simulator.hpp"
 #include "unit_style.hpp"
@@ -286,8 +287,25 @@ std::vector<core::action::DeployUnit> deploy_candidates(const core::GameState& s
     return out;
 }
 
+int deploy_cover_count(const core::GameState& state, const core::action::DeployUnit& a) {
+    const core::Unit* unit = core::find_undeployed(state, a.unit);
+    if (unit == nullptr || !core::takes_cover_and_hides(*unit) || state.terrain.empty()) return 0;
+    int count = 0;
+    for (const core::ModelPlacement& p : a.models) {
+        const core::Model* m = model_of(*unit, p.model);
+        if (m == nullptr) continue;
+        const core::BasePose pose{p.position, m->base, p.facing_deg};
+        int best = 0;
+        for (const core::TerrainArea& area : state.terrain) {
+            if (core::model_within_area(pose, area)) best = std::max(best, core::has_dense(area) ? 2 : 1);
+        }
+        count += best;
+    }
+    return count;
+}
+
 std::optional<PolicyResult> heuristic_deploy_policy(const core::GameState& state, core::Side side,
-                                                    const std::vector<core::GameAction>& legal) {
+                                                    const std::vector<core::GameAction>& legal, bool cover) {
     if (!state.pending || !std::holds_alternative<core::decision::DeployUnits>(state.pending->kind)) {
         return std::nullopt;
     }
@@ -325,7 +343,15 @@ std::optional<PolicyResult> heuristic_deploy_policy(const core::GameState& state
     }
     if (proposal == nullptr) return std::nullopt;
 
-    const std::optional<core::Position> enemy = enemy_deployed_centre(state, side);
+    std::optional<core::Position> enemy = enemy_deployed_centre(state, side);
+    const core::Unit* undeployed = core::find_undeployed(state, unit);
+    const bool seek_cover = cover && !state.terrain.empty() && undeployed != nullptr &&
+                            core::takes_cover_and_hides(*undeployed);
+    if (!enemy && seek_cover) {
+        // M89 (D-090): no enemy unit set up yet: face the centre of the enemy deployment zone.
+        const core::Rect zr = core::zone_rect(state.battlefield, state.side(other(side)).deployment_zone);
+        enemy = core::Position{0.5f * (zr.min_x + zr.max_x), 0.5f * (zr.min_y + zr.max_y), 0.0f};
+    }
     if (!enemy) {
         return PolicyResult{*proposal,
                             "D-081 (M77): set up " + name + " (" + role +
@@ -356,16 +382,29 @@ std::optional<PolicyResult> heuristic_deploy_policy(const core::GameState& state
 
     constexpr int kMaxRoomChecks = 3;  // nudges simulated before settling for the proposal
     int room_checks = 0;
-    for (const core::action::DeployUnit& cand :
-         deploy_candidates(state, *proposal, chosen_role.role, chosen_role.max_range_mm, *enemy)) {
+    std::vector<core::action::DeployUnit> cands =
+        deploy_candidates(state, *proposal, chosen_role.role, chosen_role.max_range_mm, *enemy);
+    const int proposal_cover = seek_cover ? deploy_cover_count(state, *proposal) : 0;
+    if (seek_cover) {
+        // M89 (D-090): the most cover first; M77's order breaks ties (a stable sort).
+        std::vector<std::pair<int, std::size_t>> keyed;
+        for (std::size_t i = 0; i < cands.size(); ++i) keyed.emplace_back(-deploy_cover_count(state, cands[i]), i);
+        std::stable_sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        std::vector<core::action::DeployUnit> sorted;
+        for (const auto& k : keyed) sorted.push_back(cands[k.second]);
+        cands = std::move(sorted);
+    }
+    for (const core::action::DeployUnit& cand : cands) {
         if (cand == *proposal) break;  // the proposal: legal by construction (below)
         if (!core::set_up_problems(state, side, cand).empty()) continue;
         if (room_checks >= kMaxRoomChecks) break;
         ++room_checks;
         if (!leaves_room(cand)) continue;
+        const bool for_cover = seek_cover && deploy_cover_count(state, cand) > proposal_cover;
         return PolicyResult{core::GameAction{cand},
                             "D-081 (M77): set up " + name + " (" + role + ") " + shift_text(state, side, *proposal, cand) +
-                                " where Auto-place puts it, to face the enemy's set-up units",
+                                " where Auto-place puts it, " +
+                                (for_cover ? "for cover in terrain (M89, D-090)" : "to face the enemy's set-up units"),
                             {}};
     }
     return PolicyResult{*proposal,

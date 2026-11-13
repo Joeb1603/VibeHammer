@@ -19,6 +19,7 @@
 #include "core/geometry/distance.hpp"
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/path.hpp"
+#include "core/geometry/terrain_shape.hpp"
 #include "core/geometry/units.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/mortal_wounds.hpp"
@@ -727,7 +728,8 @@ std::optional<Option> advance_option(analysis::OddsCache& cache, const GameState
         }
     }
     MoveScoreContext ctx(cache, *states[widest], unit, weights, plan);
-    const std::vector<MoveCandidate> cands = move_candidates(*states[widest], ctx.team(), ctx.area_spots());
+    const std::vector<MoveCandidate> cands =
+        move_candidates(*states[widest], ctx.team(), ctx.area_spots(), ctx.cover_spots());
     const std::vector<Ranked> ranked = rank(ctx, core::MoveType::Advance, cands);
     Option opt;
     opt.start = start;
@@ -896,11 +898,242 @@ void area_spots_for(const MoveGeometry& g, const core::ObjectiveArea& area, std:
     }
 }
 
+// ---- M89 (D-090): spots in cover, out of sight, and a detour ----
+
+// How far from `p` along `d` (a unit vector) the shape's boundary is (0 when p is outside), in 0.25" steps up to 40".
+float exit_distance(const core::TerrainShape& shape, const Position& p, const client::UnitVector& d) {
+    constexpr float kStep = 0.25f * kIn;
+    float t = 0.0f;
+    while (t < 40.0f * kIn) {
+        const core::oval_detail::Vec q{p.x + d.x * (t + kStep), p.y + d.y * (t + kStep)};
+        if (core::point_shape_signed_distance(q, shape) > 0.0) break;
+        t += kStep;
+    }
+    return t;
+}
+
+// Every end of `c` is within the area (13.08: cover from standing in it needs every model there).
+bool all_within(const MoveGeometry& g, const std::vector<Position>& ends, const core::TerrainArea& area) {
+    for (std::size_t i = 0; i < ends.size(); ++i) {
+        if (!core::model_within_area(avoid_pose(g, i, ends[i]), area)) return false;
+    }
+    return true;
+}
+
+// The unit translated straight at `spot` (as far as the move goes), and a line abreast there facing the closest enemy
+// unit, each labelled `what`.
+void spots_at(const MoveGeometry& g, const Position& spot, const std::string& what, std::vector<MoveCandidate>& out) {
+    const Position c0 = centroid_of(g.starts);
+    const float dx = spot.x - c0.x;
+    const float dy = spot.y - c0.y;
+    const float len = std::sqrt(dx * dx + dy * dy);
+    if (!(len > 0.1f * kIn) || !(g.unit_max_mm > 0.0f)) return;
+    const float t = std::min(len, g.unit_max_mm);
+    const client::UnitVector d{dx / len, dy / len};
+    if (std::optional<MoveCandidate> c = translation(g, d, t)) {
+        c->label = what + ", " + c->label;
+        out.push_back(std::move(*c));
+    }
+    if (!g.has_closest) return;
+    MoveGeometry facing = g;
+    facing.enemy_centroid = g.closest_centroid;
+    const Position at{c0.x + d.x * t, c0.y + d.y * t, 0.0f};
+    if (std::optional<MoveCandidate> c = formation(facing, 1, 0.0f, at)) {
+        c->label = what + ", " + c->label;
+        out.push_back(std::move(*c));
+    }
+}
+
+// M89 (D-090): for every terrain area the move can reach (some base within its Move of it):
+// - a unit that takes cover (13.08: INFANTRY, BEASTS, SWARM) gets spots at the area's inner point ("into cover in
+//   ..."), unless D-086 already gave the area spots (`skip_objectives` and an objective's area), and, in an area with a
+//   Dense feature (13.09), a line abreast as far from the closest enemy unit as still leaves every model within the
+//   area ("hides in ...");
+// - any unit gets spots behind an obscuring area (13.10), on its far side from the closest enemy unit ("behind ...").
+void cover_spots_for(const GameState& origin, const MoveGeometry& g, const core::Unit& u, bool skip_objectives,
+                     std::vector<MoveCandidate>& out) {
+    const bool takes_cover = core::takes_cover_and_hides(u);
+    float radius = 0.0f;
+    for (const float r : g.radius) radius = std::max(radius, r);
+    for (const core::TerrainArea& area : origin.terrain) {
+        bool reach = false;
+        for (std::size_t k = 0; k < g.starts.size() && !reach; ++k) {
+            reach = core::within(core::shape_signed_distance(avoid_pose(g, k, g.starts[k]), area.shape), g.unit_max_mm);
+        }
+        if (!reach) continue;
+        const Position inner = core::shape_inner_point(area.shape);
+        client::UnitVector away{0.0f, 0.0f};
+        if (g.has_closest) {
+            const float ax = inner.x - g.closest_centroid.x;
+            const float ay = inner.y - g.closest_centroid.y;
+            const float al = std::sqrt(ax * ax + ay * ay);
+            if (al > 1e-3f) away = client::UnitVector{ax / al, ay / al};
+        }
+        const bool moved_away = away.x != 0.0f || away.y != 0.0f;
+        if (takes_cover && !(skip_objectives && area.objective)) spots_at(g, inner, "into cover in " + area.name, out);
+        if (takes_cover && core::has_dense(area) && moved_away && g.has_closest && g.starts.size() >= 2) {
+            MoveGeometry facing = g;
+            facing.enemy_centroid = g.closest_centroid;
+            for (const float off : {4.0f, 3.0f, 2.0f, 1.0f}) {
+                const Position at{inner.x + away.x * off * kIn, inner.y + away.y * off * kIn, 0.0f};
+                std::optional<MoveCandidate> c = formation(facing, 1, 0.0f, at);
+                if (c && all_within(g, c->ends, area)) {
+                    c->label = "hides in " + area.name + ", " + c->label;
+                    out.push_back(std::move(*c));
+                    break;
+                }
+            }
+        }
+        if (core::is_obscuring(area) && moved_away) {
+            // The first spot past the area's far side, in 1" steps, where the unit stands (translated, or in line
+            // abreast facing the closest enemy unit).
+            const float exit = exit_distance(area.shape, inner, away);
+            const std::size_t before = out.size();
+            for (float extra = 0.5f; extra <= 4.5f && out.size() == before; extra += 1.0f) {
+                const float behind = exit + radius + extra * kIn;
+                const Position at{inner.x + away.x * behind, inner.y + away.y * behind, 0.0f};
+                spots_at(g, at, "behind " + area.name, out);
+            }
+        }
+    }
+}
+
+// M89 (D-090): models that can't cross a Dense feature (13.06) go round it: when the straight move towards the line's
+// enemy (or area) is blocked by such a polygon, a two-leg path via each of its two silhouette corners (pushed out by
+// the largest base's avoid radius + 0.3"), then on towards the enemy for the rest of the move (as far as it goes).
+// Every model takes the same offset.
+void detours_for(const MoveGeometry& g, std::vector<MoveCandidate>& out) {
+    if (g.uncrossable.empty() || !g.has_enemy || !(g.unit_max_mm > 0.0f)) return;
+    const Position c0 = centroid_of(g.starts);
+    const float tx = g.enemy_centroid.x - c0.x;
+    const float ty = g.enemy_centroid.y - c0.y;
+    const float tl = std::sqrt(tx * tx + ty * ty);
+    if (!(tl > 1.0f * kIn)) return;
+    const client::UnitVector d{tx / tl, ty / tl};
+    const float full = std::min(tl, g.unit_max_mm);
+    // The blocking polygons: those the straight move would cross for some model.
+    std::vector<const core::TerrainShape*> blocking;
+    for (const core::TerrainShape& f : g.uncrossable) {
+        if (f.is_circle()) continue;  // D-090: circles are left out
+        for (std::size_t i = 0; i < g.starts.size(); ++i) {
+            const Position e{g.starts[i].x + d.x * full, g.starts[i].y + d.y * full, g.starts[i].z};
+            if (core::translation_crosses_shape(avoid_pose(g, i, g.starts[i]), e, f)) {
+                blocking.push_back(&f);
+                break;
+            }
+        }
+    }
+    float radius = 0.0f;
+    for (const float r : g.radius) radius = std::max(radius, r);
+    for (const core::TerrainShape* f : blocking) {
+        // The silhouette corners seen from the centroid: the vertices at the extreme angles left and right of d.
+        std::optional<std::size_t> left;
+        std::optional<std::size_t> right;
+        float best_l = 0.0f;
+        float best_r = 0.0f;
+        const std::size_t nv = f->vertices.size();
+        for (std::size_t v = 0; v < nv; ++v) {
+            const float vx = f->vertices[v].x - c0.x;
+            const float vy = f->vertices[v].y - c0.y;
+            const float angle = std::atan2(-d.y * vx + d.x * vy, vx * d.x + vy * d.y);  // left positive
+            if (!left || angle > best_l) {
+                best_l = angle;
+                left = v;
+            }
+            if (!right || angle < best_r) {
+                best_r = angle;
+                right = v;
+            }
+        }
+        for (const auto& [corner, name] : {std::pair{left, "left"}, std::pair{right, "right"}}) {
+            if (!corner) continue;
+            // Off the corner by `push` from both edges at it: the sum of their outward normals (counter-clockwise
+            // polygon: the outward normal of edge a -> b is (dy, -dx)).
+            const Position& vtx = f->vertices[*corner];
+            const Position& prev = f->vertices[(*corner + nv - 1) % nv];
+            const Position& next = f->vertices[(*corner + 1) % nv];
+            const auto normal = [](const Position& a, const Position& b) {
+                const float ex = b.x - a.x;
+                const float ey = b.y - a.y;
+                const float el = std::max(1e-6f, std::sqrt(ex * ex + ey * ey));
+                return client::UnitVector{ey / el, -ex / el};
+            };
+            const client::UnitVector n1 = normal(prev, vtx);
+            const client::UnitVector n2 = normal(vtx, next);
+            const float push = radius + 0.3f * kIn;
+            const Position via{vtx.x + (n1.x + n2.x) * push, vtx.y + (n1.y + n2.y) * push, 0.0f};
+            const float l1x = via.x - c0.x;
+            const float l1y = via.y - c0.y;
+            const float leg1 = std::sqrt(l1x * l1x + l1y * l1y);
+            if (!(leg1 > 0.1f * kIn) || core::more_than(leg1, g.unit_max_mm)) continue;
+            // Leg 2: from the corner towards the enemy, and on in the straight move's direction (past the wall), each
+            // as far as the move and the ground allow.
+            const float rx = g.enemy_centroid.x - via.x;
+            const float ry = g.enemy_centroid.y - via.y;
+            const float rl = std::sqrt(rx * rx + ry * ry);
+            const float rest = std::min(g.unit_max_mm - leg1, rl);
+            const client::UnitVector towards = rl > 1e-3f ? client::UnitVector{rx / rl, ry / rl} : d;
+            const bool same = std::fabs(towards.x - d.x) < 1e-3f && std::fabs(towards.y - d.y) < 1e-3f;
+            for (int leg = 0; leg < (same ? 1 : 2); ++leg) {
+                const client::UnitVector e2 = leg == 0 ? towards : d;
+                const auto build = [&](float t2) -> std::optional<MoveCandidate> {
+                    MoveCandidate c;
+                    const std::size_t n = g.starts.size();
+                    c.ends.resize(n);
+                    c.lengths.assign(n, leg1 + t2);
+                    std::vector<Position> mids(n);
+                    for (std::size_t i = 0; i < n; ++i) {
+                        if (core::more_than(leg1 + t2, g.max_mm[i])) return std::nullopt;
+                        mids[i] = Position{g.starts[i].x + l1x, g.starts[i].y + l1y, g.starts[i].z};
+                        c.ends[i] = Position{mids[i].x + e2.x * t2, mids[i].y + e2.y * t2, g.starts[i].z};
+                        if (!on_battlefield(g, i, mids[i])) return std::nullopt;
+                        if (!segment_clear(g, i, g.starts[i], mids[i]) || !segment_clear(g, i, mids[i], c.ends[i])) {
+                            return std::nullopt;
+                        }
+                    }
+                    if (!ends_ok(g, c.ends)) return std::nullopt;
+                    // D-027: furthest along the move first.
+                    std::vector<std::size_t> order(n);
+                    for (std::size_t i = 0; i < n; ++i) order[i] = i;
+                    const auto ahead = [&](std::size_t i) { return g.starts[i].x * d.x + g.starts[i].y * d.y; };
+                    std::stable_sort(order.begin(), order.end(),
+                                     [&](std::size_t a, std::size_t b) { return ahead(a) > ahead(b); });
+                    for (const std::size_t i : order) {
+                        c.proposals.push_back(core::action::ProposeModelMove{g.ids[i], {mids[i], c.ends[i]}});
+                    }
+                    c.longest_mm = leg1 + t2;
+                    const Position c1 = centroid_of(c.ends);
+                    c.label = std::string("round the wall (") + name + "), " + move_label(g, c1.x - c0.x, c1.y - c0.y);
+                    return c;
+                };
+                std::optional<MoveCandidate> c = build(std::max(0.0f, rest));
+                if (!c && rest > 0.0f) {
+                    float lo = 0.0f;
+                    float hi = rest;
+                    std::optional<MoveCandidate> edge = build(0.0f);
+                    for (int k = 0; k < kBisections; ++k) {
+                        const float mid = 0.5f * (lo + hi);
+                        if (std::optional<MoveCandidate> m = build(mid)) {
+                            lo = mid;
+                            edge = std::move(m);
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    c = std::move(edge);
+                }
+                if (c) out.push_back(std::move(*c));
+            }
+        }
+    }
+}
+
 }  // namespace
 
 // ---- candidates ----
 
-std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTeam* team, bool area_spots) {
+std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTeam* team, bool area_spots,
+                                           bool cover_spots) {
     std::vector<MoveCandidate> out;
     const std::optional<MoveGeometry> geo = geometry_of(origin, team);
     if (!geo) return out;
@@ -983,6 +1216,13 @@ std::vector<MoveCandidate> move_candidates(const GameState& origin, const MoveTe
             if (reach) area_spots_for(g, area, out);
         }
     }
+    if (cover_spots && !origin.terrain.empty() && !m89_off("cand")) {
+        // M89 (D-090): after every other candidate, so their order is unchanged.
+        if (const core::Unit* u = origin.find_unit(g.unit)) {
+            cover_spots_for(origin, g, *u, area_spots && origin.mission, out);
+        }
+        detours_for(g, out);
+    }
     return out;
 }
 
@@ -999,7 +1239,7 @@ std::optional<PlannedMove> plan_unit_move(analysis::OddsCache& cache, const Game
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return std::nullopt;
     MoveScoreContext ctx(cache, origin, u->id, weights, plan);
-    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team(), ctx.area_spots());
+    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team(), ctx.area_spots(), ctx.cover_spots());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     return choose(ctx, origin, u->side, cands, ranked, decision_seed(origin), true);
 }
@@ -1011,7 +1251,7 @@ std::vector<PlannedMove> standing_moves(analysis::OddsCache& cache, const GameSt
     const core::Unit* u = origin.find_unit(origin.flow.move->unit);
     if (u == nullptr || u->models.empty()) return out;
     MoveScoreContext ctx(cache, origin, u->id, weights);
-    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team(), ctx.area_spots());
+    const std::vector<MoveCandidate> cands = move_candidates(origin, ctx.team(), ctx.area_spots(), ctx.cover_spots());
     const std::vector<Ranked> ranked = rank(ctx, origin.flow.move->type, cands);
     const std::uint64_t seed = decision_seed(origin);
     std::size_t tried = 0;

@@ -9,7 +9,8 @@
 //   seed and prints every bot decision, its reason and (M44) its time instead. --weights (for tuning) overrides the
 //   move score's weights (normal::MoveWeights, normal/move_score.hpp) for both sides, --weights-a / --weights-b for one
 //   side (applied in the order given): delay, survival, edge, coherency, approach, cohesion, follow, approach_alone,
-//   objective, objective_approach, objective_fire (M87, D-086; all 0: a mission game plays exactly as before M87).
+//   objective, objective_approach, objective_fire (M87, D-086; all 0: a mission game plays exactly as before M87),
+//   cover (M89, D-090; 0 to 1, another value exits 2; 0: a game with terrain plays exactly as before M89).
 //   --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
 //   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
@@ -81,6 +82,9 @@ void apply_weights(const std::string& text, wh40k::ai::normal::MoveWeights& w) {
             w.objective_approach = d;
         } else if (key == "objective_fire") {
             w.objective_fire = d;
+        } else if (key == "cover") {  // M89 (D-090): 0 to 1
+            if (!(d >= 0.0 && d <= 1.0)) throw std::invalid_argument("cover is 0 to 1");
+            w.cover = d;
         } else {
             throw std::invalid_argument("unknown weight");
         }
