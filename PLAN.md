@@ -616,11 +616,11 @@ user's choice, 2026-11-13)
 
   | Item | Number | Target | |
   |---|---|---|---|
-  | head-to-head, M89 against M88 (4 x 100) | 214 of 400 (53.5%), confirmed 213 (53.3%) on seeds 101–200; M88 against M88 200 | at least 55% | open (the user's choice) |
-  | the enemy's selections into cover, M89 units as targets | Chaos 34.7% / 25.2% (M88 21.5% / 19.5%); Tyranids 58.9% / 47.5% (70.6% / 51.4%), but refused as Hidden 3.74 / 5.35 a game (0.08 / 0.95) | up | met for the Chaos Space Marines; the Tyranids hide instead |
+  | head-to-head, M89 against M88 (4 x 100) | 212 of 400 (53.0%), confirmed 222 (55.5%) on seeds 101–200: 434 of 800 (54.3%); M88 against M88 200 | at least 55% | open (the user's choice) |
+  | the enemy's selections into cover, M89 units as targets | Chaos 34.3% / 25.2% (M88 21.5% / 19.5%); Tyranids 51.2% / 36.2% (70.6% / 51.4%), but refused as Hidden 3.77 / 5.63 a game (0.08 / 0.95) | up | met for the Chaos Space Marines; the Tyranids hide instead |
   | Chaos Space Marines' wins, M89 against M89 | terrain scenario 21.0% (A first) / 34.5% (B first) (M88 25.0% / 38.5%); random armies `--terrain` 17.0% auto / 17.0% hand (18.5% / 18.5%) | recorded | |
   | identity: the nine runs at the defaults, the four terrain runs at `cover=0` | identical to the M88 binary, every `game` line (2,600 games) | identical | met |
-  | clean runs, p95 | no rejected action, reverted move, fallback or unfinished game; p95 28 ms (Chaos) / 16 ms (Tyranids), random armies 18 ms | 0; at most 33 ms | met |
+  | clean runs, p95 | no rejected action, reverted move, fallback or unfinished game; p95 29 ms (Chaos) / 16 ms (Tyranids), random armies 18 ms | 0; at most 33 ms | met |
   | replays | every old replay byte-identical (m88's generator pinned to `cover=0`); new m89 | | met |
 
 - **Why the target is open:**
@@ -650,7 +650,7 @@ user's choice, 2026-11-13)
 1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89 (D-090). Still to do: the z axis
    (13.06 Moving Vertically and upper surfaces, 13.11 gaps above 3", 22.05 Plunging Fire), Stealth (24.33, left out of
    M88 by the user's choice), and a terrain editor for custom battles. Left open from M89: the head-to-head target
-   (53.4% against 55%), the army plan's terrain-blind group rates, holding fire on purpose to stay hidden, and charge
+   (54.3% against 55%), the army plan's terrain-blind group rates, holding fire on purpose to stay hidden, and charge
    odds round walls (D-090's open list).
 2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084), the bot in M87 (D-086). This enables
    Objective Consolidation and Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state
