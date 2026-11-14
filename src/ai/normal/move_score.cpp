@@ -1494,9 +1494,9 @@ OtherThreat MoveScoreContext::other_threat(const std::vector<core::Position>& po
             if (reply_.active) {
                 const bool visible = k == 0 ? stays.first : moved_visible(end);
                 const bool cover = k == 0 ? stays.second : reply_.area_cover;
-                std::pair<double, double> t{0.0, 0.0};
-                if (visible) t = cover ? other_ranged(o, keeps_heavy(g - end), end, true) : r;
-                r = {blend(r.first, t.first), blend(r.second, t.second)};
+                std::pair<double, double> seen{0.0, 0.0};
+                if (visible) seen = cover ? other_ranged(o, keeps_heavy(g - end), end, true) : r;
+                r = {blend(r.first, seen.first), blend(r.second, seen.second)};
             }
             const double p = analysis::p_charge_roll_covers(end);
             const double loss = r.first + p * o.melee;
