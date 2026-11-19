@@ -152,7 +152,7 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Unit-specific abilities (Bolter Discipline, Synapse, etc.) are **out of scope for V1**. Load them, display their text, and don't implement them.
 - A weapon ability the engine doesn't implement is never ignored. A profile with one is refused when selected, with a
   rule-cited reason (D-026, D-071). Implemented: Assault, Heavy, Pistol, Rapid Fire, Blast, Torrent, Hazardous,
-  Sustained Hits, Extra Attacks, Twin-linked, and random A/D (except random A on melee weapons).
+  Sustained Hits, Extra Attacks, Twin-linked, Ignores Cover (D-091), and random A/D (except random A on melee weapons).
 
 ## Tests
 

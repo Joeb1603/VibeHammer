@@ -21,6 +21,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M88_Replay.DISABLED_RegenerateTerrainReplay
 # and m89_cover_bot_game.json (the terrain scenario, a whole bot game playing for cover) likewise (M89):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M89_Replay.DISABLED_RegenerateCoverBotGameReplay
+# and m87_objectives_bot_game.json (the objective scenario, seed 29, a whole bot game playing the mission) (M87):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M87_Replay.DISABLED_RegenerateObjectivesBotGameReplay
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -48,3 +50,8 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
 - M89: `m89_cover_bot_game.json` is a whole bot game on the terrain scenario, the bot playing for cover (D-090): shots
   into cover, a hidden unit refused to a shooter, and the bot's own two-leg moves round a wall. `M89_Replay` replays it
   with core alone, and its `TheSavedFileMatchesTheGame` checks that it is what the bot plays now.
+- M90 (D-091): `m90_objective_consolidation.json` is scripted by `Replay.DISABLED_RegenerateReplays` from an embedded
+  initial state built from the objective scenario (seed 1): the Chaos Terminators destroy two Termagants south of the
+  Centre and make an Objective Consolidation onto it (12.08). `D091_Replay` checks it and that the file is what the
+  builder plays now. M90 regenerated `m87_objectives_bot_game.json` on purpose: Objective Consolidation gives Side B a
+  Consolidate decision at step 550 (6 added lines, the same seed and checks); every other replay stayed byte-identical.

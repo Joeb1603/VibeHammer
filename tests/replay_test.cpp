@@ -1893,9 +1893,10 @@ TEST(D091_Replay, TheObjectiveConsolidationReplayTakesTheCentre) {
     ASSERT_EQ(started.size(), 1u);
     EXPECT_EQ(started[0].mode, ConsolidationMode::Objective);
     EXPECT_EQ(started[0].objective, std::optional<std::size_t>{0});
-    for (const Model& m : end.find_unit(UnitId{3})->models) {
-        EXPECT_TRUE(within(objective_gap_mm(pose_of(m), end.mission->objectives[0]), wh40k::test::in(3.0f)));
-    }
+    // 12.08 After Moving: the unit is within range of the Centre (one or more of its models, D-009).
+    const auto& models = end.find_unit(UnitId{3})->models;
+    EXPECT_TRUE(std::any_of(models.begin(), models.end(),
+                            [&](const Model& m) { return model_within_objective(m, end.mission->objectives[0]); }));
     bool ok = false;
     std::string problem;
     const Replay again = m90_replay(kM90Seed, ok, problem);

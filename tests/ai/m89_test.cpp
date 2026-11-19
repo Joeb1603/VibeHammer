@@ -403,14 +403,17 @@ std::string per_game_field(const std::string& line, const std::string& key) {
     return line.substr(start, line.find_first_of(" \n", start) - start);
 }
 
-// M88's Release arena on the terrain scenario, seed 1 (`--per-game 1`).
-constexpr const char* kM88Actions = "9adc6beead7f055c";
-constexpr const char* kM88State = "d7c20c6aabaa3603";
-constexpr const char* kM88Trace = "d066bf6ecacfd5c7";
+// The terrain scenario, seed 1 (`--per-game 1`), played by the M88 bot (cover 0). M89 pinned M88's Release arena
+// (actions 9adc6beead7f055c, state d7c20c6aabaa3603, trace d066bf6ecacfd5c7); M90 (D-091) changed the rules under the
+// mission: 12.08 Objective Consolidation gives Side B one more consolidation in this game, so the M88 bot's game is
+// pinned under M90's rules (the M89 and M90 Release arenas at cover=0 differ only from there).
+constexpr const char* kM88Actions = "e27db795e0c1ed1f";
+constexpr const char* kM88State = "873846eb3d40fa93";
+constexpr const char* kM88Trace = "d402e9f71fb750df";
 
 }  // namespace
 
-TEST(M89_Regression, AtCoverZeroTheTerrainScenarioPlaysAsAtM88) {
+TEST(M89_Regression, AtCoverZeroTheTerrainScenarioPlaysAsTheM88BotUnderM90Rules) {
     BotConfig m88;
     m88.move.cover = 0.0;
     const PerGameReport r = run_per_game(terrain_scenario(), 1, 1, m88, m88);

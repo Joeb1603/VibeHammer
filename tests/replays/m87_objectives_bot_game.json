@@ -7377,6 +7377,12 @@
     },
     {
       "action": {
+        "kind": "EndConsolidations"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "StartMove",
         "move_type": "Normal",
         "unit": 8
