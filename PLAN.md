@@ -150,7 +150,7 @@ gaps and the bot, with M89's 55% bar for the bot.
   - The scenario's balance.
   - Charge odds round walls (tried in M89, and worse).
 
-## M90: Objective Consolidation and [IGNORES COVER]
+## M90: Objective Consolidation and [IGNORES COVER] ✅ (done)
 **Effort:** `high` · **Plan mode:** yes
 
 > Read 12.07–12.08, 14.01–14.02, 24.18, 13.08, D-009, D-022, D-071, D-084 and D-089 first. Ask if anything is
@@ -213,6 +213,46 @@ gaps and the bot, with M89's 55% bar for the bot.
   - CLAUDE.md's list of implemented abilities;
   - `docs/dev/bot_arena.md`.
 - **Build** and full `ctest` green.
+
+**Results** (2026-11-19, D-091)
+- **Rules:**
+  - 12.08 Objective Consolidation: the mode after Ongoing and Engaging, one objective chosen, each moved model within
+    range or closer, the unit within range after. Readings in D-091.
+  - 24.18 [IGNORES COVER]: `ability::IgnoresCover`. The flamers and the heavy flamer can be picked in the builder and
+    are drawn in random armies; the Havoc Champion keeps its default Flamer.
+- **Client:**
+  - the offer (a menu when several objectives are in range);
+  - the Auto move aims at the area, with a third arrangement: the whole unit moved straight towards it, which keeps
+    coherency where the greedy passes can't;
+  - the skip, and the text;
+  - a gold outline on the area during the move;
+  - the ability's help.
+- **Bot:** takes an Objective Consolidation that adds models within range (Normal and the defaults). Its odds ignore
+  cover for [IGNORES COVER]. The arena has a new line, "objective consolidations a game (M90)".
+- **Acceptance** (Release arena, 200 games each):
+
+  | Item | Number | |
+  |---|---|---|
+  | identity: V1, both bot scenarios, Strike, rosters | 1,000 of 1,000 `game` lines identical to the M89 binary | met |
+  | clean runs: the objective scenario, terrain A / B first, random armies auto / hand, random `--terrain` auto / hand, the M73 lists | 1,600 games, no rejected action, reverted move, fallback or unfinished game | met |
+  | Chaos Space Marines' wins (M89 or M87 in brackets) | objective scenario 32.0% (32.5%); terrain A first 21.5% (21.0%), B first 34.5% (34.5%); random armies 19.0% auto / 18.5% hand; random `--terrain` 19.5% / 13.5% (17.0% / 17.0%); M73 lists 54.5% | recorded |
+  | objective consolidations a game (A / B) | objective scenario 0.14 / 0.21; terrain (A first) 0.07 / 0.12; random `--terrain` 0.06 / 0.06 | recorded |
+  | p95 decision time | objective scenario 13 ms, terrain 18 ms, random `--terrain` 15 ms | |
+  | replays | m87 regenerated on purpose (Consolidate steps at 550, 6 lines, seed 29 kept); new m90; every other replay byte-identical | met |
+
+- **Tests:**
+  - `tests/m90_objective_consolidation_test.cpp` (R12_08, D091 and R24_18), `tests/client/m90_test.cpp` and
+    `tests/ai/m90_test.cpp`;
+  - D-022's test and a with-mission twin in `fight_test.cpp`;
+  - `D091_Replay` in `replay_test.cpp`.
+
+  Changed on purpose, with the user's choices:
+  - the refusal pins (D-079, D-069, D-071);
+  - `M77_BotDeploy`: D-081's rule for out-of-range shooters, 24 random battles, and the melee bar at more than 30%
+    (31.8% measured);
+  - `M89_Regression`: the M88 bot's game pinned under M90's rules;
+  - `D076_Json` exempts the new m90 file, as m72's.
+- **Build and the full `ctest`:** green.
 
 ---
 
