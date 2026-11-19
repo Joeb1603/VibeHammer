@@ -107,6 +107,11 @@ HelpEntry weapon_ability_help(const core::WeaponAbility& ability) {
                             "one that can be used.";
                 h.rule = "24.11";
                 h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::IgnoresCover>) {
+                h.summary = "The target can't have the benefit of cover against these attacks, so terrain doesn't "
+                            "worsen their BS.";
+                h.rule = "24.18";
+                h.in_this_game = true;
             } else {
                 h.summary = "Not in this game yet: weapons with this ability can't be selected (D-071).";
                 h.rule = "24";
@@ -303,6 +308,14 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
             } else {
                 line.text = "Extra Attacks: fought with in addition to another melee weapon";
                 line.kind = EffectKind::Info;
+            }
+        } else if (std::holds_alternative<ab::IgnoresCover>(a)) {
+            if (context.type == core::AttackType::Shooting) {
+                line.text = "Ignores Cover: the target has no benefit of cover";  // 24.18 (M90)
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = "Ignores Cover: no effect in the Fight phase";
+                line.kind = EffectKind::Inactive;
             }
         } else if (std::holds_alternative<ab::Assault>(a)) {
             if (type == core::ShootingType::Assault) {

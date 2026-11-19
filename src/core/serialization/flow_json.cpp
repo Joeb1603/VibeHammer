@@ -120,6 +120,7 @@ void to_json(Json& j, const MoveInProgress& v) {
              {"targets", v.targets}};
     put_opt(j, "mode", v.mode);
     put_opt(j, "consolidation_mode", v.consolidation_mode);
+    if (v.objective) j["objective"] = *v.objective;
 }
 void from_json(const Json& j, MoveInProgress& v) {
     j.at("unit").get_to(v.unit);
@@ -130,6 +131,8 @@ void from_json(const Json& j, MoveInProgress& v) {
     j.at("pending_mortal_wounds").get_to(v.pending_mortal_wounds);
     j.at("targets").get_to(v.targets);
     get_opt(j, "consolidation_mode", v.consolidation_mode);
+    v.objective.reset();
+    if (j.contains("objective")) v.objective = j.at("objective").get<std::size_t>();
 }
 void to_json(Json& j, ConsolidationMode v) { j = std::string(consolidation_mode_name(v)); }
 void from_json(const Json& j, ConsolidationMode& v) {

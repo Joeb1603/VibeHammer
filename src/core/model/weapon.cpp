@@ -77,6 +77,7 @@ WeaponAbility parse_weapon_ability(std::string_view text) {
     if (n == "hazardous") return ability::Hazardous{};
     if (n == "devastating wounds") return ability::DevastatingWounds{};
     if (n == "extra attacks") return ability::ExtraAttacks{};
+    if (n == "ignores cover") return ability::IgnoresCover{};  // 24.18 (M90)
     if (const auto x = parse_suffix_int(n, "rapid fire", std::nullopt)) {
         return ability::RapidFire{*x};  // 24.30: always [RAPID FIRE X]
     }

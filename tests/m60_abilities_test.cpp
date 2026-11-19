@@ -719,7 +719,8 @@ TEST(D071_UnknownAbilities, EveryRosterProfileWithAnUnknownAbilityIsRefused) {
             }
         }
     }
-    EXPECT_GT(refused, 5);  // Lethal Hits, Anti-X, Melta, Ignores Cover, Psychic, ... on the roster datasheets
+    // Lethal Hits, Anti-X, Melta, Psychic, ... on the roster datasheets (M90: no longer Ignores Cover, D-091).
+    EXPECT_GE(refused, 5);
 }
 
 TEST(D071_UnknownAbilities, NoWeaponEquippedInTheOldScenariosIsRefused) {

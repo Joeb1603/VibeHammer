@@ -155,10 +155,12 @@ struct FightStepEnded {  // 12.04 / Appendix: why the Fight step ended
     std::string reason;
     friend bool operator==(const FightStepEnded&, const FightStepEnded&) = default;
 };
-struct ConsolidationStarted {  // 12.08 Before Moving: the mode and the selected enemy units
+struct ConsolidationStarted {  // 12.08 Before Moving: the mode and the selected enemy units or objective
     UnitId unit;
     ConsolidationMode mode = ConsolidationMode::Ongoing;
     std::vector<UnitId> targets;
+    std::optional<std::size_t> objective{};  // M90 (D-091): Objective Consolidation's area; JSON omits it when empty
+    std::string objective_name{};             // its name, for the log (as ObjectiveControlChanged); omitted when empty
     friend bool operator==(const ConsolidationStarted&, const ConsolidationStarted&) = default;
 };
 struct UnitsForcedToFight {  // 12.08 Engaging Consolidation After Moving

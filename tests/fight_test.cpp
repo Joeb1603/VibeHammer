@@ -605,9 +605,28 @@ TEST(R12_08_ConsolidationMove, AUnitThatMeetsNoModeCannotConsolidate) {
                        Position{east.position.x + kMarineRadius + kGantRadius + in(3.5f), east.position.y, 0});
     to_fight_step(gs);
     marines_destroy_the_termagants(gs);
-    // Unengaged, no enemy unit within 3" and no objectives in V1 (D-022): the Consolidate step asks nothing.
+    // Unengaged, no enemy unit within 3" and no mission, so no objectives (D-022, D-091): the Consolidate step asks
+    // nothing.
     EXPECT_FALSE(consolidation_mode(gs, gs.units[kMarines]).has_value());
     EXPECT_EQ(*gs.pending, (PendingDecision{Side::B, decision::MoveUnits{}}));
+}
+
+TEST(R12_08_ConsolidationMove, WithAnObjectiveWithin3InchesTheSameUnitMakesAnObjectiveConsolidation) {
+    // M90 (D-091): the same fight with a mission whose one objective is under the easternmost Intercessor. A mission
+    // now changes the outcome of D-022's case: the unit is within 3" of an objective, so Objective Consolidation.
+    GameState gs = after_successful_charge();
+    const Model& east = gs.units[kMarines].models[4];
+    add_one_model_unit(gs, kGants,
+                       Position{east.position.x + kMarineRadius + kGantRadius + in(3.5f), east.position.y, 0});
+    Mission mission;
+    mission.objectives.push_back(wh40k::test::objective_area("Centre", east.position, 2.0f));
+    gs.mission = mission;
+    to_fight_step(gs);
+    marines_destroy_the_termagants(gs);
+    EXPECT_EQ(consolidation_mode(gs, gs.units[kMarines]), ConsolidationMode::Objective);
+    EXPECT_EQ(*gs.pending, (PendingDecision{Side::A, decision::Consolidate{}}));
+    EXPECT_EQ(legal_actions(gs, Side::A),
+              (std::vector<GameAction>{action::EndConsolidations{}, action::StartConsolidation{id_of(gs, kMarines), {}, 0}}));
 }
 
 // ==== D-026: weapons with abilities V1 does not implement ====

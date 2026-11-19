@@ -15,6 +15,7 @@
 #include "core/geometry/engagement.hpp"
 #include "core/geometry/oval.hpp"
 #include "core/model/keywords.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "base_shape.hpp"
 #include "fight_move_skip.hpp"
@@ -94,9 +95,12 @@ std::vector<const core::Model*> target_models(const core::GameState& state) {
 // keeps sqrt and the subtractions in order), so each group's least squared distance gives its least gap exactly.
 // D-074 part 3 (M66): a group with an oval base on either side measures each target with core's pose-aware
 // base_distance (the model at its facing), as gap_to_closest_target does.
+// M90 (D-091): in an Objective Consolidation the gap is to the objective instead (objective_gap_mm, 0 within range),
+// as gap_to_closest_target measures it.
 class TargetGap {
 public:
-    TargetGap(const core::GameState& work, const core::Model& model) : base_(model.base), facing_(model.facing_deg) {
+    TargetGap(const core::GameState& work, const core::Model& model)
+        : base_(model.base), facing_(model.facing_deg), objective_(core::move_objective(work, *work.flow.move)) {
         for (const core::Model* t : target_models(work)) {
             auto g = std::find_if(groups_.begin(), groups_.end(), [&](const Group& x) { return x.base == t->base; });
             if (g == groups_.end()) g = groups_.insert(groups_.end(), Group{t->base, {}, {}});
@@ -105,6 +109,7 @@ public:
         }
     }
     [[nodiscard]] std::optional<float> at(const core::Position& p) const {
+        if (objective_ != nullptr) return core::objective_gap_mm(core::BasePose{p, base_, facing_}, *objective_);
         std::optional<float> gap;
         for (const Group& g : groups_) {
             float d = 0.0f;
@@ -139,6 +144,7 @@ private:
     };
     core::Base base_;
     float facing_ = 0.0f;
+    const core::ObjectiveArea* objective_ = nullptr;
     std::vector<Group> groups_;
 };
 
@@ -180,6 +186,18 @@ void candidates(const core::GameState& work, const core::Unit& unit, const core:
         if (nearest == nullptr || g < nearest_gap) {
             nearest = t;
             nearest_gap = g;
+        }
+    }
+    // M90 (D-091): in an Objective Consolidation (no target models), the direct line towards the area's centre until
+    // the model is within range of it (or as far as it can go).
+    if (const core::ObjectiveArea* objective = core::move_objective(work, *work.flow.move)) {
+        const core::BasePose area = core::objective_area_pose(*objective);
+        const float gap = core::base_distance(from_pose, area);
+        if (gap > 0.0f) {
+            // Just inside the area (a gap of -kContactNudgeMm): within range, with no rounding left to spoil it.
+            const float along = distance_until_gap(from_pose, area, -kContactNudgeMm);
+            points.push_back(towards(reach.from, objective->centre, std::min(along, reach.remaining_mm)));
+            on_ray.push_back(kOffRay);
         }
     }
     if (nearest != nullptr && nearest_gap > 0.0f) {
@@ -375,6 +393,47 @@ Pass place_models(const core::GameState& state, const std::vector<core::ModelId>
     return Pass{std::move(result), score_of(work.state())};
 }
 
+// M90 (D-091): an Objective Consolidation's third arrangement: the whole unit straight towards the area's centre (as
+// seen from its closest model) by the distance that model needs to be within range, so the unit keeps its formation
+// and its coherency (03.03). Each placement still goes through GameSession::submit. A unit whose models are spread
+// round the area may not get every model closer this way; then the engine refuses a placement and this arrangement
+// is dropped.
+Pass translate_models(const core::GameState& state, const core::ObjectiveArea& objective) {
+    GameSession work(state);
+    const core::Unit& unit = *state.find_unit(state.flow.move->unit);
+    const core::BasePose area = core::objective_area_pose(objective);
+    const core::Model* closest = nullptr;
+    float closest_gap = 0.0f;
+    for (const core::Model& m : unit.models) {
+        const float g = core::objective_gap_mm(core::pose_of(m), objective);
+        if (closest == nullptr || g < closest_gap) {
+            closest = &m;
+            closest_gap = g;
+        }
+    }
+    AutoFightMove result;
+    const float d = closest == nullptr ? 0.0f : core::centre_distance(closest->position, objective.centre);
+    if (closest == nullptr || closest_gap <= 0.0f || !(d > 0.0f)) {
+        result.problems.push_back("no model can get closer");
+        return Pass{std::move(result), score_of(work.state())};
+    }
+    const float along = distance_until_gap(core::pose_of(*closest), area, -kContactNudgeMm);
+    const float dx = (objective.centre.x - closest->position.x) / d * along;
+    const float dy = (objective.centre.y - closest->position.y) / d * along;
+    for (const core::Model& m : unit.models) {
+        const core::GameAction move =
+            core::action::ProposeModelMove{m.id, {core::Position{m.position.x + dx, m.position.y + dy, 0.0f}}};
+        if (!work.submit(move).ok()) {
+            result.moves.clear();
+            result.problems = {"the unit can't move straight onto the objective"};
+            return Pass{std::move(result), score_of(state)};
+        }
+        result.moves.push_back(move);
+    }
+    result.problems = core::move_end_problems(work.state());
+    return Pass{std::move(result), score_of(work.state())};
+}
+
 }  // namespace
 
 bool auto_fight_move_available(const core::GameState& state) {
@@ -407,6 +466,16 @@ AutoFightMove auto_fight_move(const core::GameState& state) {
     Pass first = place_models(state, order, contact_cache);
     std::reverse(order.begin(), order.end());
     Pass second = place_models(state, order, contact_cache);
+    if (const core::ObjectiveArea* objective = core::move_objective(state, *state.flow.move)) {
+        // M90 (D-091): with the whole unit moved straight onto the area as a third arrangement, the best legal one.
+        Pass third = translate_models(state, *objective);
+        const Pass* best = nullptr;
+        for (const Pass* p : {&first, &second, &third}) {
+            if (p->result.ok() && (best == nullptr || better_score(p->score, best->score))) best = p;
+        }
+        if (best != nullptr) return best->result;
+        return AutoFightMove{{}, first.result.problems};
+    }
     if (first.result.ok() && second.result.ok()) {
         return better_score(second.score, first.score) ? second.result : first.result;
     }
@@ -416,10 +485,23 @@ AutoFightMove auto_fight_move(const core::GameState& state) {
 }
 
 FightMoveShape fight_move_shape(const core::GameState& state, core::UnitId unit_id,
-                                const std::vector<core::UnitId>& targets) {
+                                const std::vector<core::UnitId>& targets, const core::ObjectiveArea* objective) {
     FightMoveShape s;
     const core::Unit* unit = state.find_unit(unit_id);
     if (unit == nullptr) return s;
+    if (objective != nullptr) {
+        // M90 (D-091): measured to the objective; within range counts as engaged and in base contact.
+        for (const core::Model& m : unit->models) {
+            const float gap = core::objective_gap_mm(core::pose_of(m), *objective);
+            if (core::within_objective(core::pose_of(m), *objective)) {
+                ++s.engaged;
+                ++s.in_contact;
+            }
+            s.total_gap += gap;
+            s.links += friendly_links(*unit, m, m.position);
+        }
+        return s;
+    }
     std::vector<const core::Unit*> alive;
     for (const core::UnitId id : targets) {
         const core::Unit* t = state.find_unit(id);

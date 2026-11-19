@@ -96,8 +96,11 @@ std::optional<std::string> victory_points_text(const core::GameState& state) {
 std::vector<ObjectiveMark> objective_marks(const core::GameState& state) {
     std::vector<ObjectiveMark> out;
     if (!state.mission) return out;
+    const core::ObjectiveArea* consolidating =
+        state.flow.move ? core::move_objective(state, *state.flow.move) : nullptr;
     for (const core::ObjectiveArea& a : state.mission->objectives) {
         ObjectiveMark m;
+        m.consolidating = &a == consolidating;
         m.centre = a.centre;
         m.radius_mm = a.diameter_mm * 0.5f;
         m.controller = a.controller;

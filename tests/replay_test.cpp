@@ -22,11 +22,14 @@
 #include "core/engine/replay.hpp"
 #include "core/geometry/distance.hpp"
 #include "core/geometry/oval.hpp"
+#include "core/model/keywords.hpp"
+#include "core/rules/fight.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
 #include "core/state/deployment.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "support/army_fixtures.hpp"
 #include "support/engine_helpers.hpp"
@@ -1019,6 +1022,103 @@ Replay m86_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     return r;
 }
 
+
+// M90 (D-091): 12.08 Objective Consolidation on the objective scenario, from an embedded initial state: the Chaos
+// Terminator Squad (unit 3) set up in two ranks just south of the Centre, engaged with the east Termagants (unit 6)
+// cut down to two models. `ok` says whether the seed shows what it is about: the Terminators destroy the Termagants in
+// Side A's round-1 Fight phase, make an Objective Consolidation onto the Centre and so control it from the end of that
+// phase; `problem`, the first refused step.
+constexpr const char* kObjectiveScenario = "data/scenarios/incursion_objectives_44x60.json";
+constexpr std::uint64_t kM90Seed = 1;
+
+Replay m90_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M90: 12.08 Objective Consolidation on the objective scenario (an embedded initial state; D-091). The Chaos "
+        "Terminator Squad (unit 3) stands in two ranks of five 2\" apart, at y = 21\" and 19\" (x = 14\" to 22\"), just "
+        "south of the Centre; the east Termagants (unit 6), cut down to two models, stand at x = 23.85\", engaged with "
+        "the Terminators' east end. Every other unit is where the scenario sets it up. Round 1, Side A: every decision "
+        "takes its neutral answer (remain stationary, end each step, the first melee options, casualties in unit "
+        "order) until the Termagants are destroyed in the Fight phase. The Terminators are then unengaged, with no "
+        "enemy unit within 3\" and the Centre within 3\": Objective Consolidation onto the Centre, every model moved "
+        "straight north by what its closest model needs to be within range. Side A controls the Centre from the end of "
+        "that Fight phase. Stops at Side B's first Move Units decision.";
+    GameState init = load_scenario(repo_root() / kObjectiveScenario, repo_root());
+    Unit& terminators = *init.find_unit(UnitId{3});
+    Unit& gants = *init.find_unit(UnitId{6});
+    for (std::size_t i = 0; i < terminators.models.size(); ++i) {
+        terminators.models[i].position =
+            wh40k::test::at(14.0f + 2.0f * static_cast<float>(i % 5), i < 5 ? 21.0f : 19.0f);
+    }
+    gants.models.resize(2);
+    gants.models[0].position = wh40k::test::at(23.85f, 21.0f);
+    gants.models[1].position = wh40k::test::at(23.85f, 19.0f);
+    gants.starting_wounds = 2;  // D-076: as set up
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    std::vector<GameEvent> events = start_game(g);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    const auto side_a_consolidates = [&] {
+        return g.pending && *g.pending == PendingDecision{Side::A, decision::Consolidate{}};
+    };
+    while (!failed && g.pending && !side_a_consolidates() && g.flow.battle_round == 1 && turn_side(g) == Side::A) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !side_a_consolidates()) return r;
+    const Unit& unit = *g.find_unit(UnitId{3});
+    if (consolidation_mode(g, unit) != ConsolidationMode::Objective) return r;
+    act(action::StartConsolidation{UnitId{3}, {}, 0});
+    if (failed) return r;
+    const ObjectiveArea& centre = g.mission->objectives[0];
+    float gap = 0.0f;
+    for (std::size_t i = 0; i < unit.models.size(); ++i) {
+        const float d = objective_gap_mm(pose_of(unit.models[i]), centre);
+        if (i == 0 || d < gap) gap = d;
+    }
+    const float dy = gap + wh40k::test::in(0.05f);  // just within range
+    const std::vector<Model> models = unit.models;
+    for (const Model& m : models) {
+        act(action::ProposeModelMove{m.id, {Position{m.position.x, m.position.y + dy, 0.0f}}, {}});
+    }
+    act(action::CommitUnitMove{});
+    while (!failed && g.pending && !(*g.pending == PendingDecision{Side::B, decision::MoveUnits{}})) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !g.pending) return r;
+    r.expect = replay_expectation(g);
+    const auto started = events_of<event::ConsolidationStarted>(events);
+    const auto changed = events_of<event::ObjectiveControlChanged>(events);
+    const auto committed = events_of<event::UnitMoveCommitted>(events);
+    const bool consolidated =
+        std::any_of(committed.begin(), committed.end(), [](const event::UnitMoveCommitted& c) {
+            return c.unit == UnitId{3} && c.move_type == MoveType::Consolidation;
+        });
+    ok = is_destroyed(*g.find_unit(UnitId{6})) && started.size() == 1 &&
+         started[0] == event::ConsolidationStarted{UnitId{3}, ConsolidationMode::Objective, {}, 0, "Centre"} &&
+         consolidated && g.mission->objectives[0].controller == Side::A &&
+         std::any_of(changed.begin(), changed.end(),
+                     [](const event::ObjectiveControlChanged& c) { return c.objective == 0 && c.controller == Side::A; });
+    return r;
+}
+
 }  // namespace
 
 TEST(Replay, RandomGamesFromTheScenarioReplayIdentically) {
@@ -1707,6 +1807,14 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m86_problem.empty()) << m86_problem;
     EXPECT_TRUE(m86_shows_it) << "seed " << kM86Seed << " no longer takes the Centre and scores both sides";
     save_if_clean(m86, kReplayDir / "m86_objectives.json");
+
+    // M90 (D-091): an Objective Consolidation onto the Centre.
+    bool m90_shows_it = false;
+    std::string m90_problem;
+    const Replay m90 = m90_replay(kM90Seed, m90_shows_it, m90_problem);
+    ASSERT_TRUE(m90_problem.empty()) << m90_problem;
+    EXPECT_TRUE(m90_shows_it) << "seed " << kM90Seed << " no longer shows an Objective Consolidation onto the Centre";
+    save_if_clean(m90, kReplayDir / "m90_objective_consolidation.json");
 }
 
 // M74 (D-081): the replay's scenario file is the stock armies' custom battle set up by hand.
@@ -1767,6 +1875,46 @@ TEST(D084_Replay, TheObjectiveReplayTakesTheCentreAndScoresBothSides) {
     EXPECT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(ok);
     EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+}
+
+// M90 (D-091): the saved replay destroys the Termagants, consolidates the Terminators onto the Centre (Objective
+// Consolidation) and stops at Side B's first Move Units decision with Side A controlling the Centre.
+TEST(D091_Replay, TheObjectiveConsolidationReplayTakesTheCentre) {
+    const Replay saved = load_replay(kReplayDir / "m90_objective_consolidation.json");
+    EXPECT_FALSE(saved.initial.scenario.has_value());  // an embedded initial state
+    const ReplayResult run = run_replay(saved, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    const GameState& end = run.final_state;
+    EXPECT_EQ(end.flow.battle_round, 1);
+    EXPECT_EQ(end.pending, (PendingDecision{Side::B, decision::MoveUnits{}}));
+    EXPECT_TRUE(is_destroyed(*end.find_unit(UnitId{6})));
+    EXPECT_EQ(end.mission->objectives[0].controller, Side::A);
+    const auto started = events_of<event::ConsolidationStarted>(run.events);
+    ASSERT_EQ(started.size(), 1u);
+    EXPECT_EQ(started[0].mode, ConsolidationMode::Objective);
+    EXPECT_EQ(started[0].objective, std::optional<std::size_t>{0});
+    for (const Model& m : end.find_unit(UnitId{3})->models) {
+        EXPECT_TRUE(within(objective_gap_mm(pose_of(m), end.mission->objectives[0]), wh40k::test::in(3.0f)));
+    }
+    bool ok = false;
+    std::string problem;
+    const Replay again = m90_replay(kM90Seed, ok, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+}
+
+TEST(Replay, DISABLED_SearchM90Seed) {
+    for (std::uint64_t seed = 1; seed <= 60; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m90_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M90 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
 }
 
 TEST(Replay, DISABLED_SearchM72Seed) {

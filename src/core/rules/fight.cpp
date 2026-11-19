@@ -11,6 +11,7 @@
 #include "core/geometry/oval.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/charge.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -232,14 +233,21 @@ bool may_pass_fight(const GameState& state, Side side) {
 std::optional<ConsolidationMode> consolidation_mode(const GameState& state, const Unit& unit) {
     if (is_engaged(state, unit)) return ConsolidationMode::Ongoing;
     if (!enemy_units_within(state, unit, kEngagingRangeInches).empty()) return ConsolidationMode::Engaging;
-    return std::nullopt;  // Objective Consolidation needs objectives; V1 has none (D-022)
+    // M90 (D-091): objectives come from the mission; without one there is no Objective mode (D-022).
+    if (!objectives_within(state, unit, kObjectiveConsolidationRangeInches).empty()) return ConsolidationMode::Objective;
+    return std::nullopt;
 }
 
 std::vector<UnitId> consolidation_target_options(const GameState& state, const Unit& unit) {
     const auto mode = consolidation_mode(state, unit);
-    if (!mode) return {};
+    if (!mode || *mode == ConsolidationMode::Objective) return {};
     if (*mode == ConsolidationMode::Ongoing) return engaged_enemy_units(state, unit);
     return enemy_units_within(state, unit, kEngagingRangeInches);
+}
+
+std::vector<std::size_t> consolidation_objective_options(const GameState& state, const Unit& unit) {
+    if (consolidation_mode(state, unit) != ConsolidationMode::Objective) return {};
+    return objectives_within(state, unit, kObjectiveConsolidationRangeInches);
 }
 
 bool eligible_to_consolidate(const GameState& state, const Unit& unit) {
@@ -247,10 +255,33 @@ bool eligible_to_consolidate(const GameState& state, const Unit& unit) {
            consolidation_mode(state, unit).has_value();
 }
 
-std::optional<std::string> consolidation_targets_problem(const GameState& state, const Unit& unit,
-                                                         std::span<const UnitId> targets) {
+std::optional<std::string> consolidation_choice_problem(const GameState& state, const Unit& unit,
+                                                        std::span<const UnitId> targets,
+                                                        std::optional<std::size_t> objective) {
     const auto mode = consolidation_mode(state, unit);
     if (!mode) return "12.08: " + unit_label(unit.id) + " meets no consolidation mode's conditions";
+    if (*mode == ConsolidationMode::Objective) {
+        // M90 (D-091): select one of the objectives within 3", and no enemy unit.
+        if (!targets.empty()) {
+            return "12.08: " + unit_label(unit.id) +
+                   " has no enemy unit within 3\" (Objective Consolidation), so it selects an objective, not enemy units";
+        }
+        if (!objective) return "12.08: select one of the objectives within 3\" of " + unit_label(unit.id);
+        const std::vector<std::size_t> options = objectives_within(state, unit, kObjectiveConsolidationRangeInches);
+        if (std::find(options.begin(), options.end(), *objective) == options.end()) {
+            const bool known = state.mission && *objective < state.mission->objectives.size();
+            return "12.08: " +
+                   (known ? state.mission->objectives[*objective].name : "objective " + std::to_string(*objective)) +
+                   " is not an objective within 3\" of " + unit_label(unit.id) + " (Objective Consolidation)";
+        }
+        return std::nullopt;
+    }
+    if (objective) {
+        return "12.08: " + unit_label(unit.id) +
+               (*mode == ConsolidationMode::Ongoing ? " is engaged (Ongoing Consolidation)"
+                                                    : " is within 3\" of an enemy unit (Engaging Consolidation)") +
+               ", so it selects enemy units, not an objective";
+    }
     if (targets.empty()) return "12.08: select one or more enemy units";
     const std::vector<UnitId> options = consolidation_target_options(state, unit);
     for (std::size_t i = 0; i < targets.size(); ++i) {
@@ -270,6 +301,15 @@ std::optional<std::string> consolidation_targets_problem(const GameState& state,
         return "12.08: Ongoing Consolidation selects every enemy unit " + unit_label(unit.id) + " is engaged with";
     }
     return std::nullopt;
+}
+
+bool ends_within_or_closer_to_objective(const BasePose& start, const BasePose& end, const ObjectiveArea& area) {
+    if (within_objective(end, area)) return true;
+    const float after = objective_gap_mm(end, area);
+    if (!more_than(objective_gap_mm(start, area), after)) return false;
+    // D-074 part 2: a turn does not count as moving closer, so the start is also measured at the end facing.
+    if (start.base.shape == BaseShape::Round || footprint_turn_deg(start.facing_deg, end.facing_deg) == 0.0) return true;
+    return more_than(objective_gap_mm(BasePose{start.position, start.base, end.facing_deg}, area), after);
 }
 
 bool ends_closer_to_closest_target(const GameState& state, const Model& model, const Position& start,

@@ -31,6 +31,17 @@ inline constexpr int kMaxKillPoints = 100000;  // the points per kill VP step
 // edge-to-edge distance between the base and the area (0 when they overlap).
 [[nodiscard]] bool within_objective(const BasePose& pose, const ObjectiveArea& area);
 [[nodiscard]] float objective_gap_mm(const BasePose& pose, const ObjectiveArea& area);
+// The area as a round "base" of its diameter at its centre: what objective_gap_mm measures against (M90: the reach area
+// of an Objective Consolidation, 12.08, uses it as an obstacle pose).
+[[nodiscard]] BasePose objective_area_pose(const ObjectiveArea& area);
+
+// 12.08 (M90, D-091; 14.01 "measure to and from the closest part of it", D-009): the indices of the mission's objectives
+// that `unit` is within `inches` of, i.e. one or more of its models has a gap to the area of at most `inches` (EPS_MM
+// tolerance). A unit already within range of an area is within any distance of it. Empty without a mission.
+[[nodiscard]] std::vector<std::size_t> objectives_within(const GameState& state, const Unit& unit, float inches);
+
+// M90 (D-091): the objective an Objective Consolidation in progress selected, or nullptr for any other move.
+[[nodiscard]] const ObjectiveArea* move_objective(const GameState& state, const MoveInProgress& move);
 
 // 14.02: each player's level of control over the area: the sum of the OC characteristics of their models within range
 // of it. A model with OC '-' (including every model of a battle-shocked unit, 01.07) adds nothing.

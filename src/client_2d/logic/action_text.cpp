@@ -91,6 +91,12 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
             } else if constexpr (std::is_same_v<T, a::Fight>) {
                 return "Fight with " + unit_name(state, x.unit);
             } else if constexpr (std::is_same_v<T, a::StartConsolidation>) {
+                if (x.objective) {  // M90 (D-091): Objective Consolidation
+                    const bool known = state.mission && *x.objective < state.mission->objectives.size();
+                    return "Consolidate: " + unit_name(state, x.unit) + " onto " +
+                           (known ? state.mission->objectives[*x.objective].name
+                                  : "objective " + std::to_string(*x.objective));
+                }
                 return "Consolidate: " + unit_name(state, x.unit) + " towards " + units(state, x.targets);
             } else if constexpr (std::is_same_v<T, a::EndConsolidations>) {
                 return "End consolidation moves";

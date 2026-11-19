@@ -60,6 +60,7 @@ TEST(Serialization, EveryWeaponAbilityRoundTrips) {
         ability::RapidFire{2}, ability::Blast{3},   ability::TwinLinked{},
         ability::Torrent{},   ability::Hazardous{}, ability::DevastatingWounds{},
         ability::SustainedHits{2}, ability::ExtraAttacks{},  // M60 (24.36, 24.11)
+        ability::IgnoresCover{},                             // M90 (24.18)
         ability::Unknown{"Anti-Infantry 4+"}};
     // Guard: the list above covers every alternative of the variant.
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);

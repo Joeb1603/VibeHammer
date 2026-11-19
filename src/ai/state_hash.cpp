@@ -168,6 +168,10 @@ void add(Fnv1a& h, const core::FlowState& f) {
         h.i32(m.pending_mortal_wounds);
         for (const core::UnitId t : m.targets) add(h, t);
         add_opt_int(h, m.consolidation_mode);
+        if (m.objective) {  // M90 (D-091): only an Objective Consolidation's, so every older state hashes as before
+            h.u64(0x6f626a63ull);  // "objc"
+            h.u64(*m.objective);
+        }
     }
     h.flag(f.charge.has_value());
     if (f.charge) add(h, f.charge->unit);

@@ -162,6 +162,9 @@ void draw_objectives(const core::GameState& state, const BoardCamera& cam, float
         DrawCircleV(c, r, ColorAlpha(tint, m.controller ? 0.32f : 0.14f));
         const float thick = (m.secured ? 4.0f : 2.0f) * ui_scale;
         DrawRing(c, std::max(0.0f, r - thick), r, 0.0f, 360.0f, 96, ColorAlpha(tint, 0.9f));
+        if (m.consolidating) {  // M90 (D-091): the Objective Consolidation's area, outlined in gold
+            DrawRing(c, r, r + 3.0f * ui_scale, 0.0f, 360.0f, 96, Color{240, 200, 60, 230});
+        }
         const int size = 10 * std::max(1, static_cast<int>(std::lround(1.6f * ui_scale)));
         const int w = MeasureText(m.label.c_str(), size);
         const int tx = static_cast<int>(std::lround(c.x)) - w / 2;

@@ -864,8 +864,9 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
                 sel.target_models_at_selection = static_cast<int>(target.models.size());  // 24.05
                 core::AttackProfile ap = core::make_attack_profile(p, attack);
                 ap.hit_modifier += hit_modifier_of(facts, mv_model, p);  // D-077: 10.06 and 17.03, as the engine adds them
-                // M89 (D-090): 13.08 Benefit of Cover worsens the BS by 1 (D-089, as gather_attack_batches).
-                if (context.target_cover && ap.skill) *ap.skill += 1;
+                // M89 (D-090): 13.08 Benefit of Cover worsens the BS by 1 (D-089, as gather_attack_batches); not
+                // against an [IGNORES COVER] weapon (24.18, M90, D-091: the engine records no cover for it).
+                if (context.target_cover && ap.skill && !p.has<core::ability::IgnoresCover>()) *ap.skill += 1;
                 const core::SelectionDice sd = core::selection_dice(p, sel, attack);
                 std::vector<core::DiceExpr> random;
                 if (sd.random) random.push_back(*sd.random);  // D-069

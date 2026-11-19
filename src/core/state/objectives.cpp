@@ -19,14 +19,35 @@ namespace {
     throw DataError(std::string(where) + ": D-084: " + what);
 }
 
-BasePose area_pose(const ObjectiveArea& area) {
+}  // namespace
+
+BasePose objective_area_pose(const ObjectiveArea& area) {
     return BasePose{Position{area.centre.x, area.centre.y, 0.0f}, Base{BaseShape::Round, area.diameter_mm, 0.0f}, 0.0f};
 }
 
-}  // namespace
-
 float objective_gap_mm(const BasePose& pose, const ObjectiveArea& area) {
-    return base_distance(pose, area_pose(area));
+    return base_distance(pose, objective_area_pose(area));
+}
+
+const ObjectiveArea* move_objective(const GameState& state, const MoveInProgress& move) {
+    if (!move.objective || !state.mission || *move.objective >= state.mission->objectives.size()) return nullptr;
+    return &state.mission->objectives[*move.objective];
+}
+
+std::vector<std::size_t> objectives_within(const GameState& state, const Unit& unit, float inches) {
+    std::vector<std::size_t> out;
+    if (!state.mission) return out;
+    const float range = inches_to_mm(inches);
+    for (std::size_t i = 0; i < state.mission->objectives.size(); ++i) {
+        const ObjectiveArea& area = state.mission->objectives[i];
+        for (const Model& m : unit.models) {
+            if (within(objective_gap_mm(pose_of(m), area), range)) {
+                out.push_back(i);
+                break;
+            }
+        }
+    }
+    return out;
 }
 
 bool within_objective(const BasePose& pose, const ObjectiveArea& area) {

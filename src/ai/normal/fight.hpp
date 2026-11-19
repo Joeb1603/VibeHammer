@@ -73,6 +73,11 @@ struct FightMovePlan {
                                                                const core::GameAction& start, std::uint64_t seed,
                                                                const std::string& reason);
 
+// M90 (D-091): how many more of `unit`'s models are within range of the mission's objective `objective` in `after` than
+// in `before` (12.08 Objective Consolidation: the bot takes one only when this is positive; M91 weighs it).
+[[nodiscard]] int models_gained_in_range(const core::GameState& before, const core::GameState& after, core::UnitId unit,
+                                         std::size_t objective);
+
 // The decisions (each answers the pending decision; nullopt when the policy has no answer of its own, and the
 // caller uses the baseline's).
 [[nodiscard]] std::optional<PolicyResult> decide_fight_selection(analysis::OddsCache& cache,

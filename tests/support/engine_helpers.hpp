@@ -23,6 +23,7 @@
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
 #include "core/state/deployment.hpp"
+#include "core/state/mission.hpp"
 #include "core/state/queries.hpp"
 #include "test_helpers.hpp"
 
@@ -449,6 +450,39 @@ inline core::GameState consolidate_step_state() {
         core::apply_action(gs, decider(gs), first_melee_options(gs, unit), misses);
     }
     EXPECT_EQ(gs.flow.stage, core::Stage::Consolidate);
+    return gs;
+}
+
+// M90 (D-091): Objective Consolidation. consolidate_step_state with the Intercessors in a row along y = 4" (x = 6, 8,
+// 10, 12, 14"), the Termagants in a row along y = 20" (x = 1, 3, ... 19"), so no enemy unit is within 3", and a mission
+// with one objective, "Centre": a `diameter_in` circle at x = 10" whose closest part is `gap_in` north of the middle
+// Intercessor's base (a negative gap overlaps it). `pending` is recomputed: Side A's Consolidate decision when the area
+// is within 3".
+inline constexpr float kObjectiveRowYIn = 4.0f;
+inline core::Position objective_centre(float gap_in, float diameter_in) {
+    return core::Position{in(10.0f), in(kObjectiveRowYIn) + 16.0f + in(gap_in) + in(diameter_in) / 2.0f, 0.0f};
+}
+inline core::ObjectiveArea objective_area(std::string name, core::Position centre, float diameter_in) {
+    return core::ObjectiveArea{std::move(name), centre, in(diameter_in), {1, 1}, std::nullopt, std::nullopt};
+}
+inline core::GameState objective_consolidation_state(float gap_in = 2.0f, float diameter_in = 4.0f) {
+    core::GameState gs = consolidate_step_state();
+    for (std::size_t i = 0; i < gs.units[0].models.size(); ++i) {
+        gs.units[0].models[i].position = at(6.0f + 2.0f * static_cast<float>(i), kObjectiveRowYIn);
+    }
+    for (std::size_t i = 0; i < gs.units[1].models.size(); ++i) {
+        gs.units[1].models[i].position = at(1.0f + 2.0f * static_cast<float>(i), 20.0f);
+    }
+    core::Mission mission;
+    mission.objectives.push_back(objective_area("Centre", objective_centre(gap_in, diameter_in), diameter_in));
+    gs.mission = mission;
+    gs.result_rule = core::ResultRule::Mission;  // D-084: a mission and its result go together
+    for (core::Unit& u : gs.units) {             // D-076: a mission needs every unit's points
+        u.points = u.side == core::Side::A ? 80 : 55;
+        u.starting_wounds = 0;
+        for (const core::Model& m : u.models) u.starting_wounds += m.characteristics.wounds;
+    }
+    gs.pending = core::compute_decision(gs);
     return gs;
 }
 

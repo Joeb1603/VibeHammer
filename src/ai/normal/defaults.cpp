@@ -364,7 +364,15 @@ PolicyResult default_answer(const GameState& gs, core::Side side, const std::vec
             if (!unit || !client::fight_move_worthwhile(gs, side, a)) continue;
             const std::string reason =
                 unit_name(gs, *unit) + (pile_in ? ": pile in (auto move)" : ": consolidate (auto move)");
-            if (auto plan = simulate_fight_move(gs, side, a, seed, reason)) return from_plan(std::move(plan->steps));
+            if (auto plan = simulate_fight_move(gs, side, a, seed, reason)) {
+                // M90 (D-091): an Objective Consolidation only if it adds models within range of the area.
+                const auto* c = std::get_if<action::StartConsolidation>(&a);
+                if (c != nullptr && c->objective &&
+                    models_gained_in_range(gs, plan->after, c->unit, *c->objective) <= 0) {
+                    continue;
+                }
+                return from_plan(std::move(plan->steps));
+            }
         }
         if (end) return single(gs, *end, pile_in ? "no pile-in worth making" : "no consolidation worth making");
     }

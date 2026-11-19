@@ -605,8 +605,9 @@ TEST(D069_RandomCharacteristics, TheRosterWeaponsWithARandomAOrDCanBeSelected) {
     }
     // Still refused for another ability.
     EXPECT_TRUE(starts_with(*unimplemented_ability_problem(profile("havocs", "Meltagun")), "D-071: "));
-    EXPECT_TRUE(starts_with(*unimplemented_ability_problem(profile("havocs", "Flamer")), "D-071: "));
-    EXPECT_TRUE(starts_with(*unimplemented_ability_problem(profile("chaos_terminator_squad", "Heavy flamer")), "D-071: "));
+    // M90 (D-091): the Flamer and the Heavy flamer (D6 attacks, [IGNORES COVER], [TORRENT]) can be selected now.
+    EXPECT_FALSE(unimplemented_ability_problem(profile("havocs", "Flamer")).has_value());
+    EXPECT_FALSE(unimplemented_ability_problem(profile("chaos_terminator_squad", "Heavy flamer")).has_value());
     EXPECT_TRUE(starts_with(*unimplemented_ability_problem(profile("termagants", "Strangleweb")), "24.10: "));
 
     // On the roster fixture the Havocs are offered their lascannons in their first Shooting phase.

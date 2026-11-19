@@ -107,6 +107,7 @@ std::string weapon_ability_label(const core::WeaponAbility& ability) {
             else if constexpr (std::is_same_v<T, ab::DevastatingWounds>) return "[DEVASTATING WOUNDS]";
             else if constexpr (std::is_same_v<T, ab::SustainedHits>) return "[SUSTAINED HITS " + std::to_string(a.x) + "]";
             else if constexpr (std::is_same_v<T, ab::ExtraAttacks>) return "[EXTRA ATTACKS]";
+            else if constexpr (std::is_same_v<T, ab::IgnoresCover>) return "[IGNORES COVER]";
             else return "[" + upper(a.text) + "]";
         },
         ability);

@@ -279,6 +279,7 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     std::size_t logged = 0;
     TeamworkCounter teamwork;  // M78 (D-083 part 0)
     teamwork.observe({}, session.state());
+    std::optional<core::UnitId> objective_mover;  // M90: the unit of the Objective Consolidation in progress
     // After every accepted action (so the state is the one right after it, for M78's statistics).
     const auto count_new = [&] {
         for (; logged < session.log().size(); ++logged) {
@@ -289,11 +290,17 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
                 if (const auto* r = std::get_if<core::event::ModelRemovedForCoherency>(&e)) {
                     if (const core::Unit* u = session.state().find_unit(r->unit)) ++rec.coherency_removed[core::side_index(u->side)];
                 }
+                if (const auto* s = std::get_if<core::event::ConsolidationStarted>(&e)) {
+                    objective_mover = s->objective ? std::optional<core::UnitId>(s->unit) : std::nullopt;
+                }
                 if (const auto* c = std::get_if<core::event::UnitMoveCommitted>(&e)) {
                     const bool fight_move =
                         c->move_type == core::MoveType::PileIn || c->move_type == core::MoveType::Consolidation;
                     const core::Unit* u = session.state().find_unit(c->unit);
                     if (fight_move && u != nullptr) ++rec.fight_moves[core::side_index(u->side)];
+                    if (c->move_type == core::MoveType::Consolidation && objective_mover == c->unit && u != nullptr) {
+                        ++rec.objective_consolidations[core::side_index(u->side)];  // M90 (D-091)
+                    }
                 }
             }
         }
@@ -406,6 +413,7 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
         for (std::size_t s = 0; s < 2; ++s) {
             r.fight_move_steps[s] += g.fight_move_steps[s];
             r.fight_moves[s] += g.fight_moves[s];
+            r.objective_consolidations[s] += g.objective_consolidations[s];  // M90
             r.mean_points_destroyed[s] += g.points_destroyed[s];
             r.mean_objective_vp[s] += g.objective_vp[s];  // M86
             r.mean_kill_vp[s] += g.kill_vp[s];
@@ -585,6 +593,12 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                 areas += buf;
             }
             out += "mean objective VP by area (M87): " + areas + "\n";
+        }
+        {  // M90 (D-091): 12.08 Objective Consolidations committed, per game
+            const double n = r.games.empty() ? 1.0 : static_cast<double>(r.games.size());
+            std::snprintf(buf, sizeof buf, "objective consolidations a game (M90): A %.2f, B %.2f\n",
+                          r.objective_consolidations[0] / n, r.objective_consolidations[1] / n);
+            out += buf;
         }
     }
     if (scenario.result_rule == core::ResultRule::PointsDestroyed) {  // M67 (D-076): only for such a scenario

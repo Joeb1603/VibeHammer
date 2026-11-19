@@ -10,6 +10,7 @@
 
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
+#include "core/state/mission.hpp"
 
 namespace wh40k::client {
 
@@ -33,6 +34,10 @@ struct AutoFightMove {
 // target (D-049) only moves straight into base contact. It is tried in that order and in reverse; of the
 // results that pass the engine's end-of-move checks, the one with more models in base contact (then less
 // total gap) is kept. If neither passes, `problems` says why.
+// M90 (D-091): in an Objective Consolidation the target is the objective: "closest" and "base contact" are the gap to
+// the area and being within range of it (gap 0), the direct line goes towards the area's centre, and a third
+// arrangement is tried, the whole unit moved straight towards the area by what its closest model needs (it keeps its
+// formation); the best of the three that pass is kept.
 [[nodiscard]] AutoFightMove auto_fight_move(const core::GameState& state);
 
 // D-057 (M46): how close a unit stands to the target units of a pile-in or consolidation, and how tightly
@@ -46,8 +51,11 @@ struct FightMoveShape {
 };
 
 // D-057: the shape of `unit` against `targets` in `state`. All zero if the unit or every target is gone.
+// M90 (D-091): with `objective` (an Objective Consolidation's area) the targets are ignored and each model is measured
+// to the area instead: a model within range of it counts as engaged and in base contact.
 [[nodiscard]] FightMoveShape fight_move_shape(const core::GameState& state, core::UnitId unit,
-                                              const std::vector<core::UnitId>& targets);
+                                              const std::vector<core::UnitId>& targets,
+                                              const core::ObjectiveArea* objective = nullptr);
 
 // D-057: `after` minus `before`, field by field (a negative total_gap means the unit got closer).
 [[nodiscard]] FightMoveShape shape_change(const FightMoveShape& before, const FightMoveShape& after);

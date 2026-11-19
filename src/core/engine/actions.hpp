@@ -128,10 +128,12 @@ struct Fight {
     friend bool operator==(const Fight&, const Fight&) = default;
 };
 // 12.08 Before Moving: the selected enemy units (the mode is the first that applies), then the models
-// move (03.01).
+// move (03.01). Objective Consolidation (M90, D-091) selects one objective instead: `objective` is its index into
+// GameState::mission->objectives and `targets` is empty. JSON omits `objective` when it is empty.
 struct StartConsolidation {
     UnitId unit;
     std::vector<UnitId> targets;
+    std::optional<std::size_t> objective{};
     friend bool operator==(const StartConsolidation&, const StartConsolidation&) = default;
 };
 // 12.07: this player makes no more consolidation moves this step.

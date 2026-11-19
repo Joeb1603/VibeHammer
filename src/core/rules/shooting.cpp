@@ -487,7 +487,8 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
             sel.hit_modifier -= 1;
             sel.hit_modifier_rules.push_back(HitModifierRule::EngagedMonsterTarget);
         }
-        if (!state.terrain.empty() && target != nullptr) {
+        // 24.18 (M90, D-091): the target can't have the benefit of cover against an [IGNORES COVER] weapon's attacks.
+        if (!state.terrain.empty() && target != nullptr && !profile.has<ability::IgnoresCover>()) {
             // 13.08 (D-089): decided when the targets are selected; models lost later don't change it.
             if (!view) view.emplace(state);
             const auto key = std::make_pair(s.model.v, s.target.v);

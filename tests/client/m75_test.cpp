@@ -132,9 +132,10 @@ TEST(M75_ArmyBuilder, AddUnitUsesPlayableDefaults) {
     EXPECT_EQ(b.selected_side(), Side::A);
     EXPECT_EQ(b.selected_unit(), before + 2);  // the unit just added is selected
     EXPECT_TRUE(b.edited(Side::A));
-    // Chaos Lord: no Daemon hammer (its BSData default, refused); Havoc Champion: no Flamer; Terminators: no combi-weapon.
+    // Chaos Lord: no Daemon hammer (its BSData default, refused); Terminators: no combi-weapon. M90 (D-091): the Havoc
+    // Champion keeps its default Flamer, which [IGNORES COVER] no longer refuses.
     EXPECT_FALSE(carries(units[before], "Daemon hammer"));
-    EXPECT_FALSE(carries(units[before + 1], "Flamer"));
+    EXPECT_TRUE(carries(units[before + 1], "Flamer"));
     EXPECT_FALSE(carries(units[before + 2], "Combi-weapon"));
     for (std::size_t i = before; i < units.size(); ++i) {
         const core::Datasheet sheet = *b.datasheet(Side::A, i);
@@ -178,12 +179,12 @@ TEST(M75_ArmyBuilder, RefusedOptionsAreGreyedWithTheReason) {
     EXPECT_EQ(b.list(Side::A).units[lord].models[0].weapons, (std::vector<std::string>{"Accursed weapon", "Plasma pistol"}));
     EXPECT_EQ(b.groups(Side::A, lord)[0].slots[0].chosen, 1u);
     EXPECT_TRUE(b.edited(Side::A));
-    // The Havoc Champion's Flamer and Meltagun are refused; the rest of that slot is pickable.
+    // The Havoc Champion's Meltagun is refused; the rest of that slot is pickable (M90: the Flamer too, D-091).
     const std::size_t havocs = unit_of(b, Side::A, "data/units/havocs.json");
     const std::vector<GroupView> havoc_groups = b.groups(Side::A, havocs);
     const SlotView& ranged = havoc_groups[0].slots[1];
     for (const OptionView& o : ranged.options) {
-        EXPECT_EQ(o.refusal.has_value(), o.name == "Flamer" || o.name == "Meltagun") << o.name;
+        EXPECT_EQ(o.refusal.has_value(), o.name == "Meltagun") << o.name;
     }
     // Option points: the Tyrannofex's Rupture cannon (+20) and Acid spray (+10).
     ArmyBuilder t = builder();
@@ -217,12 +218,13 @@ TEST(M75_ArmyBuilder, UnavailableModelTypesHaveReasons) {
             EXPECT_EQ(*refused, *t.unavailable);
         }
     }
-    for (const char* name : {"Heavy weapon", "Chainfist and combi-bolter", "Chainfist and combi-weapon",
+    for (const char* name : {"Chainfist and combi-bolter", "Chainfist and combi-weapon",
                              "Accursed weapon and combi-weapon", "Power fist and combi-weapon"}) {
         EXPECT_TRUE(type_view(types, name).unavailable) << name;
     }
     EXPECT_NE(type_view(types, "Chainfist and combi-bolter").unavailable->find("Chainfist"), std::string::npos);
-    EXPECT_NE(type_view(types, "Heavy weapon").unavailable->find("Ranged weapon"), std::string::npos);
+    // M90 (D-091): the Heavy weapon type's default Heavy flamer can be picked now.
+    EXPECT_FALSE(type_view(types, "Heavy weapon").unavailable);
     EXPECT_FALSE(type_view(types, "Power fist and combi-bolter").unavailable);
     EXPECT_TRUE(type_view(types, "Terminator Champion").has_options);
     EXPECT_FALSE(type_view(types, "Paired accursed weapons").has_options);

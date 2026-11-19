@@ -55,6 +55,7 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
                                          ability::RapidFire{2}, ability::Blast{1},    ability::TwinLinked{},
                                          ability::Torrent{},    ability::Hazardous{}, ability::DevastatingWounds{},
                                          ability::SustainedHits{1}, ability::ExtraAttacks{},
+                                         ability::IgnoresCover{},  // M90 (24.18)
                                          ability::Unknown{"Lethal Hits"}};
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const WeaponAbility& a : all) expect_readable(weapon_ability_help(a));
@@ -69,6 +70,10 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
     EXPECT_TRUE(weapon_ability_help(ability::SustainedHits{1}).in_this_game);
     EXPECT_EQ(weapon_ability_help(ability::ExtraAttacks{}).rule, "24.11");
     EXPECT_TRUE(weapon_ability_help(ability::ExtraAttacks{}).in_this_game);
+    // M90 (D-091): 24.18 is in the game now.
+    EXPECT_EQ(weapon_ability_help(ability::IgnoresCover{}).title, "[IGNORES COVER]");
+    EXPECT_EQ(weapon_ability_help(ability::IgnoresCover{}).rule, "24.18");
+    EXPECT_TRUE(weapon_ability_help(ability::IgnoresCover{}).in_this_game);
 }
 
 TEST(M24_RulesHelp, EveryKeywordOnTheDatasheetsHasPlainHelp) {
