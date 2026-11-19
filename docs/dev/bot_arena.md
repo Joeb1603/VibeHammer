@@ -74,6 +74,13 @@ data/scenarios/incursion_terrain_44x60.json` with `--deploy auto` and `--deploy 
 identical to the M88 binary. At the default weights the M89 binary is the reference for the four terrain runs; add
 them to the set from M89 on.
 
+M90 (D-091) changes the rules under a mission (12.08 Objective Consolidation) and makes the flamers selectable (24.18
+[IGNORES COVER]), so the random armies draw them. The proof that nothing else changed: V1, both bot scenarios, Strike
+and the rosters (no mission, no flamer) identical to the M89 binary (M90: 1,000 of 1,000 games). Every mission run (the
+objective scenario, the terrain runs, the M73 lists) and every `--random-armies` run changes on purpose; the M90 binary
+is their reference. The M89 identity step "the terrain runs at `cover=0` as the M88 binary" no longer holds under M90's
+rules (`M89_Regression` pins the M88 bot's game under M90's rules instead).
+
 ## Deployment and the summary
 
 - The deployment step only exists in a scenario with `"deployment": "alternating"` (D-081). The bot sets up by M77's
@@ -97,3 +104,5 @@ them to the set from M89 on.
 - M89 (D-090) adds, on a battlefield with terrain, the `cover (M89)` line: the same counts as the `terrain (M88)` line
   read by the target's side (the enemy's ranged weapon selections into each side's units that had cover, and each
   side's units refused to an enemy shooter for Hidden or for terrain, per game). The `--per-game` line is unchanged.
+- M90 (D-091) adds, for a mission scenario, `objective consolidations a game (M90): A x, B y`: the Objective
+  Consolidations (12.08) committed per game and side. The `--per-game` line is unchanged.

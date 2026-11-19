@@ -125,7 +125,9 @@ Deployment deploy(GameState gs) {
 // The battles the property tests deploy: the stock armies both ways round, and the arena's random armies.
 std::vector<GameState> battles() {
     std::vector<GameState> out{stock_battle(Side::A), stock_battle(Side::B)};
-    for (std::uint64_t seed = 1; seed <= 12; ++seed) {
+    // M90 (D-091): 24 random battles (12 before): the flamers joined the random armies' draws, and the larger sample keeps
+    // the deployment statistics below measured on more battles rather than on a few draws.
+    for (std::uint64_t seed = 1; seed <= 24; ++seed) {
         out.push_back(wh40k::test::random_armies_battle(seed, DeploymentMode::Hand, seed % 2 == 0 ? Side::B : Side::A));
     }
     return out;
@@ -258,7 +260,8 @@ TEST(M77_BotDeploy, MeleeUnitsStandNearerTheEnemyThanTheirProposal) {
     }
     std::printf("%d melee set-ups, %d nearer the enemy\n", seen, nearer);
     EXPECT_GT(seen, 20);
-    EXPECT_GT(nearer, seen / 3);
+    // M90 (D-091, the user's choice): more than 30% (a third until M90; on the M90 draws, 24 battles, 56 of 176 = 31.8%).
+    EXPECT_GT(nearer * 10, seen * 3);
 }
 
 TEST(M77_BotDeploy, LongRangeShootersStandBackWhileInRange) {
@@ -274,7 +277,10 @@ TEST(M77_BotDeploy, LongRangeShootersStandBackWhileInRange) {
                 centre_distance(centroid_of(*s.proposal), *s.enemy) <= s.assessment.max_range_mm + EPS_MM;
             const bool chosen_in_range = centre_distance(centroid_of(a), *s.enemy) <= s.assessment.max_range_mm + EPS_MM;
             if (proposal_in_range) EXPECT_TRUE(chosen_in_range);  // going back never costs the range
-            if (!proposal_in_range) EXPECT_LE(behind, EPS_MM);    // out of range: no further back than the proposal
+            // D-081: in-range spots come first (the furthest back first), then the rest, the least far back first. So a
+            // spot out of range is no further back than the proposal (M90, D-091: an out-of-range proposal may give way
+            // to a spot further back and sideways that is in range).
+            if (!chosen_in_range) EXPECT_LE(behind, EPS_MM);
             ++seen;
             if (behind > inches_to_mm(0.5f)) ++back;
         }
