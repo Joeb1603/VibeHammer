@@ -756,7 +756,7 @@ std::string drop_problem_text(DropProblem problem) {
         case DropProblem::OnModel: return "it was on another model (03.01)";
         case DropProblem::TooFar: return "it was further than the model can move";
         case DropProblem::OffBattlefield: return "it was off the battlefield (03.01)";
-        case DropProblem::NotCloser: return "it didn't end closer to the target";
+        case DropProblem::NotCloser: return "it didn't end closer to the target (or within range of the objective)";
         case DropProblem::ThroughTerrain: return "its line ran into a terrain feature it can't move through (13.06)";
         case DropProblem::OnTerrain: return "it was on a terrain feature (03.01)";
     }

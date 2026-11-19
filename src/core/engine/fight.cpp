@@ -439,8 +439,16 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::Consol
     std::vector<GameAction> out{action::EndConsolidations{}};
     for (const Unit& u : state.units) {
         if (u.side != side || !eligible_to_consolidate(state, u)) continue;
+        const auto mode = consolidation_mode(state, u);
+        if (mode == ConsolidationMode::Objective) {
+            // M90 (D-091): one action per objective within 3".
+            for (const std::size_t o : consolidation_objective_options(state, u)) {
+                out.push_back(action::StartConsolidation{u.id, {}, o});
+            }
+            continue;
+        }
         const std::vector<UnitId> options = consolidation_target_options(state, u);
-        if (consolidation_mode(state, u) == ConsolidationMode::Ongoing) {
+        if (mode == ConsolidationMode::Ongoing) {
             out.push_back(action::StartConsolidation{u.id, options});
         } else {
             for (auto& s : nonempty_subsets(options)) out.push_back(action::StartConsolidation{u.id, std::move(s)});
@@ -461,7 +469,9 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
     if (!u->phase_flags.eligible_to_fight_this_phase) {
         return ValidationResult::failure("12.08: " + unit_label(a.unit) + " was not eligible to fight this phase");
     }
-    if (auto p = consolidation_targets_problem(state, *u, a.targets)) return ValidationResult::failure(std::move(*p));
+    if (auto p = consolidation_choice_problem(state, *u, a.targets, a.objective)) {
+        return ValidationResult::failure(std::move(*p));
+    }
     return ValidationResult::success();
 }
 
@@ -470,13 +480,16 @@ void apply_details(GameState& state, Side side, const action::StartConsolidation
     const Unit& u = *state.find_unit(a.unit);
     const ConsolidationMode mode = *consolidation_mode(state, u);  // 12.08: the first mode that applies
     state.flow.activation = Activation{u.id, ActivationKind::Move};
-    events.push_back(event::ConsolidationStarted{u.id, mode, a.targets});
+    std::string objective_name;
+    if (a.objective && state.mission) objective_name = state.mission->objectives[*a.objective].name;
+    events.push_back(event::ConsolidationStarted{u.id, mode, a.targets, a.objective, objective_name});
     events.push_back(event::MoveStarted{u.id, MoveType::Consolidation, std::nullopt});
     MoveInProgress mv;
     mv.unit = u.id;
     mv.type = MoveType::Consolidation;
     mv.targets = a.targets;
     mv.consolidation_mode = mode;
+    mv.objective = a.objective;  // M90 (D-091): Objective Consolidation only
     for (const Model& m : u.models) mv.starts.push_back(ModelStart{m.id, m.position, m.facing_deg});
     state.flow.move = std::move(mv);
 }

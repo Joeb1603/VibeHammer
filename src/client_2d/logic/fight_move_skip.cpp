@@ -12,6 +12,7 @@
 #include "core/geometry/oval.hpp"
 #include "core/model/keywords.hpp"
 #include "core/rules/fight.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "reach_area.hpp"
 
@@ -118,6 +119,10 @@ bool skips_fight_moves(const core::GameAction& a) {
 std::optional<float> gap_to_closest_target(const core::GameState& state, const core::Model& model,
                                            const core::Position& pos) {
     if (!state.flow.move) return std::nullopt;
+    // M90 (D-091): an Objective Consolidation's target is its objective: the gap to the area (0 within range).
+    if (const core::ObjectiveArea* area = core::move_objective(state, *state.flow.move)) {
+        return core::objective_gap_mm(core::BasePose{pos, model.base, model.facing_deg}, *area);
+    }
     std::optional<float> gap;
     for (const core::UnitId id : state.flow.move->targets) {
         const core::Unit* t = state.find_unit(id);

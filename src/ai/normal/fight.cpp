@@ -12,6 +12,7 @@
 #include "core/engine/movement.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/rules/fight.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "fight_move_skip.hpp"
 #include "normal/shooting.hpp"
@@ -522,14 +523,47 @@ std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, c
                   name_of(state, d.unit) + ": skip the Overrun pile-in (12.06): it would not gain anything");
 }
 
+int models_gained_in_range(const core::GameState& before, const core::GameState& after, core::UnitId unit,
+                           std::size_t objective) {
+    if (!before.mission || objective >= before.mission->objectives.size()) return 0;
+    const core::ObjectiveArea& area = before.mission->objectives[objective];
+    const auto count = [&](const core::GameState& gs) {
+        const core::Unit* u = gs.find_unit(unit);
+        if (u == nullptr) return 0;
+        return static_cast<int>(std::count_if(u->models.begin(), u->models.end(),
+                                               [&](const core::Model& m) { return core::model_within_objective(m, area); }));
+    };
+    return count(after) - count(before);
+}
+
 std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, const core::GameState& state,
                                                  core::Side side, const std::vector<core::GameAction>& legal,
                                                  std::uint64_t seed) {
     const double base = consolidation_score(cache, state, side);
     FightMoveCand best;  // not moving
+    // M90 (D-091): an Objective Consolidation is taken when its Auto move adds models within range of the area (the
+    // most added wins; ties go to the first offered). The objective terms weigh it in M91. A unit's starts are all
+    // Objective or none, so the other units' consolidations are weighed as before and go first.
+    std::optional<FightMovePlan> best_objective;
+    int best_gained = 0;
+    std::string objective_reason;
     for (const core::GameAction& a : legal) {
         const auto* s = std::get_if<core::action::StartConsolidation>(&a);
         if (s == nullptr || !client::fight_move_worthwhile(state, side, a)) continue;
+        if (s->objective) {
+            const std::string area = state.mission->objectives[*s->objective].name;
+            const std::string head = name_of(state, s->unit) + ": consolidate onto " + area;
+            std::optional<FightMovePlan> plan = simulate_fight_move(state, side, a, seed, head);
+            if (!plan) continue;
+            const int gained = models_gained_in_range(state, plan->after, s->unit, *s->objective);
+            if (gained > best_gained) {
+                best_gained = gained;
+                objective_reason = head + " (Objective Consolidation, 12.08): " + std::to_string(gained) +
+                                   (gained == 1 ? " more model" : " more models") + " within range";
+                best_objective = std::move(plan);
+            }
+            continue;
+        }
         const std::string head = name_of(state, s->unit) + ": consolidate towards " + names_of(state, s->targets);
         FightMoveCand c;
         c.plan = simulate_fight_move(state, side, a, seed, head);
@@ -540,6 +574,7 @@ std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, con
         if (beats(c, best)) best = std::move(c);
     }
     if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);
+    if (best_objective) return from_steps(std::move(best_objective->steps), objective_reason);
     return single(core::action::EndConsolidations{},
                   "End consolidations: no consolidation improves the position or closes in without a cost");
 }

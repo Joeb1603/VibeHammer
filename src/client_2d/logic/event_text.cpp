@@ -144,7 +144,9 @@ std::string body(const core::GameEvent& e) {
             } else if constexpr (std::is_same_v<T, ev::FightStepEnded>) {
                 return "Fight step ends: " + x.reason;
             } else if constexpr (std::is_same_v<T, ev::ConsolidationStarted>) {
-                return unit(x.unit) + " consolidates (" + std::string(core::consolidation_mode_name(x.mode)) + ")";
+                // M90 (D-091): "unit 1 consolidates (Objective, Centre)".
+                return unit(x.unit) + " consolidates (" + std::string(core::consolidation_mode_name(x.mode)) +
+                       (x.objective_name.empty() ? "" : ", " + x.objective_name) + ")";
             } else if constexpr (std::is_same_v<T, ev::UnitsForcedToFight>) {
                 std::string units;
                 for (const auto u : x.units) units += (units.empty() ? "" : ", ") + unit(u);

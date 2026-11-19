@@ -18,7 +18,8 @@ namespace {
 
 // D-006: abilities that still affect the attack from the hit roll onward, other than those already
 // captured by AttackProfile fields ([HEAVY] -> hit_modifier, [TORRENT] -> torrent). [EXTRA ATTACKS] is used
-// up in the Select Weapons step (24.11, D-071), like [ASSAULT].
+// up in the Select Weapons step (24.11, D-071), like [ASSAULT]. [IGNORES COVER] is used up in the Select Targets step,
+// where the selection's benefit of cover is decided (24.18, 13.08; M90, D-091).
 bool is_attack_time_ability(const WeaponAbility& a) {
     return std::visit(
         [](const auto& x) {
@@ -26,7 +27,7 @@ bool is_attack_time_ability(const WeaponAbility& a) {
             return !(std::is_same_v<T, ability::Assault> || std::is_same_v<T, ability::CloseQuarters> ||
                      std::is_same_v<T, ability::RapidFire> || std::is_same_v<T, ability::Blast> ||
                      std::is_same_v<T, ability::Heavy> || std::is_same_v<T, ability::Torrent> ||
-                     std::is_same_v<T, ability::ExtraAttacks>);
+                     std::is_same_v<T, ability::ExtraAttacks> || std::is_same_v<T, ability::IgnoresCover>);
         },
         a);
 }
@@ -247,6 +248,8 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
             e.active = true;
         } else if (std::holds_alternative<ability::ExtraAttacks>(a)) {
             e.active = context.type == AttackType::Fighting;  // 24.11: made in addition to another melee weapon
+        } else if (std::holds_alternative<ability::IgnoresCover>(a)) {
+            e.active = context.type == AttackType::Shooting;  // 24.18: the target can't have the benefit of cover
         }
         e.active = e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0;
         out.push_back(e);

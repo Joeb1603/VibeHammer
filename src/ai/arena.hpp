@@ -118,6 +118,7 @@ struct GameRecord {
     std::array<int, 2> coherency_removed{};  // M41: models each side removed to regain coherency (03.03)
     std::array<int, 2> fight_move_steps{};   // M46: bot decisions in a Pile In or Consolidate step (12.02, 12.07)
     std::array<int, 2> fight_moves{};        // M46: pile-ins and consolidations committed (12.03, 12.08)
+    std::array<int, 2> objective_consolidations{};  // M90 (D-091): Objective Consolidations committed (12.08)
     std::size_t steps = 0;                 // accepted actions, the client's automatic ones included
     std::size_t rejected = 0;               // bot actions the session refused
     std::size_t reverted = 0;               // UnitMoveReverted events
@@ -160,6 +161,7 @@ struct ArenaResult {
     std::array<int, 2> coherency_removed{};     // M41: total models removed for coherency, by side
     std::array<int, 2> fight_move_steps{};      // M46: totals, by side
     std::array<int, 2> fight_moves{};           // M46: totals, by side
+    std::array<int, 2> objective_consolidations{};  // M90 (D-091): totals, by side
     // M78 (D-083 part 0): every game's TeamworkStats summed (first_engagement_round: the rounds summed over the games
     // with an engagement), and by side the games with an engagement.
     TeamworkStats teamwork;

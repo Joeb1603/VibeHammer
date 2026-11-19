@@ -142,6 +142,9 @@ struct MoveInProgress {
     // 11.04 charge targets, 12.03 pile-in targets or 12.08 selected enemy units (Before Moving).
     std::vector<UnitId> targets;
     std::optional<ConsolidationMode> consolidation_mode;  // 12.08 consolidation moves only
+    // M90 (D-091): Objective Consolidation's selected objective, an index into GameState::mission->objectives.
+    // JSON omits it when empty, so older files load and save byte for byte.
+    std::optional<std::size_t> objective{};
     friend bool operator==(const MoveInProgress&, const MoveInProgress&) = default;
 };
 

@@ -475,14 +475,13 @@ TEST(D079_Character, AnArmyNeedsACharacter) {
 // ==== Refused weapons (agreed: greyed out with the reason) ====
 
 TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
-    // D-079 part 1's list: refused today from their abilities (D-026, D-071).
+    // D-079 part 1's list: refused today from their abilities (D-026, D-071). M90 (D-091): the Flamers and the Heavy
+    // flamer ([IGNORES COVER]) are no longer refused, so the "every other weapon" loop below checks them.
     const std::vector<std::pair<std::string, std::string>> refused = {
         {"chaos_lord", "Daemon hammer"},          {"chaos_terminator_squad", "Combi-weapon"},
-        {"chaos_terminator_squad", "Chainfist"},  {"chaos_terminator_squad", "Heavy flamer"},
-        {"chaos_terminator_squad", "Reaper autocannon"}, {"legionaries", "Meltagun"},
-        {"legionaries", "Flamer"},                {"havocs", "Meltagun"},
-        {"havocs", "Flamer"},                     {"legionaries", "Balefire tome"},
-        {"termagants", "Strangleweb"}};
+        {"chaos_terminator_squad", "Chainfist"},  {"chaos_terminator_squad", "Reaper autocannon"},
+        {"legionaries", "Meltagun"},              {"havocs", "Meltagun"},
+        {"legionaries", "Balefire tome"},         {"termagants", "Strangleweb"}};
     for (const auto& [ds, weapon] : refused) {
         const std::optional<std::string> r = weapon_refusal(sheet(ds), weapon);
         ASSERT_TRUE(r.has_value()) << ds << " " << weapon;
@@ -494,7 +493,7 @@ TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
         }
         EXPECT_EQ(r, engine);
     }
-    // Every other weapon of the ten is pickable: each of its profiles is playable.
+    // Every other weapon of the eight is pickable: each of its profiles is playable.
     std::set<std::string> refused_names;
     for (const auto& [ds, weapon] : refused) refused_names.insert(weapon);
     for (const Faction& f : wh40k::test::factions()) {
@@ -532,9 +531,9 @@ TEST(D079_Defaults, NewUnitsSkipRefusedWeapons) {
     };
     // The Lord's default Daemon hammer is refused: the first pickable option of that slot, the Accursed weapon.
     expect_unit("chaos_lord", {group("Chaos Lord", 1, {"Accursed weapon", "Plasma pistol"})}, 95);
-    // The Havoc Champion's default Flamer is refused: the first pickable ranged option, the Plasma pistol.
+    // The Havoc Champion keeps its BSData default Flamer (refused until M90, D-091, when the Plasma pistol was taken).
     expect_unit("havocs",
-                {group("Havoc Champion", 1, {"Astartes chainsword", "Plasma pistol"}),
+                {group("Havoc Champion", 1, {"Astartes chainsword", "Flamer"}),
                  group("Havoc w/ autocannon", 4, {"Havoc autocannon", "Close combat weapon"})},
                 135);
     expect_unit("chaos_terminator_squad",
@@ -560,7 +559,7 @@ TEST(D079_Defaults, NewUnitsSkipRefusedWeapons) {
 TEST(D079_Defaults, UnavailableModelTypes) {
     EXPECT_EQ(unavailable_model_types(sheet("chaos_terminator_squad")),
               (Names{"Accursed weapon and combi-weapon", "Power fist and combi-weapon", "Chainfist and combi-bolter",
-                     "Heavy weapon", "Chainfist and combi-weapon"}));
+                     "Chainfist and combi-weapon"}));  // M90 (D-091): the Heavy weapon type's Heavy flamer is playable
     EXPECT_EQ(unavailable_model_types(sheet("legionaries")), Names{"Legionary w/ balefire tome"});
     EXPECT_EQ(unavailable_model_types(sheet("termagants")), Names{"Termagant w/ Strangleweb"});
     for (const std::string& name : {"chaos_lord", "havocs", "genestealers", "tyrant_guard", "screamer_killer",
@@ -755,11 +754,12 @@ TEST(D079_RandomArmy, LegalAndDeterministic) {
     for (const char* w : {"Havoc autocannon", "Havoc reaper chaincannon", "Havoc missile launcher", "Power fist",
                           "Paired accursed weapons", "Reaper chaincannon", "Missile launcher", "Lascannon", "Shardlauncher",
                           "Spike rifle", "Termagant devourer", "Rupture cannon", "Acid spray", "Heavy venom cannon",
-                          "Stranglethorn cannon", "Bone cleaver, lash whip and rending claws"}) {
+                          "Stranglethorn cannon", "Bone cleaver, lash whip and rending claws",
+                          "Flamer", "Heavy flamer"}) {  // M90 (D-091): [IGNORES COVER] is implemented
         EXPECT_EQ(weapons.count(w), 1u) << w;
     }
-    for (const char* w : {"Daemon hammer", "Combi-weapon", "Chainfist", "Heavy flamer", "Reaper autocannon", "Meltagun",
-                          "Flamer", "Balefire tome", "Strangleweb"}) {
+    for (const char* w : {"Daemon hammer", "Combi-weapon", "Chainfist", "Reaper autocannon", "Meltagun", "Balefire tome",
+                          "Strangleweb"}) {
         EXPECT_EQ(weapons.count(w), 0u) << w;  // refused weapons are never picked
     }
     EXPECT_NE(random_army(csm(), army_resolver(), 1), random_army(csm(), army_resolver(), 2));

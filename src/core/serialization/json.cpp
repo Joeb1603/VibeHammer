@@ -125,6 +125,7 @@ void to_json(Json& j, const WeaponAbility& v) {
             else if constexpr (std::is_same_v<T, DevastatingWounds>) j = Json{{"kind", "DevastatingWounds"}};
             else if constexpr (std::is_same_v<T, SustainedHits>) j = Json{{"kind", "SustainedHits"}, {"x", a.x}};
             else if constexpr (std::is_same_v<T, ExtraAttacks>) j = Json{{"kind", "ExtraAttacks"}};
+            else if constexpr (std::is_same_v<T, IgnoresCover>) j = Json{{"kind", "IgnoresCover"}};
             else if constexpr (std::is_same_v<T, Unknown>) j = Json{{"kind", "Unknown"}, {"text", a.text}};
             else static_assert(sizeof(T) == 0, "unhandled WeaponAbility alternative");
         },
@@ -144,6 +145,7 @@ void from_json(const Json& j, WeaponAbility& v) {
     else if (kind == "DevastatingWounds") v = DevastatingWounds{};
     else if (kind == "SustainedHits") v = SustainedHits{j.at("x").get<int>()};
     else if (kind == "ExtraAttacks") v = ExtraAttacks{};
+    else if (kind == "IgnoresCover") v = IgnoresCover{};
     // D-071: text a file saved before the engine knew the ability (e.g. "Extra Attacks" before M60) is read
     // again, so an old save or replay gets the ability the text now names. Unrecognised text stays Unknown.
     else if (kind == "Unknown") v = parse_weapon_ability(j.at("text").get<std::string>());
@@ -534,6 +536,12 @@ void from_json(const Json& j, GameState& v) {
     check_undeployed(v);
     check_points_data(v, "state JSON");  // D-076: the points and their bounds (undeployed units included, D-081)
     check_mission_data(v, "state JSON");  // D-084
+    // M90 (D-091): an Objective Consolidation in progress names one of the mission's objectives.
+    if (v.flow.move && v.flow.move->objective &&
+        (!v.mission || *v.flow.move->objective >= v.mission->objectives.size())) {
+        throw DataError("state JSON: D-091: the move in progress names objective " +
+                        std::to_string(*v.flow.move->objective) + ", which the mission doesn't have");
+    }
     v.terrain.clear();
     if (j.contains("terrain")) j.at("terrain").get_to(v.terrain);  // D-087 (M88)
     check_terrain_data(v, "state JSON");

@@ -14,6 +14,7 @@
 #include "core/rules/attack_types.hpp"
 #include "core/rules/fight_types.hpp"
 #include "core/state/game_state.hpp"
+#include "core/state/mission.hpp"
 
 namespace wh40k::core {
 
@@ -21,6 +22,7 @@ inline constexpr float kPileInDistanceInches = 3.0f;         // 12.03 Maximum Di
 inline constexpr float kPileInTargetRangeInches = 5.0f;      // 12.03 Before Moving
 inline constexpr float kConsolidationDistanceInches = 3.0f;  // 12.08 Maximum Distance
 inline constexpr float kEngagingRangeInches = 3.0f;          // 12.08 Engaging Consolidation
+inline constexpr float kObjectiveConsolidationRangeInches = 3.0f;  // 12.08 Objective Consolidation (M90, D-091)
 inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligible to Fight, but Unable
 
 // ---- model-level engagement (03.04) ----
@@ -70,18 +72,34 @@ inline constexpr float kPassRangeInches = 5.0f;              // Appendix: Eligib
 // ---- 12.08 Consolidation move ----
 
 // 12.08 Before Moving: the first mode that applies (Ongoing if engaged, Engaging if within 3" of an
-// enemy unit; V1 has no objectives), or nullopt if none does (09 sidebar: it cannot make the move).
+// enemy unit, Objective if within 3" of one or more of the mission's objectives, M90, D-091), or nullopt if none does
+// (09 sidebar: it cannot make the move). Without a mission there is no Objective mode (D-022).
 [[nodiscard]] std::optional<ConsolidationMode> consolidation_mode(const GameState& state, const Unit& unit);
 
 // The enemy units the mode selects from: Ongoing, every engaged unit (all must be selected); Engaging,
-// those within 3" (one or more).
+// those within 3" (one or more); Objective, none.
 [[nodiscard]] std::vector<UnitId> consolidation_target_options(const GameState& state, const Unit& unit);
+// M90 (D-091): the objectives Objective Consolidation selects one from (indices into the mission's objectives, those
+// within 3" of the unit, 14.01 measuring to the closest part of the area); empty in the other modes.
+[[nodiscard]] std::vector<std::size_t> consolidation_objective_options(const GameState& state, const Unit& unit);
 
 // 12.08 Eligible If (was eligible to fight this phase), not consolidated this step, and a mode applies.
 [[nodiscard]] bool eligible_to_consolidate(const GameState& state, const Unit& unit);
 
-[[nodiscard]] std::optional<std::string> consolidation_targets_problem(const GameState& state, const Unit& unit,
-                                                                       std::span<const UnitId> targets);
+// 12.08 Before Moving: the selected enemy units and objective must fit the mode (rule-cited problem, or nullopt).
+// Ongoing and Engaging select enemy units and no objective; Objective (M90, D-091) selects one objective within 3" and
+// no enemy unit.
+[[nodiscard]] std::optional<std::string> consolidation_choice_problem(const GameState& state, const Unit& unit,
+                                                                      std::span<const UnitId> targets,
+                                                                      std::optional<std::size_t> objective);
+
+// 12.08 Objective Consolidation While Moving (M90, D-091): a moved model must end within range of the selected
+// objective, or closer to it than at its start (edge to edge to the area's closest part, 14.01). As
+// ends_closer_to_unit (D-074 part 2), a turn does not count as moving closer.
+// TODO(if-possible): 12.08 "within range of the selected objective if possible, or closer to it if not": the player
+// may take closer when within range was possible.
+[[nodiscard]] bool ends_within_or_closer_to_objective(const BasePose& start, const BasePose& end,
+                                                      const ObjectiveArea& area);
 
 // ---- shared While / After Moving checks (12.03, 12.08; D-022) ----
 

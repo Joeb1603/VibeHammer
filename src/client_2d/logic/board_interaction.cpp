@@ -535,6 +535,15 @@ ClickResult BoardInteraction::pick_actor(const core::GameState& state, core::Uni
         add_cancel(result.menu);
         return result;
     }
+    if (const auto* c = std::get_if<a::StartConsolidation>(&actions.front()); c != nullptr && c->objective) {
+        // M90 (D-091): an Objective Consolidation selects an objective, not enemy units: with one in range it starts
+        // at once, with several a menu names them (with Cancel).
+        if (actions.size() == 1) return ClickResult{actions.front(), {}};
+        ClickResult result;
+        for (const core::GameAction& action : actions) result.menu.push_back(action_entry(state, action));
+        add_cancel(result.menu);
+        return result;
+    }
     if (targets_of(actions.front()) != nullptr) {
         // Pile-in / consolidation: an engaged unit has one set of targets, so it starts at once.
         const bool one_set = std::all_of(actions.begin(), actions.end(), [&](const core::GameAction& action) {

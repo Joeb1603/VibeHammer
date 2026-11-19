@@ -50,6 +50,9 @@ struct SustainedHits {  // 24.36 [SUSTAINED HITS X]
 struct ExtraAttacks {  // 24.11
     friend bool operator==(const ExtraAttacks&, const ExtraAttacks&) = default;
 };
+struct IgnoresCover {  // 24.18 (M90, D-091): the target can't have the benefit of cover (13.08) against its attacks
+    friend bool operator==(const IgnoresCover&, const IgnoresCover&) = default;
+};
 // Anything not recognised. Loaded and displayed; a profile with one can't be selected (D-071).
 struct Unknown {
     std::string text;
@@ -60,7 +63,8 @@ struct Unknown {
 using WeaponAbility =
     std::variant<ability::Assault, ability::Heavy, ability::CloseQuarters, ability::RapidFire,
                  ability::Blast, ability::TwinLinked, ability::Torrent, ability::Hazardous,
-                 ability::DevastatingWounds, ability::SustainedHits, ability::ExtraAttacks, ability::Unknown>;
+                 ability::DevastatingWounds, ability::SustainedHits, ability::ExtraAttacks, ability::IgnoresCover,
+                 ability::Unknown>;
 
 // Never throws: unrecognised text becomes ability::Unknown{text}.
 [[nodiscard]] WeaponAbility parse_weapon_ability(std::string_view text);

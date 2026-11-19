@@ -25,6 +25,7 @@
 #include "core/rules/leadership.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/rules/terrain.hpp"
+#include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -392,9 +393,17 @@ ValidationResult validate_details(const GameState& state, Side, const action::Pr
             r.reasons.push_back(rule + ": " + model_label(a.model) +
                                 " is in base contact with an enemy model and cannot be moved");
         }
-        // Each model that is moved must end its move closer to the closest target (D-022; D-074: a turn does not
-        // count as moving closer).
-        if (!ends_closer_to_closest_target(state, start, end, mv.targets)) {
+        if (const ObjectiveArea* area = move_objective(state, mv)) {
+            // 12.08 Objective Consolidation While Moving (M90, D-091): each moved model ends within range of the
+            // selected objective, or closer to it (D-074: a turn does not count as moving closer).
+            // TODO(if-possible): 12.08 "within range ... if possible, or closer to it if not".
+            if (!ends_within_or_closer_to_objective(start, end, *area)) {
+                r.reasons.push_back("12.08: " + model_label(a.model) + " must end its move within range of " +
+                                    area->name + " or closer to it (Objective Consolidation)");
+            }
+        } else if (!ends_closer_to_closest_target(state, start, end, mv.targets)) {
+            // Each model that is moved must end its move closer to the closest target (D-022; D-074: a turn does not
+            // count as moving closer).
             r.reasons.push_back(rule + ": " + model_label(a.model) + " must end its move closer to the closest " +
                                 (pile_in ? "pile-in target" : "selected enemy unit"));
         }
@@ -725,6 +734,29 @@ std::optional<MoveReach> move_reach(const GameState& state, ModelId model, float
         reach.immobile = true;
         return reach;
     }
+    if (const ObjectiveArea* objective = move_objective(state, mv)) {
+        // 12.08 Objective Consolidation While Moving (M90, D-091): end within range of the selected objective (a gap
+        // of at most EPS to the area, D-009), or closer to it than at the start, as
+        // ends_within_or_closer_to_objective (D-074 part 2: a turn does not count as moving closer). The area is a
+        // round "base" (objective_area_pose), so both are a circle for a round mover and a ReachShape for an oval.
+        const BasePose obstacle = objective_area_pose(*objective);
+        float before = objective_gap_mm(start_pose, *objective);
+        if (!round_mover && footprint_turn_deg(start_pose.facing_deg, facing) != 0.0) {
+            before = std::min(before, objective_gap_mm(BasePose{start_pose.position, m->base, facing}, *objective));
+        }
+        std::vector<ReachCircle> group;
+        std::vector<ReachShape> group_shapes;
+        for (const float threshold : {EPS_MM, before - EPS_MM}) {
+            if (round_mover) {
+                const float radius = r + base_radius(obstacle.base) + threshold;
+                if (radius > 0.0f) group.push_back(ReachCircle{obstacle.position, radius, false, ModelId{}});
+            } else if (circumscribed_radius(m->base) + circumscribed_radius(obstacle.base) + threshold > 0.0f) {
+                group_shapes.push_back(ReachShape{m->base, facing, obstacle, threshold, false, ModelId{}});
+            }
+        }
+        add_required_group(reach, std::move(group), std::move(group_shapes));
+        return reach;
+    }
     // While Moving: end closer to the closest target, measured from the start (D-022; ties: any, D-010),
     // as ends_closer_to_closest_target: the end's distance to that unit is "more than" EPS less.
     std::vector<const Unit*> targets;
@@ -868,6 +900,16 @@ std::vector<std::string> move_end_problems(const GameState& state) {
                     out.push_back("12.08: " + detail::unit_label(u.id) + " must end its Engaging Consolidation "
                                   "engaged with " + detail::unit_label(t));
                 }
+            }
+        } else if (const ObjectiveArea* objective = move_objective(state, mv)) {
+            // 12.08 Objective Consolidation After Moving (M90, D-091): the unit (one or more of its models, D-009) is
+            // within range of the selected objective.
+            const bool in_range = std::any_of(u.models.begin(), u.models.end(), [&](const Model& m) {
+                return model_within_objective(m, *objective);
+            });
+            if (!in_range) {
+                out.push_back("12.08: " + detail::unit_label(u.id) + " must end its Objective Consolidation within "
+                              "range of " + objective->name);
             }
         }
         return out;

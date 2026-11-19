@@ -27,7 +27,7 @@ enum class FallBackMode : std::uint8_t {
 enum class ConsolidationMode : std::uint8_t {
     Ongoing,    // the unit is engaged: every enemy unit it is engaged with
     Engaging,   // otherwise, one or more enemy units within 3"
-    Objective,  // otherwise, one objective within 3" (V1 has no objectives)
+    Objective,  // otherwise, one objective within 3" (M90, D-091: the mission's objective areas)
 };
 
 [[nodiscard]] std::string_view move_type_name(MoveType t);  // also the JSON name

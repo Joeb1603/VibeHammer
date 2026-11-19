@@ -219,9 +219,13 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, StartChargeMove>) {
                 j["unit"] = a.unit;
                 j["targets"] = a.targets;
-            } else if constexpr (std::is_same_v<T, StartPileIn> || std::is_same_v<T, StartConsolidation>) {
+            } else if constexpr (std::is_same_v<T, StartPileIn>) {
                 j["unit"] = a.unit;
                 j["targets"] = a.targets;
+            } else if constexpr (std::is_same_v<T, StartConsolidation>) {
+                j["unit"] = a.unit;
+                j["targets"] = a.targets;
+                if (a.objective) j["objective"] = *a.objective;  // M90 (D-091): omitted when empty
             } else if constexpr (std::is_same_v<T, RemoveModelForCoherency>) {
                 j["unit"] = a.unit;
                 j["model"] = a.model;
@@ -291,7 +295,9 @@ void from_json(const Json& j, GameAction& v) {
     } else if (kind == "Fight") {
         v = Fight{j.at("unit").get<UnitId>(), j.at("declarations").get<std::vector<MeleeDeclaration>>()};
     } else if (kind == "StartConsolidation") {
-        v = StartConsolidation{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+        StartConsolidation a{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
+        if (j.contains("objective")) a.objective = j.at("objective").get<std::size_t>();
+        v = a;
     } else if (kind == "RemoveModelForCoherency") {
         v = RemoveModelForCoherency{j.at("unit").get<UnitId>(), j.at("model").get<ModelId>()};
     } else if (kind == "EndConsolidations") {
@@ -399,6 +405,8 @@ void to_json(Json& j, const GameEvent& v) {
                 j["unit"] = e.unit;
                 j["mode"] = e.mode;
                 j["targets"] = e.targets;
+                if (e.objective) j["objective"] = *e.objective;  // M90 (D-091): omitted when empty
+                if (!e.objective_name.empty()) j["objective_name"] = e.objective_name;
             } else if constexpr (std::is_same_v<T, UnitsForcedToFight>) {
                 j["units"] = e.units;
             } else if constexpr (std::is_same_v<T, CommandPointGained>) {
@@ -534,8 +542,11 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "FightStepEnded") {
         v = FightStepEnded{j.at("reason").get<std::string>()};
     } else if (kind == "ConsolidationStarted") {
-        v = ConsolidationStarted{j.at("unit").get<UnitId>(), j.at("mode").get<ConsolidationMode>(),
-                                 j.at("targets").get<std::vector<UnitId>>()};
+        ConsolidationStarted e{j.at("unit").get<UnitId>(), j.at("mode").get<ConsolidationMode>(),
+                               j.at("targets").get<std::vector<UnitId>>()};
+        if (j.contains("objective")) e.objective = j.at("objective").get<std::size_t>();
+        if (j.contains("objective_name")) e.objective_name = j.at("objective_name").get<std::string>();
+        v = e;
     } else if (kind == "UnitsForcedToFight") {
         v = UnitsForcedToFight{j.at("units").get<std::vector<UnitId>>()};
     } else if (kind == "CommandPointGained") {
