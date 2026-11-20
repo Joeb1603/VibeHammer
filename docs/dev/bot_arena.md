@@ -19,7 +19,12 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   terms, the approach to an area and the shooting at enemy holders, under a mission only; with all three 0 a mission
   game plays exactly as at M86. M89 (D-090) adds `cover`, 0 to 1 (another value exits 2): how far the move
   score believes what terrain does to its shots, on a battlefield with terrain only. At 0 a terrain game plays exactly
-  as at M88, so the M88 bot is `--weights-a cover=0` (or `--weights-b`).
+  as at M88, so the M88 bot is `--weights-a cover=0` (or `--weights-b`). M91 (D-092) adds five keys, all 0 by default
+  (none measured better, so the bot at the defaults is the M90 bot): `plan_terrain` and `aim_terrain` (0 to 1: terrain in
+  the army plan and the shooting aim's reply), `hold_fire` (0 or 1: holding fire to stay hidden, 13.09),
+  `objective_charge` and `objective_fight` (0 or more, x `objective`: the objective terms in charges and in pile-ins
+  and consolidations). Any other value exits 2. The features on: `--weights
+  plan_terrain=1,aim_terrain=1,hold_fire=1,objective_charge=1,objective_fight=1`.
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -81,6 +86,13 @@ objective scenario, the terrain runs, the M73 lists) and every `--random-armies`
 is their reference. The M89 identity step "the terrain runs at `cover=0` as the M88 binary" no longer holds under M90's
 rules (`M89_Regression` pins the M88 bot's game under M90's rules instead).
 
+M91 (D-092) changes no play at the defaults (its five keys default to 0). The proof: all thirteen runs above (V1, both
+bot scenarios, Strike, the rosters, the objective scenario, the terrain scenario with `--first A` and `--first B`,
+random armies auto and hand, with and without `--terrain`, the M73 lists) at the defaults are identical to the M90
+binary, and the M90 binary stays the reference for every run. The head-to-head procedure for a feature (as M89's and
+M91's): the variant with `--weights-a <keys>` against the reference with `--weights-b <keys at 0>` and the reverse, each
+with `--first A` and `--first B`, 100 games each (seeds 1–100); one standard deviation is about 10 games in the 400.
+
 ## Deployment and the summary
 
 - The deployment step only exists in a scenario with `"deployment": "alternating"` (D-081). The bot sets up by M77's
@@ -106,3 +118,6 @@ rules (`M89_Regression` pins the M88 bot's game under M90's rules instead).
   side's units refused to an enemy shooter for Hidden or for terrain, per game). The `--per-game` line is unchanged.
 - M90 (D-091) adds, for a mission scenario, `objective consolidations a game (M90): A x, B y`: the Objective
   Consolidations (12.08) committed per game and side. The `--per-game` line is unchanged.
+- M91 (D-092) adds, for a mission scenario, `charges onto an objective a game (M91)` (committed charge moves with a model
+  within range of an area), and with terrain `holds of fire a game (M91)` (units able to shoot, every model hidden, when
+  the bot ended a Shoot step). The `--per-game` line is unchanged.

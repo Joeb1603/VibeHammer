@@ -256,7 +256,7 @@ gaps and the bot, with M89's 55% bar for the bot.
 
 ---
 
-## M91: The bot plays terrain and objectives in every phase
+## M91: The bot plays terrain and objectives in every phase ✅ (done; the 55% target open, every feature off by default)
 **Effort:** `xhigh` · **Plan mode:** yes
 
 > Bot and arena only: no rule, engine, state or file-format change. Read 13.08–13.11, 12.05–12.08, 14.02, D-083,
@@ -315,6 +315,43 @@ gaps and the bot, with M89's 55% bar for the bot.
   - a screenshot under `xvfb-run`.
 - **Build** and full `ctest` green.
 
+**Results** (2026-11-20, D-092)
+- **Built**, each behind its key and tested (`tests/ai/m91_test.cpp`):
+  - `plan_terrain`: the army plan's rates with area cover, and a standing shooter's sight of its target;
+  - `aim_terrain`: `ShootingAim::reply` with cover and sight;
+  - `hold_fire`: holding fire to stay hidden, in the move score and the Shooting phase;
+  - `objective_charge`: the objective terms in charges, with the enemy holders' losses;
+  - `objective_fight`: the objective terms in pile-ins and consolidations, in either player's turn (`fight_outlook`).
+  - The arena has two new lines, holds of fire and charges onto an objective.
+- **Measured** (Release arena, terrain scenario, 4 x 100 games against the M90 bot; M90 against M90 is 200):
+
+  | Variant | Wins of 400 |
+  |---|---|
+  | full set | 201 |
+  | without `plan_terrain` | 205 |
+  | without `aim_terrain` | 201 |
+  | without `hold_fire` | 200 |
+  | without `objective_charge` | 198 |
+  | without `objective_fight` | 199 |
+  | objective keys at 3 | 200 |
+  | full set on the objective scenario | 201 |
+
+  - Holding fire never arose in these armies (0 a game): no long-range Tyranid gun to hide from.
+  - Charges onto an objective: 0.05–0.35 a game (up to 0.9 for the Tyranids on the objective scenario).
+  - Objective Consolidations: about 0.1 a game.
+  - Decision time: unchanged.
+- **Outcome** (the keep rule, and then the outcome, both the user's choice):
+  - No feature cost 10 games when switched off, so **all five default to 0**, and the M91 bot at the defaults is the M90
+    bot.
+  - **The 55% target is open**: 201 of 400 (50.2%).
+  - The confirmation on seeds 101–200 was not run: with every feature off there is nothing to confirm.
+- **Identity:** IDENTITY_PLACEHOLDER
+- **Replay:** `tests/replays/m91_bot_game.json` (seed 6, the features on).
+  - It has three charges onto an objective and an Objective Consolidation; it can't show holding fire, which never
+    arose.
+  - Older replays are byte-identical: the m87 and m89 generators are pinned to the keys at 0.
+- **Clean:** every run had no rejected action, reverted move, fallback or unfinished game.
+
 ---
 
 ## Later (post-V1, rough order)
@@ -329,14 +366,14 @@ The long-range map from here to a full game with any army on any mission (phases
    (13.06 Moving Vertically and upper surfaces, 13.11 gaps above 3", 22.05 Plunging Fire), Stealth (24.33, left out of
    M88 by the user's choice; the Genestealers list it only because the fetch tool ignores BSData's Chameleonic
    condition, D-070), and a terrain editor for custom battles. Left open from M89: charge odds round walls (D-090's
-   open list). M91 takes the rest (the head-to-head target, the army plan's terrain-blind group rates, holding fire
-   to stay hidden).
+   open list). M91 built the army plan's terrain rates and holding fire to stay hidden, both
+   off by default (no measured gain, D-092); the 55% head-to-head target is open.
 2. **Objectives** (14) and a simple mission: the engine is done in M86 (D-084), the bot in M87 (D-086). This enables
    Bolter Discipline. Left open from M86: nothing secures an objective yet (14.03 is state only). Left open from
    M87: the objective scenario's balance (the Chaos Space Marines win about a third: the Tyranids' OC takes the
    Centre; an asymmetric mission, other armies or terrain are the levers) and units holding back (about as at M83).
-   M90 adds Objective Consolidation (12.08), and M91 has the bot's charges, pile-ins and consolidations weigh the
-   areas.
+   M90 adds Objective Consolidation (12.08). M91 built the objective terms into charges, pile-ins and consolidations
+   (off by default: no measured gain, D-092).
    - **Bot personalities** (after M87): Aggressive (values kills and charges, takes risks) and Tactical (values
      objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).

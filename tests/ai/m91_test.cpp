@@ -1,7 +1,8 @@
 // M91 (D-092): the bot plays terrain and objectives in every phase. Five features, each behind a MoveWeights key and at
 // 0 exactly as M90: the army plan with terrain (plan_terrain), ShootingAim::reply with cover and sight (aim_terrain),
 // holding fire to stay hidden (hold_fire, 13.09), the objective terms in charges (objective_charge) and in pile-ins and
-// consolidations (objective_fight, in either player's turn).
+// consolidations (objective_fight, in either player's turn). D-092: none measured better than the M90 bot, so all five
+// default to 0 (the M91 bot at the defaults is the M90 bot); the tests switch them on (m91_weights).
 
 #include <gtest/gtest.h>
 
@@ -74,6 +75,17 @@ normal::MoveWeights m90_weights() {
     w.hold_fire = 0.0;
     w.objective_charge = 0.0;
     w.objective_fight = 0.0;
+    return w;
+}
+
+// The five M91 keys at 1 (D-092: all five default to 0, so the features are switched on by hand here).
+normal::MoveWeights m91_weights() {
+    normal::MoveWeights w;
+    w.plan_terrain = 1.0;
+    w.aim_terrain = 1.0;
+    w.hold_fire = 1.0;
+    w.objective_charge = 1.0;
+    w.objective_fight = 1.0;
     return w;
 }
 
@@ -171,7 +183,8 @@ TEST(M91_ArmyPlan, AtWeightZeroTheArmyPlanIsM90s) {
     const normal::PlanTerrain off{&sight, 0.0};
     EXPECT_EQ(normal::army_plan(cache, gs, Side::A, &off), normal::army_plan(cache, gs, Side::A));
     EXPECT_FALSE(normal::plan_terrain_on(gs, m90_weights()));
-    EXPECT_TRUE(normal::plan_terrain_on(gs, normal::MoveWeights{}));
+    EXPECT_FALSE(normal::plan_terrain_on(gs, normal::MoveWeights{}));  // D-092: off by default
+    EXPECT_TRUE(normal::plan_terrain_on(gs, m91_weights()));
 }
 
 // ==== 2. and 3. ShootingAim::reply with terrain; holding fire to stay hidden (13.09) ====
@@ -215,7 +228,7 @@ TEST(M91_HoldFire, OnlyAHideableEndIsScoredHoldingFire) {
     GameState gs = havocs_in_ruin(false);
     ASSERT_TRUE(every_model_hidden(gs, mf::kHavocs));
     analysis::OddsCache cache;
-    const normal::MoveScoreContext on(cache, gs, gs.units[mf::kHavocs].id, normal::MoveWeights{});
+    const normal::MoveScoreContext on(cache, gs, gs.units[mf::kHavocs].id, m91_weights());
     EXPECT_TRUE(on.may_hold_fire(positions_of(gs.units[mf::kHavocs])));
     const normal::MoveScoreContext off(cache, gs, gs.units[mf::kHavocs].id, m90_weights());
     EXPECT_FALSE(off.may_hold_fire(positions_of(gs.units[mf::kHavocs])));
@@ -231,13 +244,13 @@ TEST(M91_HoldFire, TheShootingPhaseAgreesWithTheMoveScore) {
         GameState gs = havocs_in_ruin(one_model);
         ASSERT_TRUE(every_model_hidden(gs, mf::kHavocs));
         analysis::OddsCache cache;
-        const normal::ShootTerrain terrain{std::make_shared<analysis::TerrainSight>(gs), normal::MoveWeights{}};
+        const normal::ShootTerrain terrain{std::make_shared<analysis::TerrainSight>(gs), m91_weights()};
         std::vector<UnitId> held;
         const std::optional<normal::ShootingChoice> c =
             normal::choose_shooting(cache, gs, legal_actions(gs, Side::A), 0.0, &terrain, &held);
         // The move score of the Havocs' stay, as the Shooting phase judged it.
         const normal::ArmyPlan plan = normal::army_plan(cache, gs, Side::A);
-        normal::MoveScoreContext ctx(cache, gs, gs.units[mf::kHavocs].id, normal::MoveWeights{}, &plan, terrain.sight);
+        normal::MoveScoreContext ctx(cache, gs, gs.units[mf::kHavocs].id, m91_weights(), &plan, terrain.sight);
         normal::PlannedEnd stay{MoveType::Normal, positions_of(gs.units[mf::kHavocs]), 0.0f};
         const normal::MoveScore s = normal::refine_move_score(ctx, stay, gs, 0, false);
         const bool havocs_held = std::find(held.begin(), held.end(), gs.units[mf::kHavocs].id) != held.end();
@@ -258,7 +271,7 @@ TEST(M91_HoldFire, AWeakVolleyHoldsFireAndAStrongOneShoots) {
     for (const bool one_model : {true, false}) {
         SCOPED_TRACE(one_model);
         GameState gs = havocs_in_ruin(one_model);
-        const normal::ShootTerrain terrain{std::make_shared<analysis::TerrainSight>(gs), normal::MoveWeights{}};
+        const normal::ShootTerrain terrain{std::make_shared<analysis::TerrainSight>(gs), m91_weights()};
         std::vector<UnitId> held;
         (void)normal::choose_shooting(cache, gs, legal_actions(gs, Side::A), 0.0, &terrain, &held);
         const bool havocs_held = std::find(held.begin(), held.end(), gs.units[mf::kHavocs].id) != held.end();
@@ -299,7 +312,7 @@ TEST(M91_Charge, AChargeEndingOnAnAreaGainsTheObjectiveTerms) {
     const double plain = normal::charged_value(cache, gs, gs.units[0].id, targets, turns);
     const double with = normal::charged_value(cache, gs, gs.units[0].id, targets, turns, nullptr, &objectives);
     EXPECT_GT(with, plain);
-    EXPECT_TRUE(normal::objective_charge_on(gs, normal::MoveWeights{}));
+    EXPECT_TRUE(normal::objective_charge_on(gs, m91_weights()));
     EXPECT_FALSE(normal::objective_charge_on(gs, m90_weights()));
 }
 
@@ -349,7 +362,7 @@ TEST(M91_FightMoves, AnObjectiveConsolidationIsWeighedWithTheObjectiveTerms) {
     GameState gs = wh40k::test::objective_consolidation_state(2.0f);
     analysis::OddsCache cache;
     const std::vector<GameAction> legal = legal_actions(gs, Side::A);
-    const std::optional<PolicyResult> r = normal::decide_consolidation(cache, gs, Side::A, legal, 1, normal::MoveWeights{});
+    const std::optional<PolicyResult> r = normal::decide_consolidation(cache, gs, Side::A, legal, 1, m91_weights());
     ASSERT_TRUE(r.has_value());
     ASSERT_TRUE(std::holds_alternative<action::StartConsolidation>(r->action)) << r->reason;
     EXPECT_NE(r->reason.find("for objectives"), std::string::npos) << r->reason;
@@ -391,3 +404,121 @@ TEST(M91_Arena, TheSummaryHasTheNewLines) {
     EXPECT_NE(text.find("charges onto an objective a game (M91)"), std::string::npos) << text;
 }
 
+
+TEST(M91_Regression, TheDefaultsAreTheM90Bot) {
+    // D-092: all five keys default to 0.
+    const normal::MoveWeights w;
+    EXPECT_EQ(w.plan_terrain, 0.0);
+    EXPECT_EQ(w.aim_terrain, 0.0);
+    EXPECT_EQ(w.hold_fire, 0.0);
+    EXPECT_EQ(w.objective_charge, 0.0);
+    EXPECT_EQ(w.objective_fight, 0.0);
+}
+
+// ==== The M91 replay: tests/replays/m91_bot_game.json ====
+
+namespace {
+
+constexpr std::uint64_t kM91Seed = 6;  // chosen by M91_Replay.DISABLED_SearchM91Seed (the first of 1-40 with both)
+constexpr const char* kM91File = "m91_bot_game.json";
+
+std::filesystem::path m91_replay_path() { return std::filesystem::path(WH40K_REPLAY_DIR) / kM91File; }
+
+struct M91Game {
+    Replay replay;
+    GameRecord record;
+};
+
+// A whole game on the terrain scenario, the bot on both sides with the five M91 features on (they default to 0,
+// D-092), through GameSession as M87's and M89's; replaying it needs only core.
+M91Game play_m91_bot_game(std::uint64_t seed = kM91Seed) {
+    M91Game g;
+    g.replay.description =
+        "M91: a whole game played by the bot on both sides of the terrain scenario "
+        "(data/scenarios/incursion_terrain_44x60.json) with dice seed " +
+        std::to_string(seed) +
+        ", with the five M91 features switched on (D-092; off by default): terrain in the army plan and the shooting "
+        "aim, holding fire to stay hidden, the objective terms in charges and in pile-ins and consolidations. It has a "
+        "charge onto an objective and an Objective Consolidation (12.08). Replaying it needs only the engine.";
+    g.replay.initial.scenario = kTerrainScenario;
+    g.replay.initial.seed = seed;
+    wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
+    g.record = play_bot_session(session, config(m91_weights()), config(m91_weights()), 5000);
+    g.replay.steps = session.history();
+    g.replay.expect = replay_expectation(session.state());
+    return g;
+}
+
+int objective_consolidations(const std::vector<GameEvent>& events) {
+    int n = 0;
+    for (const GameEvent& e : events) {
+        if (const auto* c = std::get_if<event::ConsolidationStarted>(&e); c != nullptr && c->objective) ++n;
+    }
+    return n;
+}
+
+}  // namespace
+
+TEST(M91_Replay, TheBotGameReplaysToItsResultWithCoreOnly) {
+    const Replay saved = load_replay(m91_replay_path());
+    ASSERT_TRUE(saved.initial.scenario.has_value());
+    EXPECT_EQ(*saved.initial.scenario, kTerrainScenario);
+    EXPECT_EQ(saved.initial.seed, kM91Seed);
+    const ReplayResult first = run_replay(saved, repo_root());
+    ASSERT_TRUE(first.ok()) << "step " << *first.failed_step << ": " << first.reasons.front();
+    EXPECT_EQ(replay_expectation(first.final_state), saved.expect);
+    const ReplayResult second = run_replay(saved, repo_root());
+    ASSERT_TRUE(second.ok());
+    EXPECT_EQ(first.final_state, second.final_state);  // deterministic
+    ASSERT_TRUE(first.final_state.result.has_value());
+    EXPECT_GT(objective_consolidations(first.events), 0);
+}
+
+TEST(M91_Replay, TheSavedFileMatchesTheGame) {
+    // The bot with the features on and the replay's seed plays exactly the saved game now (D-054), clean, with a charge
+    // onto an objective.
+    const Replay saved = load_replay(m91_replay_path());
+    const M91Game g = play_m91_bot_game();
+    EXPECT_TRUE(g.record.finished);
+    EXPECT_EQ(g.record.rejected, 0u);
+    EXPECT_EQ(g.record.reverted, 0u);
+    EXPECT_EQ(g.record.fallbacks, 0u);
+    EXPECT_GT(g.record.charges_onto_areas[0] + g.record.charges_onto_areas[1], 0);
+    ASSERT_EQ(saved.steps.size(), g.replay.steps.size());
+    for (std::size_t i = 0; i < saved.steps.size(); ++i) {
+        ASSERT_EQ(Json(saved.steps[i]).dump(), Json(g.replay.steps[i]).dump()) << "step " << i;
+    }
+    EXPECT_EQ(Json(saved).dump(2), Json(g.replay).dump(2));
+}
+
+// Writes tests/replays/m91_bot_game.json. Run on purpose only:
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M91_Replay.DISABLED_RegenerateM91BotGameReplay
+TEST(M91_Replay, DISABLED_RegenerateM91BotGameReplay) {
+    const M91Game g = play_m91_bot_game();
+    ASSERT_TRUE(g.record.finished);
+    ASSERT_EQ(g.record.rejected, 0u);
+    ASSERT_EQ(g.record.reverted, 0u);
+    ASSERT_EQ(g.record.fallbacks, 0u);
+    ASSERT_GT(g.record.charges_onto_areas[0] + g.record.charges_onto_areas[1], 0);
+    ASSERT_GT(g.record.objective_consolidations[0] + g.record.objective_consolidations[1], 0);
+    const ReplayResult r = run_replay(g.replay, repo_root());
+    ASSERT_TRUE(r.ok()) << "step " << *r.failed_step << ": " << r.reasons.front();
+    if (::testing::Test::HasFailure()) return;  // never overwrite the committed replay with a broken game
+    save_replay(g.replay, m91_replay_path());
+}
+
+// Prints, per seed, what the game shows (run on purpose, in Release if possible):
+//   wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M91_Replay.DISABLED_SearchM91Seed
+TEST(M91_Replay, DISABLED_SearchM91Seed) {
+    for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+        const M91Game g = play_m91_bot_game(seed);
+        const int charges = g.record.charges_onto_areas[0] + g.record.charges_onto_areas[1];
+        const int consolidations = g.record.objective_consolidations[0] + g.record.objective_consolidations[1];
+        const int holds = g.record.holds_of_fire[0] + g.record.holds_of_fire[1];
+        std::printf("seed %llu: steps %zu, charges onto areas %d, objective consolidations %d, holds of fire %d%s\n",
+                    static_cast<unsigned long long>(seed), g.replay.steps.size(), charges, consolidations, holds,
+                    charges > 0 && consolidations > 0 && g.record.finished ? "  <- shows both" : "");
+        std::fflush(stdout);
+        if (charges > 0 && consolidations > 0 && g.record.finished) return;
+    }
+}
