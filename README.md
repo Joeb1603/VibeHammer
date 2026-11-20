@@ -107,6 +107,10 @@ behind each step.
     models could see from where they end, the cover its targets have, and the cover and line of sight it has itself
     against the enemy's reply. Its infantry moves into terrain areas and hides in ruins. Its monsters go round walls
     they can't cross, and in hand deployment its infantry sets up in cover where it can.
+  - **Tuning switches:** more terrain and objective play is built in but off by default, because none of it won more
+    games when measured (D-092): terrain in the army plan and the shooting aim, holding fire to stay hidden, and the
+    objectives in charges, pile-ins and consolidations. The arena's `--weights` switches them on
+    (`docs/dev/bot_arena.md`).
 
 **Not yet:** terrain heights (floors, climbing, Plunging Fire) and Stealth, missions
 beyond the one objective mission, stratagems, unit abilities (including

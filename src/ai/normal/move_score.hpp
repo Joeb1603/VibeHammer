@@ -122,23 +122,25 @@ struct MoveWeights {
     // each such rate is (1 - cover) x the terrain-blind rate + cover x the terrain rate. Above 0 the candidates also
     // take spots in cover, hidden spots and detours, and hand deployment prefers cover.
     double cover = 1.0;
-    // M91 (D-092). Each key at 0 plays exactly as M90; nothing behind a key is computed while its gate is off.
+    // M91 (D-092). Each key at 0 plays exactly as M90; nothing behind a key is computed while its gate is off. All five
+    // default to 0: measured, none gained anything against the M90 bot (D-092's tables), so by the keep rule agreed with
+    // the user none is on by default; each stays for tuning (arena --weights) and is tested.
     // On a battlefield with terrain (cover_on) only:
     // - the army plan rates its groups' shots with terrain (13.08 area cover where the target stands, and whether a
     //   shoot track that doesn't move sees its target now), 0 to 1, a blend as `cover`;
-    double plan_terrain = 1.0;
+    double plan_terrain = 0.0;
     // - ShootingAim::reply (the enemy target's next-turn reply on our unit) with our unit's area cover and the target's
     //   sight of it, 0 to 1, a blend;
-    double aim_terrain = 1.0;
+    double aim_terrain = 0.0;
     // - holding fire to stay hidden (13.09): 0 or 1. A unit that could hide where it ends is scored shooting and
     //   holding fire, the better kept (the move score), and a hidden unit holds fire in the Shooting phase when the
     //   move score prefers it.
-    double hold_fire = 1.0;
+    double hold_fire = 0.0;
     // Under a mission with `objective` above 0 only (x `objective`): the objective terms at a charge's end positions
     // (charged_value, hold_value), engaging an enemy unit that holds an area included ...
-    double objective_charge = 1.0;
+    double objective_charge = 0.0;
     // ... and in pile-ins and consolidations (their gain), in our turn and the enemy's.
-    double objective_fight = 1.0;
+    double objective_fight = 0.0;
 };
 
 // M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or

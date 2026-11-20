@@ -105,3 +105,4 @@ decision, the code that cites it, and its tests.
 - [D-089](decisions/D-089.md): Benefit of cover and worsening BS (13.08; "Modified Characteristics", app-only rule; implemented in M88)
 - [D-090](decisions/D-090.md): The bot plays for cover: terrain in the move score, cover and hidden spots, detours, hand deployment (M89, implemented; uses D-087–D-089)
 - [D-091](decisions/D-091.md): Objective Consolidation and [IGNORES COVER] (12.08, 24.18; M90; amends D-022 and D-071)
+- [D-092](decisions/D-092.md): The bot plays terrain and objectives in every phase: five features behind keys, all off by default (M91; the 55% target open)

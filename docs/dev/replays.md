@@ -23,6 +23,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M89_Replay.DISABLED_RegenerateCoverBotGameReplay
 # and m87_objectives_bot_game.json (the objective scenario, seed 29, a whole bot game playing the mission) (M87):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M87_Replay.DISABLED_RegenerateObjectivesBotGameReplay
+# and m91_bot_game.json (the terrain scenario, seed 6, the bot with the five M91 features on) (M91):
+./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M91_Replay.DISABLED_RegenerateM91BotGameReplay
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -55,3 +57,7 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   Centre and make an Objective Consolidation onto it (12.08). `D091_Replay` checks it and that the file is what the
   builder plays now. M90 regenerated `m87_objectives_bot_game.json` on purpose: Objective Consolidation gives Side B a
   Consolidate decision at step 550 (6 added lines, the same seed and checks); every other replay stayed byte-identical.
+- M91 (D-092): `m91_bot_game.json` is a whole bot game on the terrain scenario (seed 6) with the five M91 features
+  switched on (they default to 0): charges onto an objective and an Objective Consolidation. `M91_Replay` replays it with
+  core alone, and its `TheSavedFileMatchesTheGame` checks it is what the bot with those weights plays now. The m87 and
+  m89 generators are pinned to the five keys at 0, and every older replay stayed byte-identical.
