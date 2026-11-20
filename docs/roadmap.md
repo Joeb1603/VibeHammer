@@ -14,8 +14,8 @@ Two players (human or bot, either side) play a complete, legal game of Warhammer
   reason (the D-026 / D-071 principle, kept to the end: nothing is ever silently ignored);
 - and with a **bot that plays whichever mission it is given**, without mission-specific code.
 
-"Any army" is defined as: every datasheet, detachment, enhancement and stratagem in the pinned data version. Legends
-and Crusade content are out unless asked for (question 5 below).
+"Any army" is defined as: every standard, currently legal datasheet, detachment, enhancement and stratagem in the
+pinned data version. Legends, Crusade and the like are out for now (the user, 2026-11-20).
 
 ## Where the project stands
 
@@ -36,7 +36,7 @@ Sources of rules text, and their limits:
 - `docs/gdmissions/`: the same rules plus 101 app-only entries, the mission pack, layouts (images) and detachment
   names with costs. Third-party and unverified.
 - BSData (`tools/fetch_bsdata.py`): datasheets and list-building data. Whether it carries detachment rules,
-  stratagems and enhancements for 11th edition has not been checked (question 2 below).
+  stratagems and enhancements for 11th edition could not be checked from the cloud session (question 4 below).
 - Nothing in the repo holds the text of faction rules, detachment rules, stratagems or enhancements.
 
 ## The order, and why
@@ -66,7 +66,7 @@ feature: an engine milestone, then its client and bot milestones, as M86 / M87 a
 3. **Reaction windows.** A general way for the opposing side to be offered a decision at a trigger ("just after an
    enemy unit ends a move", "just after a unit is selected to fight"). Built once, used by stratagems, abilities and
    mission rules. Rules Sequencing (app-only) decides the order when both sides have one.
-4. **Answer the open questions** at the end of this file; several change the size of later phases.
+4. **Settle the open questions** at the end of this file; question 4 changes the size of Phase 4.
 
 ## Phase 1: finish the core rules (about 25–35 milestones)
 
@@ -96,15 +96,16 @@ Abilities (24.02) applies throughout.
 | 23 Aircraft | Aircraft deployment, movement, shooting, fighting | reserves, Hover |
 | 14.03 | Securing objectives (state only today) | none |
 
-**The z axis.** 13.06 Moving Vertically, 13.11 gaps above 3", 22.05 Plunging Fire and part of 21.03 need height.
-The engine is 2D by decision (D-087). This is the one place where "fully complete" may mean reopening an
-architecture decision: see question 1.
+**The z axis stays out.** 13.06 Moving Vertically, 13.11 gaps above 3", 22.05 Plunging Fire and the height part of
+21.03 need height. The engine is 2D by decision (D-087), and the user confirmed 2D is fine for now (2026-11-20), so
+these stay `TODO(z)` and are not part of this roadmap. Any ability that only matters with height is recorded as
+"not modelled" in the coverage table instead of being refused.
 
 **Battle size.** Strike Force (2,000 points) beside Incursion: unit limits, DP and enhancement limits from 25.03, and
 the bot's time budgets re-measured at twice the army.
 
-Done when: every one of the 156 rule numbers has tests or a recorded decision saying why it has none, and every
-core ability is implemented.
+Done when: every one of the 156 rule numbers has tests or a recorded decision saying why it has none (the z-axis
+rules among the latter), and every core ability is implemented.
 
 ## Phase 2: the mission system (about 10–14 milestones)
 
@@ -165,7 +166,10 @@ can be built, saved, loaded and deployed.
 
 Datasheet abilities, faction rules, detachment rules, enhancements and stratagems. There are thousands of them, so
 they cannot be hand-written one function each. The plan is an **effect layer**: a rule is a data record made of a
-few building blocks the engine implements once.
+few building blocks the engine implements once. (The user left the choice between this and plain code per rule to
+Claude, 2026-11-20. The effect layer is chosen because the volume is in the thousands, because data records can be
+counted for the coverage table, and because the bot's simulator then sees every ability through the same few blocks.
+Rules that do not fit still get hand-written code: item 5.)
 
 1. **The building blocks.** Worked out from a survey of real abilities, not guessed; expected to include:
    - *when it applies:* always, while leading, in a phase, in an aura (22.01), once per battle or turn, when a
@@ -180,14 +184,14 @@ few building blocks the engine implements once.
 3. **Coverage, tracked.** A generated table: per faction, how many abilities, detachment rules, enhancements and
    stratagems have records. It is the progress bar for the whole phase.
 4. **One faction at a time.** Chaos Space Marines and Tyranids first, because their datasheets and rosters are
-   already here, then by the user's order (question 4). A faction is done when its datasheets, army rule,
+   already here, then by the user's order (question 5). A faction is done when its datasheets, army rule,
    detachments, enhancements and stratagems are all covered and a bot-against-bot game with each detachment runs to
    the end.
 5. **The long tail.** Some rules will not fit the building blocks. Each gets either a new block (if others will use
    it) or a small hand-written rule with its own tests. Expect this to be a real share of the work.
 
 The blocking question is the **text**: faction rules, detachment rules, enhancements and stratagems are not in the
-repo and may not be in BSData (question 2).
+repo and may not be in BSData (question 4).
 
 ## Phase 5: the bot
 
@@ -241,24 +245,32 @@ Mouse-only flows still need the user's manual pass on Windows after each.
 - A full game by mouse on Windows for each new kind of decision.
 - Data updates as a routine (Phase 3 item 5), with the coverage table re-generated.
 
-## Open questions for the user
+## Decisions and open questions
 
-1. **The z axis.** Keep terrain 2D and leave vertical movement, gaps above 3" and Plunging Fire unmodelled (with a
-   recorded decision), or add height? Adding it touches the geometry kernel, visibility, the client's view and the
-   bot. The published layouts are flat ruins, so 2D loses little there.
-2. **Where the army rules text comes from.** Someone needs to check what BSData's 11th edition catalogues contain
-   beyond datasheets (needs `github.com`, which this cloud environment does not allow yet). If detachment rules,
-   stratagems and enhancements are not there, they have to come from the app or the codexes, supplied by the user.
-3. **How army rules are written.** The effect layer above (data records, a fixed set of building blocks), or plain
-   code per rule? The roadmap assumes the effect layer; it costs a design milestone up front and pays back on volume.
-4. **Faction order** after Chaos Space Marines and Tyranids.
-5. **What "any army" leaves out.** Legends datasheets, Crusade, Combat Patrol, allied detachments, Forge World
-   units: in or out?
+Answered by the user on 2026-11-20:
+
+1. **The z axis:** 2D is fine for now. Vertical movement, gaps above 3" and Plunging Fire stay out (Phase 1).
+2. **How army rules are written:** left to Claude; the effect layer (Phase 4).
+3. **What "any army" leaves out:** Legends and similar content; standard legal units only for now.
+
+Still open:
+
+4. **Where the army rules text comes from.** The user gave permission to check BSData, and `raw.githubusercontent.com`
+   and `api.github.com` were added to the cloud environment for it, but the check could not be made from the cloud
+   session: every repository of the BSData organisation was refused there (other public repositories were readable),
+   so it is not known from here whether that is this session's GitHub restriction or the repositories themselves.
+   It needs one run on the user's machine: download a catalogue (for example `Tyranids.json`) and
+   `Warhammer 40,000.json` at the pinned commit and look for detachment rules, stratagems and enhancement text.
+   What the repo already shows: the catalogues have an Enhancements subtree under units (the fetch tool skips it)
+   and modifiers that name a detachment (D-079 mentions "Devotees of Destruction"), so detachments and enhancements
+   are at least present as selections. Nothing here shows stratagem text. If the text is not in BSData it has to
+   come from the app or the codexes, supplied by the user.
+5. **Faction order** after Chaos Space Marines and Tyranids.
 6. **Networking** ("Later", item 6) is not on this roadmap. Is it part of "complete"?
 
 ## What this adds up to
 
 Phases 0 to 3 are bounded: roughly 45 to 65 milestones at the size the project has been working in, and at the end
 of them any army can be mustered and played on any mission with core rules only, its special rules shown and
-flagged. Phase 4 is where "any army, fully" is earned, and its size depends on questions 2 and 3; it should be
+flagged. Phase 4 is where "any army, fully" is earned, and its size depends on question 4; it should be
 expected to be larger than everything before it put together.
