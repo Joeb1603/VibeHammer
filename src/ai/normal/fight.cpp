@@ -46,9 +46,71 @@ bool beats(const FightMoveCand& a, const FightMoveCand& b) {
 }
 
 client::FightMoveShape move_change(const core::GameState& before, const core::GameState& after, core::UnitId unit,
-                                   const std::vector<core::UnitId>& targets) {
-    return client::shape_change(client::fight_move_shape(before, unit, targets),
-                                client::fight_move_shape(after, unit, targets));
+                                   const std::vector<core::UnitId>& targets,
+                                   const core::ObjectiveArea* objective = nullptr) {
+    return client::shape_change(client::fight_move_shape(before, unit, targets, objective),
+                                client::fight_move_shape(after, unit, targets, objective));
+}
+
+// M91 (D-092, objective_fight): the objective terms of fight moves in one decision: the outlook from the decision's
+// state (fight_outlook), then each moving unit's terms where it ends minus where it starts (survival 1: no exchange
+// is played out for a fight move's objective terms).
+class FightObjectives {
+public:
+    FightObjectives(const core::GameState& state, const MoveWeights& weights) : state_(state) {
+        on_ = objective_fight_on(state, weights);
+        weight_ = weights.objective * weights.objective_fight;
+    }
+    [[nodiscard]] bool on() const noexcept { return on_; }
+    // The delta for `unit`'s move from `state` to `after` (0 with the gate off or no scoring ahead).
+    double delta(const core::GameState& after, core::UnitId unit) {
+        if (!on_) return 0.0;
+        const core::Unit* u0 = state_.find_unit(unit);
+        const core::Unit* u1 = after.find_unit(unit);
+        if (u0 == nullptr || u1 == nullptr || u0->models.empty() || u1->models.size() != u0->models.size()) return 0.0;
+        Slot& slot = slot_of(*u0);
+        if (!slot.outlook) return 0.0;
+        return terms(*slot.outlook, *u1) - slot.before;
+    }
+
+private:
+    struct Slot {
+        core::UnitId unit;
+        std::optional<ObjectiveOutlook> outlook;
+        double before = 0.0;
+    };
+    double terms(const ObjectiveOutlook& o, const core::Unit& u) const {
+        std::vector<core::Position> at;
+        at.reserve(u.models.size());
+        for (const core::Model& m : u.models) at.push_back(m.position);
+        const ObjectiveTerms t = objective_terms(o, state_, u, at, 1.0);
+        return t.deny + t.score;
+    }
+    Slot& slot_of(const core::Unit& u) {
+        for (Slot& s : slots_) {
+            if (s.unit == u.id) return s;
+        }
+        Slot s{u.id, fight_outlook(state_, u, weight_), 0.0};
+        if (s.outlook) s.before = terms(*s.outlook, u);
+        slots_.push_back(std::move(s));
+        return slots_.back();
+    }
+    const core::GameState& state_;
+    bool on_ = false;
+    double weight_ = 0.0;
+    std::vector<Slot> slots_;
+};
+
+std::string signed_value(double v);
+
+// "... (+0.12)" or, with objective terms, "... (+0.12, +0.30 for objectives)".
+std::string with_objectives(std::string reason, double objectives) {
+    if (objectives == 0.0) return reason;
+    if (!reason.empty() && reason.back() == ')') {
+        reason.pop_back();
+        return reason + ", " + signed_value(objectives) + " for objectives)";
+    }
+    return reason + " (" + signed_value(objectives) + " for objectives)";
 }
 
 std::string name_of(const core::GameState& state, core::UnitId id) {
@@ -409,7 +471,7 @@ std::optional<FightMovePlan> simulate_fight_move(const core::GameState& state, c
 
 std::optional<PolicyResult> decide_fight_selection(analysis::OddsCache& cache, const core::GameState& state,
                                                    core::Side side, const std::vector<core::GameAction>& legal,
-                                                   std::uint64_t seed) {
+                                                   std::uint64_t seed, const MoveWeights& weights) {
     const double base_theirs = side_melee(cache, state, side).theirs;
     std::optional<core::GameAction> best;
     double best_score = 0.0;
@@ -427,15 +489,17 @@ std::optional<PolicyResult> decide_fight_selection(analysis::OddsCache& cache, c
         if (s1.pending && std::holds_alternative<core::decision::OverrunPileIn>(s1.pending->kind)) {
             // 12.06: the additional pile-in, planned as decide_overrun_pile_in will plan it.
             double best_here = own - (theirs - base_theirs);
+            FightObjectives objectives(s1, weights);  // M91 (D-092): as decide_overrun_pile_in weighs it
             for (const core::GameAction& p : core::legal_actions(s1, side)) {
                 if (!std::holds_alternative<core::action::StartPileIn>(p)) continue;
                 const auto plan = simulate_fight_move(s1, side, p, seed, {});
                 if (!plan) continue;
                 const double o = own_fight_value(cache, plan->after, sel->unit);
                 const double t = side_melee(cache, plan->after, side).theirs;
-                if (o - (t - base_theirs) > best_here + kBetter) {
-                    best_here = o - (t - base_theirs);
-                    own = o;
+                const double obj = objectives.delta(plan->after, sel->unit);
+                if (o - (t - base_theirs) + obj > best_here + kBetter) {
+                    best_here = o - (t - base_theirs) + obj;
+                    own = o + obj;
                     theirs = t;
                     how = "Overrun fight with a pile-in";
                 }
@@ -477,8 +541,10 @@ std::optional<PolicyResult> decide_melee(analysis::OddsCache& cache, const core:
 }
 
 std::optional<PolicyResult> decide_pile_in(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                                           const std::vector<core::GameAction>& legal, std::uint64_t seed) {
+                                           const std::vector<core::GameAction>& legal, std::uint64_t seed,
+                                           const MoveWeights& weights) {
     const double base = melee_exchange(cache, state, side);
+    FightObjectives objectives(state, weights);  // M91 (D-092)
     FightMoveCand best;  // not moving
     for (const core::GameAction& a : legal) {
         const auto* p = std::get_if<core::action::StartPileIn>(&a);
@@ -487,9 +553,10 @@ std::optional<PolicyResult> decide_pile_in(analysis::OddsCache& cache, const cor
         FightMoveCand c;
         c.plan = simulate_fight_move(state, side, a, seed, head);
         if (!c.plan) continue;
-        c.gain = melee_exchange(cache, c.plan->after, side) - base;
+        const double obj = objectives.delta(c.plan->after, p->unit);
+        c.gain = melee_exchange(cache, c.plan->after, side) - base + obj;
         c.change = move_change(state, c.plan->after, p->unit, p->targets);
-        c.reason = fight_move_reason(head, c);
+        c.reason = with_objectives(fight_move_reason(head, c), obj);
         if (beats(c, best)) best = std::move(c);
     }
     if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);
@@ -499,10 +566,11 @@ std::optional<PolicyResult> decide_pile_in(analysis::OddsCache& cache, const cor
 
 std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, const core::GameState& state,
                                                    core::Side side, const std::vector<core::GameAction>& legal,
-                                                   std::uint64_t seed) {
+                                                   std::uint64_t seed, const MoveWeights& weights) {
     const auto& d = std::get<core::decision::OverrunPileIn>(state.pending->kind);
     const double base_theirs = side_melee(cache, state, side).theirs;
     const double skip_score = own_fight_value(cache, state, d.unit);
+    FightObjectives objectives(state, weights);  // M91 (D-092)
     FightMoveCand best;  // skipping
     for (const core::GameAction& a : legal) {
         const auto* p = std::get_if<core::action::StartPileIn>(&a);
@@ -513,9 +581,10 @@ std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache, c
         if (!c.plan) continue;
         const double score = own_fight_value(cache, c.plan->after, d.unit) -
                              (side_melee(cache, c.plan->after, side).theirs - base_theirs);
-        c.gain = score - skip_score;
+        const double obj = objectives.delta(c.plan->after, d.unit);
+        c.gain = score - skip_score + obj;
         c.change = move_change(state, c.plan->after, d.unit, p->targets);
-        c.reason = fight_move_reason(head, c);
+        c.reason = with_objectives(fight_move_reason(head, c), obj);
         if (beats(c, best)) best = std::move(c);
     }
     if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);
@@ -538,8 +607,9 @@ int models_gained_in_range(const core::GameState& before, const core::GameState&
 
 std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, const core::GameState& state,
                                                  core::Side side, const std::vector<core::GameAction>& legal,
-                                                 std::uint64_t seed) {
+                                                 std::uint64_t seed, const MoveWeights& weights) {
     const double base = consolidation_score(cache, state, side);
+    FightObjectives objectives(state, weights);  // M91 (D-092)
     FightMoveCand best;  // not moving
     // M90 (D-091): an Objective Consolidation is taken when its Auto move adds models within range of the area (the
     // most added wins; ties go to the first offered). The objective terms weigh it in M91. A unit's starts are all
@@ -556,6 +626,21 @@ std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, con
             std::optional<FightMovePlan> plan = simulate_fight_move(state, side, a, seed, head);
             if (!plan) continue;
             const int gained = models_gained_in_range(state, plan->after, s->unit, *s->objective);
+            if (objectives.on()) {
+                // M91 (D-092): weighed with the others; M90's rule stays the tie-break for a gain that ties.
+                const double obj = objectives.delta(plan->after, s->unit);
+                FightMoveCand c;
+                c.gain = consolidation_score(cache, plan->after, side) - base + obj;
+                c.change = move_change(state, plan->after, s->unit, {}, &state.mission->objectives[*s->objective]);
+                c.reason = with_objectives(fight_move_reason(head + " (Objective Consolidation, 12.08)", c), obj);
+                if (c.gain < -kFightMoveTie) continue;
+                c.plan = std::move(plan);
+                if (c.gain > kFightMoveTie && beats(c, best)) {
+                    best = std::move(c);
+                    continue;
+                }
+                plan = std::move(c.plan);
+            }
             if (gained > best_gained) {
                 best_gained = gained;
                 objective_reason = head + " (Objective Consolidation, 12.08): " + std::to_string(gained) +
@@ -568,9 +653,10 @@ std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache, con
         FightMoveCand c;
         c.plan = simulate_fight_move(state, side, a, seed, head);
         if (!c.plan) continue;
-        c.gain = consolidation_score(cache, c.plan->after, side) - base;
+        const double obj = objectives.delta(c.plan->after, s->unit);
+        c.gain = consolidation_score(cache, c.plan->after, side) - base + obj;
         c.change = move_change(state, c.plan->after, s->unit, s->targets);
-        c.reason = fight_move_reason(head, c);
+        c.reason = with_objectives(fight_move_reason(head, c), obj);
         if (beats(c, best)) best = std::move(c);
     }
     if (best.plan) return from_steps(std::move(best.plan->steps), best.reason);

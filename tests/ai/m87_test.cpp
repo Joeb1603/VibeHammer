@@ -134,6 +134,21 @@ GameState started(const GameState& gs, UnitId id, MoveType type = MoveType::Norm
     return sim.state();
 }
 
+// M91 (D-092): the five M91 keys at 0 (the M90 bot), for tests that pin mission or terrain play at the defaults.
+MoveWeights m90_keys(MoveWeights w = {}) {
+    w.plan_terrain = 0.0;
+    w.aim_terrain = 0.0;
+    w.hold_fire = 0.0;
+    w.objective_charge = 0.0;
+    w.objective_fight = 0.0;
+    return w;
+}
+BotConfig m90_bot(MoveWeights w = {}) {
+    BotConfig c;
+    c.move = m90_keys(w);
+    return c;
+}
+
 MoveWeights zero_objectives() {
     MoveWeights w;
     w.objective = 0.0;
@@ -781,7 +796,8 @@ BotGame play_objectives_bot_game(std::uint64_t seed = kObjectivesSeed) {
     g.replay.initial.scenario = kObjectiveScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000);
+    // M91 (D-092): the M87 game, pinned to the M91 keys at 0 (the saved file is the M90 bot's).
+    g.record = play_bot_session(session, m90_bot(), m90_bot(), 5000);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     return g;

@@ -11,6 +11,7 @@
 #include "core/state/objectives.hpp"
 #include "core/state/queries.hpp"
 #include "normal/army_plan.hpp"
+#include "normal/charge.hpp"
 #include "normal/value.hpp"
 
 namespace wh40k::ai::normal {
@@ -139,7 +140,8 @@ bool can_still_move(const core::GameState& state, const core::Unit& unit) {
 }
 
 std::optional<ObjectiveOutlook> objective_outlook(const core::GameState& origin, const core::Unit& us,
-                                                  const ArmyPlan& plan, int turns, double weight) {
+                                                  const ArmyPlan& plan, int turns, double weight,
+                                                  std::span<const UnitShare> left) {
     if (!origin.mission || !(weight > 0.0)) return std::nullopt;
     ObjectiveOutlook o;
     o.next = next_scorings(origin, us.side, turns);
@@ -174,9 +176,16 @@ std::optional<ObjectiveOutlook> objective_outlook(const core::GameState& origin,
         }
     }
     // The enemy: its level now, and where it can be at the end of its next turn.
+    // M91 (D-092): a unit in `left` at its surviving share, rounded to whole OC.
+    const auto scaled = [&](const core::Unit& e, int oc) {
+        for (const UnitShare& l : left) {
+            if (l.unit == e.id) return static_cast<int>(std::lround(static_cast<double>(oc) * std::clamp(l.left, 0.0, 1.0)));
+        }
+        return oc;
+    };
     for (const core::Unit& e : origin.units) {
         if (e.side == us.side || e.models.empty()) continue;
-        const int oc = unit_oc(e);
+        const int oc = scaled(e, unit_oc(e));
         if (oc <= 0) continue;
         const analysis::ThreatRanges th = analysis::threat_ranges(e);
         const bool engaged = core::is_engaged(origin, e);
@@ -184,7 +193,7 @@ std::optional<ObjectiveOutlook> objective_outlook(const core::GameState& origin,
         std::vector<bool> in_range(o.areas.size(), false);
         for (AreaOutlook& a : o.areas) {
             const core::ObjectiveArea& area = areas[a.index];
-            a.them_now += oc_within(e, area);
+            a.them_now += scaled(e, oc_within(e, area));
             const float gap = area_gap_mm(e, area);
             in_range[a.index] = core::within(gap, 0.0f);
             // An engaged unit stays where it is (it can only Fall Back, 09.07).
@@ -193,6 +202,49 @@ std::optional<ObjectiveOutlook> objective_outlook(const core::GameState& origin,
         one_place(p, in_range);
         for (AreaOutlook& a : o.areas) a.reach.add(oc, p[a.index]);
     }
+    return o;
+}
+
+std::optional<ObjectiveOutlook> fight_outlook(const core::GameState& state, const core::Unit& us, double weight) {
+    if (!state.mission || !(weight > 0.0)) return std::nullopt;
+    const int turns = turns_left(state);
+    if (core::turn_side(state) == us.side) {
+        return objective_outlook(state, us, no_plan(state, us.side), turns, weight);
+    }
+    // The enemy's turn: our next Command phase reads control at the end of this turn.
+    ObjectiveOutlook o;
+    const int round = state.flow.battle_round;
+    const int first = state.mission->first_scoring_round;
+    // Our Command phase comes next round if the enemy went second this round, else later this round (it went first).
+    const bool enemy_second = state.flow.turn_in_round != 0;
+    const int our_round = round + (enemy_second ? 1 : 0);
+    o.next.ours = turns >= 1 && our_round <= state.battle_rounds && our_round >= first;
+    o.next.theirs = false;
+    if (!o.next.ours) return std::nullopt;
+    const double rate = vp_share(state) * weight;
+    if (!(rate > 0.0)) return std::nullopt;
+    const std::size_t ours = core::side_index(us.side);
+    const std::vector<core::ObjectiveArea>& areas = state.mission->objectives;
+    for (std::size_t i = 0; i < areas.size(); ++i) {
+        AreaOutlook a;
+        a.index = i;
+        a.value_us = rate * static_cast<double>(areas[i].vp[ours]);
+        a.value_them = rate * static_cast<double>(areas[i].vp[1 - ours]);
+        o.areas.push_back(std::move(a));
+    }
+    for (const core::Unit& f : state.units) {
+        if (f.models.empty() || f.id == us.id) continue;
+        for (AreaOutlook& a : o.areas) {
+            const int oc = oc_within(f, areas[a.index]);
+            if (f.side == us.side) {
+                a.others += oc;
+            } else {
+                a.them_now += oc;
+            }
+        }
+    }
+    // The enemy's level at the end of this turn: what it has in range now, for certain.
+    for (AreaOutlook& a : o.areas) a.reach.add(a.them_now, 1.0);
     return o;
 }
 

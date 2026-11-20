@@ -10,7 +10,9 @@
 //   move score's weights (normal::MoveWeights, normal/move_score.hpp) for both sides, --weights-a / --weights-b for one
 //   side (applied in the order given): delay, survival, edge, coherency, approach, cohesion, follow, approach_alone,
 //   objective, objective_approach, objective_fire (M87, D-086; all 0: a mission game plays exactly as before M87),
-//   cover (M89, D-090; 0 to 1, another value exits 2; 0: a game with terrain plays exactly as before M89).
+//   cover (M89, D-090; 0 to 1, another value exits 2; 0: a game with terrain plays exactly as before M89),
+//   plan_terrain and aim_terrain (M91, D-092; 0 to 1), hold_fire (0 or 1), objective_charge and objective_fight (0 or
+//   more); all five 0: plays exactly as M90.
 //   --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
 //   game instead of the totals: its result, its counts and FNV-1a
 //   hashes of the accepted actions, the final state (JSON) and the bot decisions' trace lines (reasons, no times),
@@ -85,6 +87,15 @@ void apply_weights(const std::string& text, wh40k::ai::normal::MoveWeights& w) {
         } else if (key == "cover") {  // M89 (D-090): 0 to 1
             if (!(d >= 0.0 && d <= 1.0)) throw std::invalid_argument("cover is 0 to 1");
             w.cover = d;
+        } else if (key == "plan_terrain" || key == "aim_terrain") {  // M91 (D-092): 0 to 1
+            if (!(d >= 0.0 && d <= 1.0)) throw std::invalid_argument(key + " is 0 to 1");
+            (key == "plan_terrain" ? w.plan_terrain : w.aim_terrain) = d;
+        } else if (key == "hold_fire") {  // M91: 0 or 1
+            if (d != 0.0 && d != 1.0) throw std::invalid_argument("hold_fire is 0 or 1");
+            w.hold_fire = d;
+        } else if (key == "objective_charge" || key == "objective_fight") {  // M91: 0 or more
+            if (!(d >= 0.0)) throw std::invalid_argument(key + " is 0 or more");
+            (key == "objective_charge" ? w.objective_charge : w.objective_fight) = d;
         } else {
             throw std::invalid_argument("unknown weight");
         }

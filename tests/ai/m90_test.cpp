@@ -51,6 +51,21 @@ void consolidate(GameState& gs, Side side, Decide decide) {
     }
 }
 
+// M91 (D-092): the five M91 keys at 0 (the M90 bot), for tests that pin mission or terrain play at the defaults.
+normal::MoveWeights m90_keys(normal::MoveWeights w = {}) {
+    w.plan_terrain = 0.0;
+    w.aim_terrain = 0.0;
+    w.hold_fire = 0.0;
+    w.objective_charge = 0.0;
+    w.objective_fight = 0.0;
+    return w;
+}
+BotConfig m90_bot(normal::MoveWeights w = {}) {
+    BotConfig c;
+    c.move = m90_keys(w);
+    return c;
+}
+
 bool has_flamer(const GameState& gs) {
     for (const Unit& u : gs.units) {
         for (const Model& m : u.models) {
@@ -67,7 +82,7 @@ bool has_flamer(const GameState& gs) {
 TEST(M90_Bot, NormalMakesAnObjectiveConsolidationThatGetsModelsWithinRange) {
     GameState gs = objective_consolidation_state(2.0f);
     ASSERT_EQ(within_range(gs), 0);
-    Bot bot(BotConfig{});
+    Bot bot(m90_bot());  // M91 (D-092): M90's rule, the new keys at 0 (M91_FightMoves weighs it)
     const BotChoice first = bot.decide(gs, Side::A);
     ASSERT_TRUE(std::holds_alternative<action::StartConsolidation>(first.action)) << action_name(first.action);
     EXPECT_EQ(std::get<action::StartConsolidation>(first.action).objective, std::optional<std::size_t>{0});
@@ -80,7 +95,7 @@ TEST(M90_Bot, NormalMakesAnObjectiveConsolidationThatGetsModelsWithinRange) {
 TEST(M90_Bot, NormalEndsTheStepWhenEveryModelIsAlreadyWithinRange) {
     GameState gs = objective_consolidation_state(-6.0f, 14.0f);
     ASSERT_EQ(within_range(gs), 5);
-    const BotChoice c = Bot(BotConfig{}).decide(gs, Side::A);
+    const BotChoice c = Bot(m90_bot()).decide(gs, Side::A);
     EXPECT_TRUE(std::holds_alternative<action::EndConsolidations>(c.action)) << action_name(c.action);
 }
 

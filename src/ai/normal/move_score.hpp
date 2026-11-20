@@ -122,11 +122,34 @@ struct MoveWeights {
     // each such rate is (1 - cover) x the terrain-blind rate + cover x the terrain rate. Above 0 the candidates also
     // take spots in cover, hidden spots and detours, and hand deployment prefers cover.
     double cover = 1.0;
+    // M91 (D-092). Each key at 0 plays exactly as M90; nothing behind a key is computed while its gate is off.
+    // On a battlefield with terrain (cover_on) only:
+    // - the army plan rates its groups' shots with terrain (13.08 area cover where the target stands, and whether a
+    //   shoot track that doesn't move sees its target now), 0 to 1, a blend as `cover`;
+    double plan_terrain = 1.0;
+    // - ShootingAim::reply (the enemy target's next-turn reply on our unit) with our unit's area cover and the target's
+    //   sight of it, 0 to 1, a blend;
+    double aim_terrain = 1.0;
+    // - holding fire to stay hidden (13.09): 0 or 1. A unit that could hide where it ends is scored shooting and
+    //   holding fire, the better kept (the move score), and a hidden unit holds fire in the Shooting phase when the
+    //   move score prefers it.
+    double hold_fire = 1.0;
+    // Under a mission with `objective` above 0 only (x `objective`): the objective terms at a charge's end positions
+    // (charged_value, hold_value), engaging an enemy unit that holds an area included ...
+    double objective_charge = 1.0;
+    // ... and in pile-ins and consolidations (their gain), in our turn and the enemy's.
+    double objective_fight = 1.0;
 };
 
 // M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or
 // objective_fire) above 0.
 [[nodiscard]] bool objectives_on(const core::GameState& state, const MoveWeights& weights);
+// M91 (D-092): each new feature's gate (see MoveWeights).
+[[nodiscard]] bool plan_terrain_on(const core::GameState& state, const MoveWeights& weights);
+[[nodiscard]] bool aim_terrain_on(const core::GameState& state, const MoveWeights& weights);
+[[nodiscard]] bool hold_fire_on(const core::GameState& state, const MoveWeights& weights);
+[[nodiscard]] bool objective_charge_on(const core::GameState& state, const MoveWeights& weights);
+[[nodiscard]] bool objective_fight_on(const core::GameState& state, const MoveWeights& weights);
 // M89 (D-090): the terrain terms are on: the battlefield has terrain and the cover weight is above 0.
 [[nodiscard]] bool cover_on(const core::GameState& state, const MoveWeights& weights);
 
@@ -156,6 +179,9 @@ struct MoveScore {
     bool in_cover = false;
     bool hidden = false;
     bool unseen = false;
+    // M91 (D-092): the plan would shoot this turn; it holds fire on purpose to stay hidden (13.09, hold_fire).
+    bool shoots = false;
+    bool holds_fire = false;
     // D-083 part 2 (M80), a unit that follows its group: its focus when the line follows it, and the share of the
     // focus's reply counted on it (1: it stands alone; 1/k: it shares the reply with k - 1 synced partners in its reach).
     std::optional<core::UnitId> focus;
@@ -269,8 +295,13 @@ public:
     // D-083 part 2 (M80): `plan`, the army plan of `unit`'s side in `origin` (army_plan(cache, origin, side): a caller
     // that has it passes it, so it is computed once per decision); nullptr: computed here. A unit with partners in it
     // follows its focus instead (see the file comment).
+    // M91 (D-092): `sight`, the decision's TerrainSight (one per decision, shared with the army plan); nullptr: built
+    // here under cover_on, as before. With plan_terrain on, an army plan computed here gets it too.
     MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                     MoveWeights weights = {}, const ArmyPlan* plan = nullptr);
+                     MoveWeights weights = {}, const ArmyPlan* plan = nullptr,
+                     std::shared_ptr<analysis::TerrainSight> sight = nullptr);
+    // M91: the sight this context uses (nullptr without cover_on).
+    [[nodiscard]] const std::shared_ptr<analysis::TerrainSight>& sight() const noexcept { return sight_; }
 
     [[nodiscard]] const core::GameState& origin() const noexcept { return origin_; }
     [[nodiscard]] const core::Unit& unit() const noexcept { return us_; }
@@ -359,6 +390,9 @@ public:
     [[nodiscard]] bool area_spots() const noexcept { return area_spots_; }
     // M89 (D-090): the terrain terms are on (cover_on), so the candidates add cover and hidden spots and detours.
     [[nodiscard]] bool cover_spots() const noexcept { return sight_ != nullptr; }
+    // M91 (D-092, hold_fire): our unit ending at `positions` could hide in the enemy's turn if it held fire (13.09: it
+    // takes cover and hides, and every model is within an area with a Dense feature). False with hold_fire off.
+    [[nodiscard]] bool may_hold_fire(const std::vector<core::Position>& positions) const;
     // M89 (D-090): how our unit at `positions` stands against the enemy's reply in its next turn, for the rates below
     // until end_reply (score_move_plan sets it per plan; nothing happens without cover_on). `shoots`: the plan makes
     // ranged attacks this turn (then our unit is not hidden in the enemy's turn, 13.09). Returns the closest enemy

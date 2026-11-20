@@ -68,6 +68,21 @@ TerrainArea area_with(const std::string& name, const TerrainShape& area, const T
     return a;
 }
 
+// M91 (D-092): the five M91 keys at 0 (the M90 bot), for tests that pin mission or terrain play at the defaults.
+normal::MoveWeights m90_keys(normal::MoveWeights w = {}) {
+    w.plan_terrain = 0.0;
+    w.aim_terrain = 0.0;
+    w.hold_fire = 0.0;
+    w.objective_charge = 0.0;
+    w.objective_fight = 0.0;
+    return w;
+}
+BotConfig m90_bot(normal::MoveWeights w = {}) {
+    BotConfig c;
+    c.move = m90_keys(w);
+    return c;
+}
+
 normal::MoveWeights with_cover(double cover) {
     normal::MoveWeights w;
     w.cover = cover;
@@ -414,7 +429,7 @@ constexpr const char* kM88Trace = "d402e9f71fb750df";
 }  // namespace
 
 TEST(M89_Regression, AtCoverZeroTheTerrainScenarioPlaysAsTheM88BotUnderM90Rules) {
-    BotConfig m88;
+    BotConfig m88 = m90_bot();  // M91 (D-092): the new keys at 0 too
     m88.move.cover = 0.0;
     const PerGameReport r = run_per_game(terrain_scenario(), 1, 1, m88, m88);
     EXPECT_TRUE(r.clean);
@@ -472,7 +487,8 @@ CoverGame play_cover_bot_game(std::uint64_t seed = kCoverSeed) {
     g.replay.initial.scenario = kTerrainScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
-    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000);
+    // M91 (D-092): the M89 game, pinned to the M91 keys at 0 (the saved file is the M90 bot's).
+    g.record = play_bot_session(session, m90_bot(), m90_bot(), 5000);
     g.replay.steps = session.history();
     g.replay.expect = replay_expectation(session.state());
     for (const ReplayStep& st : g.replay.steps) {

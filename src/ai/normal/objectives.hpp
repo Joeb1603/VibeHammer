@@ -86,8 +86,26 @@ struct ObjectiveOutlook {
 // What the areas are worth to a move of `us` (its models at the move's start) in `origin`, our turn; `turns`:
 // turns_left(origin); `weight`: MoveWeights::objective. nullopt without a mission, with weight 0, or with no scoring
 // ahead.
+// M91 (D-092): `left`, enemy units that lose models before the next check (a charge's targets after this Fight phase):
+// each one's OC counts at its surviving share, rounded to the nearest whole OC, both now and in its reach.
+struct UnitShare {
+    core::UnitId unit;
+    double left = 1.0;  // the share of the unit left, 0..1
+};
 [[nodiscard]] std::optional<ObjectiveOutlook> objective_outlook(const core::GameState& origin, const core::Unit& us,
-                                                                const ArmyPlan& plan, int turns, double weight);
+                                                                const ArmyPlan& plan, int turns, double weight,
+                                                                std::span<const UnitShare> left = {});
+
+// M91 (D-092, objective_fight): the outlook of a fight move (a pile-in or consolidation) by `us` in `state`'s Fight
+// phase, in either player's turn (`weight`: objective x objective_fight).
+// - Our turn: objective_outlook as above with no plan (nothing can still move): the enemy's next scoring reads control
+//   at the end of this turn, ours at the end of its next one.
+// - The enemy's turn: control at the end of this turn is what we score in our next Command phase (`ours`), the
+//   enemy's level at it being what it has in range now (its moves are over); the enemy's next scoring reads the end of
+//   our next turn, beyond the move (`theirs` false). Survival through the enemy's turn is then 1.
+// nullopt without a mission, with weight 0, or with no scoring ahead.
+[[nodiscard]] std::optional<ObjectiveOutlook> fight_outlook(const core::GameState& state, const core::Unit& us,
+                                                            double weight);
 
 struct ObjectiveTerms {
     double deny = 0.0;   // the enemy's next scoring we deny by being there at the end of our turn
