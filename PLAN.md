@@ -345,7 +345,11 @@ gaps and the bot, with M89's 55% bar for the bot.
     bot.
   - **The 55% target is open**: 201 of 400 (50.2%).
   - The confirmation on seeds 101–200 was not run: with every feature off there is nothing to confirm.
-- **Identity:** IDENTITY_PLACEHOLDER
+- **Identity** (`--per-game`, 200 games each, against the M90 binary): all thirteen runs at the defaults are
+  identical, 2,600 of 2,600 games. The runs are V1, both bot scenarios, Strike, the rosters, the objective scenario,
+  the terrain scenario with A first and with B first, random armies auto and hand, with and without `--terrain`, and the
+  M73 lists. `M91_Regression` covers the keys at 0 on the terrain and objective scenarios.
+- **Build** and the full `ctest`: green, 1,464 tests.
 - **Replay:** `tests/replays/m91_bot_game.json` (seed 6, the features on).
   - It has three charges onto an objective and an Objective Consolidation; it can't show holding fire, which never
     arose.
