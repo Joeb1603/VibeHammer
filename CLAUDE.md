@@ -24,6 +24,9 @@ docs/plan_archive.md      the finished milestones M0–M83, verbatim
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
 docs/datasheets/          the two New Recruit army rosters behind rosters_44x60.json (GW copyright: private repo only)
+docs/gdmissions/          gdmissions.app's 11th ed pages as Markdown: core rules incl. app-only entries, missions, layouts,
+                          detachments, changelogs (third-party, unverified; GW copyright: private repo only)
+  00_index.md             what is in each file
 docs/decisions.md         index of rule interpretations and design decisions (D-001 ...), cited in code
 docs/decisions/D-NNN.md   one file per decision
 docs/dev/                 reference: replays, client flags, bot arena, packaging and data regeneration
@@ -178,4 +181,6 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Don't edit `data/units/*.json` by hand. Re-run the fetch tool, or put overrides in the scenario file.
 - Never commit the PDF or `rules-summary.txt`. They are gitignored on purpose (Games Workshop copyright).
 - `docs/rules/` is no longer gitignored and may be committed, because the repo is private and will stay that way. It is still Games Workshop's copyrighted text: never make the repo public or copy `docs/rules/` anywhere public. If the repo ever goes public, add `docs/rules/` back to `.gitignore` and remove it from the history first.
+- `docs/gdmissions/` (scraped from gdmissions.app) is Games Workshop's copyrighted text as well, under the same rules. It is a
+  third-party transcription: `docs/rules/` stays the source of truth, and its app-only entries are unverified.
 - `docs/datasheets/` (the New Recruit roster exports) is Games Workshop's copyrighted text too. The same rules apply: never copy it into `data/`, the package or a release, and the scenario file keeps only unit points and loadouts.
