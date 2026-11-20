@@ -645,6 +645,9 @@ user's choice, 2026-11-13)
 ---
 
 ## Later (post-V1, rough order)
+The long-range map from here to a full game with any army on any mission (phases, order, open questions) is
+`docs/roadmap.md`. The items below are the nearer, smaller ones; each roadmap item still becomes a milestone here first.
+
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
 - **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
