@@ -79,24 +79,26 @@ struct FightMovePlan {
                                          std::size_t objective);
 
 // The decisions (each answers the pending decision; nullopt when the policy has no answer of its own, and the
-// caller uses the baseline's).
+// caller uses the baseline's). M91 (D-092): `weights`, for objective_fight: a pile-in's, an Overrun pile-in's and a
+// consolidation's gain add the moving unit's objective terms after the move minus before it (fight_outlook: in our
+// turn and the enemy's), and Objective Consolidations are weighed with the others (M90's rule stays the tie-break).
 [[nodiscard]] std::optional<PolicyResult> decide_fight_selection(analysis::OddsCache& cache,
                                                                  const core::GameState& state, core::Side side,
                                                                  const std::vector<core::GameAction>& legal,
-                                                                 std::uint64_t seed);
+                                                                 std::uint64_t seed, const MoveWeights& weights = MoveWeights{});
 [[nodiscard]] std::optional<PolicyResult> decide_melee(analysis::OddsCache& cache, const core::GameState& state,
                                                        core::UnitId unit);
 [[nodiscard]] std::optional<PolicyResult> decide_pile_in(analysis::OddsCache& cache, const core::GameState& state,
                                                          core::Side side, const std::vector<core::GameAction>& legal,
-                                                         std::uint64_t seed);
+                                                         std::uint64_t seed, const MoveWeights& weights = MoveWeights{});
 [[nodiscard]] std::optional<PolicyResult> decide_overrun_pile_in(analysis::OddsCache& cache,
                                                                  const core::GameState& state, core::Side side,
                                                                  const std::vector<core::GameAction>& legal,
-                                                                 std::uint64_t seed);
+                                                                 std::uint64_t seed, const MoveWeights& weights = MoveWeights{});
 [[nodiscard]] std::optional<PolicyResult> decide_consolidation(analysis::OddsCache& cache,
                                                                const core::GameState& state, core::Side side,
                                                                const std::vector<core::GameAction>& legal,
-                                                               std::uint64_t seed);
+                                                               std::uint64_t seed, const MoveWeights& weights = MoveWeights{});
 // A pile-in or consolidation in progress (MoveModels): the rest of the auto_fight_move arrangement planned from
 // the move's start, so a replan (after a load or undo, or a fresh bot) gives the same steps as the memo.
 [[nodiscard]] std::optional<PolicyResult> continue_fight_move(const core::GameState& state, core::Side side,

@@ -77,4 +77,19 @@ private:
 [[nodiscard]] std::vector<std::size_t> sight_samples(const std::vector<core::Position>& positions,
                                                      const core::Position& towards, std::size_t n = kSightSamples);
 
+// M91 (D-092): one unit standing where it is, looking at another standing where it is (the army plan's shoot tracks
+// that don't move, ShootingAim::reply), as MoveScoreContext's stays_view judges the enemy's reply:
+// - `visible`: some sampled model of `observer` sees some sampled model of `target` (13.09-13.11; a target model
+//   counts as hidden when `target_hidden` and TerrainSight::hidden_now says so: its record included);
+// - `cover`: 13.08 for the target, by area (it takes cover with every model within an area) or, against the observer's
+//   sampled model closest to it, no sampled target model outside an area fully visible.
+struct UnitView {
+    bool visible = true;
+    bool cover = false;
+};
+[[nodiscard]] UnitView unit_view(TerrainSight& sight, const core::Unit& observer, const core::Unit& target,
+                                 bool target_hidden);
+// 13.08's first condition for every model where it stands: it takes cover and is within a terrain area.
+[[nodiscard]] bool area_cover_now(const TerrainSight& sight, const core::Unit& unit);
+
 }  // namespace wh40k::ai::analysis

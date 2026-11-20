@@ -91,7 +91,21 @@ struct ChargeCredit {
 // The value of not charging with `unit` (also of a failed charge), for its side (see the file comment). D-066
 // (M56): the shooting and charge threat of the other enemy units that have no other target count too (marginal
 // exposure, as the move score's).
-[[nodiscard]] double hold_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit);
+// M91 (D-092, objective_charge): the objective terms in a charge's values: the army plan of the deciding side and the
+// weight (objective x objective_charge). nullptr: as before M91.
+struct ChargeObjectives {
+    const ArmyPlan* plan = nullptr;
+    double weight = 0.0;
+};
+// M91 (D-092): the objective terms of `unit` where it stands in `state` (its models' positions there): D-086's outlook
+// (`left`: enemy units' surviving shares, see objective_outlook) and objective_terms at `survive`. 0 with no scoring.
+[[nodiscard]] double charge_objective_value(const core::GameState& state, core::UnitId unit, double survive,
+                                            std::span<const UnitShare> left, int turns,
+                                            const ChargeObjectives& objectives);
+// With `objectives`, the objective terms of the unit where it stands (D-086's, as the move score's: the enemy scoring
+// denied at the end of our turn and ours held through its next turn, at the share of the unit left then).
+[[nodiscard]] double hold_value(analysis::OddsCache& cache, const core::GameState& state, core::UnitId unit,
+                                const ChargeObjectives* objectives = nullptr);
 
 // The value of the position after `unit`'s charge move against `targets` (`after_commit`: the charge resolved,
 // Fights First set), for its side; `turns` as turns_left of the state the charge was planned from. D-066 (M56):
@@ -100,9 +114,12 @@ struct ChargeCredit {
 // no other enemy unit is M42's value.
 // D-083 part 3 (M81): `credit`, the partners of a charge at one target (charge_credit): the value is what the charge adds
 // to their fight (see the file comment); ignored for several targets.
+// M91 (D-092): with `objectives`, the objective terms at the charge move's end positions, the targets' OC scaled by the
+// share of them left after this Fight phase (charging a unit that holds an area costs the enemy its control).
 [[nodiscard]] double charged_value(analysis::OddsCache& cache, const core::GameState& after_commit, core::UnitId unit,
                                    std::span<const core::UnitId> targets, int turns,
-                                   const ChargeCredit* credit = nullptr);
+                                   const ChargeCredit* credit = nullptr,
+                                   const ChargeObjectives* objectives = nullptr);
 
 // M43's seam: what declaring a charge with `unit` is worth from `state`.
 // - `state`: `unit`'s side to act, at its Charge decision, or earlier in the same turn (a Shoot or MoveUnits
@@ -133,16 +150,19 @@ struct ChargeProspect {
                                                             core::UnitId unit, std::uint64_t seed,
                                                             double enemy_losses = 0.0,
                                                             std::optional<core::UnitId> losses_from = std::nullopt,
-                                                            const ArmyPlan* plan = nullptr);
+                                                            const ArmyPlan* plan = nullptr,
+                                                            const ChargeObjectives* objectives = nullptr);
 
 // The decisions (nullopt: no answer of the Normal level's own; the caller uses the defaults', normal/defaults.hpp).
+// M91 (D-092): `weights`, for plan_terrain (their army plan) and objective_charge.
 [[nodiscard]] std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core::GameState& state,
                                                         core::Side side, const std::vector<core::GameAction>& legal,
-                                                        std::uint64_t seed);
+                                                        std::uint64_t seed, const MoveWeights& weights = MoveWeights{});
 [[nodiscard]] std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache,
                                                                 const core::GameState& state, core::Side side,
                                                                 const std::vector<core::GameAction>& legal,
-                                                                std::uint64_t seed);
+                                                                std::uint64_t seed,
+                                                                const MoveWeights& weights = MoveWeights{});
 // A charge move in progress (MoveModels): the rest of the auto_charge_move arrangement planned from the move's
 // start, so a replan gives the memo's steps.
 [[nodiscard]] std::optional<PolicyResult> continue_charge_move(const core::GameState& state, core::Side side,

@@ -303,14 +303,15 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
 }
 
 std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
-                                              const std::vector<core::GameAction>& legal, double objective_fire) {
+                                              const std::vector<core::GameAction>& legal, double objective_fire,
+                                              const ShootTerrain* terrain, std::vector<core::UnitId>* held) {
     // D-083 part 3 (M81): focus fire, for the side shooting.
     std::optional<ShootingAim> aim;
     for (const core::GameAction& a : legal) {
         const auto* shoot = std::get_if<core::action::Shoot>(&a);
         const core::Unit* u = shoot != nullptr ? state.find_unit(shoot->unit) : nullptr;
         if (u == nullptr) continue;
-        aim.emplace(cache, state, u->side, objective_fire);
+        aim.emplace(cache, state, u->side, objective_fire, terrain);
         break;
     }
     if (aim && !aim->active()) aim.reset();
@@ -319,11 +320,45 @@ std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const 
         return use != nullptr && std::any_of(c.shots.begin(), c.shots.end(),
                                              [&](const core::ShotDeclaration& d) { return use->focus(d.target); });
     };
+    // M91 (D-092, hold_fire): a unit hidden now (13.09: every model) is scored staying where it is, with the engine's
+    // best shooting now and holding fire (refine_move_score, as the Movement phase scores its ends); it is left out
+    // when holding fire scores better. Judged once per unit and decision.
+    const bool hold_fire = terrain != nullptr && terrain->sight && hold_fire_on(state, terrain->weights);
+    std::optional<ArmyPlan> hold_plan;
+    std::vector<std::pair<core::UnitId, bool>> judged;
+    const auto holds = [&](core::UnitId id) {
+        for (const auto& [unit, h] : judged) {
+            if (unit == id) return h;
+        }
+        bool h = false;
+        const core::Unit* u = state.find_unit(id);
+        if (u != nullptr && !u->models.empty() && !u->turn_flags.fell_back && core::takes_cover_and_hides(*u)) {
+            h = std::all_of(u->models.begin(), u->models.end(),
+                            [&](const core::Model& m) { return terrain->sight->hidden_now(*u, m); });
+            if (h) {
+                if (!hold_plan) {
+                    const PlanTerrain with{terrain->sight.get(), terrain->weights.plan_terrain};
+                    hold_plan = army_plan(cache, state, u->side,
+                                          plan_terrain_on(state, terrain->weights) ? &with : nullptr);
+                }
+                MoveScoreContext ctx(cache, state, id, terrain->weights, &*hold_plan, terrain->sight);
+                PlannedEnd stay;
+                stay.type = u->turn_flags.advanced ? core::MoveType::Advance : core::MoveType::Normal;
+                for (const core::Model& m : u->models) stay.positions.push_back(m.position);
+                stay.longest_path_mm = u->turn_flags.moved_over_3in ? core::inches_to_mm(4.0f) : 0.0f;
+                h = refine_move_score(ctx, stay, state, 0, false).holds_fire;
+            }
+        }
+        judged.emplace_back(id, h);
+        if (h && held != nullptr) held->push_back(id);
+        return h;
+    };
     std::optional<ShootingChoice> best;
     bool best_at_focus = false;
     for (const core::GameAction& a : legal) {
         const auto* shoot = std::get_if<core::action::Shoot>(&a);
         if (shoot == nullptr) continue;
+        if (hold_fire && holds(shoot->unit)) continue;
         std::optional<ShootingChoice> c = plan_shooting(cache, state, shoot->unit, shoot->type, use);
         if (!c || !(c->value > kBetter)) continue;
         // D-083 part 3: a unit shooting at a focus target first (then the most valuable, as before).
@@ -340,7 +375,7 @@ std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const 
 // ---- D-083 part 3 (M81): focus fire ----
 
 ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
-                         double objective_fire)
+                         double objective_fire, const ShootTerrain* terrain)
     : cache_(&cache), state_(&state), side_(side) {
     std::array<int, 2> units{};
     for (const core::Unit& u : state.units) {
@@ -352,7 +387,15 @@ ShootingAim::ShootingAim(analysis::OddsCache& cache, const core::GameState& stat
     // at most kFinishTurns.
     const int turns = std::max(0, state.battle_rounds - state.flow.battle_round + (state.flow.turn_in_round == 0 ? 1 : 0));
     finish_turns_ = static_cast<double>(std::min(kFinishTurns, turns));
-    const ArmyPlan plan = army_plan(cache, state, side);
+    // M91 (D-092): the plan with terrain (plan_terrain), and the reply's (aim_terrain).
+    analysis::TerrainSight* sight = terrain != nullptr ? terrain->sight.get() : nullptr;
+    const bool plan_terrain = sight != nullptr && plan_terrain_on(state, terrain->weights);
+    const PlanTerrain plan_with{sight, plan_terrain ? terrain->weights.plan_terrain : 0.0};
+    if (sight != nullptr && aim_terrain_on(state, terrain->weights)) {
+        sight_ = sight;
+        aim_weight_ = std::clamp(terrain->weights.aim_terrain, 0.0, 1.0);
+    }
+    const ArmyPlan plan = army_plan(cache, state, side, plan_terrain ? &plan_with : nullptr);
     for (const PlanGroup& g : plan.groups) {
         if (std::find(focus_.begin(), focus_.end(), g.target) == focus_.end()) focus_.push_back(g.target);
     }
@@ -420,9 +463,22 @@ double ShootingAim::reply(core::UnitId target) const {
             double v = 0.0;
             // Its shooting after a Normal move towards u (judged by who is engaged now, next_turn_shot), and, unengaged,
             // its charge after the move; engaged with u, it fights u.
-            if (const std::optional<analysis::ShotContext> ctx =
+            if (std::optional<analysis::ShotContext> ctx =
                     next_turn_shot(*state_, *e, u, std::max(0.0f, gap - reach.move_mm))) {
-                v += ranged_share(*cache_, *state_, *e, u, *ctx);
+                const double plain = ranged_share(*cache_, *state_, *e, u, *ctx);
+                if (sight_ == nullptr) {
+                    v += plain;
+                } else {
+                    // M91 (D-092): our unit's area cover where it stands, and whether the target's models see it now
+                    // (it shoots this turn, so it isn't hidden in the enemy's turn: 13.09).
+                    const analysis::UnitView view = analysis::unit_view(*sight_, *e, u, false);
+                    double terrain = 0.0;
+                    if (view.visible) {
+                        ctx->target_cover = view.cover;
+                        terrain = view.cover ? ranged_share(*cache_, *state_, *e, u, *ctx) : plain;
+                    }
+                    v += (1.0 - aim_weight_) * plain + aim_weight_ * terrain;
+                }
             }
             if (with_u) {
                 v += melee_share(*cache_, *state_, *e, u);

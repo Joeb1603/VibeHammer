@@ -109,8 +109,12 @@ public:
         std::optional<core::UnitId> reply_to;
     };
 
-    Planner(analysis::OddsCache& cache, const core::GameState& state, core::Side side)
-        : cache_(cache), state_(state), side_(side) {
+    Planner(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
+            const PlanTerrain* terrain = nullptr)
+        : cache_(cache), state_(state), side_(side),
+          terrain_(terrain != nullptr && terrain->sight != nullptr && !terrain->sight->empty() && terrain->weight > 0.0
+                       ? terrain
+                       : nullptr) {
         for (const core::Unit& u : state.units) {
             if (u.models.empty()) continue;
             Info i;
@@ -132,6 +136,7 @@ public:
         gaps_.assign(n * n, std::nullopt);
         lone_.assign(n * n, std::nullopt);
         closest_.assign(n, std::nullopt);
+        area_cover_.assign(n, std::nullopt);
         compute_turns();
     }
 
@@ -430,7 +435,9 @@ private:
         if (!(r > 0.0f)) return 0.0;
         if (t.mode == AttackMode::Shoot) {
             if (j < t.ts) return 0.0;
-            return ranged(t.unit, e, std::min(t.d0, r), !core::more_than(t.d0, r) || j > t.ts);
+            // M91 (D-092): a shoot track that doesn't move shoots from where it stands now.
+            const bool standing = !core::more_than(t.d0, r);
+            return ranged(t.unit, e, std::min(t.d0, r), standing || j > t.ts, standing);
         }
         if (t.mode == AttackMode::Charge && j == t.tc) {
             const float at = std::max(t.d0 - travel(t.unit, j), 0.0f);
@@ -492,15 +499,50 @@ private:
         if (!slot) slot = ranged_share(cache_, state_, *units_[a].unit, *units_[b].unit, 0.0f, true);
         return *slot;
     }
-    double ranged(std::size_t a, std::size_t b, float gap_mm, bool heavy) {
+    // `standing`: the shooter shoots from where it stands now (M91: then its sight of the target counts).
+    double ranged(std::size_t a, std::size_t b, float gap_mm, bool heavy, bool standing = false) {
+        const double plain = ranged_at(a, b, gap_mm, heavy, false);
+        if (terrain_ == nullptr) return plain;
+        // M91 (D-092): the terrain rate, blended.
+        bool cover = area_cover(b);
+        double terrain = 0.0;
+        if (standing) {
+            const analysis::UnitView& v = view(a, b);
+            cover = cover || (v.visible && v.cover);
+            terrain = v.visible ? (cover ? ranged_at(a, b, gap_mm, heavy, true) : plain) : 0.0;
+        } else {
+            terrain = cover ? ranged_at(a, b, gap_mm, heavy, true) : plain;
+        }
+        return (1.0 - terrain_->weight) * plain + terrain_->weight * terrain;
+    }
+    // The cache carries the cover bit (M91; the terrain-blind map is as before).
+    double ranged_at(std::size_t a, std::size_t b, float gap_mm, bool heavy, bool cover) {
         const auto key = std::make_tuple(a, b, heavy, band_of(units_[a].ranges, gap_mm));
-        if (const auto it = ranged_.find(key); it != ranged_.end()) return it->second;
+        auto& cache = cover ? ranged_cover_ : ranged_;
+        if (const auto it = cache.find(key); it != cache.end()) return it->second;
         double v = 0.0;
         if (std::optional<analysis::ShotContext> ctx = shot_context(a, b, gap_mm)) {
             if (ctx->type == core::ShootingType::Normal) ctx->heavy = heavy;
+            ctx->target_cover = cover;
             v = ranged_share(cache_, state_, *units_[a].unit, *units_[b].unit, *ctx);
         }
-        return ranged_.emplace(key, v).first->second;
+        return cache.emplace(key, v).first->second;
+    }
+    // M91: unit k takes cover with every model within an area where it stands; unit a standing, looking at unit b.
+    bool area_cover(std::size_t k) {
+        std::optional<bool>& slot = area_cover_[k];
+        if (!slot) slot = analysis::area_cover_now(*terrain_->sight, *units_[k].unit);
+        return *slot;
+    }
+    const analysis::UnitView& view(std::size_t a, std::size_t b) {
+        const auto key = std::make_pair(a, b);
+        if (const auto it = views_.find(key); it != views_.end()) return it->second;
+        // An enemy target's hidden flags are its own (13.09, its record); ours aren't asked (the plan's sight is of
+        // our shooters only).
+        const bool enemy_target = units_[b].unit->side != side_;
+        return views_
+            .emplace(key, analysis::unit_view(*terrain_->sight, *units_[a].unit, *units_[b].unit, enemy_target))
+            .first->second;
     }
 
     analysis::OddsCache& cache_;
@@ -516,6 +558,11 @@ private:
     std::vector<std::optional<double>> melee_;
     std::vector<std::optional<double>> cq_;
     std::map<std::tuple<std::size_t, std::size_t, bool, std::uint64_t>, double> ranged_;
+    // M91 (D-092): with plan_terrain only.
+    const PlanTerrain* terrain_ = nullptr;
+    std::map<std::tuple<std::size_t, std::size_t, bool, std::uint64_t>, double> ranged_cover_;
+    std::vector<std::optional<bool>> area_cover_;
+    std::map<std::pair<std::size_t, std::size_t>, analysis::UnitView> views_;
     std::vector<std::optional<float>> gaps_;
     std::vector<std::optional<Lone>> lone_;
     std::vector<std::optional<std::optional<std::size_t>>> closest_;
@@ -866,7 +913,8 @@ const AreaSet* ArmyPlan::area_of(core::UnitId unit) const {
 
 ArmyPlan no_plan(const core::GameState& state, core::Side side) { return noop_plan(state, side); }
 
-ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side) {
+ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
+                   const PlanTerrain* terrain) {
     const PlanInput in(state);
     const core::GameState& gs = *in.state;
     ArmyPlan plan = noop_plan(gs, side);
@@ -875,13 +923,13 @@ ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, cor
         // M87 (D-086): a last unit still gets an area under a mission.
         if (gs.mission && !plan.units.empty() && gs.flow.stage != core::Stage::NotStarted &&
             gs.flow.stage != core::Stage::Deploy) {
-            Planner p(cache, gs, side);
+            Planner p(cache, gs, side, terrain);
             assign_areas(p, gs, side, plan);
         }
         return plan;
     }
     if (gs.flow.stage == core::Stage::NotStarted || gs.flow.stage == core::Stage::Deploy) return plan;
-    Planner p(cache, gs, side);
+    Planner p(cache, gs, side, terrain);
     if (p.turns() <= 0 || p.theirs().empty()) return plan;
     plan.active = true;
 
@@ -951,12 +999,12 @@ ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, cor
 }
 
 LoneExchange lone_exchange(analysis::OddsCache& cache, const core::GameState& state, core::UnitId ours,
-                           core::UnitId enemy) {
+                           core::UnitId enemy, const PlanTerrain* terrain) {
     LoneExchange out;
     const PlanInput in(state);
     const core::Unit* u = in.state->find_unit(ours);
     if (u == nullptr) return out;
-    Planner p(cache, *in.state, u->side);
+    Planner p(cache, *in.state, u->side, terrain);
     const std::optional<std::size_t> ui = p.index(ours);
     const std::optional<std::size_t> ei = p.index(enemy);
     if (!ui || !ei) return out;

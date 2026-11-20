@@ -29,6 +29,7 @@
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 #include "normal/army_plan.hpp"
+#include "normal/move_score.hpp"
 
 namespace wh40k::ai::normal {
 
@@ -36,6 +37,14 @@ namespace wh40k::ai::normal {
 inline constexpr int kFinishTurns = 3;        // a destroyed target's reply is removed for its next turns, at most these
 inline constexpr double kFocusWeight = 0.1;   // x the share destroyed of a target of the army plan's groups
 inline constexpr double kSplitMargin = 0.02;  // a split declaration must beat the best concentrated one by this
+
+// M91 (D-092): terrain for one Shoot decision, under cover_on: the decision's sight (shared by the aim, its army plan and
+// the hold-fire move score) and the bot's weights (plan_terrain, aim_terrain and hold_fire read it). Without one (or
+// with those keys at 0) the decision is as before M91.
+struct ShootTerrain {
+    std::shared_ptr<analysis::TerrainSight> sight;
+    MoveWeights weights;
+};
 
 // D-083 part 3 (M81): what focus fire knows about the shooting side's targets, for one Shoot decision. Inactive (every
 // value as before M81) with one unit a side.
@@ -47,7 +56,10 @@ public:
     // M87 (D-086): `objective_fire` (MoveWeights::objective_fire, under a mission; 0: none), the weight of the enemy
     // scorings the shooting helps deny: losses among an enemy unit within range of an area it would score at the end of
     // our turn, as a share of the OC it is ahead by, times that area's VP at the VP rate.
-    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side, double objective_fire = 0.0);
+    // M91 (D-092): `terrain` (see ShootTerrain): its army plan with plan_terrain; with aim_terrain, reply() blends in
+    // our unit's area cover and whether the target's models see it now (aim_terrain is the weight).
+    ShootingAim(analysis::OddsCache& cache, const core::GameState& state, core::Side side, double objective_fire = 0.0,
+                const ShootTerrain* terrain = nullptr);
     [[nodiscard]] bool active() const noexcept { return active_; }
     // The bonus of a declaration with these outcomes (unit shares; 0 when inactive).
     [[nodiscard]] double bonus(std::span<const analysis::TargetOutcome> outcomes) const;
@@ -74,6 +86,9 @@ private:
         double value = 0.0;
     };
     std::vector<Lead> leads_;
+    // M91 (D-092): aim_terrain's sight and weight (nullptr / 0: as before).
+    analysis::TerrainSight* sight_ = nullptr;
+    double aim_weight_ = 0.0;
 };
 
 struct ShootingChoice {
@@ -98,9 +113,13 @@ struct ShootingChoice {
 // offered Shoot is worth anything (end the step). D-083 part 3 (M81): with focus fire active (ShootingAim), the values
 // with its bonus, and a unit shooting at a focus target first.
 // M87 (D-086): `objective_fire`, the aim's objective weight (0: none).
+// M91 (D-092): `terrain` (see ShootTerrain); with hold_fire, a unit hidden now (13.09) that the move score would rather
+// keep hidden is left out (`held`: those units, in legal order).
 [[nodiscard]] std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
                                                             const std::vector<core::GameAction>& legal,
-                                                            double objective_fire = 0.0);
+                                                            double objective_fire = 0.0,
+                                                            const ShootTerrain* terrain = nullptr,
+                                                            std::vector<core::UnitId>* held = nullptr);
 
 // The value of `volley` resolved in `order` (indices into it) against `target`, in model equivalents.
 [[nodiscard]] double order_value(analysis::OddsCache& cache, std::span<const analysis::VolleyBatch> volley,

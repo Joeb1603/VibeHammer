@@ -12,6 +12,7 @@
 #include "normal/fight.hpp"
 #include "normal/movement.hpp"
 #include "normal/shooting.hpp"
+#include "unit_style.hpp"
 
 namespace wh40k::ai {
 
@@ -36,8 +37,17 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     if (std::holds_alternative<decision::Shoot>(kind)) {
         // M87 (D-086): the objective part of the aim, under a mission.
         const double fire = normal::objectives_on(gs, weights) ? weights.objective_fire : 0.0;
-        if (const auto c = normal::choose_shooting(cache, gs, legal, fire)) {
+        // M91 (D-092): the decision's terrain (its sight, shared by the aim, the plan and the hold-fire score).
+        std::optional<normal::ShootTerrain> terrain;
+        if (normal::cover_on(gs, weights)) terrain = normal::ShootTerrain{std::make_shared<analysis::TerrainSight>(gs), weights};
+        std::vector<UnitId> held;
+        if (const auto c = normal::choose_shooting(cache, gs, legal, fire, terrain ? &*terrain : nullptr, &held)) {
             return single(action::Shoot{c->unit, c->type, c->shots}, normal::describe_shooting(gs, *c));
+        }
+        if (!held.empty()) {
+            std::string names;
+            for (const UnitId id : held) names += (names.empty() ? "" : ", ") + client::unit_display_name(gs, id);
+            return single(action::EndShootStep{}, "End shooting: " + names + " hold fire to stay hidden (13.09, M91)");
         }
         return single(action::EndShootStep{}, "End shooting: no shot is worth anything");
     }
@@ -67,23 +77,23 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
         return std::nullopt;
     }
     if (std::holds_alternative<decision::SelectUnitToFight>(kind) || std::holds_alternative<decision::ForcedFight>(kind)) {
-        return normal::decide_fight_selection(cache, gs, side, legal, seed);
+        return normal::decide_fight_selection(cache, gs, side, legal, seed, weights);
     }
     if (const auto* d = std::get_if<decision::DeclareMeleeAttacks>(&kind)) return normal::decide_melee(cache, gs, d->unit);
-    if (std::holds_alternative<decision::PileIn>(kind)) return normal::decide_pile_in(cache, gs, side, legal, seed);
+    if (std::holds_alternative<decision::PileIn>(kind)) return normal::decide_pile_in(cache, gs, side, legal, seed, weights);
     if (std::holds_alternative<decision::OverrunPileIn>(kind)) {
-        return normal::decide_overrun_pile_in(cache, gs, side, legal, seed);
+        return normal::decide_overrun_pile_in(cache, gs, side, legal, seed, weights);
     }
     if (std::holds_alternative<decision::Consolidate>(kind)) {
-        return normal::decide_consolidation(cache, gs, side, legal, seed);
+        return normal::decide_consolidation(cache, gs, side, legal, seed, weights);
     }
     if (std::holds_alternative<decision::MoveModels>(kind) && is_fight_move(gs)) {
         return normal::continue_fight_move(gs, side, seed);
     }
     // M42: charges (11.02, 11.04).
-    if (std::holds_alternative<decision::Charge>(kind)) return normal::decide_charge(cache, gs, side, legal, seed);
+    if (std::holds_alternative<decision::Charge>(kind)) return normal::decide_charge(cache, gs, side, legal, seed, weights);
     if (std::holds_alternative<decision::SelectChargeTargets>(kind)) {
-        return normal::decide_charge_targets(cache, gs, side, legal, seed);
+        return normal::decide_charge_targets(cache, gs, side, legal, seed, weights);
     }
     if (std::holds_alternative<decision::MoveModels>(kind) && gs.flow.move &&
         gs.flow.move->type == MoveType::Charge) {

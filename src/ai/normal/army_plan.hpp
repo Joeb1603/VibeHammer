@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "analysis/odds.hpp"
+#include "analysis/terrain_sight.hpp"
 #include "core/geometry/units.hpp"
 #include "core/state/game_state.hpp"
 
@@ -118,7 +119,20 @@ struct ArmyPlan {
     friend bool operator==(const ArmyPlan&, const ArmyPlan&) = default;
 };
 
-[[nodiscard]] ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side);
+// M91 (D-092, plan_terrain): terrain in the plan's group rates. `sight` is the decision's (built on the state the caller
+// holds; the plan reads only poses and the enemy's records from it), `weight` the blend (0 to 1).
+// - Every shot's target that takes cover with every model within a terrain area where it stands has the benefit of
+//   cover (13.08), both ways: our volleys at the enemy and its reply on our units.
+// - A shoot track that doesn't move (its gap within its longest range) shoots only if its models see the target from
+//   where they stand (13.09-13.11), and the target not fully visible to them has cover too (D-089).
+// Each such rate is (1 - weight) x the terrain-blind rate + weight x the terrain rate. nullptr: as before M91.
+struct PlanTerrain {
+    analysis::TerrainSight* sight = nullptr;
+    double weight = 0.0;
+};
+
+[[nodiscard]] ArmyPlan army_plan(analysis::OddsCache& cache, const core::GameState& state, core::Side side,
+                                 const PlanTerrain* terrain = nullptr);
 
 // The no-op plan (army_plan's answer before the battle or with fewer than two units): every unit of `side` with its
 // closest enemy unit and no partners, inactive. D-085 (M85): what the pre-batch generation (Generation::M77) read, so the
@@ -136,8 +150,9 @@ struct LoneExchange {
     int arrival = kNoArrival;  // the mode's
     double value = 0.0;        // 0 when it can't arrive within the game
 };
+// M91 (D-092): `terrain` as army_plan's (nullptr: as before).
 [[nodiscard]] LoneExchange lone_exchange(analysis::OddsCache& cache, const core::GameState& state, core::UnitId ours,
-                                         core::UnitId enemy);
+                                         core::UnitId enemy, const PlanTerrain* terrain = nullptr);
 
 // The joint exchange of `members` (our units, any order; each in its lone mode) with `target`.
 struct JointExchange {

@@ -804,6 +804,12 @@ bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side s
         MoveWeights guard{};
         guard.objective = weights.objective;
         guard.objective_approach = weights.objective_approach;
+        // M91 (D-092): the new keys as the caller plays them too (all 0: M90's guard).
+        guard.plan_terrain = weights.plan_terrain;
+        guard.aim_terrain = weights.aim_terrain;
+        guard.hold_fire = weights.hold_fire;
+        guard.objective_charge = weights.objective_charge;
+        guard.objective_fight = weights.objective_fight;
         if (standing_moves(cache, after, guard, 1, kMaxSimulatedMoves).empty()) return false;
     }
     return true;
@@ -1316,11 +1322,15 @@ std::optional<PolicyResult> decide_move_units(analysis::OddsCache& cache, const 
     // D-083 part 2 (M80): the army plan, once per decision (the same for the move's start: the moving unit counts as
     // not moved, D-083 part 1).
     std::optional<ArmyPlan> own_plan;
+    // M91 (D-092): one sight for the decision's plan and its context on gs (under cover_on).
+    std::shared_ptr<analysis::TerrainSight> sight =
+        cover_on(gs, weights) ? std::make_shared<analysis::TerrainSight>(gs) : nullptr;
     if (plan == nullptr) {
-        own_plan = army_plan(cache, gs, side);
+        const PlanTerrain terrain{sight.get(), weights.plan_terrain};
+        own_plan = army_plan(cache, gs, side, plan_terrain_on(gs, weights) ? &terrain : nullptr);
         plan = &*own_plan;
     }
-    MoveScoreContext ctx(cache, gs, *unit, weights, plan);
+    MoveScoreContext ctx(cache, gs, *unit, weights, plan, sight);
 
     // Remain Stationary (09.04).
     const GameAction stay = core::action::StartMove{*unit, core::MoveType::RemainStationary, std::nullopt};

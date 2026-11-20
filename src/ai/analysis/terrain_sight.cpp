@@ -6,6 +6,7 @@
 
 #include "core/geometry/distance.hpp"
 #include "core/geometry/terrain_shape.hpp"
+#include "core/state/queries.hpp"
 #include "core/state/terrain.hpp"
 
 namespace wh40k::ai::analysis {
@@ -202,6 +203,70 @@ std::vector<std::size_t> sight_samples(const std::vector<core::Position>& positi
     for (std::size_t i = 0; i < positions.size() && out.size() < n; ++i) {
         if (std::find(out.begin(), out.end(), i) == out.end()) out.push_back(i);
     }
+    return out;
+}
+
+namespace {
+
+std::vector<core::Position> positions_now(const core::Unit& u) {
+    std::vector<core::Position> out;
+    out.reserve(u.models.size());
+    for (const core::Model& m : u.models) out.push_back(m.position);
+    return out;
+}
+
+core::Position centroid_now(const core::Unit& u) {
+    core::Position c{0.0f, 0.0f, 0.0f};
+    if (u.models.empty()) return c;
+    for (const core::Model& m : u.models) {
+        c.x += m.position.x;
+        c.y += m.position.y;
+    }
+    const auto n = static_cast<float>(u.models.size());
+    return core::Position{c.x / n, c.y / n, 0.0f};
+}
+
+}  // namespace
+
+bool area_cover_now(const TerrainSight& sight, const core::Unit& unit) {
+    if (sight.empty() || unit.models.empty() || !core::takes_cover_and_hides(unit)) return false;
+    for (const core::Model& m : unit.models) {
+        if (sight.mask_at(core::pose_of(m)) == 0) return false;
+    }
+    return true;
+}
+
+UnitView unit_view(TerrainSight& sight, const core::Unit& observer, const core::Unit& target, bool target_hidden) {
+    UnitView out;
+    if (sight.empty() || observer.models.empty() || target.models.empty()) return out;
+    const bool takes_cover = core::takes_cover_and_hides(target);
+    const std::vector<std::size_t> from = sight_samples(positions_now(observer), centroid_now(target));
+    const std::vector<std::size_t> to = sight_samples(positions_now(target), centroid_now(observer));
+    std::vector<std::uint32_t> to_masks;
+    std::vector<char> to_hidden;
+    std::vector<char> to_ok;
+    for (const std::size_t i : to) {
+        const core::Model& m = target.models[i];
+        const std::uint32_t mask = sight.mask_at(core::pose_of(m));
+        to_masks.push_back(mask);
+        to_hidden.push_back(target_hidden && sight.hidden_now(target, m) ? 1 : 0);
+        to_ok.push_back(takes_cover && mask != 0 ? 1 : 0);
+    }
+    out.visible = false;
+    bool cover = true;
+    for (std::size_t s = 0; s < from.size(); ++s) {
+        const core::BasePose at = core::pose_of(observer.models[from[s]]);
+        const std::uint32_t at_mask = sight.mask_at(at);
+        for (std::size_t k = 0; k < to.size(); ++k) {
+            const bool need_full = s == 0 && to_ok[k] == 0;
+            if (out.visible && !need_full) continue;
+            const SightLine l =
+                sight.line(at, at_mask, core::pose_of(target.models[to[k]]), to_masks[k], to_hidden[k] != 0, need_full);
+            out.visible = out.visible || l.visible;
+            if (need_full && l.fully_visible) cover = false;
+        }
+    }
+    out.cover = area_cover_now(sight, target) || cover;
     return out;
 }
 

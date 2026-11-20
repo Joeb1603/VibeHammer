@@ -301,6 +301,16 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
                     if (c->move_type == core::MoveType::Consolidation && objective_mover == c->unit && u != nullptr) {
                         ++rec.objective_consolidations[core::side_index(u->side)];  // M90 (D-091)
                     }
+                    // M91 (D-092): a charge move that ends with a model within range of an objective.
+                    if (c->move_type == core::MoveType::Charge && u != nullptr && session.state().mission) {
+                        const auto& areas = session.state().mission->objectives;
+                        const bool onto = std::any_of(areas.begin(), areas.end(), [&](const core::ObjectiveArea& a) {
+                            return std::any_of(u->models.begin(), u->models.end(), [&](const core::Model& m) {
+                                return core::model_within_objective(m, a);
+                            });
+                        });
+                        if (onto) ++rec.charges_onto_areas[core::side_index(u->side)];
+                    }
                 }
             }
         }
@@ -336,6 +346,21 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
         }
         if (const auto* shoot = std::get_if<core::action::Shoot>(&choice.action)) {
             teamwork.observe_shoot(session.state(), shoot->unit);  // M88: before the targets are shot
+        } else if (std::holds_alternative<core::action::EndShootStep>(choice.action) && !session.state().terrain.empty()) {
+            // M91 (D-092): the units that could still shoot, every model hidden (13.09), when the bot ends the step.
+            core::TerrainView view(session.state());
+            std::vector<std::uint32_t> seen;
+            for (const core::GameAction& a : session.legal()) {
+                const auto* t = std::get_if<core::action::Shoot>(&a);
+                if (t == nullptr || std::find(seen.begin(), seen.end(), t->unit.v) != seen.end()) continue;
+                seen.push_back(t->unit.v);
+                const core::Unit* u = session.state().find_unit(t->unit);
+                if (u == nullptr || u->models.empty()) continue;
+                if (std::all_of(u->models.begin(), u->models.end(),
+                                [&](const core::Model& m) { return view.hidden(*u, m); })) {
+                    ++rec.holds_of_fire[core::side_index(u->side)];
+                }
+            }
         }
         const core::ValidationResult r = session.submit(choice.action);
         if (!r.ok()) {
@@ -414,6 +439,8 @@ ArenaResult run_arena(const ScenarioForSeed& scenario_for, int games, std::uint6
             r.fight_move_steps[s] += g.fight_move_steps[s];
             r.fight_moves[s] += g.fight_moves[s];
             r.objective_consolidations[s] += g.objective_consolidations[s];  // M90
+            r.holds_of_fire[s] += g.holds_of_fire[s];                      // M91
+            r.charges_onto_areas[s] += g.charges_onto_areas[s];
             r.mean_points_destroyed[s] += g.points_destroyed[s];
             r.mean_objective_vp[s] += g.objective_vp[s];  // M86
             r.mean_kill_vp[s] += g.kill_vp[s];
@@ -599,6 +626,9 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
             std::snprintf(buf, sizeof buf, "objective consolidations a game (M90): A %.2f, B %.2f\n",
                           r.objective_consolidations[0] / n, r.objective_consolidations[1] / n);
             out += buf;
+            std::snprintf(buf, sizeof buf, "charges onto an objective a game (M91): A %.2f, B %.2f\n",
+                          r.charges_onto_areas[0] / n, r.charges_onto_areas[1] / n);
+            out += buf;
         }
     }
     if (scenario.result_rule == core::ResultRule::PointsDestroyed) {  // M67 (D-076): only for such a scenario
@@ -665,6 +695,11 @@ std::string format_arena(const ArenaResult& r, const core::GameState& scenario) 
                           t.ranged_selections[0], 100.0 * ratio(t.covered_selections[0], t.ranged_selections[0]),
                           t.refused_hidden[1] / n, t.refused_hidden[0] / n, t.refused_terrain[1] / n,
                           t.refused_terrain[0] / n);
+            out += buf;
+            // M91 (D-092): units hidden and able to shoot when the bot ended a Shoot step.
+            std::snprintf(buf, sizeof buf, "holds of fire a game (M91), hidden units that could shoot when the step ended: "
+                          "A %.2f, B %.2f\n",
+                          r.holds_of_fire[0] / n, r.holds_of_fire[1] / n);
             out += buf;
         }
     }

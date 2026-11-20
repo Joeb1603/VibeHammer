@@ -86,8 +86,9 @@ struct ShootOverride {
     std::optional<OtherShot> other;  // D-066: the engine's best shooting is at another enemy unit (then share is 0)
 };
 
-MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::optional<ShootOverride>& shoot,
-                     const ChargeProspect* prospect) {
+// `hold` (M91, D-092): the plan holds fire this turn on purpose (no shot, so 13.09 Hidden counts in the enemy's turn).
+MoveScore score_once(MoveScoreContext& ctx, const PlannedEnd& plan, const std::optional<ShootOverride>& shoot,
+                     const ChargeProspect* prospect, bool hold) {
     MoveScore s;
     const core::Unit* enemy = ctx.enemy();
     const core::Unit& us = ctx.unit();
@@ -141,6 +142,13 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
                 share = 0.0;
                 models_destroyed = 0.0;
             }
+        }
+        s.shoots = share > 0.0 || other.has_value();
+        if (hold) {  // M91 (D-092)
+            share = 0.0;
+            models_destroyed = 0.0;
+            other.reset();
+            s.holds_fire = true;
         }
         line.we_hit(share);
         s.shoot_now = line.value();
@@ -268,6 +276,18 @@ MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::o
     return s;
 }
 
+// M91 (D-092, hold_fire): an end where the unit could hide (13.09) and would shoot is also scored holding fire; the
+// better is kept (holds_fire says which). Otherwise score_once as before.
+MoveScore score_impl(MoveScoreContext& ctx, const PlannedEnd& plan, const std::optional<ShootOverride>& shoot,
+                     const ChargeProspect* prospect) {
+    MoveScore s = score_once(ctx, plan, shoot, prospect, false);
+    if (s.shoots && ctx.may_hold_fire(plan.positions)) {
+        MoveScore h = score_once(ctx, plan, shoot, prospect, true);
+        if (h.total > s.total + 1e-12) return h;
+    }
+    return s;
+}
+
 // D-083 part 2 (M80): the focus of the group `us` follows in `plan`: it has partners there, the focus (an enemy unit)
 // has models, and the group is a clear surplus: its gain at least `follow` of its risk (what it puts at stake). nullptr:
 // the unit doesn't follow a group.
@@ -294,11 +314,36 @@ bool cover_on(const core::GameState& state, const MoveWeights& weights) {
     return !state.terrain.empty() && weights.cover > 0.0;
 }
 
+bool plan_terrain_on(const core::GameState& state, const MoveWeights& weights) {
+    return cover_on(state, weights) && weights.plan_terrain > 0.0;
+}
+
+bool aim_terrain_on(const core::GameState& state, const MoveWeights& weights) {
+    return cover_on(state, weights) && weights.aim_terrain > 0.0;
+}
+
+bool hold_fire_on(const core::GameState& state, const MoveWeights& weights) {
+    return cover_on(state, weights) && weights.hold_fire > 0.0;
+}
+
+bool objective_charge_on(const core::GameState& state, const MoveWeights& weights) {
+    return state.mission.has_value() && weights.objective > 0.0 && weights.objective_charge > 0.0;
+}
+
+bool objective_fight_on(const core::GameState& state, const MoveWeights& weights) {
+    return state.mission.has_value() && weights.objective > 0.0 && weights.objective_fight > 0.0;
+}
+
 // ---- the context ----
 
 MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameState& origin, core::UnitId unit,
-                                   MoveWeights weights, const ArmyPlan* plan)
+                                   MoveWeights weights, const ArmyPlan* plan,
+                                   std::shared_ptr<analysis::TerrainSight> sight)
     : cache_(cache), origin_(origin), weights_(weights) {
+    // M89 (D-090) / M91 (D-092): the sight, under cover_on only: the decision's, else one of our own (kept below, where
+    // M89 set it; the army plan may use it first).
+    std::shared_ptr<analysis::TerrainSight> decision_sight;
+    if (cover_on(origin, weights_)) decision_sight = sight ? std::move(sight) : std::make_shared<analysis::TerrainSight>(origin);
     const core::Unit* u = origin.find_unit(unit);
     if (u == nullptr) throw std::logic_error("MoveScoreContext: unknown unit");
     us_ = *u;
@@ -327,7 +372,8 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
     const core::Unit* focus = nullptr;
     bool line_focus = false;
     if (plan == nullptr) {
-        own_plan = army_plan(cache_, origin, us_.side);
+        const PlanTerrain terrain{decision_sight.get(), weights_.plan_terrain};
+        own_plan = army_plan(cache_, origin, us_.side, plan_terrain_on(origin, weights_) ? &terrain : nullptr);
         plan = &*own_plan;
     }
     focus = followed_focus(*plan, origin, us_, weights_.follow);
@@ -410,7 +456,7 @@ MoveScoreContext::MoveScoreContext(analysis::OddsCache& cache, const core::GameS
         }
         // M89 (D-090): terrain, under cover_on only.
         if (cover_on(origin, weights_)) {
-            sight_ = std::make_shared<analysis::TerrainSight>(origin);
+            sight_ = decision_sight;
             cover_w_ = std::clamp(weights_.cover, 0.0, 1.0);
             us_takes_cover_ = core::takes_cover_and_hides(us_);
             enemy_side_ = terrain_side(*e, enemy_models_);
@@ -802,6 +848,16 @@ std::pair<bool, bool> MoveScoreContext::stays_view(const std::vector<core::Posed
         }
     }
     return {visible, reply_.area_cover || cover};
+}
+
+bool MoveScoreContext::may_hold_fire(const std::vector<core::Position>& positions) const {
+    if (!sight_ || !us_takes_cover_ || !hold_fire_on(origin_, weights_)) return false;
+    if (positions.size() != us_.models.size() || positions.empty()) return false;
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        const core::BasePose pose{positions[i], us_.models[i].base, us_.models[i].facing_deg};
+        if (!sight_->dense(sight_->mask_at(pose))) return false;
+    }
+    return true;
 }
 
 bool MoveScoreContext::moved_visible(float to_mm) const {
