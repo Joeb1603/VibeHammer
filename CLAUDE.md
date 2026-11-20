@@ -21,6 +21,7 @@ CLAUDE.md                 this file
 README.md                 overview for people visiting the repo (play, build, layout)
 PLAN.md                   current and upcoming milestones, with acceptance criteria
 docs/plan_archive.md      the finished milestones M0–M83, verbatim
+docs/roadmap.md           long-range map: what a full game with any army on any mission still needs, by phase
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
 docs/datasheets/          the two New Recruit army rosters behind rosters_44x60.json (GW copyright: private repo only)
