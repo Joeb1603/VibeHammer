@@ -304,9 +304,9 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
                     // M91 (D-092): a charge move that ends with a model within range of an objective.
                     if (c->move_type == core::MoveType::Charge && u != nullptr && session.state().mission) {
                         const auto& areas = session.state().mission->objectives;
-                        const bool onto = std::any_of(areas.begin(), areas.end(), [&](const core::ObjectiveArea& a) {
+                        const bool onto = std::any_of(areas.begin(), areas.end(), [&](const core::ObjectiveArea& area) {
                             return std::any_of(u->models.begin(), u->models.end(), [&](const core::Model& m) {
-                                return core::model_within_objective(m, a);
+                                return core::model_within_objective(m, area);
                             });
                         });
                         if (onto) ++rec.charges_onto_areas[core::side_index(u->side)];
@@ -350,8 +350,8 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
             // M91 (D-092): the units that could still shoot, every model hidden (13.09), when the bot ends the step.
             core::TerrainView view(session.state());
             std::vector<std::uint32_t> seen;
-            for (const core::GameAction& a : session.legal()) {
-                const auto* t = std::get_if<core::action::Shoot>(&a);
+            for (const core::GameAction& legal : session.legal()) {
+                const auto* t = std::get_if<core::action::Shoot>(&legal);
                 if (t == nullptr || std::find(seen.begin(), seen.end(), t->unit.v) != seen.end()) continue;
                 seen.push_back(t->unit.v);
                 const core::Unit* u = session.state().find_unit(t->unit);
