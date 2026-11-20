@@ -1,7 +1,7 @@
 # VibeHammer: finished milestones (archive)
 
 The finished milestones M0–M83, moved here verbatim from `PLAN.md` in M84 (only M16, M21 and M22 gained their
-✅), and M84–M89, moved the same way while planning M90–M91. `PLAN.md` keeps the current and upcoming work and the
+✅), M84–M89, moved the same way while planning M90–M91, and M90–M91, moved the same way after M91. `PLAN.md` keeps the current and upcoming work and the
 "Later" list. Read a section here only when a
 milestone or decision points at it.
 
@@ -5719,5 +5719,230 @@ user's choice, 2026-11-13)
 - **Build and `ctest`:** Linux Debug build clean; full `ctest` 1,418 of 1,418 passed. Screenshot under `xvfb-run` of
   the replay at step 167 (Screamer-killer 7 going round the Centre's dense walls; Chaos units in the south-east
   barricades and south-west ruin). A full game by mouse on Windows stays a manual check for the user.
+
+---
+
+## Rules gaps, then the bot on terrain and objectives (M90–M91)
+
+Agreed with the user on 2026-11-13, after M89. The user asked for more work on terrain and objectives, the rules
+gaps and the bot, with M89's 55% bar for the bot.
+- **M90** closes two rules gaps that objectives and terrain left open:
+  - 12.08 Objective Consolidation. Missions have existed since M86, but `consolidation_mode` still says "V1 has none
+    (D-022)". In m87's replay at step 550, a unit in the Centre after its fight gets no Consolidate decision.
+  - 24.18 [IGNORES COVER]. It is the only reason the Flamers and the Heavy flamer are refused.
+- **M91** takes the open bot items of D-090 and D-086.
+- Each milestone is planned in detail in plan mode at the start of its own session.
+- **Not in the batch:**
+  - Stealth (24.33): the Genestealers list it only because the fetch tool ignores BSData's Chameleonic condition
+    (D-070).
+  - Terrain layouts or an editor for custom battles.
+  - The scenario's balance.
+  - Charge odds round walls (tried in M89, and worse).
+
+## M90: Objective Consolidation and [IGNORES COVER] ✅ (done)
+**Effort:** `high` · **Plan mode:** yes
+
+> Read 12.07–12.08, 14.01–14.02, 24.18, 13.08, D-009, D-022, D-071, D-084 and D-089 first. Ask if anything is
+> ambiguous, and record the readings in a new D-091.
+> - **12.08 Objective Consolidation:**
+>   - *The mode:* `consolidation_mode` (`rules/fight.cpp`) returns Objective when the unit is unengaged, no enemy unit
+>     is within 3", and one or more objective areas are within 3". Measure to the area's closest part (14.01; D-009).
+>   - *The choice:* the player selects one of those areas. `StartConsolidation`, `ConsolidationStarted` and
+>     `MoveInProgress` gain an optional objective field, omitted when empty, so old files stay byte-identical.
+>     `state_hash` takes it.
+>   - *While moving:* each moved model ends within range of the area, or closer to it. "If possible" is left to the
+>     player (`TODO(if-possible)`).
+>   - *After moving:* the unit is within range.
+>   - `move_reach` and `move_end_problems` check both.
+> - **24.18 [IGNORES COVER]:**
+>   - `ability::IgnoresCover`, which does not split attack batches.
+>   - `make_weapon_selections` clears `benefit_of_cover` for such a profile.
+>   - The Flamer (Legionaries, Havocs) and the Heavy flamer (Chaos Terminators) become pickable in the builder and in
+>     random armies. They are [TORRENT], so their odds don't change.
+> - **Client:**
+>   - The consolidation UI offers the areas.
+>   - The Auto move (M34) aims at the area.
+>   - The "too small to matter" skip (M31) measures the gap to the area.
+>   - The action, event and log text name the area.
+>   - The ability gets its help text.
+> - **Bot:**
+>   - It answers the new option legally, in Normal and in the defaults: an Auto move onto the area, taken when it adds
+>     models within range. Weighing it with the objective terms comes in M91.
+>   - `unit_ranged_volley` ignores `ShotContext::target_cover` for an [IGNORES COVER] profile.
+
+**Acceptance**
+- **Rule tests** (ScriptedDice, inch coordinates):
+  - `R12_08_*`:
+    - the modes' precedence;
+    - an area at 2.9" and at 3.1";
+    - only an area within 3" may be chosen;
+    - a model that ends further from the area is refused;
+    - the unit must end within range;
+    - without a mission, play is as before.
+  - D-022's test updated (a mission now changes the outcome).
+  - `R24_18_*`: a fixture weapon without [TORRENT] keeps its BS against a target in cover.
+  - JSON round-trip tests for every new field. An old action, event or state without them loads and saves byte for
+    byte.
+- **Client tests** `M90_*`: the offer, the Auto move, the skip, the text, and the builder offering the flamers.
+- **AI tests** `M90_*`: objective consolidation answered legally, and a game with a flamer that plays clean.
+- **Replays:**
+  - Core replays stay byte-identical.
+  - `m87_objectives_bot_game.json` is regenerated on purpose, since it now meets a Consolidate decision at step 550.
+    Re-search its seed if its checks need it.
+  - Every other replay stays byte-identical.
+  - New: `tests/replays/m90_objective_consolidation.json`, scripted on the objective scenario.
+- **Arena** (Release, 200 games each):
+  - V1, both bot scenarios, Strike and the rosters are identical to the M89 binary.
+  - The mission and terrain runs change on purpose. Record the objective consolidations a game and the win rates. The
+    M90 binary becomes their reference.
+  - Every run is clean: no rejected action, reverted move, fallback or unfinished game.
+- **Docs:**
+  - D-091;
+  - notes on D-022, D-069 and D-071;
+  - CLAUDE.md's list of implemented abilities;
+  - `docs/dev/bot_arena.md`.
+- **Build** and full `ctest` green.
+
+**Results** (2026-11-19, D-091)
+- **Rules:**
+  - 12.08 Objective Consolidation: the mode after Ongoing and Engaging, one objective chosen, each moved model within
+    range or closer, the unit within range after. Readings in D-091.
+  - 24.18 [IGNORES COVER]: `ability::IgnoresCover`. The flamers and the heavy flamer can be picked in the builder and
+    are drawn in random armies; the Havoc Champion keeps its default Flamer.
+- **Client:**
+  - the offer (a menu when several objectives are in range);
+  - the Auto move aims at the area, with a third arrangement: the whole unit moved straight towards it, which keeps
+    coherency where the greedy passes can't;
+  - the skip, and the text;
+  - a gold outline on the area during the move;
+  - the ability's help.
+- **Bot:** takes an Objective Consolidation that adds models within range (Normal and the defaults). Its odds ignore
+  cover for [IGNORES COVER]. The arena has a new line, "objective consolidations a game (M90)".
+- **Acceptance** (Release arena, 200 games each):
+
+  | Item | Number | |
+  |---|---|---|
+  | identity: V1, both bot scenarios, Strike, rosters | 1,000 of 1,000 `game` lines identical to the M89 binary | met |
+  | clean runs: the objective scenario, terrain A / B first, random armies auto / hand, random `--terrain` auto / hand, the M73 lists | 1,600 games, no rejected action, reverted move, fallback or unfinished game | met |
+  | Chaos Space Marines' wins (M89 or M87 in brackets) | objective scenario 32.0% (32.5%); terrain A first 21.5% (21.0%), B first 34.5% (34.5%); random armies 19.0% auto / 18.5% hand; random `--terrain` 19.5% / 13.5% (17.0% / 17.0%); M73 lists 54.5% | recorded |
+  | objective consolidations a game (A / B) | objective scenario 0.14 / 0.21; terrain (A first) 0.07 / 0.12; random `--terrain` 0.06 / 0.06 | recorded |
+  | p95 decision time | objective scenario 13 ms, terrain 18 ms, random `--terrain` 15 ms | |
+  | replays | m87 regenerated on purpose (Consolidate steps at 550, 6 lines, seed 29 kept); new m90; every other replay byte-identical | met |
+
+- **Tests:**
+  - `tests/m90_objective_consolidation_test.cpp` (R12_08, D091 and R24_18), `tests/client/m90_test.cpp` and
+    `tests/ai/m90_test.cpp`;
+  - D-022's test and a with-mission twin in `fight_test.cpp`;
+  - `D091_Replay` in `replay_test.cpp`.
+
+  Changed on purpose, with the user's choices:
+  - the refusal pins (D-079, D-069, D-071);
+  - `M77_BotDeploy`: D-081's rule for out-of-range shooters, 24 random battles, and the melee bar at more than 30%
+    (31.8% measured);
+  - `M89_Regression`: the M88 bot's game pinned under M90's rules;
+  - `D076_Json` exempts the new m90 file, as m72's.
+- **Build and the full `ctest`:** green.
+
+---
+
+## M91: The bot plays terrain and objectives in every phase ✅ (done; the 55% target open, every feature off by default)
+**Effort:** `xhigh` · **Plan mode:** yes
+
+> Bot and arena only: no rule, engine, state or file-format change. Read 13.08–13.11, 12.05–12.08, 14.02, D-083,
+> D-086, D-090 and D-091 first.
+>
+> Each feature sits behind a `MoveWeights` key (arena `--weights`), gated like `objectives_on` and `cover_on`, with
+> nothing computed when it is off. A feature is kept only if it measures better; the tuning goes in a new D-092.
+> - **The army plan with terrain:**
+>   - `Planner::ranged` (`army_plan.cpp`) gives a target that stands in a terrain area the benefit of cover
+>     (`ShotContext::target_cover`), both ways: our volleys and its reply.
+>   - A shoot track that doesn't move uses whether its shooters see the target now.
+>   - The cache keys carry the cover bit.
+>   - One `TerrainSight` per decision is shared by the plan and the move score, threaded through `army_plan`'s five
+>     callers.
+> - **Holding fire to stay hidden (13.09):** a hidden unit passes when its best volley is worth less than the reply it
+>   avoids by staying hidden. The move score's Hidden then counts for a plan that holds fire on purpose.
+> - **Objectives in charges:**
+>   - `charged_value` and `hold_value` (`charge.cpp`) add the objective terms at the charge's end positions. That
+>     includes engaging an enemy unit that holds an area.
+>   - `decide_charge*` take the weights.
+> - **Objectives in pile-ins and consolidations:**
+>   - The pile-in gain and `consolidation_score` (`normal/fight.cpp`) add the objective terms.
+>   - The outlook covers the enemy's turn too: control at the end of its turn is what we score next.
+> - **`ShootingAim::reply`** gets cover and visibility.
+
+**Acceptance**
+- **Head-to-head on the terrain scenario:** the M91 bot (defaults) against the M90 bot (the new keys at 0).
+  - Run `--weights-a ...` and the reverse, each with `--first A` and `--first B`, 100 games each (seeds 1–100).
+  - The M91 bot wins at least 55% of the 400 games, confirmed on seeds 101–200.
+- **Recorded:**
+  - the same head-to-head on the objective scenario and on random armies with `--terrain`;
+  - the Chaos Space Marines' wins with M91 on both sides;
+  - objective VP against kill VP;
+  - units never within 12" and lone engagements;
+  - Hidden refusals, holds of fire and objective consolidations a game.
+- **Identity:**
+  - V1, both bot scenarios, Strike and the rosters at the defaults are identical to the M90 binary.
+  - The mission and terrain runs with the new keys at 0 are identical to the M90 binary.
+- **Clean runs:** no rejected action, reverted move, fallback or unfinished game. The p95 decision time is at most
+  twice M90's.
+- **Tests** in `tests/ai/m91_test.cpp`:
+  - `M91_ArmyPlan`, `M91_HoldFire`, `M91_Charge`, `M91_FightMoves`;
+  - `M91_Regression` (the keys at 0 play as M90), `M91_Arena`, `M91_Replay`.
+
+  Tests that pin mission or terrain play at the defaults are pinned to the keys at 0, as M87 and M89 did.
+- **Replay:** `tests/replays/m91_bot_game.json` on the terrain scenario.
+  - It contains a charge onto an area, an objective consolidation, and a unit holding fire while hidden.
+  - It is checked with core only and with `TheSavedFileMatchesTheGame`.
+  - Older replays stay byte-identical (the m87 and m89 generators are pinned to the keys at 0 if needed).
+- **Docs:**
+  - D-092 (the design, the tuning, the final numbers);
+  - the D-086 and D-090 open lists;
+  - PLAN.md Results;
+  - `docs/dev/bot_arena.md` (the keys, the reference binary);
+  - the README and the CLAUDE.md overview line;
+  - a screenshot under `xvfb-run`.
+- **Build** and full `ctest` green.
+
+**Results** (2026-11-20, D-092)
+- **Built**, each behind its key and tested (`tests/ai/m91_test.cpp`):
+  - `plan_terrain`: the army plan's rates with area cover, and a standing shooter's sight of its target;
+  - `aim_terrain`: `ShootingAim::reply` with cover and sight;
+  - `hold_fire`: holding fire to stay hidden, in the move score and the Shooting phase;
+  - `objective_charge`: the objective terms in charges, with the enemy holders' losses;
+  - `objective_fight`: the objective terms in pile-ins and consolidations, in either player's turn (`fight_outlook`).
+  - The arena has two new lines, holds of fire and charges onto an objective.
+- **Measured** (Release arena, terrain scenario, 4 x 100 games against the M90 bot; M90 against M90 is 200):
+
+  | Variant | Wins of 400 |
+  |---|---|
+  | full set | 201 |
+  | without `plan_terrain` | 205 |
+  | without `aim_terrain` | 201 |
+  | without `hold_fire` | 200 |
+  | without `objective_charge` | 198 |
+  | without `objective_fight` | 199 |
+  | objective keys at 3 | 200 |
+  | full set on the objective scenario | 201 |
+
+  - Holding fire never arose in these armies (0 a game): no long-range Tyranid gun to hide from.
+  - Charges onto an objective: 0.05–0.35 a game (up to 0.9 for the Tyranids on the objective scenario).
+  - Objective Consolidations: about 0.1 a game.
+  - Decision time: unchanged.
+- **Outcome** (the keep rule, and then the outcome, both the user's choice):
+  - No feature cost 10 games when switched off, so **all five default to 0**, and the M91 bot at the defaults is the M90
+    bot.
+  - **The 55% target is open**: 201 of 400 (50.2%).
+  - The confirmation on seeds 101–200 was not run: with every feature off there is nothing to confirm.
+- **Identity** (`--per-game`, 200 games each, against the M90 binary): all thirteen runs at the defaults are
+  identical, 2,600 of 2,600 games. The runs are V1, both bot scenarios, Strike, the rosters, the objective scenario,
+  the terrain scenario with A first and with B first, random armies auto and hand, with and without `--terrain`, and the
+  M73 lists. `M91_Regression` covers the keys at 0 on the terrain and objective scenarios.
+- **Build** and the full `ctest`: green, 1,464 tests.
+- **Replay:** `tests/replays/m91_bot_game.json` (seed 6, the features on).
+  - It has three charges onto an objective and an Objective Consolidation; it can't show holding fire, which never
+    arose.
+  - Older replays are byte-identical: the m87 and m89 generators are pinned to the keys at 0.
+- **Clean:** every run had no rejected action, reverted move, fallback or unfinished game.
 
 ---
