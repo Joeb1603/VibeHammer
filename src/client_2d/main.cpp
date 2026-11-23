@@ -133,21 +133,22 @@ const fs::path kRepoRoot = find_data_root();
 const fs::path kReplayDir = kRepoRoot / "tests/replays";
 const fs::path kSavePath = kRepoRoot / "saves/game.json";              // gitignored
 
-// D-084 (M86): custom battles play the objective scenario's mission. If the file can't be read the builder keeps
-// none, and its battles are decided on points destroyed (D-076) as before. D-087 (M88): and they are fought over the
-// terrain scenario's terrain (its areas link to that mission's objectives by name); without a mission or the file,
-// none.
+// D-084 (M86): custom battles play the objective mission; D-087 (M88): fought over the terrain scenario's terrain,
+// whose areas link to its mission's objectives by name. M93 (D-094): so the mission comes from the terrain scenario
+// (its objectives are terrain objectives, 14.01); without that file, the objective scenario's (objective markers,
+// 14.01.01) on a bare battlefield; without either, none, and battles are decided on points destroyed (D-076).
 void give_mission(ArmyBuilder& builder) {
+    try {
+        builder.load_mission(resolve_data_path(kRepoRoot, kTerrainScenario));
+        builder.load_terrain(resolve_data_path(kRepoRoot, kTerrainScenario));
+        return;
+    } catch (const std::exception&) {
+        builder.set_terrain(std::nullopt);
+    }
     try {
         builder.load_mission(resolve_data_path(kRepoRoot, kObjectiveScenario));
     } catch (const std::exception&) {
         builder.set_mission(std::nullopt);
-    }
-    try {
-        if (builder.mission() == nullptr) throw std::runtime_error("no mission");
-        builder.load_terrain(resolve_data_path(kRepoRoot, kTerrainScenario));
-    } catch (const std::exception&) {
-        builder.set_terrain(std::nullopt);
     }
 }
 const fs::path kExportPath = kRepoRoot / "replays/exported_replay.json";  // gitignored

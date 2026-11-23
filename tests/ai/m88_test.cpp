@@ -131,6 +131,8 @@ TEST(M88_Arena, TerrainBattlesCarryTheBlockAndTheSummaryHasTheTerrainLine) {
     EXPECT_FALSE(source.terrain.has_value());  // a bare battlefield unless given
     source.mission = load_mission_block(repo_root() / "data/scenarios/incursion_objectives_44x60.json");
     EXPECT_TRUE(random_armies_battle(source, 7, Side::A).terrain.empty());
+    // M93 (D-094): over terrain, the terrain scenario's mission (its objectives are its terrain areas).
+    source.mission = load_mission_block(repo_root() / kTerrainScenario);
     source.terrain = load_terrain_block(repo_root() / kTerrainScenario);
     const GameState battle = random_armies_battle(source, 7, Side::A);
     EXPECT_EQ(battle.terrain.size(), 9u);

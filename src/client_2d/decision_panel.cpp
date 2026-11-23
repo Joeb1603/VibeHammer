@@ -171,6 +171,7 @@ void DecisionPanel::sync(const GameSession& session) {
     melee_.reset();
     casualties_.reset();
     rerolls_ = RerollPicks(session.state());  // M61: inactive unless the decision is RerollWoundRolls
+    retargets_ = RetargetPicks(session.state());  // M93: inactive unless the decision is RetargetAttacks
     auto_move_message_.clear();
     for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
@@ -234,6 +235,40 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
         if (rerolls_.custom() && row.button("Re-roll selected (" + std::to_string(rerolls_.selected().size()) + ")")) {
             chosen = rerolls_.action();
         }
+        ImGui::EndTable();
+        return chosen;
+    }
+    // M93 (D-093): new targets for the weapons whose target is gone, one row per weapon (an eligible unit or "lost").
+    // The bar's buttons are the engine's answers (all at one unit, then none) and the picks.
+    if (retargets_.active()) {
+        if (!begin_bar("Retarget as picked")) return std::nullopt;
+        headline(gs, session.pending()->side, "New targets? Their target is gone (04.03.03, D-093)");
+        const std::vector<RetargetRow>& rows = retargets_.rows();
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            const RetargetRow& r = rows[i];
+            ImGui::PushID(static_cast<int>(i));
+            const std::string current = r.chosen ? unit_display_name(gs, r.options[*r.chosen]) : std::string("lost");
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
+            if (ImGui::BeginCombo(r.weapon.c_str(), current.c_str())) {
+                for (std::size_t k = 0; k < r.options.size(); ++k) {
+                    const std::string name = unit_display_name(gs, r.options[k]);
+                    if (ImGui::Selectable(name.c_str(), r.chosen == k)) retargets_.choose(i, k);
+                }
+                if (ImGui::Selectable("lost", !r.chosen)) retargets_.choose(i, std::nullopt);
+                ImGui::EndCombo();
+            }
+            ImGui::PopID();
+        }
+        ImGui::TableNextColumn();
+        ButtonRow row;
+        for (std::size_t i = 0; i < view.buttons.size(); ++i) {
+            ImGui::PushID(static_cast<int>(100 + i));
+            if (row.button(action_label(gs, view.buttons[i]))) chosen = view.buttons[i];
+            ImGui::PopID();
+        }
+        const core::action::RetargetAttacks picked = retargets_.action();
+        const bool offered = std::find(view.buttons.begin(), view.buttons.end(), core::GameAction{picked}) != view.buttons.end();
+        if (!offered && row.button("Retarget as picked (" + std::to_string(picked.retargets.size()) + ")")) chosen = picked;
         ImGui::EndTable();
         return chosen;
     }

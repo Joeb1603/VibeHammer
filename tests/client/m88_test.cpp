@@ -193,7 +193,7 @@ TEST(M88_Builder, ACustomBattleTakesTheTerrainScenariosTerrain) {
     ArmyBuilder b(repo_root());
     EXPECT_EQ(b.terrain(), nullptr);
     EXPECT_TRUE(b.battle_state().terrain.empty());  // without it, as before
-    b.load_mission(repo_root() / kObjectiveScenario);
+    b.load_mission(repo_root() / kTerrainScenario);  // M93 (D-094): its objectives are its terrain areas
     b.load_terrain(repo_root() / kTerrainScenario);
     ASSERT_NE(b.terrain(), nullptr);
     const GameState gs = b.battle_state();

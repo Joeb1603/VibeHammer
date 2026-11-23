@@ -36,6 +36,7 @@ add_executable(wh40k_client_tests
     m88_test.cpp
     m90_test.cpp
     m92_test.cpp
+    m93_test.cpp
     m70_test.cpp
     m74_test.cpp
     m75_test.cpp

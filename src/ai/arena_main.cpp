@@ -222,9 +222,12 @@ int main(int argc, char** argv) {
             namespace core = wh40k::core;
             auto loaded = wh40k::ai::load_army_source(root);
             // M86 (D-084): custom and random battles play the objective scenario's mission, as in the client.
-            // M87 (D-086): --mission names another scenario to read the block from.
-            loaded.mission =
-                core::load_mission_block(mission ? in_repo(*mission) : root / "data/scenarios/incursion_objectives_44x60.json");
+            // M87 (D-086): --mission names another scenario to read the block from. M93 (D-094): with --terrain and no
+            // --mission, the terrain scenario's own (its objectives are its terrain areas; the objective scenario's are
+            // markers, 14.01.01, which no terrain area can be).
+            loaded.mission = core::load_mission_block(
+                mission ? in_repo(*mission)
+                        : (terrain ? in_repo(*terrain) : root / "data/scenarios/incursion_objectives_44x60.json"));
             // M88 (D-087): --terrain names a scenario to read a "terrain" block from (its areas may link to the
             // mission's objectives by name). Without it, a bare battlefield as before.
             if (terrain) loaded.terrain = core::load_terrain_block(in_repo(*terrain));

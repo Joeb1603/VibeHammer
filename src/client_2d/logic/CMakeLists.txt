@@ -25,6 +25,7 @@ add_library(wh40k_client_logic STATIC
     phase_track.cpp
     reach_area.cpp
     reroll_picks.cpp
+    retarget_picks.cpp
     datasheet_view.cpp
     measure.cpp
     rules_help.cpp

@@ -229,7 +229,17 @@ Mission parse_mission(const Json& j) {
         a.name = name.get<std::string>();
         a.centre = Position{inches_to_mm(require_inches(o, "x_in", owhere)), inches_to_mm(require_inches(o, "y_in", owhere)),
                             0.0f};
-        a.diameter_mm = inches_to_mm(require_inches(o, "diameter_in", owhere));
+        if (o.contains("marker")) {
+            // D-094 (14.01.01): an objective marker: 40 mm across, within range at 3"; no diameter of its own.
+            if (!o.at("marker").is_boolean()) fail(owhere + ": field 'marker' must be true or false");
+            a.marker = o.at("marker").get<bool>();
+        }
+        if (a.marker) {
+            if (o.contains("diameter_in")) fail(owhere + ": D-094: an objective marker is 40 mm across; give no 'diameter_in'");
+            a.diameter_mm = kObjectiveMarkerDiameterMm + 2.0f * kObjectiveMarkerRangeMm;
+        } else {
+            a.diameter_mm = inches_to_mm(require_inches(o, "diameter_in", owhere));
+        }
         const Json& vp = require(o, "vp", owhere);
         a.vp[side_index(Side::A)] = require_int(vp, "A", owhere + ".vp");
         a.vp[side_index(Side::B)] = require_int(vp, "B", owhere + ".vp");

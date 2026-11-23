@@ -17,6 +17,7 @@
 #include "core/engine/actions.hpp"
 #include "melee_plan.hpp"
 #include "reroll_picks.hpp"
+#include "retarget_picks.hpp"
 #include "session.hpp"
 #include "shot_plan.hpp"
 
@@ -82,6 +83,7 @@ private:
     std::optional<MeleePlan> melee_;
     std::optional<CasualtyPlan> casualties_;  // the default order, without the board (D-051)
     RerollPicks rerolls_;                     // M61: the [TWIN-LINKED] re-roll picks (D-072)
+    RetargetPicks retargets_;                 // M93: the new targets per weapon (04.03.03, D-093)
     bool undo_step_available_ = false;  // D-039
     bool undo_step_requested_ = false;
     bool cancel_requested_ = false;  // D-041

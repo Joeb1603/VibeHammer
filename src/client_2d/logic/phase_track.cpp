@@ -102,7 +102,8 @@ std::vector<ObjectiveMark> objective_marks(const core::GameState& state) {
         ObjectiveMark m;
         m.consolidating = &a == consolidating;
         m.centre = a.centre;
-        m.radius_mm = a.diameter_mm * 0.5f;
+        m.radius_mm = a.diameter_mm * 0.5f;  // a marker's range circle (D-094)
+        if (a.marker) m.marker_radius_mm = core::kObjectiveMarkerDiameterMm * 0.5f;
         m.controller = a.controller;
         m.secured = a.secured_by.has_value();
         m.label = a.name + " " + std::to_string(a.vp[0]) + "/" + std::to_string(a.vp[1]);
