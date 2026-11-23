@@ -111,3 +111,4 @@ ruled that the scraped app text overrides the wording they supplied: D-012 is re
 - [D-091](decisions/D-091.md): Objective Consolidation and [IGNORES COVER] (12.08, 24.18; M90; amends D-022 and D-071)
 - [D-092](decisions/D-092.md): The bot plays terrain and objectives in every phase: five features behind keys, all off by default (M91; the 55% target open)
 - [D-093](decisions/D-093.md): The app-only rules audit: the scraped app text replaces the AI-sourced wording; re-targeting (04.03.03, replaces D-012), Gone to Ground (13.11.01), control first at the end of a turn (14.02.01), the optional other weapon with [EXTRA ATTACKS] (24.11.01), BS no worse than 6+ (02.02.01) (M92)
+- [D-094](decisions/D-094.md): M92's open items: per-weapon new targets in the client, objective markers (14.01.01), Gone to Ground in the bot's move score behind `gone_to_ground` (M93; amends D-084, D-086, D-090, D-093)

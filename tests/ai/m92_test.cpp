@@ -61,3 +61,47 @@ TEST(M92_Bots, TheBotRetargetsAtTheEligibleUnit) {
     ASSERT_TRUE(fb.action.has_value());
     EXPECT_EQ(*fb.action, expected);
 }
+
+// ==== M93 (D-094): 13.11.01 Gone to Ground in the move score, behind gone_to_ground ====
+
+#include "analysis/terrain_sight.hpp"
+#include "arena.hpp"
+#include "core/data/scenario_loader.hpp"
+#include "core/rules/terrain.hpp"
+#include "normal/move_score.hpp"
+
+namespace {
+
+std::string per_game_field(const std::string& line, const std::string& key) {
+    const std::size_t at = line.find(key + " ");
+    if (at == std::string::npos) return "";
+    const std::size_t start = at + key.size() + 1;
+    return line.substr(start, line.find_first_of(" \n", start) - start);
+}
+
+}  // namespace
+
+TEST(M93_GoneToGround, TheKeyIsOffByDefaultAndAGameWithItOnPlaysCleanly) {
+    EXPECT_EQ(normal::MoveWeights{}.gone_to_ground, 0.0);  // D-094: measured +8 in 400, so off (D-092's keep rule)
+    const GameState scenario =
+        load_scenario(wh40k::test::repo_root() / "data/scenarios/incursion_terrain_44x60.json", wh40k::test::repo_root());
+    BotConfig on;
+    on.move.gone_to_ground = 1.0;
+    const PerGameReport with_it = run_per_game(scenario, 1, 1, on, on);
+    EXPECT_TRUE(with_it.clean);
+    const PerGameReport without = run_per_game(scenario, 1, 1, BotConfig{}, BotConfig{});
+    EXPECT_TRUE(without.clean);
+    EXPECT_FALSE(per_game_field(with_it.text, "actions").empty());
+}
+
+TEST(M93_GoneToGround, TheSightSeesADenseFeatureBetweenAModelAndAPoint) {
+    const GameState gs =
+        load_scenario(wh40k::test::repo_root() / "data/scenarios/incursion_terrain_44x60.json", wh40k::test::repo_root());
+    analysis::TerrainSight sight(gs);
+    const Base base{BaseShape::Round, 32.0f, 0.0f};
+    // The Centre ruin's south wall runs along y 27"-27.5" from x 17" to 23": a model at (20", 29") looking south at
+    // (20", 20") has it between; looking north at (20", 40") it does not (the north wall spans x 21"-27").
+    const BasePose at{wh40k::test::at(20.0f, 29.0f), base, 0.0f};
+    EXPECT_TRUE(sight.dense_between(at, wh40k::test::at(20.0f, 20.0f)));
+    EXPECT_FALSE(sight.dense_between(at, wh40k::test::at(20.0f, 40.0f)));
+}

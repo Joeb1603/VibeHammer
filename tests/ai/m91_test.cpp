@@ -75,6 +75,7 @@ normal::MoveWeights m90_weights() {
     w.hold_fire = 0.0;
     w.objective_charge = 0.0;
     w.objective_fight = 0.0;
+    w.gone_to_ground = 0.0;  // M93 (D-094): off by default too
     return w;
 }
 
@@ -383,7 +384,9 @@ TEST(M91_Regression, TheNewKeysAtZeroPlayTheTerrainAndObjectiveScenariosAsM90) {
         const char* state;
         const char* trace;
     } pins[] = {{kTerrainScenario, "dd02111be5230c80", "e3f0d22c61823516", "54c0dfee123ead1b"},
-                {kObjectiveScenario, "0f541058be8987ce", "7d146f09e35eecf6", "a4954478d7e5ca05"}};
+                // M93 (D-094): the objective scenario's objectives are markers (14.01.01), so its game is pinned under
+                // M93's rules (M90's pins: 0f541058be8987ce, 7d146f09e35eecf6, a4954478d7e5ca05).
+                {kObjectiveScenario, "ab644a7bf2f340a3", "a72929b923c9055d", "1991fde7d6fe9d5c"}};
     for (const auto& pin : pins) {
         SCOPED_TRACE(pin.scenario);
         const GameState scenario = load_scenario(repo_root() / pin.scenario, repo_root());

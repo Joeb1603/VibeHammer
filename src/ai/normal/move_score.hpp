@@ -143,8 +143,9 @@ struct MoveWeights {
     double objective_fight = 0.0;
     // M93 (D-094): 13.11.01 Gone to Ground in the enemy's reply (moved_visible): 0 or 1. At 1 a unit of ours hidden
     // with a Dense feature towards the enemy is taken as seen only within 12", not 15". On a battlefield with terrain
-    // (cover_on) only.
-    double gone_to_ground = 1.0;
+    // (cover_on) only. Default 0: measured +8 games in 400 against it off (under one standard deviation), so by the keep
+    // rule (D-092) it is off and the bot plays as at M92.
+    double gone_to_ground = 0.0;
 };
 
 // M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or

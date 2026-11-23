@@ -24,13 +24,16 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   the army plan and the shooting aim's reply), `hold_fire` (0 or 1: holding fire to stay hidden, 13.09),
   `objective_charge` and `objective_fight` (0 or more, x `objective`: the objective terms in charges and in pile-ins
   and consolidations). Any other value exits 2. The features on: `--weights
-  plan_terrain=1,aim_terrain=1,hold_fire=1,objective_charge=1,objective_fight=1`.
+  plan_terrain=1,aim_terrain=1,hold_fire=1,objective_charge=1,objective_fight=1`. M93 (D-094) adds `gone_to_ground`
+  (0 or 1, default 0: measured +8 games in 400, not better): 13.11.01 in the move score's guess of the enemy's reply.
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
   Since M86 (D-084) these battles play the objective mission, its block read from
   `data/scenarios/incursion_objectives_44x60.json`, as custom battles do in the client. `--mission <scenario file>`
   (M87) reads the block from another scenario instead (for tuning the mission's numbers); with `--scenario` it exits 2.
+  M93 (D-094): with `--terrain` and no `--mission` the block is read from the terrain file (its objectives are its
+  terrain areas; the objective scenario's are 14.01.01 markers, which no terrain area can be).
   `--terrain <scenario file>` (M88, D-087) fights these battles over that scenario's terrain block (e.g.
   `data/scenarios/incursion_terrain_44x60.json`, whose areas link to the mission's objectives); without it the
   battlefield is bare as before, and with `--scenario` it exits 2 (a scenario has its own terrain).
