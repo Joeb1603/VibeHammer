@@ -1,6 +1,6 @@
 # Roadmap: from today's engine to a full game with any army
 
-Written 2026-11-20, after M89. This is the long-range map, not a milestone list: `PLAN.md` stays the order of work,
+Written 2026-11-20, after M89; brought up to date after M91 (M90 added 24.18 [IGNORES COVER], D-091). This is the long-range map, not a milestone list: `PLAN.md` stays the order of work,
 and each item here still becomes a `PLAN.md` milestone with rules and acceptance criteria, agreed before it starts
 (`CLAUDE.md`, "Working style"). Sizes are rough guesses in milestones, to show proportion, not promises.
 
@@ -21,9 +21,9 @@ pinned data version. Legends, Crusade and the like are out for now (the user, 20
 
 | Area | Today | Gap to the goal |
 |---|---|---|
-| Core rules 01–14 | 66 of the 156 numbered rules have tests: the turn sequence, the attack sequence, moves, charges, fights, 2D terrain, objectives | 10.07 Indirect Shooting; the z axis (13.06, 13.11, 22.05); 14.03 securing |
+| Core rules 01–14 | 67 of the 156 numbered rules have tests: the turn sequence, the attack sequence, moves, charges, fights, 2D terrain, objectives | 10.07 Indirect Shooting; the z axis (13.06, 13.11, 22.05); 14.03 securing |
 | Core rules 15–23 | 17.01 and 17.03 only | All of stratagems, actions, FRAME, transports, attached units, reserves, flying, surging, auras, psychic, aircraft |
-| Core abilities (24) | 10 weapon abilities and random A/D | 27 of the 37 entries: see Phase 1 |
+| Core abilities (24) | 11 weapon abilities and random A/D | 26 of the 37 entries: see Phase 1 |
 | Missions | One house mission (D-084), scored from the scenario file | The real mission pack: 25 primaries, 18 secondaries, force dispositions, layouts |
 | Armies | 11 datasheets, 2 factions in custom battles, Incursion only | About 28 faction lists, 256 detachments, well over a thousand datasheets |
 | Unit, faction and detachment rules | Loaded and shown as text; none implemented | The largest part of the whole roadmap: Phase 4 |
@@ -73,7 +73,7 @@ feature: an engine milestone, then its client and bot milestones, as M86 / M87 a
 Each line is roughly one engine milestone, with its client and bot slices to follow. The order inside the phase is by
 what unlocks the most datasheets.
 
-**Weapon abilities (24)**: Lethal Hits, Devastating Wounds, Anti, Melta, Lance, Precision, Ignores Cover, Cleave,
+**Weapon abilities (24)**: Lethal Hits, Devastating Wounds, Anti, Melta, Lance, Precision, Cleave,
 Close-Quarters, Indirect Fire with 10.07, One Shot, Psychic, random A on melee weapons. After this no weapon profile
 is refused.
 
