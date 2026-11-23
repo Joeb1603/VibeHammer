@@ -88,6 +88,17 @@ std::vector<const core::TerrainShape*> TerrainSight::near(std::span<const core::
     return out;
 }
 
+bool TerrainSight::dense_between(const core::BasePose& at, const core::Position& towards) {
+    if (empty_) return false;
+    core::Rect box = pose_box(at);
+    box.min_x = std::min(box.min_x, towards.x);
+    box.min_y = std::min(box.min_y, towards.y);
+    box.max_x = std::max(box.max_x, towards.x);
+    box.max_y = std::max(box.max_y, towards.y);
+    const std::vector<const core::TerrainShape*> dense = near(view_.dense_features(), box);
+    return !dense.empty() && !clear(at.position, towards, dense);
+}
+
 SightLine TerrainSight::line(const core::BasePose& from, std::uint32_t from_mask, const core::BasePose& to,
                              std::uint32_t to_mask, bool to_hidden, bool need_full) {
     SightLine out;

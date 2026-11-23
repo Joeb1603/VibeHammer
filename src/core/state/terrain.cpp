@@ -84,6 +84,10 @@ void check_terrain_data(const GameState& state, std::string_view where) {
                 if (o.name == *area.objective) objective = &o;
             }
             if (objective == nullptr) fail(where, label + " is linked to an unknown objective '" + *area.objective + "'");
+            if (objective->marker) {
+                fail(where, label + " is linked to objective '" + *area.objective +
+                                "', an objective marker (14.01.01: a marker is an objective not within a terrain area)");
+            }
             for (const std::string& l : linked) {
                 if (l == *area.objective) fail(where, "objective '" + l + "' is linked to two terrain areas");
             }

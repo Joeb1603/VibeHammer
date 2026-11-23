@@ -26,4 +26,14 @@ std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId 
 std::vector<GameEvent> begin_attacks(GameState& state, UnitId attacker, const AttackContext& context,
                                      std::vector<WeaponSelection> selections);
 
+// 04.03.03 (D-093): one weapon selection waiting on a target that is gone, and its eligible new targets (unit order).
+struct RetargetChoice {
+    std::size_t selection = 0;  // index into the attack's WeaponSelections
+    std::vector<UnitId> options;
+    friend bool operator==(const RetargetChoice&, const RetargetChoice&) = default;
+};
+// Read-only, for clients and bots (M93): every such selection, in selection order, including those with no option.
+// Empty unless an attack is in progress.
+[[nodiscard]] std::vector<RetargetChoice> retarget_choices(const GameState& state);
+
 }  // namespace wh40k::core

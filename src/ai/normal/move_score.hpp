@@ -500,6 +500,9 @@ private:
         bool active = false;
         bool area_cover = false;   // every model of ours takes cover within an area
         bool all_hidden = false;   // every sampled model of ours is hidden in the enemy's turn
+        // M93 (D-094): and each has a Dense feature between it and the enemy's centroid: gone to ground (13.11.01), so
+        // its detection range is 12", not 15".
+        bool gone_to_ground = false;
         std::vector<core::BasePose> poses;  // our sampled models
         std::vector<std::uint32_t> masks;
         std::vector<char> hidden;

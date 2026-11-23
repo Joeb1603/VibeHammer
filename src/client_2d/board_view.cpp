@@ -162,6 +162,11 @@ void draw_objectives(const core::GameState& state, const BoardCamera& cam, float
         DrawCircleV(c, r, ColorAlpha(tint, m.controller ? 0.32f : 0.14f));
         const float thick = (m.secured ? 4.0f : 2.0f) * ui_scale;
         DrawRing(c, std::max(0.0f, r - thick), r, 0.0f, 360.0f, 96, ColorAlpha(tint, 0.9f));
+        if (m.marker_radius_mm > 0.0f) {  // M93 (D-094): the 40 mm marker itself, inside its 3" range
+            const float mr = cam.to_px(m.marker_radius_mm);
+            DrawCircleV(c, mr, ColorAlpha(tint, 0.85f));
+            DrawRing(c, std::max(0.0f, mr - 1.5f * ui_scale), mr, 0.0f, 360.0f, 48, BLACK);
+        }
         if (m.consolidating) {  // M90 (D-091): the Objective Consolidation's area, outlined in gold
             DrawRing(c, r, r + 3.0f * ui_scale, 0.0f, 360.0f, 96, Color{240, 200, 60, 230});
         }

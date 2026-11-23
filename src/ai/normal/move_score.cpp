@@ -861,8 +861,10 @@ bool MoveScoreContext::may_hold_fire(const std::vector<core::Position>& position
 }
 
 bool MoveScoreContext::moved_visible(float to_mm) const {
-    // An enemy unit that moves sees us again (D-090), unless we are hidden and it is still beyond 15" (13.09).
-    return !(reply_.all_hidden && core::more_than(to_mm, core::kDetectionRangeMm));
+    // An enemy unit that moves sees us again (D-090), unless we are hidden and it is still beyond 15" (13.09), or beyond
+    // 12" while we have gone to ground (13.11.01, M93, D-094).
+    const float range = core::kDetectionRangeMm - (reply_.gone_to_ground ? core::kGoneToGroundMm : 0.0f);
+    return !(reply_.all_hidden && core::more_than(to_mm, range));
 }
 
 MoveScoreContext::ReplyFacts MoveScoreContext::begin_reply(const std::vector<core::Position>& positions, bool shoots) {
@@ -887,6 +889,11 @@ MoveScoreContext::ReplyFacts MoveScoreContext::begin_reply(const std::vector<cor
         const bool hidden = may_hide && sight_->dense(mask);
         reply_.hidden.push_back(hidden ? 1 : 0);
         reply_.all_hidden = reply_.all_hidden && hidden;
+    }
+    reply_.gone_to_ground = reply_.all_hidden && !reply_.poses.empty();
+    for (const core::BasePose& p : reply_.poses) {
+        if (!reply_.gone_to_ground) break;
+        reply_.gone_to_ground = sight_->dense_between(p, enemy_centroid_);
     }
     if (enemy_) {
         const std::pair<bool, bool> v = stays_view(enemy_models_, enemy_side_);

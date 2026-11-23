@@ -255,6 +255,7 @@ std::uint64_t state_hash(const core::GameState& state) {
             h.i32(a.vp[1]);
             add_opt_int(h, a.controller);
             add_opt_int(h, a.secured_by);
+            if (a.marker) h.u64(0x6d61726bull);  // M93 (D-094): only for a marker, so areas hash as before
         }
         h.i32(m.objective_vp[0]);
         h.i32(m.objective_vp[1]);

@@ -702,6 +702,15 @@ std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId 
     return events;
 }
 
+std::vector<RetargetChoice> retarget_choices(const GameState& state) {
+    std::vector<RetargetChoice> out;
+    if (!state.flow.attack) return out;
+    for (const std::size_t i : detail::lost_selections(state, *state.flow.attack)) {
+        out.push_back(RetargetChoice{i, detail::retarget_options(state, *state.flow.attack, i)});
+    }
+    return out;
+}
+
 std::vector<GameEvent> begin_attacks(GameState& state, UnitId attacker, const AttackContext& context,
                                      std::vector<WeaponSelection> selections) {
     SeededDice dice(state.dice);

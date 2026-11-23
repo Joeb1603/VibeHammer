@@ -376,7 +376,7 @@ TEST(M89_Candidates, AMonsterGoesRoundAWallItCantCross) {
 
 TEST(M89_Deploy, InfantrySetsUpInCoverWhenItCan) {
     ArmySource source = load_army_source(repo_root());
-    source.mission = load_mission_block(repo_root() / "data/scenarios/incursion_objectives_44x60.json");
+    source.mission = load_mission_block(repo_root() / kTerrainScenario);  // M93 (D-094): its objectives are terrain areas
     source.terrain = load_terrain_block(repo_root() / kTerrainScenario);
     int set_ups = 0;
     int more_cover = 0;

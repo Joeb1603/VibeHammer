@@ -55,6 +55,9 @@ public:
     // `need_full`: also work out Fully Visible.
     [[nodiscard]] SightLine line(const core::BasePose& from, std::uint32_t from_mask, const core::BasePose& to,
                                  std::uint32_t to_mask, bool to_hidden, bool need_full);
+    // 13.11.01 Gone to Ground (M93, D-094), estimated: a Dense feature crosses the line from the centre of `at` to
+    // `towards` (the model is then not fully visible from there).
+    [[nodiscard]] bool dense_between(const core::BasePose& at, const core::Position& towards);
 
 private:
     // The shapes of `shapes` whose box meets `box`.

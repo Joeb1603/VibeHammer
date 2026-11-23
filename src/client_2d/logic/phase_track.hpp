@@ -60,6 +60,7 @@ struct ObjectiveMark {
     std::optional<core::Side> controller;
     bool secured = false;                // 14.03
     bool consolidating = false;          // M90 (D-091): the objective of the Objective Consolidation in progress
+    float marker_radius_mm = 0.0f;       // M93 (D-094): an objective marker's own radius (20 mm); 0 for an area
     std::string label;
 };
 [[nodiscard]] std::vector<ObjectiveMark> objective_marks(const core::GameState& state);

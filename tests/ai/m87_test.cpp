@@ -227,9 +227,14 @@ TEST(M87_Mission, TheObjectiveScenarioCarriesTheTunedNumbers) {
     EXPECT_EQ(m.objectives[kHomeA].vp, (std::array<int, 2>{4, 8}));
     EXPECT_EQ(m.objectives[kHomeB].vp, (std::array<int, 2>{8, 4}));
     for (std::size_t i = 0; i < m.objectives.size(); ++i) {
+        // M93 (D-094): and each is an objective marker (14.01.01): 40 mm, within range at 3", held as its range circle.
         ObjectiveArea a = m.objectives[i];
+        EXPECT_TRUE(a.marker);
+        EXPECT_FLOAT_EQ(a.diameter_mm, kObjectiveMarkerDiameterMm + 2.0f * kObjectiveMarkerRangeMm);
         a.vp = m86.mission->objectives[i].vp;
-        EXPECT_EQ(a, m86.mission->objectives[i]) << "only the VP changed";
+        a.marker = false;
+        a.diameter_mm = m86.mission->objectives[i].diameter_mm;
+        EXPECT_EQ(a, m86.mission->objectives[i]) << "only the VP and the markers changed";
     }
     for (const Side s : {Side::A, Side::B}) {
         const ObjectiveArea& home = m.objectives[s == Side::A ? kHomeA : kHomeB];

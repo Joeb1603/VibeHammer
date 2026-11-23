@@ -402,6 +402,7 @@ void to_json(Json& j, const ObjectiveArea& v) {
     j = Json{{"name", v.name}, {"centre", v.centre}, {"diameter_mm", v.diameter_mm}, {"vp", v.vp}};
     if (v.controller) j["controller"] = *v.controller;  // 14.02: omitted while neither player controls it
     if (v.secured_by) j["secured_by"] = *v.secured_by;  // 14.03: omitted while not secured
+    if (v.marker) j["marker"] = true;                    // D-094: omitted for an area
 }
 void from_json(const Json& j, ObjectiveArea& v) {
     j.at("name").get_to(v.name);
@@ -412,6 +413,7 @@ void from_json(const Json& j, ObjectiveArea& v) {
     if (j.contains("controller")) v.controller = j.at("controller").get<Side>();
     v.secured_by.reset();
     if (j.contains("secured_by")) v.secured_by = j.at("secured_by").get<Side>();
+    v.marker = j.value("marker", false);
 }
 void to_json(Json& j, const Mission& v) {
     j = Json{{"first_scoring_round", v.first_scoring_round},

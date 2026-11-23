@@ -41,7 +41,9 @@ std::vector<std::size_t> objectives_within(const GameState& state, const Unit& u
     for (std::size_t i = 0; i < state.mission->objectives.size(); ++i) {
         const ObjectiveArea& area = state.mission->objectives[i];
         for (const Model& m : unit.models) {
-            if (within(objective_gap_mm(pose_of(m), area), range)) {
+            // 14.01 / 14.01.01: measured to the closest part of the objective; a marker's is 3" inside its range circle.
+            const float gap = objective_gap_mm(pose_of(m), area) + (area.marker ? kObjectiveMarkerRangeMm : 0.0f);
+            if (within(gap, range)) {
                 out.push_back(i);
                 break;
             }
