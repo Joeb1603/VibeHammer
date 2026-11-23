@@ -380,7 +380,7 @@ TEST(R04_03_ResolveAttacks, AttackerChoosesBatchOrderAndFinishesATargetFirst) {
 
 // ==== D-012 and D-007 ====
 
-TEST(D012_TargetNoLongerEligible, AttacksAgainstADestroyedTargetAreLost) {
+TEST(D093_TargetNoLongerEligible, AttacksAgainstADestroyedTargetAreLostWhenNoNewTargetIsSelected) {
     GameState gs = shoot_step_state();
     const UnitId gants = gs.units[kGants].id;
     const UnitId gants2 = add_unit_copy(gs, kGants);
@@ -396,8 +396,13 @@ TEST(D012_TargetNoLongerEligible, AttacksAgainstADestroyedTargetAreLost) {
     ASSERT_EQ(decider(gs), Side::A);  // three batches, two targets: the attacker chooses
     apply_action(gs, Side::A, action::SelectAttackBatch{0}, dice);
     ASSERT_EQ(*gs.pending, (PendingDecision{Side::B, decision::OrderCasualties{gants}}));  // D-051
-    const auto events =
-        apply_action(gs, Side::B, action::OrderCasualties{gants, model_ids(gs.units[kGants])}, dice);
+    auto events = apply_action(gs, Side::B, action::OrderCasualties{gants, model_ids(gs.units[kGants])}, dice);
+    // 04.03.03 (D-093): the second unit is an eligible new target, so the attacker is asked; it selects none.
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::RetargetAttacks{gs.units[kMarines].id}}));
+    EXPECT_EQ(legal_actions(gs, Side::A),
+              (std::vector<GameAction>{action::RetargetAttacks{{AttackRetarget{1, gants2}}}, action::RetargetAttacks{}}));
+    const auto declined = apply_action(gs, Side::A, action::RetargetAttacks{}, dice);
+    events.insert(events.end(), declined.begin(), declined.end());
 
     const auto resolved = events_of<event::SavesResolved>(events);
     ASSERT_EQ(resolved.size(), 1u);

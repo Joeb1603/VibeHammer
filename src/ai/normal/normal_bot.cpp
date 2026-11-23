@@ -1,5 +1,6 @@
 #include "normal/normal_bot.hpp"
 
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <utility>
@@ -55,6 +56,15 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
         const std::size_t b = normal::choose_attack_batch(cache, gs, legal);
         return single(action::SelectAttackBatch{b}, "Resolve attack batch " + std::to_string(b) +
                                                         " next: the order with the most expected damage (04.03)");
+    }
+    if (std::holds_alternative<decision::RetargetAttacks>(kind)) {
+        // 04.03.03 (M92, D-093): the new target with the most expected damage.
+        double value = 0.0;
+        action::RetargetAttacks r = normal::choose_retarget(cache, gs, legal, &value);
+        char buf[96];
+        std::snprintf(buf, sizeof buf, " (expected value %.2f, 04.03.03)", value);
+        if (r.retargets.empty()) return single(std::move(r), "Select no new targets: none is worth anything (04.03.03)");
+        return single(std::move(r), "New targets for the weapons whose target is gone" + std::string(buf));
     }
     if (std::holds_alternative<decision::DeclareAllocationOrder>(kind)) {
         if (auto o = normal::allocation_order(cache, gs, legal)) {

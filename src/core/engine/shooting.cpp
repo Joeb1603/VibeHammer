@@ -59,7 +59,7 @@ void apply_details(GameState& state, Side, const action::Shoot& a, DiceSource&, 
     // 10.04-10.06 After Shooting (not eligible to start an action) is not tracked: actions (16) are not
     // in V1.
     events.push_back(event::ShootingStarted{a.unit, a.type, selections});
-    start_attacks(state, a.unit, context, std::move(selections), events);  // 04.03; apply_action advances
+    start_attacks(state, a.unit, context, std::move(selections), events, a.type);  // 04.03; apply_action advances
 }
 
 ValidationResult validate_details(const GameState&, Side, const action::EndShootStep&) {

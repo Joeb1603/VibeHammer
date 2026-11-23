@@ -136,6 +136,13 @@ inline constexpr std::size_t kPermutedBatches = 6;
 [[nodiscard]] std::size_t choose_attack_batch(analysis::OddsCache& cache, const core::GameState& state,
                                               const std::vector<core::GameAction>& legal);
 
+// 04.03.03 RetargetAttacks (M92, D-093): the offered answer whose new batches, with the attacks still to come against
+// the same unit, have the most expected value (choose_attack_batch's measure); the empty answer only when none is
+// worth anything. `value` gets the chosen answer's value.
+[[nodiscard]] core::action::RetargetAttacks choose_retarget(analysis::OddsCache& cache, const core::GameState& state,
+                                                            const std::vector<core::GameAction>& legal,
+                                                            double* value = nullptr);
+
 // The batches grouped by target, each target's batches in their best order (best_batch_order), evaluated against
 // the target as it is in `state` (the value of a declaration as the bot will resolve it).
 [[nodiscard]] std::vector<analysis::TargetOutcome> evaluate_in_best_order(analysis::OddsCache& cache,

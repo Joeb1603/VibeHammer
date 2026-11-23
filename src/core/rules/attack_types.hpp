@@ -59,6 +59,13 @@ struct WeaponSelection {
     friend bool operator==(const WeaponSelection&, const WeaponSelection&) = default;
 };
 
+// 04.03.03 Target No Longer Eligible or Viable (D-093, M92): a weapon selection whose target is gone, given a new one.
+struct AttackRetarget {
+    std::size_t selection = 0;  // index into the attack's WeaponSelection list
+    UnitId target;              // the new target
+    friend bool operator==(const AttackRetarget&, const AttackRetarget&) = default;
+};
+
 // D-006 / 04.03 Identical Attacks: everything that still affects an attack from the hit roll onward.
 // Two attacks against the same target are identical iff their AttackProfiles are equal.
 struct AttackProfile {

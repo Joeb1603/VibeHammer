@@ -15,6 +15,7 @@
 #include "core/rules/attack_types.hpp"
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
+#include "core/rules/shooting_types.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -98,7 +99,7 @@ struct AttackFlow {
     AttackContext context;
     std::vector<WeaponSelection> selections;
     std::vector<AttackBatch> batches;
-    std::vector<bool> batch_done;          // resolved, or lost (D-012)
+    std::vector<bool> batch_done;          // resolved, lost or re-targeted (D-093)
     std::optional<UnitId> current_target;  // 04.03 Select Enemy Unit
     std::optional<BatchInProgress> current;
     // 24.15 [HAZARDOUS]: hazard rolls (06.03) to make for the attacking unit once all of its attacks are
@@ -109,6 +110,9 @@ struct AttackFlow {
     int pending_mortal_wounds = 0;
     // 24.38 (D-072): the wound rolls waiting for the attacker's RerollWoundRolls answer. Omitted from JSON when absent.
     std::optional<PendingWoundRerolls> wound_rerolls;
+    // D-093 (M92): the shooting type the unit was selected with (10.02), which new targets (04.03.03) must also fit.
+    // Normal for a fight. Omitted from JSON when Normal.
+    ShootingType shooting_type = ShootingType::Normal;
     friend bool operator==(const AttackFlow&, const AttackFlow&) = default;
 };
 

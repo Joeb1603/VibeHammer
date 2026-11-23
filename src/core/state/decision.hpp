@@ -93,6 +93,13 @@ struct RerollWoundRolls {
 struct DeployUnits {
     friend bool operator==(const DeployUnits&, const DeployUnits&) = default;
 };
+// 04.03.03 Target No Longer Eligible or Viable (app-only, D-093, M92; replaces D-012's "lost"): one or more batches'
+// target is no longer an eligible target and at least one of their weapons has another eligible target, so the
+// attacking unit's player can select new targets for them. Weapons not given one are lost.
+struct RetargetAttacks {
+    UnitId attacker;
+    friend bool operator==(const RetargetAttacks&, const RetargetAttacks&) = default;
+};
 }  // namespace decision
 
 // Appended at the end only: the bots' state_hash hashes the index (D-054).
@@ -101,7 +108,8 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::SelectUnitToFight, decision::DeclareMeleeAttacks,
                                   decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
-                                  decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits>;
+                                  decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits,
+                                  decision::RetargetAttacks>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)

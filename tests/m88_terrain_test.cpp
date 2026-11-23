@@ -578,6 +578,59 @@ TEST(R13_09_Hidden, AHiddenModelIsVisibleOnlyWithin15Inches) {
     EXPECT_TRUE(starts_with(r.front(), "13.09:")) << r.front();
 }
 
+// ---- 13.11.01 Gone to Ground (app-only, D-093, M92) ----
+
+namespace {
+
+// One Termagant (INFANTRY) at (10", 17") in a ruin; Intercessor 0 straight south, its edge `edge_in` from the
+// Termagant's. `intervening`: a dense block between them that covers the east half of the Termagant's base but leaves
+// the centre line clear (so a line of sight exists but the Termagant is not fully visible); otherwise the ruin's
+// dense wall stands well away in its north-east corner (the Termagant is still hidden, and fully visible).
+GameState gone_to_ground_state(float edge_in, bool intervening) {
+    const float gap = mm_to_inches(14.25f + 16.0f);
+    std::vector<TerrainFeature> features{dense_wall("Corner wall", rect_in(18, 19, 18, 18.4f))};
+    if (intervening) features.push_back(dense_wall("Block", rect_in(10.15f, 10.9f, 15.7f, 16.0f)));
+    GameState gs = v1_shooting({area("Ruin", rect_in(2, 22, 15.5f, 18.5f), std::move(features))}, 17.0f - gap - edge_in,
+                               17.0f, 10.0f);
+    gs.units[1].models.resize(1);
+    return gs;
+}
+
+}  // namespace
+
+TEST(R13_11_GoneToGround, AHiddenModelNotFullyVisibleDueToDenseTerrainHasA12InchDetectionRange) {
+    GameState gs = gone_to_ground_state(13.0f, true);
+    const Unit& gants = gs.units[1];
+    const Model& marine = gs.units[0].models[0];
+    ASSERT_TRUE(is_hidden(gs, gants, gants.models[0]));
+    TerrainView view(gs);
+    EXPECT_TRUE(view.gone_to_ground(marine, gants, gants.models[0]));
+    EXPECT_FLOAT_EQ(view.detection_range_mm(marine, gants, gants.models[0]), in(12.0f));
+    // 13" away: within 15" but not within 12", so not visible.
+    EXPECT_FALSE(unit_visible_to_model(gs, marine, gants));
+    const VisibilityProblem why = visibility_problem(gs, marine, gants);
+    EXPECT_EQ(why.kind, VisibilityProblemKind::Hidden);
+    EXPECT_NE(why.text.find("12\" while gone to ground, 13.11.01"), std::string::npos) << why.text;
+    // 11.5" away: within its detection range, and a line of sight exists past the block.
+    GameState near = gone_to_ground_state(11.5f, true);
+    EXPECT_TRUE(unit_visible_to_model(near, near.units[0].models[0], near.units[1]));
+}
+
+TEST(R13_11_GoneToGround, AFullyVisibleOrNotHiddenModelKeepsThe15InchRange) {
+    // Hidden, but nothing dense between them: fully visible, so 15" applies.
+    GameState open = gone_to_ground_state(13.0f, false);
+    TerrainView view(open);
+    const Unit& gants = open.units[1];
+    EXPECT_FALSE(view.gone_to_ground(open.units[0].models[0], gants, gants.models[0]));
+    EXPECT_TRUE(unit_visible_to_model(open, open.units[0].models[0], gants));
+    // A unit that shot this turn or last is not hidden, so it can't go to ground either.
+    GameState shot = gone_to_ground_state(13.0f, true);
+    shot.units[1].ranged_attacks.previous_turn = true;
+    TerrainView v2(shot);
+    EXPECT_FALSE(v2.gone_to_ground(shot.units[0].models[0], shot.units[1], shot.units[1].models[0]));
+    EXPECT_TRUE(unit_visible_to_model(shot, shot.units[0].models[0], shot.units[1]));
+}
+
 TEST(R13_09_Hidden, OnlyInfantryBeastsOrSwarmInAnAreaWithADenseFeature) {
     GameState gs = v1_shooting(gants_ruin(), 2.0f, 17.0f);
     EXPECT_TRUE(is_hidden(gs, gs.units[1], gs.units[1].models[0]));

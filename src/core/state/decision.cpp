@@ -33,6 +33,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "05.04";
             else if constexpr (std::is_same_v<T, decision::RerollWoundRolls>) return "24.38";
             else if constexpr (std::is_same_v<T, decision::DeployUnits>) return "03.02";  // D-081
+            else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) return "D-093";  // 04.03.03 (app-only)
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         d.kind);
@@ -59,6 +60,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::OrderCasualties>) return "OrderCasualties";
             else if constexpr (std::is_same_v<T, decision::RerollWoundRolls>) return "RerollWoundRolls";
             else if constexpr (std::is_same_v<T, decision::DeployUnits>) return "DeployUnits";
+            else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) return "RetargetAttacks";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         kind);
@@ -105,6 +107,9 @@ std::string what_to_do(const PendingDecision& d) {
                        " ([TWIN-LINKED])";
             } else if constexpr (std::is_same_v<T, decision::DeployUnits>) {
                 return "set up one of your units";  // D-081: the sides alternate
+            } else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) {
+                return "select new targets for unit " + std::to_string(k.attacker.v) +
+                       "'s attacks whose target is gone";  // D-093
             } else {
                 static_assert(sizeof(T) == 0, "unhandled decision");
             }

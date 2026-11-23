@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M91 are done. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92 is below. Their full text (prompts, acceptance checks, results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -132,6 +132,47 @@ Open items still carried are listed under "Later" below.
 | M89 | The bot plays for cover (open items) |
 | M90 | Objective Consolidation and [IGNORES COVER] |
 | M91 | The bot plays terrain and objectives in every phase (open items) |
+
+---
+
+## M92: The app-only rules audit (D-093)
+
+**Effort:** high. **Scope:** Phase 0, item 1 of `docs/roadmap.md`. Agreed with the user on 2026-11-23: compare the 101
+app-only entries in `docs/gdmissions/core_rules/` with D-001, D-009, D-010, D-011, D-012, D-015, D-069 and every other
+decision that leans on an app-only rule; **the scraped app text overrides the wording the user supplied** (the user's
+ruling), and the differences are built now.
+
+**Rules** (app-only, cited through D-093): 04.03.03 Target No Longer Eligible or Viable; 13.11.01 Gone to Ground;
+14.02.01 Controlling an Objective at the End of a Phase; 24.11.01 Only [EXTRA ATTACKS] weapons; 02.02.01 Modifiers (BS
+no worse than 6+). PDF rules read: 04.03, 05.04, 13.09, 13.11, 14.01–14.03, 03.03, 24.11, 25 (Rules Appendix).
+
+**Acceptance**
+- [x] D-093 records every app-only entry the engine touches: what changed, what matched, what waits for later rules.
+- [x] 04.03.03: a weapon whose target is gone can select an eligible new target (`RetargetAttacks`, the attacking
+  side's decision); unselected ones are lost; with no eligible new target nothing is asked (D-012's behaviour). Shooting
+  checks the new target with the unit's shooting type; fighting, an enemy unit the model is engaged with. Select Targets
+  facts are recorded again; new batches are appended. Validation reasons are rule-cited. JSON round trips.
+- [x] 13.11.01: a hidden model not fully visible due to intervening Dense features has a 12" detection range (engine
+  and the bot's sight estimate).
+- [x] 14.02.01: end-of-turn control is determined before Regaining Coherency.
+- [x] 24.11.01: [EXTRA ATTACKS] weapons may be selected without another melee weapon.
+- [x] 02.02.01: a BS worsened by cover stops at 6+.
+- [x] The bot, the defaults and the fallback answer `RetargetAttacks`; the client shows its answers, logs the event and
+  keeps the dice cards' batches.
+- [x] Every existing replay stays byte-identical; a new replay, `m92_retarget.json`, shows a re-target.
+- [x] Full `ctest` green.
+
+**Results.** Every existing replay is byte-identical: no saved game had a weapon left with an eligible new target. The
+bot's pinned M88 game on the terrain battlefield (M89's regression) keeps its actions and final state; its trace hash
+changed with Gone to Ground (re-pinned). Random play on the Strike, monster and Tyrannofex fixtures reaches the new
+decision and stays valid.
+
+**Open items.**
+- *Client:* `RetargetAttacks` is answered with the engine's buttons (all lost weapons at one unit, or none); a target
+  per weapon needs an editor.
+- *Bots:* `MoveScoreContext::moved_visible` still uses 15" for a hidden unit (no Gone to Ground there).
+- *Missions:* the objective scenario without terrain keeps its circular areas, not 14.01.01's 40 mm markers (with the
+  mission pack).
 
 ---
 

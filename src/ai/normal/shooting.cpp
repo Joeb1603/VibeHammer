@@ -568,6 +568,56 @@ std::size_t choose_attack_batch(analysis::OddsCache& cache, const core::GameStat
     return best.value_or(0);
 }
 
+core::action::RetargetAttacks choose_retarget(analysis::OddsCache& cache, const core::GameState& state,
+                                             const std::vector<core::GameAction>& legal, double* value) {
+    core::action::RetargetAttacks best;
+    double best_value = 0.0;
+    const core::AttackFlow* f = state.flow.attack ? &*state.flow.attack : nullptr;
+    const core::Unit* attacker = f != nullptr ? state.find_unit(f->attacker) : nullptr;
+    for (const core::GameAction& a : legal) {
+        const auto* r = std::get_if<core::action::RetargetAttacks>(&a);
+        if (r == nullptr || r->retargets.empty() || attacker == nullptr) continue;
+        // The selections the engine would record now (04.02), gathered as it would (04.03, D-006).
+        std::vector<core::WeaponSelection> fresh;
+        for (const core::AttackRetarget& t : r->retargets) {
+            const core::WeaponSelection& old = f->selections[t.selection];
+            if (f->context.type == core::AttackType::Fighting) {
+                fresh.push_back(core::select_weapon_target(state, old.attacker, old.weapon_index, old.profile_index,
+                                                           t.target, old.declared_attacks));
+            } else {
+                const core::ShotDeclaration shot{old.attacker, old.weapon_index, old.profile_index, t.target};
+                fresh.push_back(core::make_weapon_selections(state, *attacker, f->shooting_type,
+                                                             std::span<const core::ShotDeclaration>(&shot, 1))
+                                    .front());
+            }
+        }
+        double v = 0.0;
+        const std::vector<core::AttackBatch> batches = core::gather_attack_batches(state, fresh, f->context);
+        std::vector<core::UnitId> targets;
+        for (const core::AttackBatch& b : batches) {
+            if (std::find(targets.begin(), targets.end(), b.target) == targets.end()) targets.push_back(b.target);
+        }
+        for (const core::UnitId id : targets) {
+            const core::Unit* target = state.find_unit(id);
+            if (target == nullptr || target->models.empty()) continue;
+            analysis::Volley volley;
+            for (const core::AttackBatch& b : batches) {
+                if (b.target == id) volley.push_back(analysis::volley_batch(b));
+            }
+            for (std::size_t j = 0; j < f->batches.size(); ++j) {
+                if (!f->batch_done[j] && f->batches[j].target == id) volley.push_back(analysis::volley_batch(f->batches[j]));
+            }
+            v += unit_share(state, *target, best_value_starting_with(cache, volley, 0, analysis::snapshot_of(*target)));
+        }
+        if (v > best_value + kBetter) {
+            best = *r;
+            best_value = v;
+        }
+    }
+    if (value != nullptr) *value = best_value;
+    return best;
+}
+
 std::string describe_shooting(const core::GameState& state, const ShootingChoice& choice) {
     const core::Unit* u = state.find_unit(choice.unit);
     std::vector<std::pair<std::string, int>> counts;  // "profile at target" -> models, first-appearance order

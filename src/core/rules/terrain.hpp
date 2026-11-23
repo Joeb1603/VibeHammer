@@ -90,6 +90,15 @@ public:
     // D-088 Fully Visible (13.08 "intervening terrain"): the obscuring areas neither model is within and the Light and
     // Dense features of the areas either is within (the others are inside those obscuring areas, as above).
     [[nodiscard]] std::span<const TerrainShape* const> cover_blockers(std::uint32_t mask);
+    // 13.11.01 (D-093): every Dense feature on the battlefield.
+    [[nodiscard]] std::span<const TerrainShape* const> dense_features();
+    // 13.11.01 Gone to Ground (app-only, D-093, M92): `observed` (of `observed_unit`) is hidden (13.09, which already
+    // asks that its unit made no ranged attacks this turn or the previous turn) and not fully visible to `observer`
+    // due to one or more intervening Dense features (D-088 Fully Visible past the Dense features alone).
+    [[nodiscard]] bool gone_to_ground(const Model& observer, const Unit& observed_unit, const Model& observed);
+    // 13.09 with 13.11.01: `observed`'s detection range against `observer`: 15", or 12" while it has gone to ground.
+    // Only meaningful for a hidden model.
+    [[nodiscard]] float detection_range_mm(const Model& observer, const Unit& observed_unit, const Model& observed);
 
 private:
     const GameState& state_;
@@ -99,11 +108,13 @@ private:
     std::map<std::uint32_t, std::uint32_t> within_;                    // by model id
     std::map<std::uint32_t, std::vector<const TerrainShape*>> sight_;  // by mask
     std::map<std::uint32_t, std::vector<const TerrainShape*>> cover_;  // by mask
+    std::optional<std::vector<const TerrainShape*>> dense_features_;
 };
 
 // 06.01 with 13.09-13.11 (D-088): `observer` can see `observed` (a model of `observed_unit`) past the model
 // `blockers` (06.01: not those of the two units) and the terrain: a hidden model is visible only within 15" (edge to
-// edge, D-009), and then only with a line of sight past the sight_blockers. Without terrain: has_line_of_sight.
+// edge, D-009; 12" while it has gone to ground, 13.11.01, D-093), and then only with a line of sight past the
+// sight_blockers. Without terrain: has_line_of_sight.
 [[nodiscard]] bool model_visible(TerrainView& view, const Model& observer, const Unit& observed_unit,
                                  const Model& observed, std::span<const PosedModel> blockers);
 

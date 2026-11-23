@@ -62,6 +62,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::RerollWoundRolls>(d);
             else if constexpr (std::is_same_v<T, action::DeployUnit> || std::is_same_v<T, action::CannotSetUp>)
                 return std::holds_alternative<decision::DeployUnits>(d);
+            else if constexpr (std::is_same_v<T, action::RetargetAttacks>)
+                return std::holds_alternative<decision::RetargetAttacks>(d);
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);

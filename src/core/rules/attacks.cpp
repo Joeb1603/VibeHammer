@@ -16,6 +16,9 @@ namespace wh40k::core {
 
 namespace {
 
+// 02.02.01 Modifiers (app-only, D-093, M92): "BS cannot be 1+ (or better) or 7+ (or worse)" after all modifiers.
+constexpr int kWorstSkill = 6;
+
 // D-006: abilities that still affect the attack from the hit roll onward, other than those already
 // captured by AttackProfile fields ([HEAVY] -> hit_modifier, [TORRENT] -> torrent). [EXTRA ATTACKS] is used
 // up in the Select Weapons step (24.11, D-071), like [ASSAULT]. [IGNORES COVER] is used up in the Select Targets step,
@@ -277,7 +280,8 @@ std::vector<AttackBatch> gather_attack_batches(const GameState& state,
         // 13.08 (D-089): worsen the BS characteristic of the attack by 1 (3+ becomes 4+). The characteristic, not the
         // hit roll, so D-011's cap doesn't apply; [TORRENT] has no BS. Part of the profile, so D-006 keeps attacks with
         // and without cover in separate batches.
-        if (sel.benefit_of_cover && profile.skill) *profile.skill += 1;
+        // 02.02.01 (app-only, D-093, M92): after all modifiers a BS cannot be 7+ or worse, so 6+ stays 6+.
+        if (sel.benefit_of_cover && profile.skill) *profile.skill = std::min(*profile.skill + 1, kWorstSkill);
         const SelectionDice dice = selection_dice(wp, sel, context);
 
         if (std::find(target_order.begin(), target_order.end(), sel.target) == target_order.end()) {

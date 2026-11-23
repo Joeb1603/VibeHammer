@@ -315,6 +315,12 @@ void from_json(const Json& j, AttackDiceRoll& v) {
     j.at("bonus").get_to(v.bonus);
 }
 
+void to_json(Json& j, const AttackRetarget& v) { j = Json{{"selection", v.selection}, {"target", v.target}}; }
+void from_json(const Json& j, AttackRetarget& v) {
+    j.at("selection").get_to(v.selection);
+    j.at("target").get_to(v.target);
+}
+
 void to_json(Json& j, const AttackBatch& v) {
     j = Json{{"target", v.target},
              {"profile", v.profile},
@@ -411,6 +417,7 @@ void to_json(Json& j, const AttackFlow& v) {
     if (v.hazard_rolls != 0) j["hazard_rolls"] = v.hazard_rolls;  // 24.15 (D-071); omitted when 0
     if (v.pending_mortal_wounds != 0) j["pending_mortal_wounds"] = v.pending_mortal_wounds;
     if (v.wound_rerolls) j["wound_rerolls"] = *v.wound_rerolls;  // 24.38 (D-072); omitted when absent
+    if (v.shooting_type != ShootingType::Normal) j["shooting_type"] = v.shooting_type;  // D-093; omitted when Normal
 }
 void from_json(const Json& j, AttackFlow& v) {
     j.at("attacker").get_to(v.attacker);
@@ -426,6 +433,8 @@ void from_json(const Json& j, AttackFlow& v) {
     if (const auto it = j.find("wound_rerolls"); it != j.end() && !it->is_null()) {
         v.wound_rerolls = it->get<PendingWoundRerolls>();
     }
+    v.shooting_type = ShootingType::Normal;
+    if (const auto it = j.find("shooting_type"); it != j.end()) it->get_to(v.shooting_type);
 }
 
 void to_json(Json& j, const FlowState& v) {
@@ -514,7 +523,8 @@ void to_json(Json& j, const PendingDecision& v) {
                           std::is_same_v<T, decision::RestoreCoherency>) {
                 j["unit"] = k.unit;
             } else if constexpr (std::is_same_v<T, decision::SelectAttackBatch> ||
-                                 std::is_same_v<T, decision::RerollWoundRolls>) {
+                                 std::is_same_v<T, decision::RerollWoundRolls> ||
+                                 std::is_same_v<T, decision::RetargetAttacks>) {
                 j["attacker"] = k.attacker;
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder> ||
                                  std::is_same_v<T, decision::OrderCasualties>) {
@@ -543,6 +553,7 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "OrderCasualties") v.kind = decision::OrderCasualties{j.at("target").get<UnitId>()};
     else if (kind == "RerollWoundRolls") v.kind = decision::RerollWoundRolls{j.at("attacker").get<UnitId>()};
     else if (kind == "DeployUnits") v.kind = decision::DeployUnits{};  // D-081
+    else if (kind == "RetargetAttacks") v.kind = decision::RetargetAttacks{j.at("attacker").get<UnitId>()};  // D-093
     else bad_enum("PendingDecision", j);
 }
 

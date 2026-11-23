@@ -52,7 +52,7 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::SavesResolved>) return {"SavesResolved", "05.04"};
     else if constexpr (std::is_same_v<T, event::ModelDestroyed>) return {"ModelDestroyed", "Appendix: Destroyed"};
     else if constexpr (std::is_same_v<T, event::UnitDestroyed>) return {"UnitDestroyed", "Appendix: Destroyed"};
-    else if constexpr (std::is_same_v<T, event::AttacksLost>) return {"AttacksLost", "D-012"};
+    else if constexpr (std::is_same_v<T, event::AttacksLost>) return {"AttacksLost", "D-093"};
     else if constexpr (std::is_same_v<T, event::GameOver>) return {"GameOver", "D-007"};
     else if constexpr (std::is_same_v<T, event::WoundRollsRerolled>) return {"WoundRollsRerolled", "24.38"};
     else if constexpr (std::is_same_v<T, event::AttackDiceRolled>) return {"AttackDiceRolled", "04.03"};
@@ -61,6 +61,7 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::UnitNotSetUp>) return {"UnitNotSetUp", "D-081"};
     else if constexpr (std::is_same_v<T, event::ObjectiveControlChanged>) return {"ObjectiveControlChanged", "14.02"};
     else if constexpr (std::is_same_v<T, event::VictoryPointsScored>) return {"VictoryPointsScored", "D-084"};
+    else if constexpr (std::is_same_v<T, event::AttacksRetargeted>) return {"AttacksRetargeted", "D-093"};
     else static_assert(sizeof(T) == 0, "unhandled event");
 }
 

@@ -78,6 +78,8 @@ void to_json(Json& j, const RandomAttackDice& v);
 void from_json(const Json& j, RandomAttackDice& v);
 void to_json(Json& j, const AttackDiceRoll& v);
 void from_json(const Json& j, AttackDiceRoll& v);
+void to_json(Json& j, const AttackRetarget& v);
+void from_json(const Json& j, AttackRetarget& v);
 void to_json(Json& j, const AttackBatch& v);
 void from_json(const Json& j, AttackBatch& v);
 void to_json(Json& j, const AllocationGroup& v);

@@ -1030,6 +1030,7 @@ Replay m86_replay(std::uint64_t seed, bool& ok, std::string& problem) {
 // phase; `problem`, the first refused step.
 constexpr const char* kObjectiveScenario = "data/scenarios/incursion_objectives_44x60.json";
 constexpr std::uint64_t kM90Seed = 1;
+constexpr std::uint64_t kM92Seed = 2;  // M92: picked by Replay.DISABLED_SearchM92Seed
 
 Replay m90_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
@@ -1116,6 +1117,86 @@ Replay m90_replay(std::uint64_t seed, bool& ok, std::string& problem) {
          consolidated && g.mission->objectives[0].controller == Side::A &&
          std::any_of(changed.begin(), changed.end(),
                      [](const event::ObjectiveControlChanged& c) { return c.objective == 0 && c.controller == Side::A; });
+    return r;
+}
+
+// M92 (D-093): 04.03.03 Target No Longer Eligible or Viable. The V1 scenario (an embedded initial state) with a second
+// Termagant unit (unit 3, a copy of unit 2 set 2.5" further north) and unit 2 cut to one model. Side A remains
+// stationary and shoots: Intercessor 0 on Saturation and Intercessor 1 on Focused Fire at unit 2, the other three on
+// Saturation at unit 3. Saturation at unit 2 is resolved first; when it destroys the lone Termagant, Focused Fire's
+// target is gone and the attacker gives it unit 3. Every other decision takes its neutral answer. Stops at Side A's
+// first Charge decision.
+Replay m92_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.description =
+        "M92: 04.03.03 Target No Longer Eligible or Viable (D-093). The V1 scenario (an embedded initial state) with a "
+        "second Termagant unit (unit 3, a copy of unit 2 set 2.5\" further north) and unit 2 cut to one model. Side A "
+        "remains stationary and shoots: Intercessor 0 on Saturation and Intercessor 1 on Focused Fire at unit 2, the "
+        "other three on Saturation at unit 3. Saturation at unit 2 is resolved first and destroys the lone Termagant; "
+        "Focused Fire's target is then gone and the attacker selects unit 3 as its new target (RetargetAttacks). Every "
+        "other decision takes its neutral answer. Stops at Side A's first Charge decision.";
+    GameState init = wh40k::test::load_v1_scenario();
+    Unit copy = init.units[1];
+    copy.id = UnitId{3};
+    std::uint32_t next = 0;
+    for (const Unit& u : init.units) {
+        for (const Model& m : u.models) next = std::max(next, m.id.v);
+    }
+    for (Model& m : copy.models) {
+        m.id = ModelId{++next};
+        m.position.y += wh40k::test::in(2.5f);
+    }
+    init.units[1].models.resize(1);
+    init.units[1].starting_strength = 1;
+    init.units.push_back(copy);
+    init.dice.seed = seed;
+    r.initial.state = init;
+    GameState g = replay_initial_state(r, repo_root());
+    std::vector<GameEvent> events = start_game(g);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed || !g.pending) {
+            failed = true;
+            return;
+        }
+        const Side side = decider(g);
+        const auto v = validate_action(g, side, a);
+        if (!v.ok()) {
+            if (problem.empty()) problem = v.reasons[0];
+            failed = true;
+            return;
+        }
+        r.steps.push_back(ReplayStep{side, a});
+        const auto e = apply_action(g, side, a);
+        events.insert(events.end(), e.begin(), e.end());
+    };
+    while (!failed && g.pending && !(g.flow.stage == Stage::Shoot && turn_side(g) == Side::A)) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !g.pending) return r;
+    const Unit& marines = g.units[0];
+    action::Shoot shoot{marines.id, ShootingType::Normal, {}};
+    for (std::size_t i = 0; i < marines.models.size(); ++i) {
+        shoot.shots.push_back(ShotDeclaration{marines.models[i].id, 0, i == 1 ? 0u : 1u, i < 2 ? UnitId{2} : UnitId{3}});
+    }
+    act(shoot);
+    if (failed || !g.pending || !std::holds_alternative<decision::SelectAttackBatch>(g.pending->kind)) return r;
+    act(action::SelectAttackBatch{0});  // Saturation at unit 2
+    while (!failed && g.pending && g.flow.attack && !std::holds_alternative<decision::RetargetAttacks>(g.pending->kind) &&
+           !std::holds_alternative<decision::SelectAttackBatch>(g.pending->kind)) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !g.pending || !std::holds_alternative<decision::RetargetAttacks>(g.pending->kind)) return r;
+    act(action::RetargetAttacks{{AttackRetarget{1, UnitId{3}}}});
+    while (!failed && g.pending && !(g.flow.stage == Stage::Charge && turn_side(g) == Side::A)) {
+        act(wh40k::test::neutral_action(g));
+    }
+    if (failed || !g.pending) return r;
+    r.expect = replay_expectation(g);
+    const auto moved = events_of<event::AttacksRetargeted>(events);
+    ok = is_destroyed(*g.find_unit(UnitId{2})) && moved.size() == 1 && moved[0].batches.size() == 1 &&
+         moved[0].batches[0].target == UnitId{3} && events_of<event::AttacksLost>(events).empty();
     return r;
 }
 
@@ -1815,6 +1896,47 @@ TEST(Replay, DISABLED_RegenerateReplays) {
     ASSERT_TRUE(m90_problem.empty()) << m90_problem;
     EXPECT_TRUE(m90_shows_it) << "seed " << kM90Seed << " no longer shows an Objective Consolidation onto the Centre";
     save_if_clean(m90, kReplayDir / "m90_objective_consolidation.json");
+
+    // M92 (D-093): a weapon whose target is destroyed selects a new target (04.03.03).
+    bool m92_shows_it = false;
+    std::string m92_problem;
+    const Replay m92 = m92_replay(kM92Seed, m92_shows_it, m92_problem);
+    ASSERT_TRUE(m92_problem.empty()) << m92_problem;
+    EXPECT_TRUE(m92_shows_it) << "seed " << kM92Seed << " no longer destroys unit 2 and retargets Focused Fire";
+    save_if_clean(m92, kReplayDir / "m92_retarget.json");
+}
+
+TEST(Replay, DISABLED_SearchM92Seed) {
+    for (std::uint64_t seed = 1; seed <= 60; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m92_replay(seed, ok, problem);
+        if (ok) {
+            std::printf("M92 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+    }
+    ADD_FAILURE() << "no seed in 1..60";
+}
+
+// M92 (D-093): the saved replay destroys unit 2 with the first batch and gives Focused Fire unit 3 as its new target.
+TEST(D093_Replay, TheRetargetReplayGivesTheLostWeaponANewTarget) {
+    const Replay saved = load_replay(kReplayDir / "m92_retarget.json");
+    EXPECT_FALSE(saved.initial.scenario.has_value());  // an embedded initial state
+    const ReplayResult run = run_replay(saved, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    EXPECT_TRUE(is_destroyed(*run.final_state.find_unit(UnitId{2})));
+    EXPECT_EQ(run.final_state.pending, (PendingDecision{Side::A, decision::Charge{}}));
+    const auto moved = events_of<event::AttacksRetargeted>(run.events);
+    ASSERT_EQ(moved.size(), 1u);
+    EXPECT_EQ(moved[0].retargets, (std::vector<AttackRetarget>{{1, UnitId{3}}}));
+    bool ok = false;
+    std::string problem;
+    const Replay again = m92_replay(kM92Seed, ok, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
 }
 
 // M74 (D-081): the replay's scenario file is the stock armies' custom battle set up by hand.

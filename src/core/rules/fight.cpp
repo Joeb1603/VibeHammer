@@ -396,7 +396,7 @@ std::vector<std::string> melee_problems(const GameState& state, const Unit& unit
         }
     }
     // 04.01 While Fighting: every model that can attack must select one melee weapon (D-021), and 24.11 all of
-    // its [EXTRA ATTACKS] weapons plus one other melee weapon if it has one it can use (D-071).
+    // its [EXTRA ATTACKS] weapons plus at most one other melee weapon (D-071; the other is optional, 24.11.01, D-093).
     for (const Model& m : unit.models) {
         if (!has_melee_weapon(m) || enemy_units_engaged_with_model(state, unit, pose_of(m)).empty()) continue;
         std::vector<std::size_t> declared;
@@ -417,13 +417,8 @@ std::vector<std::string> melee_problems(const GameState& state, const Unit& unit
                               m.weapons[w].name + "' is not selected)");
             }
         }
-        const bool other_declared = std::any_of(declared.begin(), declared.end(), [&m](std::size_t w) {
-            return w < m.weapons.size() && !is_extra_attacks_weapon(m.weapons[w]);
-        });
-        if (rule.has_other && !other_declared) {
-            out.push_back("24.11: " + model_label(m.id) + " must also select one of its melee weapons other than its "
-                                                          "[EXTRA ATTACKS] weapons");
-        }
+        // 24.11.01 (app-only, D-093, M92): it does not need to select a weapon without [EXTRA ATTACKS] to attack with
+        // its [EXTRA ATTACKS] weapons, so leaving out the other melee weapon is allowed (two others are still refused).
     }
     return out;
 }

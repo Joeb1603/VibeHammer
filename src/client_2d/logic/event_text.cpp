@@ -270,6 +270,15 @@ std::string body(const core::GameEvent& e) {
                 const std::size_t w = core::side_index(*x.controller);
                 return side(*x.controller) + " takes control of " + x.name + " (OC " + std::to_string(x.levels[w]) +
                        " to " + std::to_string(x.levels[1 - w]) + ")";
+            } else if constexpr (std::is_same_v<T, ev::AttacksRetargeted>) {
+                // 04.03.03 (D-093): "Intercessor Squad selects new targets for 3 weapons: Termagants (12 attack dice)".
+                std::string text = unit(x.attacker) + " selects new targets for " + std::to_string(x.retargets.size()) +
+                                   " weapon" + (x.retargets.size() == 1 ? "" : "s") + ":";
+                for (std::size_t i = 0; i < x.batches.size(); ++i) {
+                    text += (i == 0 ? " " : ", ") + unit(x.batches[i].target) + " (" +
+                            attack_count_text(x.batches[i].attack_dice, x.batches[i].random_attacks) + " attack dice)";
+                }
+                return text;
             } else if constexpr (std::is_same_v<T, ev::VictoryPointsScored>) {
                 return side(x.side) + " scores " + std::to_string(x.vp) + " VP for holding " + x.name + " (" +
                        std::to_string(x.total) + " objective VP)";

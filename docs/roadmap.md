@@ -57,7 +57,7 @@ feature: an engine milestone, then its client and bot milestones, as M86 / M87 a
 
 ## Phase 0: decisions and groundwork (2–3 milestones)
 
-1. **Audit the app-only rules.** Compare the 101 *APP* entries in `docs/gdmissions/core_rules/` with the working
+1. **Audit the app-only rules.** *Done in M92 (D-093): the scraped app text overrides the supplied wording.* Compare the 101 *APP* entries in `docs/gdmissions/core_rules/` with the working
    assumptions in D-009, D-010, D-011, D-012, D-015 and D-069. Record each difference as a decision; fix the engine
    where the user agrees the scraped wording is right. This also settles which remaining "known gaps" are closed.
 2. **Engine-paced dice rolls** (already in `PLAN.md`, "Later": Option 2 of M20). Every roll becomes a point the engine
