@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92 is below. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92 and M93 are below. Their full text (prompts, acceptance checks, results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -167,12 +167,38 @@ bot's pinned M88 game on the terrain battlefield (M89's regression) keeps its ac
 changed with Gone to Ground (re-pinned). Random play on the Strike, monster and Tyrannofex fixtures reaches the new
 decision and stays valid.
 
-**Open items.**
-- *Client:* `RetargetAttacks` is answered with the engine's buttons (all lost weapons at one unit, or none); a target
-  per weapon needs an editor.
-- *Bots:* `MoveScoreContext::moved_visible` still uses 15" for a hidden unit (no Gone to Ground there).
-- *Missions:* the objective scenario without terrain keeps its circular areas, not 14.01.01's 40 mm markers (with the
-  mission pack).
+**Open items.** All three done in M93 (below).
+
+---
+
+## M93: M92's open items (D-094)
+
+**Effort:** high. **Scope:** the three open items of M92, asked for by the user on 2026-11-23.
+
+**Rules:** 04.03.03 (D-093), 14.01.01 Objectives Not Within a Terrain Area (app-only; also the Rules Appendix), 14.01,
+14.02, 12.08, 13.11.01 (D-093).
+
+**Acceptance**
+- [x] Client: one row per weapon waiting on a gone target, each picking an eligible unit or "lost"
+  (`RetargetPicks`, core's read-only `retarget_choices`); the engine's buttons stay.
+- [x] Objective markers: `ObjectiveArea::marker` (40 mm, within range at 3", held as its range circle); the scenario
+  format (`"marker": true`, no diameter), JSON, a terrain area can't link to one; 12.08's "within 3"" measured to the
+  marker; the board draws the marker. The objective scenario's objectives are markers; custom battles and the arena over
+  terrain read the terrain scenario's mission.
+- [x] Bot: 13.11.01 in `moved_visible` behind `gone_to_ground`, measured by M91's head-to-head; on by default only if
+  better (D-092's keep rule).
+- [x] Replays regenerated on purpose only where the rules moved them; every other one byte-identical. Full `ctest` green.
+
+**Results.**
+- *Bot:* `gone_to_ground` on won 208 of 400 against it off on the terrain scenario (+8, under one standard deviation),
+  so it defaults to 0 and the bot plays as at M92 (the terrain bot games and pins are unchanged).
+- *Objective scenario with markers* (200 games, default weights): Chaos Space Marines win 67 (33.5%; 32.5% at M87), 9 of
+  them on points destroyed at equal VP. Mean objective VP A 15.6 / B 17.9; the Centre is still the Tyranids' (B 1.95 VP a
+  game, A 0.08). The balance item of M87 stays open.
+- *Replays:* `m87_objectives_bot_game.json` and `m90_objective_consolidation.json` regenerated (the markers); the M91
+  objective-scenario pin re-pinned. `ctest`: 1485 of 1485.
+
+**Open items.** None new. The objective scenario's balance (Chaos about a third) is M87's, unchanged.
 
 ---
 
