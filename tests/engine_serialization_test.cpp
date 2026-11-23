@@ -76,6 +76,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::OrderCasualties{UnitId{2}}},
         {Side::B, decision::RerollWoundRolls{UnitId{2}}},  // M61 (24.38)
         {Side::B, decision::DeployUnits{}},                // M74 (D-081)
+        {Side::A, decision::RetargetAttacks{UnitId{1}}},   // M92 (D-093)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
@@ -228,6 +229,7 @@ TEST(Serialization, EveryActionKindRoundTrips) {
                            {ModelPlacement{ModelId{7}, Position{10.5f, 20.25f, 0.0f}, 0.0f},
                             ModelPlacement{ModelId{8}, Position{40.0f, 20.25f, 0.0f}, 30.0f}}},  // M74 (D-081)
         action::CannotSetUp{UnitId{4}},                                                          // M74 (D-081)
+        action::RetargetAttacks{{AttackRetarget{1, UnitId{4}}, AttackRetarget{3, UnitId{5}}}},     // M92 (D-093)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {
@@ -326,6 +328,7 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::UnitNotSetUp{UnitId{4}, Side::B},    // M74
         event::ObjectiveControlChanged{1, "A home", Side::A, {3, 1}},  // M86 (14.02)
         event::VictoryPointsScored{Side::B, 2, "B home", 2, 7},         // M86 (D-084)
+        event::AttacksRetargeted{UnitId{1}, {AttackRetarget{0, UnitId{4}}}, {selection}, 2, {batch}},  // M92 (D-093)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

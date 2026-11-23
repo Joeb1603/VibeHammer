@@ -58,6 +58,8 @@ inline constexpr std::size_t kMaxTerrainFeatures = 16;  // per area
 inline constexpr float kDenseMoveHeightMm = 2.0f * MM_PER_INCH;
 // 13.09: unless otherwise stated, a model's detection range is 15".
 inline constexpr float kDetectionRangeMm = 15.0f * MM_PER_INCH;
+// 13.11.01 Gone to Ground (app-only, D-093, M92): while a model has gone to ground, subtract 3" from its detection range.
+inline constexpr float kGoneToGroundMm = 3.0f * MM_PER_INCH;
 
 // 13.04 / 13.05 / D-087: a Light or Dense feature is solid: no model is set up or ends a move on it.
 [[nodiscard]] constexpr bool is_solid(TerrainCategory c) noexcept { return c != TerrainCategory::Exposed; }

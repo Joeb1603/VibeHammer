@@ -159,30 +159,34 @@ void apply_details(GameState& state, Side side, const action::ResetUnitMove& a, 
 
 // The decision the attack in progress needs (pure), or nullopt if it can progress automatically.
 [[nodiscard]] std::optional<PendingDecision> attack_decision(const GameState& state);
-// One step of automatic attack work (rolls, damage, D-012, finishing). Precondition: an attack is in
+// One step of automatic attack work (rolls, damage, lost attacks (04.03.03, D-093), finishing). Precondition: an attack is in
 // progress and attack_decision(state) is nullopt.
 void attack_progress(GameState& state, DiceSource& dice, Events& events);
 // 04.03: gathers the attack batches and makes `attacker` the selected unit (01.03); the caller then
 // advances. Throws std::logic_error on the begin_attacks preconditions.
 void start_attacks(GameState& state, UnitId attacker, const AttackContext& context,
-                   std::vector<WeaponSelection> selections, Events& events);
+                   std::vector<WeaponSelection> selections, Events& events,
+                   ShootingType shooting_type = ShootingType::Normal);
 
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectAttackBatch& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::DeclareAllocationOrder& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::OrderCasualties& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RerollWoundRolls& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RetargetAttacks& d);
 
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::SelectAttackBatch& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
                                                 const action::DeclareAllocationOrder& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::OrderCasualties& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::RerollWoundRolls& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::RetargetAttacks& a);
 
 void apply_details(GameState& state, Side side, const action::SelectAttackBatch& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::DeclareAllocationOrder& a, DiceSource& dice,
                    Events& events);
 void apply_details(GameState& state, Side side, const action::OrderCasualties& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::RerollWoundRolls& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::RetargetAttacks& a, DiceSource& dice, Events& events);
 
 // ---- deployment.cpp: D-081 deployment by hand (03.02) ----
 

@@ -75,7 +75,10 @@ void on_enter_stage(GameState& state, DiceSource& dice, Events& events) {
             on_enter_fight_stage(state, events);  // fight.cpp
             break;
         case Stage::EndOfTurn:
-            break;  // 03.03 Regaining Coherency is a decision (stage_decision)
+            // 14.02: control at the end of each turn. 14.02.01 (app-only, D-093, M92): the first thing done at the end of
+            // a turn, before any other rule there, so before 03.03 Regaining Coherency (a decision, stage_decision).
+            update_objective_control(state, false, events);
+            break;
         case Stage::Deploy:
             // D-081: the side that sets up first (the one taking the second turn, unless it has no units).
             events.push_back(event::DeploymentStarted{side_to_deploy(state).value_or(opponent(state.first_turn))});
@@ -94,7 +97,7 @@ void on_leave_stage(GameState& state, Events& events) {
     }
     switch (stage) {
         case Stage::EndOfTurn:
-            update_objective_control(state, false, events);  // 14.02: and at the end of each turn
+            // 14.02's end-of-turn control was determined on entering the step (14.02.01, D-093).
             for (Unit& u : state.units) {
                 u.turn_flags = UnitTurnFlags{};  // effects that last "until the end of the turn" end
                 if (!state.terrain.empty()) {

@@ -179,8 +179,8 @@ TEST(M62_ClientText, TheNewEventsAreLoggedAsRolls) {
     EXPECT_FALSE(is_roll_event(event::SavesResolved{UnitId{2}, r}));
 
     const event::AttacksLost lost{UnitId{2}, 1, 0, {RandomAttackDice{0, ModelId{6}, DiceExpr{1, 6, 3}, 1}}};
-    EXPECT_EQ(format_event(lost), "[D-012] 1 + D6+3 attacks against unit 2 are lost (not rolled)");
-    EXPECT_EQ(format_event(event::AttacksLost{UnitId{2}, 1, 4, {}}), "[D-012] 4 attacks against unit 2 are lost");
+    EXPECT_EQ(format_event(lost), "[D-093] 1 + D6+3 attacks against unit 2 are lost (not rolled)");
+    EXPECT_EQ(format_event(event::AttacksLost{UnitId{2}, 1, 4, {}}), "[D-093] 4 attacks against unit 2 are lost");
     EXPECT_EQ(attack_count_text(0, {RandomAttackDice{0, ModelId{6}, DiceExpr{1, 6, 3}, 0}}), "D6+3");
 }
 

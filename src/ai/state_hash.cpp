@@ -143,6 +143,8 @@ void add(Fnv1a& h, const core::FlowState& f) {
             h.u64(a.wound_rerolls->rolls.rolls.size());
             for (const core::WoundRoll& r : a.wound_rerolls->rolls.rolls) h.i32(r.unmodified);
         }
+        // M92 (D-093): AttackFlow::shooting_type is not hashed. It only narrows the new targets of 04.03.03, and the
+        // batches hashed above already differ by its effects (10.05 / 10.06), so every older state hashes as before.
     }
     h.flag(f.move.has_value());
     if (f.move) {

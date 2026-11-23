@@ -291,6 +291,19 @@ TEST(R10_05_AssaultShooting, AfterAnAdvanceOnlyAssaultShootingWithAssaultProfile
     EXPECT_TRUE(starts_with(reasons.at(0), "10.05: 'Bolt pistol' is not an [ASSAULT] weapon")) << reasons[0];
 }
 
+TEST(R10_05_AssaultShooting, TheAttackKeepsItsShootingTypeForNewTargets) {
+    // D-093 (M92): new targets (04.03.03) must fit the shooting type too, so the attack in progress records it.
+    GameState gs = after_marine_move(MoveType::Advance, 1.0f);
+    const Unit& m = gs.units[kMarines];
+    ScriptedDice dice{6, 6, 6, 6, 6, 6, 1, 1, 1};  // Saturation: three hits, three wounds, three failed saves
+    apply_action(gs, Side::A,
+                 action::Shoot{m.id, ShootingType::Assault,
+                               {ShotDeclaration{m.models[0].id, kBoltRifle, kSaturation, gs.units[kGants].id}}},
+                 dice);
+    ASSERT_TRUE(gs.flow.attack.has_value());  // waiting for Side B's casualties
+    EXPECT_EQ(gs.flow.attack->shooting_type, ShootingType::Assault);
+}
+
 TEST(R10_05_AssaultShooting, NotEligibleWithoutAnAdvanceMove) {
     GameState gs = shoot_step_state();
     const auto reasons = rejection(gs, Side::A, marines_fire(gs, ShootingType::Assault, kBoltRifle, kSaturation));

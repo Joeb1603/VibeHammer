@@ -9,8 +9,10 @@
 #include "core/model/keywords.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/fight.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/rules/random_characteristics.hpp"
+#include "core/rules/shooting.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -49,7 +51,7 @@ Unit& unit_ref(GameState& state, UnitId id) {
     return *u;
 }
 
-// D-012: a batch whose target is no longer on the battlefield can't be resolved against it.
+// 04.03.03 (D-093, M92; was D-012): a batch whose target is no longer on the battlefield can't be resolved against it.
 bool target_gone(const GameState& state, const AttackBatch& batch) {
     const Unit* u = state.find_unit(batch.target);
     return u == nullptr || is_destroyed(*u);
@@ -62,6 +64,63 @@ bool has_lost_batches(const GameState& state, const AttackFlow& f) {
         }
     }
     return false;
+}
+
+// 04.03.03 (D-093): the selections in batches whose target is gone, in selection order.
+std::vector<std::size_t> lost_selections(const GameState& state, const AttackFlow& f) {
+    std::vector<std::size_t> out;
+    for (std::size_t i = 0; i < f.batches.size(); ++i) {
+        if (f.batch_done[i] || !target_gone(state, f.batches[i])) continue;
+        out.insert(out.end(), f.batches[i].selections.begin(), f.batches[i].selections.end());
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+// 04.03.03 (D-093): the eligible new targets for selection `index`, in unit order. Shooting: every enemy unit the
+// model could select with that weapon and profile now, with the unit's shooting type (04.02, 06.01, 10.04-10.06,
+// 17.03, 24.07: shot_problems). Fighting: the enemy units the model is engaged with (04.02 While Fighting).
+std::vector<UnitId> retarget_options(const GameState& state, const AttackFlow& f, std::size_t index) {
+    std::vector<UnitId> out;
+    const WeaponSelection& sel = f.selections[index];
+    const Unit& unit = unit_ref(state, f.attacker);
+    const Model* model = find_model(unit, sel.attacker);
+    if (model == nullptr) return out;
+    if (f.context.type == AttackType::Fighting) {
+        for (const UnitId id : enemy_units_engaged_with_model(state, unit, *model, model->position)) {
+            const Unit* t = state.find_unit(id);
+            if (t != nullptr && !is_destroyed(*t)) out.push_back(id);
+        }
+        return out;
+    }
+    for (const Unit& t : state.units) {
+        if (t.side == unit.side || is_destroyed(t)) continue;
+        const ShotDeclaration shot{sel.attacker, sel.weapon_index, sel.profile_index, t.id};
+        if (shot_problems(state, unit, f.shooting_type, std::span<const ShotDeclaration>(&shot, 1)).empty()) {
+            out.push_back(t.id);
+        }
+    }
+    return out;
+}
+
+bool any_retarget_option(const GameState& state, const AttackFlow& f) {
+    for (const std::size_t i : lost_selections(state, f)) {
+        if (!retarget_options(state, f, i).empty()) return true;
+    }
+    return false;
+}
+
+// 04.03.03 (D-093): `old` with its new target, the Select Targets facts recorded now (24.05, 24.30, 10.06, 17.03,
+// 13.08), as a fresh selection would record them. A melee selection keeps its declared attacks (04.02 splitting).
+WeaponSelection retargeted(const GameState& state, const AttackFlow& f, const WeaponSelection& old, UnitId target) {
+    if (f.context.type == AttackType::Fighting) {
+        return select_weapon_target(state, old.attacker, old.weapon_index, old.profile_index, target,
+                                    old.declared_attacks);
+    }
+    const ShotDeclaration shot{old.attacker, old.weapon_index, old.profile_index, target};
+    return make_weapon_selections(state, unit_ref(state, f.attacker), f.shooting_type,
+                                  std::span<const ShotDeclaration>(&shot, 1))
+        .front();
 }
 
 // 04.03: the batches the attacker may resolve next. All batches against the current target are
@@ -258,7 +317,12 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
         return std::nullopt;
     }
     if (has_lost_batches(state, f)) {
-        return std::nullopt;  // D-012 drops them first
+        // 04.03.03 (D-093): the attacking unit's player can select new targets when one exists; otherwise the attacks
+        // are lost (attack_progress).
+        if (any_retarget_option(state, f)) {
+            return PendingDecision{unit_ref(state, f.attacker).side, decision::RetargetAttacks{f.attacker}};
+        }
+        return std::nullopt;
     }
     if (batch_options(state, f).size() > 1) {
         return PendingDecision{unit_ref(state, f.attacker).side, decision::SelectAttackBatch{f.attacker}};  // 04.03
@@ -294,7 +358,8 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
         f.pending_mortal_wounds = 0;
         return;
     }
-    // D-012: batches against a target that is no longer on the battlefield are lost.
+    // 04.03.03 (D-093): batches against a target that is no longer on the battlefield, none of whose weapons has
+    // another eligible target, are lost.
     bool dropped = false;
     for (std::size_t i = 0; i < f.batches.size(); ++i) {
         if (!f.batch_done[i] && target_gone(state, f.batches[i])) {
@@ -463,6 +528,102 @@ void apply_details(GameState& state, Side, const action::RerollWoundRolls& a, Di
     after_wound_rolls(state, p.batch, p.rolls);
 }
 
+// ---- 04.03.03 RetargetAttacks (D-093) ----
+
+std::vector<GameAction> legal_for(const GameState& state, const decision::RetargetAttacks&) {
+    // D-004: one answer per enemy unit that some lost weapon can target (every such weapon given that unit), then
+    // none. Any other combination of each weapon's options is valid too.
+    const AttackFlow& f = flow_of(state);
+    const std::vector<std::size_t> lost = lost_selections(state, f);
+    std::vector<std::vector<UnitId>> options;
+    for (const std::size_t i : lost) options.push_back(retarget_options(state, f, i));
+    std::vector<GameAction> out;
+    for (const Unit& u : state.units) {
+        action::RetargetAttacks a;
+        for (std::size_t k = 0; k < lost.size(); ++k) {
+            if (std::find(options[k].begin(), options[k].end(), u.id) != options[k].end()) {
+                a.retargets.push_back(AttackRetarget{lost[k], u.id});
+            }
+        }
+        if (!a.retargets.empty()) out.push_back(std::move(a));
+    }
+    out.push_back(action::RetargetAttacks{});
+    return out;
+}
+
+ValidationResult validate_details(const GameState& state, Side, const action::RetargetAttacks& a) {
+    const AttackFlow& f = flow_of(state);
+    const std::vector<std::size_t> lost = lost_selections(state, f);
+    ValidationResult r;
+    std::vector<std::size_t> seen;
+    for (const AttackRetarget& t : a.retargets) {
+        const std::string what = "weapon selection " + std::to_string(t.selection);
+        if (std::find(lost.begin(), lost.end(), t.selection) == lost.end()) {
+            r.reasons.push_back("D-093: " + what + " is not waiting on a target that is gone; only those weapons "
+                                "select new targets (04.03.03)");
+            continue;
+        }
+        if (std::find(seen.begin(), seen.end(), t.selection) != seen.end()) {
+            r.reasons.push_back("D-093: " + what + " is given a new target more than once");
+            continue;
+        }
+        seen.push_back(t.selection);
+        const std::vector<UnitId> options = retarget_options(state, f, t.selection);
+        if (std::find(options.begin(), options.end(), t.target) == options.end()) {
+            r.reasons.push_back("D-093: " + unit_label(t.target) + " is not an eligible target for " + what +
+                                (f.context.type == AttackType::Fighting
+                                     ? " (04.02: an enemy unit its model is engaged with)"
+                                     : " (04.02: an enemy unit it could select now)"));
+        }
+    }
+    return r.reasons.empty() ? ValidationResult::success() : r;
+}
+
+void apply_details(GameState& state, Side, const action::RetargetAttacks& a, DiceSource&, Events& events) {
+    AttackFlow& f = flow_of(state);
+    std::vector<AttackRetarget> retargets = a.retargets;
+    std::sort(retargets.begin(), retargets.end(),
+              [](const AttackRetarget& x, const AttackRetarget& y) { return x.selection < y.selection; });
+    // The new Select Targets facts, recorded before anything is rolled (04.02).
+    std::vector<WeaponSelection> fresh;
+    std::vector<std::size_t> moved;
+    for (const AttackRetarget& t : retargets) {
+        fresh.push_back(retargeted(state, f, f.selections[t.selection], t.target));
+        moved.push_back(t.selection);
+    }
+    // The batches whose target is gone are done; the weapons not given a new target are lost (D-069: a random A
+    // unrolled).
+    for (std::size_t i = 0; i < f.batches.size(); ++i) {
+        if (f.batch_done[i] || !target_gone(state, f.batches[i])) continue;
+        f.batch_done[i] = true;
+        int dice = 0;
+        bool dropped = false;
+        std::vector<RandomAttackDice> random;
+        for (const std::size_t s : f.batches[i].selections) {
+            if (std::find(moved.begin(), moved.end(), s) != moved.end()) continue;
+            dropped = true;
+            const SelectionDice d = selection_dice(selected_profile(state, f.selections[s]), f.selections[s], f.context);
+            dice += d.dice;
+            if (d.random) random.push_back(RandomAttackDice{s, f.selections[s].attacker, *d.random, d.bonus});
+        }
+        if (dropped) {
+            events.push_back(event::AttacksLost{f.batches[i].target, i, dice, std::move(random)});
+        }
+    }
+    if (retargets.empty()) return;
+    // 04.03 / D-006: the moved weapons gathered into new batches, appended (earlier batch indices stay).
+    std::vector<AttackBatch> batches = gather_attack_batches(state, fresh, f.context);
+    for (AttackBatch& b : batches) {
+        for (std::size_t& s : b.selections) s = moved[s];
+        for (RandomAttackDice& r : b.random_attacks) r.selection = moved[r.selection];
+    }
+    for (std::size_t k = 0; k < moved.size(); ++k) f.selections[moved[k]] = fresh[k];  // fresh is moved into the event
+    const std::size_t first = f.batches.size();
+    f.batches.insert(f.batches.end(), batches.begin(), batches.end());
+    f.batch_done.resize(f.batches.size(), false);
+    events.push_back(event::AttacksRetargeted{f.attacker, std::move(retargets), std::move(fresh), first, std::move(batches)});
+}
+
 void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource& dice, Events& events) {
     if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
         resolve_attack_mortal_wounds(state, a.priority, events);  // 06.02 ([HAZARDOUS] hazards, 24.15)
@@ -512,7 +673,7 @@ void check_begin_preconditions(const GameState& state, UnitId attacker, const At
 }  // namespace
 
 void start_attacks(GameState& state, UnitId attacker, const AttackContext& context,
-                   std::vector<WeaponSelection> selections, Events& events) {
+                   std::vector<WeaponSelection> selections, Events& events, ShootingType shooting_type) {
     check_begin_preconditions(state, attacker, context, selections);
     AttackFlow f;
     f.attacker = attacker;
@@ -521,6 +682,7 @@ void start_attacks(GameState& state, UnitId attacker, const AttackContext& conte
     f.batch_done.assign(f.batches.size(), false);
     f.hazard_rolls = hazardous_weapons_selected(state, selections);  // 24.15: counted at Select Weapons
     f.selections = std::move(selections);
+    f.shooting_type = shooting_type;  // D-093: new targets (04.03.03) must fit it too
     events.push_back(event::AttackBatchesGathered{attacker, f.batches});
 
     // 01.03: the attacking unit's controlling player is active until its attacks are resolved.

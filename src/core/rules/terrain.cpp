@@ -172,13 +172,40 @@ std::span<const TerrainShape* const> TerrainView::cover_blockers(std::uint32_t m
     return it->second;
 }
 
+std::span<const TerrainShape* const> TerrainView::dense_features() {
+    if (!dense_features_) {
+        std::vector<const TerrainShape*> out;
+        for (const TerrainArea& a : state_.terrain) {
+            for (const TerrainFeature& f : a.features) {
+                if (f.category == TerrainCategory::Dense) out.push_back(&f.shape);
+            }
+        }
+        dense_features_ = std::move(out);
+    }
+    return *dense_features_;
+}
+
+bool TerrainView::gone_to_ground(const Model& observer, const Unit& observed_unit, const Model& observed) {
+    if (!hidden(observed_unit, observed)) return false;
+    return !fully_visible_past(posed_of(observer), posed_of(observed), dense_features());
+}
+
+float TerrainView::detection_range_mm(const Model& observer, const Unit& observed_unit, const Model& observed) {
+    const float d = base_distance(pose_of(observer), pose_of(observed));
+    // Gone to Ground only matters between 12" and 15"; within 12" the model is within range either way.
+    if (!more_than(d, kDetectionRangeMm - kGoneToGroundMm) || more_than(d, kDetectionRangeMm)) return kDetectionRangeMm;
+    return gone_to_ground(observer, observed_unit, observed) ? kDetectionRangeMm - kGoneToGroundMm : kDetectionRangeMm;
+}
+
 bool model_visible(TerrainView& view, const Model& observer, const Unit& observed_unit, const Model& observed,
                    std::span<const PosedModel> blockers) {
     const PosedModel from = posed_of(observer);
     const PosedModel to = posed_of(observed);
     if (view.empty()) return has_line_of_sight(from, to, blockers);
-    // 13.09: a hidden model can only be visible to enemy models within its detection range (15", D-009 within).
-    if (view.hidden(observed_unit, observed) && more_than(base_distance(from.pose(), to.pose()), kDetectionRangeMm)) {
+    // 13.09: a hidden model can only be visible to enemy models within its detection range (15", D-009 within; 12"
+    // while it has gone to ground, 13.11.01, D-093).
+    if (view.hidden(observed_unit, observed) &&
+        more_than(base_distance(from.pose(), to.pose()), view.detection_range_mm(observer, observed_unit, observed))) {
         return false;
     }
     const std::uint32_t mask = view.within_mask(observer) | view.within_mask(observed);
@@ -195,7 +222,7 @@ VisibilityProblem visibility_problem(const GameState& state, const Model& observ
     for (const Model& m : target.models) {
         if (model_visible(view, observer, target, m, blockers)) return {};
         const bool hidden_far = !view.empty() && view.hidden(target, m) &&
-                                more_than(base_distance(from.pose(), pose_of(m)), kDetectionRangeMm);
+                                more_than(base_distance(from.pose(), pose_of(m)), view.detection_range_mm(observer, target, m));
         if (!hidden_far) {
             all_hidden_far = false;
             if (!line_without_terrain && !view.empty()) line_without_terrain = has_line_of_sight(from, posed_of(m), blockers);
@@ -206,7 +233,7 @@ VisibilityProblem visibility_problem(const GameState& state, const Model& observ
         p.kind = VisibilityProblemKind::Hidden;
         p.text = "13.09: " + unit_label(target.id) + " is hidden (within a terrain area with a dense terrain feature, "
                  "and it made no ranged attacks this turn or last) and " + model_label(observer.id) +
-                 " is not within its 15\" detection range";
+                 " is not within its 15\" detection range (12\" while gone to ground, 13.11.01)";
     } else if (line_without_terrain) {
         p.kind = VisibilityProblemKind::Terrain;
         p.text = "13.10 / 13.11: every line of sight from " + model_label(observer.id) + " to " +

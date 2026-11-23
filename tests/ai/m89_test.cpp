@@ -421,10 +421,11 @@ std::string per_game_field(const std::string& line, const std::string& key) {
 // The terrain scenario, seed 1 (`--per-game 1`), played by the M88 bot (cover 0). M89 pinned M88's Release arena
 // (actions 9adc6beead7f055c, state d7c20c6aabaa3603, trace d066bf6ecacfd5c7); M90 (D-091) changed the rules under the
 // mission: 12.08 Objective Consolidation gives Side B one more consolidation in this game, so the M88 bot's game is
-// pinned under M90's rules (the M89 and M90 Release arenas at cover=0 differ only from there).
+// pinned under M90's rules (the M89 and M90 Release arenas at cover=0 differ only from there). M92 (D-093): 13.11.01
+// Gone to Ground changes the trace only (d402e9f71fb750df under M90): the actions and the final state are the same.
 constexpr const char* kM88Actions = "e27db795e0c1ed1f";
 constexpr const char* kM88State = "873846eb3d40fa93";
-constexpr const char* kM88Trace = "d402e9f71fb750df";
+constexpr const char* kM88Trace = "69714275291ebb7f";
 
 }  // namespace
 

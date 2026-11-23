@@ -107,7 +107,7 @@ SightLine TerrainSight::line(const core::BasePose& from, std::uint32_t from_mask
     const std::vector<const core::TerrainShape*> sight = near(view_.sight_blockers(mask), box);
     const std::vector<const core::TerrainShape*> cover =
         need_full ? near(view_.cover_blockers(mask), box) : std::vector<const core::TerrainShape*>{};
-    if (sight.empty() && cover.empty()) return out;
+    if (sight.empty() && cover.empty() && !to_hidden) return out;
     // D-090: an estimate, not core's exact search (the engine decides every real shot): three parallel lines, from
     // the centres and from near either side of both bases.
     float dx = to.position.x - from.position.x;
@@ -124,6 +124,16 @@ SightLine TerrainSight::line(const core::BasePose& from, std::uint32_t from_mask
     const float ny = dx;
     const std::array<core::Position, 3> a = across(from, nx, ny);
     const std::array<core::Position, 3> b = across(to, nx, ny);
+    // 13.11.01 Gone to Ground (M92, D-093): beyond 12" a hidden model is not visible when a Dense feature intervenes;
+    // estimated as one of the three lines crossing a Dense feature (not fully visible).
+    if (to_hidden && core::more_than(core::base_distance(from, to), core::kDetectionRangeMm - core::kGoneToGroundMm)) {
+        const std::vector<const core::TerrainShape*> dense = near(view_.dense_features(), box);
+        if (!dense.empty() && !(clear(a[0], b[0], dense) && clear(a[1], b[1], dense) && clear(a[2], b[2], dense))) {
+            out.visible = false;
+            out.fully_visible = false;
+            return out;
+        }
+    }
     if (!sight.empty()) {
         out.visible = clear(a[0], b[0], sight) || clear(a[1], b[1], sight) || clear(a[2], b[2], sight);
     }

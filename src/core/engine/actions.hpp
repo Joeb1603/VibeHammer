@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/geometry/primitives.hpp"
+#include "core/rules/attack_types.hpp"
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
@@ -183,6 +184,13 @@ struct CannotSetUp {
     UnitId unit;
     friend bool operator==(const CannotSetUp&, const CannotSetUp&) = default;
 };
+// 04.03.03 (D-093, M92): the new targets for weapons whose target is no longer eligible: each listed selection (an
+// index into the attack's WeaponSelections, in a batch whose target is gone) attacks its new target; every other such
+// selection is lost. Empty: select no new targets (all of them are lost). Never a template.
+struct RetargetAttacks {
+    std::vector<AttackRetarget> retargets;
+    friend bool operator==(const RetargetAttacks&, const RetargetAttacks&) = default;
+};
 }  // namespace action
 
 // New alternatives are appended at the end, so every existing index stays the same.
@@ -194,7 +202,7 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::EndConsolidations, action::RemoveModelForCoherency,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties, action::RerollWoundRolls, action::DeployUnit,
-                                action::CannotSetUp>;
+                                action::CannotSetUp, action::RetargetAttacks>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"

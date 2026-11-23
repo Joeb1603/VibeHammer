@@ -227,7 +227,7 @@ struct UnitDestroyed {  // Rules Appendix: Destroyed
     UnitId unit;
     friend bool operator==(const UnitDestroyed&, const UnitDestroyed&) = default;
 };
-struct AttacksLost {  // D-012: the target is no longer eligible; the batch's attacks are lost
+struct AttacksLost {  // D-093 (04.03.03): the target is gone and no new one was selected; those attacks are lost
     UnitId target;
     std::size_t batch = 0;
     int attack_dice = 0;
@@ -276,6 +276,14 @@ struct ObjectiveControlChanged {  // 14.02 (D-084, M86): an objective's controll
     std::array<int, 2> levels{};      // both players' levels of control, indexed by side_index
     friend bool operator==(const ObjectiveControlChanged&, const ObjectiveControlChanged&) = default;
 };
+struct AttacksRetargeted {  // 04.03.03 (D-093, M92): weapons whose target was gone select new targets
+    UnitId attacker;
+    std::vector<AttackRetarget> retargets;  // each selection and its new target, in selection order
+    std::vector<WeaponSelection> selections;  // those selections as recorded now (04.02), in the same order
+    std::size_t first_batch = 0;            // index of the first new batch in the attack's batches
+    std::vector<AttackBatch> batches;       // the new batches (04.03, D-006), gathered from those selections
+    friend bool operator==(const AttacksRetargeted&, const AttacksRetargeted&) = default;
+};
 struct VictoryPointsScored {  // D-084 (M86): a player scores an objective they control in their Command phase
     Side side = Side::A;
     std::size_t objective = 0;
@@ -301,7 +309,7 @@ using GameEvent =
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled, event::DeploymentStarted,
                  event::UnitSetUp, event::UnitNotSetUp, event::ObjectiveControlChanged,
-                 event::VictoryPointsScored>;
+                 event::VictoryPointsScored, event::AttacksRetargeted>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

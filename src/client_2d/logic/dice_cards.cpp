@@ -347,6 +347,16 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
                         c.batch.reset();
                         c.groups.clear();
                         c.attacking = true;
+                    } else if constexpr (std::is_same_v<T, ev::AttacksRetargeted>) {
+                        // 04.03.03 (D-093): the new batches are appended; the moved selections have new targets.
+                        c.batches.resize(std::max(c.batches.size(), e.first_batch));
+                        c.batches.erase(c.batches.begin() + static_cast<std::ptrdiff_t>(e.first_batch), c.batches.end());
+                        c.batches.insert(c.batches.end(), e.batches.begin(), e.batches.end());
+                        for (std::size_t k = 0; k < e.retargets.size() && k < e.selections.size(); ++k) {
+                            if (e.retargets[k].selection < c.selections.size()) {
+                                c.selections[e.retargets[k].selection] = e.selections[k];
+                            }
+                        }
                     } else if constexpr (std::is_same_v<T, ev::MoveStarted>) {
                         c.attacking = false;
                     } else if constexpr (std::is_same_v<T, ev::AttackBatchSelected>) {

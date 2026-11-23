@@ -12,6 +12,10 @@ D-009, D-010, D-011, D-012 and D-015 use wording the user obtained from an AI as
 Warhammer 40,000 app. Treat them as working assumptions: if the official app text differs, update the
 decision, the code that cites it, and its tests.
 
+**M92 (D-093):** they were checked against the app text scraped from gdmissions.app (`docs/gdmissions/`). The user
+ruled that the scraped app text overrides the wording they supplied: D-012 is replaced, D-015's wording is replaced
+(same outcome), and D-009, D-010, D-011 and D-069 agree with it.
+
 ## Decisions
 
 - [D-001](decisions/D-001.md): Multiple Weapon Profiles are chosen per model (04.01, app-only rule)
@@ -106,3 +110,4 @@ decision, the code that cites it, and its tests.
 - [D-090](decisions/D-090.md): The bot plays for cover: terrain in the move score, cover and hidden spots, detours, hand deployment (M89, implemented; uses D-087–D-089)
 - [D-091](decisions/D-091.md): Objective Consolidation and [IGNORES COVER] (12.08, 24.18; M90; amends D-022 and D-071)
 - [D-092](decisions/D-092.md): The bot plays terrain and objectives in every phase: five features behind keys, all off by default (M91; the 55% target open)
+- [D-093](decisions/D-093.md): The app-only rules audit: the scraped app text replaces the AI-sourced wording; re-targeting (04.03.03, replaces D-012), Gone to Ground (13.11.01), control first at the end of a turn (14.02.01), the optional other weapon with [EXTRA ATTACKS] (24.11.01), BS no worse than 6+ (02.02.01) (M92)

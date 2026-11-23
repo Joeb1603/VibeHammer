@@ -219,10 +219,11 @@ TEST(R14_02_LevelOfControl, ControlIsDeterminedAtTheEndOfEachPhaseAndHoldsUntilT
     EXPECT_EQ(lost[0], (event::ObjectiveControlChanged{kCentre, "Centre", std::nullopt, {0, 0}}));
 }
 
-TEST(R14_02_LevelOfControl, ControlIsDeterminedAtTheEndOfTheTurnToo) {
+TEST(R14_02_LevelOfControl, ControlIsDeterminedAtTheEndOfTheTurnBeforeRegainingCoherency) {
     // One Legionary in the Centre, out of coherency with its unit: at the end of Side A's turn its player removes models
-    // to regain coherency (03.03). Before they do, a Termagant steps into the area (moved by hand): the check at the end
-    // of the turn (after the Fight phase's) sees it, so control changes before TurnEnded.
+    // to regain coherency (03.03). 14.02.01 (app-only, D-093, M92): control is the first thing determined at the end of
+    // the turn, so it was determined on entering the End of Turn step, with the Legionary there. A Termagant stepping
+    // into the area afterwards (moved by hand) and the Legionary's removal change nothing before TurnEnded.
     GameState gs = load_objectives();
     keep_units(gs, {1, 6});
     unit(gs, 1).models[0].position = at(19.0f, 29.0f);
@@ -231,15 +232,16 @@ TEST(R14_02_LevelOfControl, ControlIsDeterminedAtTheEndOfTheTurnToo) {
     play_until(gs, [](const GameState& s) { return s.flow.stage == Stage::EndOfTurn; });
     ASSERT_EQ(gs.flow.stage, Stage::EndOfTurn);
     ASSERT_TRUE(gs.pending.has_value());
-    EXPECT_EQ(area(gs, kCentre).controller, Side::A);  // the Fight phase's check: still Side A's
+    ASSERT_TRUE(std::holds_alternative<decision::RestoreCoherency>(gs.pending->kind));
+    EXPECT_EQ(area(gs, kCentre).controller, Side::A);  // the end-of-turn check is made: still Side A's
     unit(gs, 6).models[0].position = at(25.0f, 31.0f);
     unit(gs, 6).models[1].position = at(25.0f, 32.3f);
     // Its player removes models one at a time (03.03) until the unit is coherent; then the turn ends.
     const std::vector<GameEvent> ev = play_until(gs, [](const GameState& s) { return s.flow.stage != Stage::EndOfTurn; });
+    const std::ptrdiff_t ended = first_index<event::TurnEnded>(ev);
+    ASSERT_GE(ended, 0);
     const std::ptrdiff_t change = first_index<event::ObjectiveControlChanged>(ev);
-    ASSERT_GE(change, 0);
-    EXPECT_LT(change, first_index<event::TurnEnded>(ev));
-    EXPECT_NE(std::get<event::ObjectiveControlChanged>(ev[static_cast<std::size_t>(change)]).controller, Side::A);
+    EXPECT_TRUE(change < 0 || change > ended) << change;  // no second check this turn
 }
 
 TEST(R14_02_LevelOfControl, TheUnitsControllingAnObjectiveAreTheControllersUnitsInRangeWithOcOneOrMore) {

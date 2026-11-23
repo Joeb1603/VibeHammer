@@ -251,9 +251,10 @@ TEST(R04_03_GatherAttackDice, TorrentWithARandomAHitsWithTheRolledNumberOfAttack
     for (const HitRoll& h : hits.rolls) EXPECT_EQ(h.outcome, HitOutcome::AutoHit);
 }
 
-TEST(R04_03_GatherAttackDice, ABatchLostUnderD012IsNeverRolled) {
-    // Two batches at a Termagant unit of one model: the fixed Focused Fire destroys it, so the random-A Saturation
-    // batch is lost (D-012) without its A being rolled. A second Termagant unit keeps Side B on the board (D-007).
+TEST(R04_03_GatherAttackDice, ABatchLostUnderD093IsNeverRolled) {
+    // Two batches at a Termagant unit of one model: the fixed Focused Fire destroys it, and the attacker selects no new
+    // target, so the random-A Saturation batch is lost (D-093) without its A being rolled. A second Termagant unit
+    // keeps Side B on the board (D-007).
     GameState gs = shoot_step_state();
     (void)wh40k::test::add_unit_copy(gs, kGants);
     gs.units[kGants].models.resize(1);
@@ -272,8 +273,9 @@ TEST(R04_03_GatherAttackDice, ABatchLostUnderD012IsNeverRolled) {
     EXPECT_EQ(kill.remaining(), 0u);
     ASSERT_TRUE(std::holds_alternative<decision::OrderCasualties>(gs.pending->kind));
     ScriptedDice nothing{};  // any roll for the lost batch would exhaust it
-    const std::vector<GameEvent> events =
-        apply_action(gs, Side::B, action::OrderCasualties{gants, model_ids(gs.units[kGants])}, nothing);
+    apply_action(gs, Side::B, action::OrderCasualties{gants, model_ids(gs.units[kGants])}, nothing);
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::RetargetAttacks{gs.units[kMarines].id}}));
+    const std::vector<GameEvent> events = apply_action(gs, Side::A, action::RetargetAttacks{}, nothing);
     const auto lost = events_of<event::AttacksLost>(events);
     ASSERT_EQ(lost.size(), 1u);
     EXPECT_EQ(lost[0].batch, 1u);

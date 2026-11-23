@@ -127,6 +127,15 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 return "Set up " + unit_name(state, x.unit) + " (auto-place)";
             } else if constexpr (std::is_same_v<T, a::CannotSetUp>) {
                 return "Can't be set up: " + unit_name(state, x.unit) + " (counts as destroyed)";
+            } else if constexpr (std::is_same_v<T, a::RetargetAttacks>) {
+                // 04.03.03 (D-093): "Retarget 3 weapons at Termagants", or "Let them be lost".
+                if (x.retargets.empty()) return "Select no new targets (the attacks are lost)";
+                std::vector<core::UnitId> targets;
+                for (const auto& r : x.retargets) {
+                    if (std::find(targets.begin(), targets.end(), r.target) == targets.end()) targets.push_back(r.target);
+                }
+                const std::string n = std::to_string(x.retargets.size()) + " weapon" + (x.retargets.size() == 1 ? "" : "s");
+                return "Retarget " + n + " at " + units(state, targets);
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

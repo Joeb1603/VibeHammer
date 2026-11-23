@@ -236,7 +236,8 @@ TEST(R24_15_Hazardous, AMonsterUnitSuffersThreeMortalWoundsPerFailedRoll) {
 }
 
 TEST(R24_15_Hazardous, TheRollsAreMadeWhenTheTargetIsDestroyedBeforeEveryAttackIsResolved) {
-    // D-012: a batch whose target is gone is lost; the unit's attacks are still resolved, then the hazard roll.
+    // D-093 (04.03.03): a batch whose target is gone is lost when no new target is selected; the unit's attacks are
+    // still resolved, then the hazard roll.
     GameState gs = havocs_fixture();
     const UnitId second = add_unit_copy(gs, kTyrant);  // a second Hive Tyrant, so Side B still has models
     gs.find_unit(second)->models[0].position.x -= in(6);
@@ -261,6 +262,10 @@ TEST(R24_15_Hazardous, TheRollsAreMadeWhenTheTargetIsDestroyedBeforeEveryAttackI
         const auto more = apply_action(gs, Side::B, action::OrderCasualties{tyrant, model_ids(gs.units[kTyrant])}, dice);
         all.insert(all.end(), more.begin(), more.end());
     }
+    // The second Tyrant is an eligible new target (D-093); the attacker selects none.
+    ASSERT_EQ(*gs.pending, (PendingDecision{Side::A, decision::RetargetAttacks{gs.units[kHavocs].id}}));
+    const auto declined = apply_action(gs, Side::A, action::RetargetAttacks{}, dice);
+    all.insert(all.end(), declined.begin(), declined.end());
     EXPECT_TRUE(is_destroyed(*gs.find_unit(tyrant)));
     ASSERT_EQ(events_of<event::AttacksLost>(all).size(), 1u);
     ASSERT_EQ(events_of<event::HazardRollsMade>(all).size(), 1u);
@@ -529,7 +534,7 @@ void refused_bonesword(GameState& gs) {
 
 }  // namespace
 
-TEST(R24_11_ExtraAttacks, AModelMustSelectItsExtraAttacksWeaponAndOneOtherMeleeWeapon) {
+TEST(R24_11_ExtraAttacks, AModelMustSelectItsExtraAttacksWeaponAndMayAddOneOtherMeleeWeapon) {
     const GameState gs = tyrant_declaring(usable_bonesword);
     const Unit& tyrant = gs.units[kTyrant];
     const std::string who = "model " + std::to_string(tyrant.models[0].id.v);
@@ -541,12 +546,8 @@ TEST(R24_11_ExtraAttacks, AModelMustSelectItsExtraAttacksWeaponAndOneOtherMeleeW
                                         " must select all of its [EXTRA ATTACKS] weapons ('Monstrous scything talons' "
                                         "is not selected)"))
         << no_talons.front();
-    // The talons alone, when it has another melee weapon it can use.
-    const auto talons_alone = rejection(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kTalons)}});
-    EXPECT_TRUE(contains(talons_alone, "24.11: " + who +
-                                           " must also select one of its melee weapons other than its [EXTRA ATTACKS] "
-                                           "weapons"))
-        << talons_alone.front();
+    // 24.11.01 (app-only, D-093, M92): the talons alone are valid too, though it has another melee weapon it can use.
+    expect_valid(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kTalons)}});
 }
 
 TEST(R24_11_ExtraAttacks, BothWeaponsAttackInTheirOwnBatches) {
@@ -611,21 +612,16 @@ TEST(R24_11_ExtraAttacks, WhileItsOtherWeaponIsRefusedTheTyrantSelectsItsTalonsA
     EXPECT_TRUE(starts_with(with_bonesword.front(), "D-071: ")) << with_bonesword.front();
 }
 
-TEST(R24_11_ExtraAttacks, TheTyrantMustTakeItsTwinLinkedBoneswordWithItsTalons) {
-    // M61 (D-072): the real bonesword ([TWIN-LINKED]) is selectable now, so 24.11 makes the Tyrant select it and its
-    // scything talons together: the talons alone are refused, and both are valid.
+TEST(R24_11_ExtraAttacks, TheTyrantMayTakeItsTwinLinkedBoneswordWithItsTalons) {
+    // M61 (D-072): the real bonesword ([TWIN-LINKED]) is selectable now, so it is offered with the scything talons and
+    // both are valid. M92 (24.11.01, D-093): the talons alone are valid too.
     const GameState gs = tyrant_declaring();
     const Unit& tyrant = gs.units[kTyrant];
     ASSERT_TRUE(gs.units[kTyrant].models[0].weapons[kBonesword].profiles[0].has<ability::TwinLinked>());
     bool bonesword_offered = false;
     for (const MeleeDeclaration& d : melee_options(gs, tyrant)) bonesword_offered |= d.weapon_index == kBonesword;
     EXPECT_TRUE(bonesword_offered);
-    const std::string who = "model " + std::to_string(tyrant.models[0].id.v);
-    const auto talons_alone = rejection(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kTalons)}});
-    EXPECT_TRUE(contains(talons_alone, "24.11: " + who +
-                                           " must also select one of its melee weapons other than its [EXTRA ATTACKS] "
-                                           "weapons"))
-        << talons_alone.front();
+    expect_valid(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kTalons)}});
     expect_valid(gs, Side::B, action::Fight{tyrant.id, {tyrant_with(gs, kBonesword), tyrant_with(gs, kTalons)}});
 }
 

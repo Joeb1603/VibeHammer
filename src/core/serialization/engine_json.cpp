@@ -252,6 +252,8 @@ void to_json(Json& j, const GameAction& v) {
                 j["models"] = a.models;
             } else if constexpr (std::is_same_v<T, CannotSetUp>) {
                 j["unit"] = a.unit;  // D-081
+            } else if constexpr (std::is_same_v<T, RetargetAttacks>) {
+                j["retargets"] = a.retargets;  // 04.03.03 (D-093)
             }
         },
         v);
@@ -316,6 +318,8 @@ void from_json(const Json& j, GameAction& v) {
         v = DeployUnit{j.at("unit").get<UnitId>(), j.at("models").get<std::vector<ModelPlacement>>()};
     } else if (kind == "CannotSetUp") {
         v = CannotSetUp{j.at("unit").get<UnitId>()};
+    } else if (kind == "RetargetAttacks") {
+        v = RetargetAttacks{j.at("retargets").get<std::vector<AttackRetarget>>()};  // D-093
     } else {
         bad_enum("GameAction", j);
     }
@@ -474,6 +478,12 @@ void to_json(Json& j, const GameEvent& v) {
                 j["name"] = e.name;
                 j["vp"] = e.vp;
                 j["total"] = e.total;
+            } else if constexpr (std::is_same_v<T, AttacksRetargeted>) {
+                j["attacker"] = e.attacker;  // 04.03.03 (D-093)
+                j["retargets"] = e.retargets;
+                j["selections"] = e.selections;
+                j["first_batch"] = e.first_batch;
+                j["batches"] = e.batches;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -607,6 +617,9 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "VictoryPointsScored") {
         v = VictoryPointsScored{j.at("side").get<Side>(), j.at("objective").get<std::size_t>(),
                                 j.at("name").get<std::string>(), j.at("vp").get<int>(), j.at("total").get<int>()};
+    } else if (kind == "AttacksRetargeted") {
+        v = AttacksRetargeted{j.at("attacker").get<UnitId>(), j.at("retargets").get<std::vector<AttackRetarget>>(),
+                              j.at("selections").get<std::vector<WeaponSelection>>(), j.at("first_batch").get<std::size_t>(), j.at("batches").get<std::vector<AttackBatch>>()};
     } else {
         bad_enum("GameEvent", j);
     }
