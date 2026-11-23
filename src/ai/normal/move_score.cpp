@@ -863,7 +863,8 @@ bool MoveScoreContext::may_hold_fire(const std::vector<core::Position>& position
 bool MoveScoreContext::moved_visible(float to_mm) const {
     // An enemy unit that moves sees us again (D-090), unless we are hidden and it is still beyond 15" (13.09), or beyond
     // 12" while we have gone to ground (13.11.01, M93, D-094).
-    const float range = core::kDetectionRangeMm - (reply_.gone_to_ground ? core::kGoneToGroundMm : 0.0f);
+    const bool ground = reply_.gone_to_ground && weights_.gone_to_ground > 0.0;
+    const float range = core::kDetectionRangeMm - (ground ? core::kGoneToGroundMm : 0.0f);
     return !(reply_.all_hidden && core::more_than(to_mm, range));
 }
 

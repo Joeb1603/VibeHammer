@@ -141,6 +141,10 @@ struct MoveWeights {
     double objective_charge = 0.0;
     // ... and in pile-ins and consolidations (their gain), in our turn and the enemy's.
     double objective_fight = 0.0;
+    // M93 (D-094): 13.11.01 Gone to Ground in the enemy's reply (moved_visible): 0 or 1. At 1 a unit of ours hidden
+    // with a Dense feature towards the enemy is taken as seen only within 12", not 15". On a battlefield with terrain
+    // (cover_on) only.
+    double gone_to_ground = 1.0;
 };
 
 // M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or

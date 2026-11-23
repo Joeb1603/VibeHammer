@@ -810,6 +810,7 @@ bool escape_stands(analysis::OddsCache& cache, const GameState& gs, core::Side s
         guard.hold_fire = weights.hold_fire;
         guard.objective_charge = weights.objective_charge;
         guard.objective_fight = weights.objective_fight;
+        guard.gone_to_ground = weights.gone_to_ground;  // M93 (D-094)
         if (standing_moves(cache, after, guard, 1, kMaxSimulatedMoves).empty()) return false;
     }
     return true;
