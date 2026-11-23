@@ -61,3 +61,12 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   switched on (they default to 0): charges onto an objective and an Objective Consolidation. `M91_Replay` replays it with
   core alone, and its `TheSavedFileMatchesTheGame` checks it is what the bot with those weights plays now. The m87 and
   m89 generators are pinned to the five keys at 0, and every older replay stayed byte-identical.
+- M92 (D-093): `m92_retarget.json` is scripted by `Replay.DISABLED_RegenerateReplays` (seed 2, picked by
+  `Replay.DISABLED_SearchM92Seed`) from an embedded V1 state with a second Termagant unit: Focused Fire's target is
+  destroyed by the first batch and the attacker gives it the other unit (04.03.03). `D093_Replay` checks it. Every older
+  replay stayed byte-identical.
+- M93 (D-094): the objective scenario's objectives became 14.01.01 markers, so two replays were regenerated on purpose:
+  `m87_objectives_bot_game.json` (the same seed and checks, the game played over the markers) and
+  `m90_objective_consolidation.json` (its setup 5" further north, so the Terminators start within range of the Centre
+  marker and consolidate staying within range; for a marker "within 3" of the objective" is being within range). Every
+  other replay stayed byte-identical; the terrain scenario's bot games did not change (`gone_to_ground` defaults to 0).

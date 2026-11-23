@@ -12,7 +12,7 @@
 //   objective, objective_approach, objective_fire (M87, D-086; all 0: a mission game plays exactly as before M87),
 //   cover (M89, D-090; 0 to 1, another value exits 2; 0: a game with terrain plays exactly as before M89),
 //   plan_terrain and aim_terrain (M91, D-092; 0 to 1), hold_fire (0 or 1), objective_charge and objective_fight (0 or
-//   more); all five 0: plays exactly as M90. gone_to_ground (M93, D-094; 0 or 1, default 1): 13.11.01 in the move
+//   more); all five 0: plays exactly as M90. gone_to_ground (M93, D-094; 0 or 1, default 0): 13.11.01 in the move
 //   score's reply; 0 plays the M92 bot's estimate.
 //   --per-game 1 (M54, to show that an optimisation changes no play) prints one line per
 //   game instead of the totals: its result, its counts and FNV-1a

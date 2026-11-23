@@ -1,5 +1,5 @@
 {
-  "description": "M90: 12.08 Objective Consolidation on the objective scenario (an embedded initial state; D-091). The Chaos Terminator Squad (unit 3) stands in two ranks of five 2\" apart, at y = 21\" and 19\" (x = 14\" to 22\"), just south of the Centre; the east Termagants (unit 6), cut down to two models, stand at x = 23.85\", engaged with the Terminators' east end. Every other unit is where the scenario sets it up. Round 1, Side A: every decision takes its neutral answer (remain stationary, end each step, the first melee options, casualties in unit order) until the Termagants are destroyed in the Fight phase. The Terminators are then unengaged, with no enemy unit within 3\" and the Centre within 3\": Objective Consolidation onto the Centre, every model moved straight north by what its closest model needs to be within range. Side A controls the Centre from the end of that Fight phase. Stops at Side B's first Move Units decision.",
+  "description": "M90: 12.08 Objective Consolidation on the objective scenario (an embedded initial state; D-091). M93 (D-094): the Centre is an objective marker (14.01.01: 40 mm, within range at 3\"), so the setup stands 5\" further north than at M90. The Chaos Terminator Squad (unit 3) stands in two ranks of five 2\" apart, at y = 26\" and 24\" (x = 14\" to 22\"), its front rank within range of the Centre; the east Termagants (unit 6), cut down to two models, stand at x = 23.85\", engaged with the Terminators' east end. Every other unit is where the scenario sets it up. Round 1, Side A: every decision takes its neutral answer (remain stationary, end each step, the first melee options, casualties in unit order) until the Termagants are destroyed in the Fight phase. The Terminators are then unengaged, with no enemy unit within 3\" and the Centre marker within 3\" (so within range): Objective Consolidation onto the Centre, every model moved 0.05\" north (each must end within range or closer, and the unit within range). Side A controls the Centre. Stops at Side B's first Move Units decision.",
   "expect": {
     "battle_round": 1,
     "models": [
@@ -85,70 +85,70 @@
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 355.6000061035156,
-        "y_mm": 590.8699951171875
+        "y_mm": 661.6699829101563
       },
       {
         "model": 13,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 406.3999938964844,
-        "y_mm": 590.8699951171875
+        "y_mm": 661.6699829101563
       },
       {
         "model": 14,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 457.1999816894531,
-        "y_mm": 590.8699951171875
+        "y_mm": 661.6699829101563
       },
       {
         "model": 15,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 508.0,
-        "y_mm": 590.8699951171875
+        "y_mm": 661.6699829101563
       },
       {
         "model": 16,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 558.7999877929688,
-        "y_mm": 590.8699951171875
+        "y_mm": 661.6699829101563
       },
       {
         "model": 17,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 355.6000061035156,
-        "y_mm": 540.070068359375
+        "y_mm": 610.8699951171875
       },
       {
         "model": 18,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 406.3999938964844,
-        "y_mm": 540.070068359375
+        "y_mm": 610.8699951171875
       },
       {
         "model": 19,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 457.1999816894531,
-        "y_mm": 540.070068359375
+        "y_mm": 610.8699951171875
       },
       {
         "model": 20,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 508.0,
-        "y_mm": 540.070068359375
+        "y_mm": 610.8699951171875
       },
       {
         "model": 21,
         "unit": 3,
         "wounds_remaining": 3,
         "x_mm": 558.7999877929688,
-        "y_mm": 540.070068359375
+        "y_mm": 610.8699951171875
       },
       {
         "model": 22,
@@ -496,7 +496,8 @@
               "y": 762.0,
               "z": 0.0
             },
-            "diameter_mm": 304.79998779296875,
+            "diameter_mm": 192.39999389648438,
+            "marker": true,
             "name": "Centre",
             "vp": [
               1,
@@ -509,7 +510,8 @@
               "y": 152.39999389648438,
               "z": 0.0
             },
-            "diameter_mm": 152.39999389648438,
+            "diameter_mm": 192.39999389648438,
+            "marker": true,
             "name": "A home",
             "vp": [
               4,
@@ -522,7 +524,8 @@
               "y": 1371.5999755859375,
               "z": 0.0
             },
-            "diameter_mm": 152.39999389648438,
+            "diameter_mm": 192.39999389648438,
+            "marker": true,
             "name": "B home",
             "vp": [
               8,
@@ -1605,7 +1608,7 @@
               "id": 12,
               "position": {
                 "x": 355.6000061035156,
-                "y": 533.3999633789063,
+                "y": 660.3999633789063,
                 "z": 0.0
               },
               "type_name": "Terminator Champion",
@@ -1670,7 +1673,7 @@
               "id": 13,
               "position": {
                 "x": 406.3999938964844,
-                "y": 533.3999633789063,
+                "y": 660.3999633789063,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -1735,7 +1738,7 @@
               "id": 14,
               "position": {
                 "x": 457.1999816894531,
-                "y": 533.3999633789063,
+                "y": 660.3999633789063,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -1800,7 +1803,7 @@
               "id": 15,
               "position": {
                 "x": 508.0,
-                "y": 533.3999633789063,
+                "y": 660.3999633789063,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -1865,7 +1868,7 @@
               "id": 16,
               "position": {
                 "x": 558.7999877929688,
-                "y": 533.3999633789063,
+                "y": 660.3999633789063,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -1930,7 +1933,7 @@
               "id": 17,
               "position": {
                 "x": 355.6000061035156,
-                "y": 482.6000061035156,
+                "y": 609.5999755859375,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -1995,7 +1998,7 @@
               "id": 18,
               "position": {
                 "x": 406.3999938964844,
-                "y": 482.6000061035156,
+                "y": 609.5999755859375,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -2060,7 +2063,7 @@
               "id": 19,
               "position": {
                 "x": 457.1999816894531,
-                "y": 482.6000061035156,
+                "y": 609.5999755859375,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -2125,7 +2128,7 @@
               "id": 20,
               "position": {
                 "x": 508.0,
-                "y": 482.6000061035156,
+                "y": 609.5999755859375,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -2190,7 +2193,7 @@
               "id": 21,
               "position": {
                 "x": 558.7999877929688,
-                "y": 482.6000061035156,
+                "y": 609.5999755859375,
                 "z": 0.0
               },
               "type_name": "Accursed weapon and combi-bolter",
@@ -3543,7 +3546,7 @@
               "id": 37,
               "position": {
                 "x": 605.7899780273438,
-                "y": 533.3999633789063,
+                "y": 660.3999633789063,
                 "z": 0.0
               },
               "type_name": "Termagants",
@@ -3607,7 +3610,7 @@
               "id": 38,
               "position": {
                 "x": 605.7899780273438,
-                "y": 482.6000061035156,
+                "y": 609.5999755859375,
                 "z": 0.0
               },
               "type_name": "Termagants",
@@ -5767,7 +5770,7 @@
         "path": [
           {
             "x": 355.6000061035156,
-            "y": 590.8699951171875,
+            "y": 661.6699829101563,
             "z": 0.0
           }
         ]
@@ -5781,7 +5784,7 @@
         "path": [
           {
             "x": 406.3999938964844,
-            "y": 590.8699951171875,
+            "y": 661.6699829101563,
             "z": 0.0
           }
         ]
@@ -5795,7 +5798,7 @@
         "path": [
           {
             "x": 457.1999816894531,
-            "y": 590.8699951171875,
+            "y": 661.6699829101563,
             "z": 0.0
           }
         ]
@@ -5809,7 +5812,7 @@
         "path": [
           {
             "x": 508.0,
-            "y": 590.8699951171875,
+            "y": 661.6699829101563,
             "z": 0.0
           }
         ]
@@ -5823,7 +5826,7 @@
         "path": [
           {
             "x": 558.7999877929688,
-            "y": 590.8699951171875,
+            "y": 661.6699829101563,
             "z": 0.0
           }
         ]
@@ -5837,7 +5840,7 @@
         "path": [
           {
             "x": 355.6000061035156,
-            "y": 540.070068359375,
+            "y": 610.8699951171875,
             "z": 0.0
           }
         ]
@@ -5851,7 +5854,7 @@
         "path": [
           {
             "x": 406.3999938964844,
-            "y": 540.070068359375,
+            "y": 610.8699951171875,
             "z": 0.0
           }
         ]
@@ -5865,7 +5868,7 @@
         "path": [
           {
             "x": 457.1999816894531,
-            "y": 540.070068359375,
+            "y": 610.8699951171875,
             "z": 0.0
           }
         ]
@@ -5879,7 +5882,7 @@
         "path": [
           {
             "x": 508.0,
-            "y": 540.070068359375,
+            "y": 610.8699951171875,
             "z": 0.0
           }
         ]
@@ -5893,7 +5896,7 @@
         "path": [
           {
             "x": 558.7999877929688,
-            "y": 540.070068359375,
+            "y": 610.8699951171875,
             "z": 0.0
           }
         ]

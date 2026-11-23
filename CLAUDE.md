@@ -9,7 +9,9 @@ own, scored in VP (14.02, D-084), which the bot plays for since M87 (D-086), and
 and features, cover, Hidden, obscuring and solid walls) on the objective battlefield, the default scenario since M88,
 which the bot plays for cover since M89 (D-090). M90 added Objective Consolidation and [IGNORES COVER] (D-091), M91
 the bot's terrain and objective play in every phase behind weight keys, off by default (none measured better, D-092),
-and M92 the app-only rules audit (D-093): the scraped app text in `docs/gdmissions/` overrides the AI-sourced wording.
+M92 the app-only rules audit (D-093): the scraped app text in `docs/gdmissions/` overrides the AI-sourced wording, and
+M93 its open items (D-094): per-weapon new targets in the client, 40 mm objective markers (14.01.01) on the objective
+scenario, and Gone to Ground in the bot's move score behind a key, off by default.
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay

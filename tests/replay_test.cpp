@@ -1036,25 +1036,26 @@ Replay m90_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
     r.description =
-        "M90: 12.08 Objective Consolidation on the objective scenario (an embedded initial state; D-091). The Chaos "
-        "Terminator Squad (unit 3) stands in two ranks of five 2\" apart, at y = 21\" and 19\" (x = 14\" to 22\"), just "
-        "south of the Centre; the east Termagants (unit 6), cut down to two models, stand at x = 23.85\", engaged with "
-        "the Terminators' east end. Every other unit is where the scenario sets it up. Round 1, Side A: every decision "
-        "takes its neutral answer (remain stationary, end each step, the first melee options, casualties in unit "
-        "order) until the Termagants are destroyed in the Fight phase. The Terminators are then unengaged, with no "
-        "enemy unit within 3\" and the Centre within 3\": Objective Consolidation onto the Centre, every model moved "
-        "straight north by what its closest model needs to be within range. Side A controls the Centre from the end of "
-        "that Fight phase. Stops at Side B's first Move Units decision.";
+        "M90: 12.08 Objective Consolidation on the objective scenario (an embedded initial state; D-091). M93 (D-094): the "
+        "Centre is an objective marker (14.01.01: 40 mm, within range at 3\"), so the setup stands 5\" further north "
+        "than at M90. The Chaos Terminator Squad (unit 3) stands in two ranks of five 2\" apart, at y = 26\" and 24\" "
+        "(x = 14\" to 22\"), its front rank within range of the Centre; the east Termagants (unit 6), cut down to two "
+        "models, stand at x = 23.85\", engaged with the Terminators' east end. Every other unit is where the scenario "
+        "sets it up. Round 1, Side A: every decision takes its neutral answer (remain stationary, end each step, the "
+        "first melee options, casualties in unit order) until the Termagants are destroyed in the Fight phase. The "
+        "Terminators are then unengaged, with no enemy unit within 3\" and the Centre marker within 3\" (so within "
+        "range): Objective Consolidation onto the Centre, every model moved 0.05\" north (each must end within range "
+        "or closer, and the unit within range). Side A controls the Centre. Stops at Side B's first Move Units decision.";
     GameState init = load_scenario(repo_root() / kObjectiveScenario, repo_root());
     Unit& terminators = *init.find_unit(UnitId{3});
     Unit& gants = *init.find_unit(UnitId{6});
     for (std::size_t i = 0; i < terminators.models.size(); ++i) {
         terminators.models[i].position =
-            wh40k::test::at(14.0f + 2.0f * static_cast<float>(i % 5), i < 5 ? 21.0f : 19.0f);
+            wh40k::test::at(14.0f + 2.0f * static_cast<float>(i % 5), i < 5 ? 26.0f : 24.0f);
     }
     gants.models.resize(2);
-    gants.models[0].position = wh40k::test::at(23.85f, 21.0f);
-    gants.models[1].position = wh40k::test::at(23.85f, 19.0f);
+    gants.models[0].position = wh40k::test::at(23.85f, 26.0f);
+    gants.models[1].position = wh40k::test::at(23.85f, 24.0f);
     gants.starting_wounds = 2;  // D-076: as set up
     init.dice.seed = seed;
     r.initial.state = init;
