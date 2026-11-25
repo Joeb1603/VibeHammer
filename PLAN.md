@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92 and M93 are below. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92, M93 and M94 are below. Their full text (prompts, acceptance checks, results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -264,20 +264,49 @@ Pain / Command Re-roll).
 - *Docs:* D-095; amend D-033, D-069, D-072, D-014, D-025, D-039; CLAUDE.md's engine API; the roadmap's Phase 0 item 2.
 
 **Acceptance**
-- [ ] Each roll point is a `RollDice` decision for the roller, and the Roll answer makes the same dice in the same
+- [x] Each roll point is a `RollDice` decision for the roller, and the Roll answer makes the same dice in the same
   order. `D095_RollPoints` tests cover each point, the roller's side, the skipped cases (Torrent, no hits, fixed D,
   reused Advance, no Hazardous roll with no enemy left) and a refused Roll (wrong side, kind or unit).
-- [ ] The closure holds: the existing tests pass unchanged through the inline `apply_action`; every regenerated
+- [x] The closure holds: the existing tests pass unchanged through the inline `apply_action`; every regenerated
   replay's `expect` is byte-identical; its steps without the Roll steps are the old ones; the paced and inline runs of
   every replay give the same events and state; the M93 and M94 event dumps of all 28 replays are identical.
-- [ ] Format-1 saves and replays load (fixtures in `tests/data/legacy/`); format 2 round-trips. Every new state field
+- [x] Format-1 saves and replays load (fixtures in `tests/data/legacy/`); format 2 round-trips. Every new state field
   has a JSON round-trip test.
-- [ ] Bots: arena `--per-game` `state` and `trace` hashes identical to M93 on the identity set; decision p95 within
+- [x] Bots: arena `--per-game` `state` and `trace` hashes identical to M93 on the identity set; decision p95 within
   budget.
-- [ ] Client: with pop-ups on, a human's roll waits for Roll and the faces match the events (logic test); with them off,
+- [x] Client: with pop-ups on, a human's roll waits for Roll and the faces match the events (logic test); with them off,
   or for a bot, rolls are automatic; Undo goes back past Rolls; no deadlock against the bot (logic test); xvfb
   screenshots of a pre-roll card for a hit roll and a save.
-- [ ] Full `ctest` green, warnings as errors.
+- [x] Full `ctest` green, warnings as errors.
+
+**Results.**
+- *The closure:* the core suite passed unchanged through the inline `apply_action` after each roll point moved. The
+  M93 and M94 dumps of all 28 replays (every event and the final state) are byte-identical, the M94 one both inline
+  (format 1) and paced (format 2). `D095_Closure` checks paced against inline for every replay, for random games on V1,
+  the rosters and Strike, and for each roll point with scripted dice.
+- *Replays:* all 28 regenerated as format 2: the same description, initial state and `expect`, and the same steps once
+  the 1009 roll steps are taken out (scripted against `git show HEAD:`). New `m94_paced_rolls.json`: a Desperate Escape
+  (its hazard and battle-shock rolls), the 08.03 step, and a volley and a charge with every other kind of roll, 11 of
+  its 28 steps rolls.
+- *Bots:* the identity set (13 runs, 2,600 games) is identical to the M93 binary in every per-game field but `steps` and
+  `actions`. Run one after the other on an idle machine, the decision p95 is 1.6-2.9% higher (terrain 12.7 -> 13.1 ms,
+  objectives 9.0 -> 9.2 ms, random armies 6.6 -> 6.7 ms; wall time +2-4%): the inline roll loop's extra passes in the
+  bot's simulations. Far inside the 500 ms budget.
+- *Tests changed, each checked:* the client's history counts now include the rolls (`M13_Undo`, `M61_Undo`,
+  `M16_BoardInteraction`); the per-game pins re-pinned `actions` only (M87, M89, M91; `M78_Arena`'s line its steps too:
+  every `state` and `trace` pin unchanged); the "file is what the builder plays now" checks and every
+  `TheSavedFileMatchesTheGame` compare as format 2; `M88_Replay` applies the file's format; the serialization lists gain
+  `RollDice`. `ctest`: 1520 of 1520 (35 new: 24 `D095_*`, 8 `M94_*` client, 3 `M94_Bots`).
+- *Client:* the pre-roll card (`roll_prompt`, the same title, purpose and need as the rolled card) and its Roll button;
+  xvfb screenshots of a human's hit card before and after Roll and of the defender's save card; the package's
+  `--bot-steps 5` smoke test still takes 5 of 5.
+
+**Open items.**
+- A random D is rolled once per batch; the per-attack split, and a decision between each roll and its result (15.02
+  Command Re-roll, Feel No Pain), are for their milestone (D-095 part 4 lists what resolves inside its Roll today).
+- The pre-roll card's damage dice are the casualty preview's count (each D at its maximum), so a lower D can roll more.
+- Manual checks by mouse on Windows: pressing Roll in hotseat and against the bot, Undo just after a roll, saving while a
+  roll waits, and turning the dice pop-ups off while a roll waits.
 
 ---
 
