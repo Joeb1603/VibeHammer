@@ -192,6 +192,8 @@ void StartScreen::draw_options(AppSettings& s, const StartContext& /*ctx*/) {
 
     ImGui::SeparatorText("Playing");
     ImGui::Checkbox("Show dice pop-ups", &s.show_dice);
+    ImGui::SetItemTooltip("Show each dice roll in a pop-up. On: you make your own rolls with its Roll button. Off: "
+                          "your rolls are made for you, as the bot's always are.");
     ImGui::Checkbox("Skip steps with nothing to do", &s.skip_empty_steps);
     ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
     ImGui::Checkbox("Fix illegal moves", &s.fix_moves);

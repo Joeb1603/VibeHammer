@@ -315,7 +315,7 @@ The long-range map from here to a full game with any army on any mission (phases
 `docs/roadmap.md`. The items below are the nearer, smaller ones; each roadmap item still becomes a milestone here first.
 
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
-- **Engine-paced dice rolls (Option 2 of M20):** now M94, above.
+- **Engine-paced dice rolls (Option 2 of M20):** done in M94 (D-095).
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89 (D-090). Still to do: the z axis

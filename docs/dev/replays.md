@@ -82,5 +82,6 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   steps follows its format (`M88_Replay`). `m94_paced_rolls.json` (`D095_Replay`) answers every kind of roll, a
   Desperate Escape's hazard and battle-shock rolls among them, and is checked against the same game played inline.
   `tests/data/legacy/` keeps `m8_shooting` and `m62_random_characteristics` as M93 wrote them (format 1) and an M93
-  save: `D095_Replays` and `M94_Saves` load them. `D095_Closure.DISABLED_DumpReplayEvents` (with
+  save: `D095_Replays` and `M94_Saves` load them. `M94_Legacy` checks the save byte for byte against the same game's
+  save now with its roll steps taken out (its generator writes that, so re-running it rewrites the same file). `D095_Closure.DISABLED_DumpReplayEvents` (with
   `WH40K_EVENT_DUMP_DIR`) writes every replay's events and final state: the M93 and M94 dumps were byte-identical.
