@@ -852,7 +852,12 @@ TEST(M88_Replay, TheTerrainReplayShowsCoverADetourAndAHiddenTargetWithCoreOnly) 
     // Step by step: 13.08 cover on a selection; a MONSTER's two-leg move whose straight line would cross a dense wall
     // it can't move through (13.06); a target refused for 13.09 at a Shoot.
     GameState gs = replay_initial_state(saved, repo_root());
-    start_game(gs);
+    const bool paced = saved.format == kReplayFormatRollsRecorded;  // M94 (D-095): each roll a step of its own
+    if (paced) {
+        start_game_paced(gs);
+    } else {
+        start_game(gs);
+    }
     int covered = 0;
     int detours = 0;
     int hidden_refused = 0;
@@ -882,7 +887,9 @@ TEST(M88_Replay, TheTerrainReplayShowsCoverADetourAndAHiddenTargetWithCoreOnly) 
             }
         }
         ASSERT_TRUE(validate_action(gs, step.side, step.action).ok());
-        for (const GameEvent& e : apply_action(gs, step.side, step.action)) {
+        const std::vector<GameEvent> events = paced ? apply_action_paced(gs, step.side, step.action)
+                                                    : apply_action(gs, step.side, step.action);
+        for (const GameEvent& e : events) {
             if (const auto* sh = std::get_if<event::ShootingStarted>(&e)) {
                 for (const WeaponSelection& s : sh->selections) covered += s.benefit_of_cover ? 1 : 0;
             }

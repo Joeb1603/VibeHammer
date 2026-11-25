@@ -47,6 +47,7 @@ BotGame play_bot_game_replay() {
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
     g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000, nullptr, &g.trace);
     g.replay.steps = session.history();
+    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

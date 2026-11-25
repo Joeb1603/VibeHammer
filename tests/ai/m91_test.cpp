@@ -448,6 +448,7 @@ M91Game play_m91_bot_game(std::uint64_t seed = kM91Seed) {
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
     g.record = play_bot_session(session, config(m91_weights()), config(m91_weights()), 5000);
     g.replay.steps = session.history();
+    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }
@@ -480,7 +481,8 @@ TEST(M91_Replay, TheBotGameReplaysToItsResultWithCoreOnly) {
 TEST(M91_Replay, TheSavedFileMatchesTheGame) {
     // The bot with the features on and the replay's seed plays exactly the saved game now (D-054), clean, with a charge
     // onto an objective.
-    const Replay saved = load_replay(m91_replay_path());
+    // M94 (D-095): compared as format 2 (each roll a step), however the file was written.
+    const Replay saved = with_roll_steps(load_replay(m91_replay_path()), repo_root());
     const M91Game g = play_m91_bot_game();
     EXPECT_TRUE(g.record.finished);
     EXPECT_EQ(g.record.rejected, 0u);
