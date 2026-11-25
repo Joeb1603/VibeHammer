@@ -3,6 +3,7 @@
 // The engine API: the only way in or out of the rules (CLAUDE.md, Engine API).
 // GameState is a plain value; these are free functions. Every action answers state.pending.
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,8 @@ namespace wh40k::core {
 
 // Starts the first battle round (D-003) and advances to the first decision. D-081 (M74): when units wait to be set up
 // (GameState::undeployed, a deployment by hand), the deployment step comes first (Stage::Deploy) and battle round 1
-// starts after the last unit is handled.
+// starts after the last unit is handled. D-095 (M94): every dice roll on the way is made at once (see apply_action);
+// start_game_paced stops at the first roll instead.
 // Precondition: state.flow.stage == Stage::NotStarted (std::logic_error otherwise).
 std::vector<GameEvent> start_game(GameState& state);
 std::vector<GameEvent> start_game(GameState& state, DiceSource& dice);
@@ -32,6 +34,10 @@ std::vector<GameEvent> start_game(GameState& state, DiceSource& dice);
 // Applies a validated action (std::logic_error if it is not valid), then advances the game to the
 // next decision. Returns everything that happened. The first overload rolls dice with
 // SeededDice(state.dice); the second lets tests script them.
+// D-095 (M94): the engine stops at every roll point with a RollDice decision; apply_action answers each one at once,
+// for its roller (the decision's side), from the same dice and inside the same rollback, so the next decision is never
+// a RollDice and every roll is made where the action made it before M94 (the roll closure). apply_action_paced stops at
+// each RollDice instead.
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action);
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice);
 // M54: the same as the DiceSource overload, with the copy kept for the rollback (D-026) made in `backup` by
@@ -39,6 +45,35 @@ std::vector<GameEvent> apply_action(GameState& state, Side side, const GameActio
 // of copying the whole state each time. `backup` is scratch: afterwards it holds no particular state.
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice,
                                     GameState& backup);
+
+// ---- D-095 (M94): engine-paced dice rolls ----
+// The same as start_game / apply_action, but stopping at the next decision even when it is a RollDice, so a player can
+// make each roll (the client's Roll button, GameSession; format-2 replays record those answers). Answering every
+// RollDice that follows, each from the same dice, gives exactly what start_game / apply_action give.
+std::vector<GameEvent> start_game_paced(GameState& state);
+std::vector<GameEvent> start_game_paced(GameState& state, DiceSource& dice);
+std::vector<GameEvent> apply_action_paced(GameState& state, Side side, const GameAction& action);
+std::vector<GameEvent> apply_action_paced(GameState& state, Side side, const GameAction& action, DiceSource& dice);
+std::vector<GameEvent> apply_action_paced(GameState& state, Side side, const GameAction& action, DiceSource& dice,
+                                          GameState& backup);
+
+// Whether the pending decision is a RollDice.
+[[nodiscard]] bool roll_pending(const GameState& state);
+
+// What the pending RollDice rolls, for showing it before it is made (the client's pre-roll card, D-024: the client
+// works none of it out itself). nullopt unless a RollDice is pending.
+struct RollDiceInfo {
+    RollKind roll = RollKind::Hit;
+    UnitId unit;                   // the unit the roll is for (decision::RollDice::unit)
+    Side roller = Side::A;         // its controlling player, who makes the roll
+    std::optional<UnitId> target;  // an attack's target: random A, hit, wound, save and damage rolls
+    // How many dice are rolled. A batch's damage rolls: the dice of its D for each attack that the casualty preview
+    // (D-051, a random D at its maximum, D-069) says inflicts damage; a lower D can leave more attacks inflicting it.
+    int dice = 0;
+    std::string expression;  // each roll: "D6", "2D6", or a random characteristic such as "D3+1" (random A, damage)
+    friend bool operator==(const RollDiceInfo&, const RollDiceInfo&) = default;
+};
+[[nodiscard]] std::optional<RollDiceInfo> roll_dice_info(const GameState& state);
 
 // 01.03: the active player. Between turns (and during the deployment step, D-081), the player who takes the first
 // turn; while a unit is selected to move, shoot or fight, that unit's controlling player; otherwise the player whose

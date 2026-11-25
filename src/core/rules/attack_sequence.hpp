@@ -22,25 +22,8 @@ namespace wh40k::core {
 
 // ---- 05.01 Hit Rolls ----
 
-enum class HitOutcome : std::uint8_t { Fail, Hit, CriticalHit, AutoHit };
-
-struct HitRoll {
-    std::optional<int> unmodified;  // nullopt: [TORRENT] automatically hits, no roll is made (24.37)
-    std::optional<int> modified;
-    HitOutcome outcome = HitOutcome::Fail;
-    friend bool operator==(const HitRoll&, const HitRoll&) = default;
-};
-
-struct HitRolls {
-    std::vector<HitRoll> rolls;
-    // 24.36 [SUSTAINED HITS X]: the additional hits scored by critical hits (X each). They are hits, not
-    // critical hits (D-071), and have no roll of their own.
-    int sustained_hits = 0;
-    [[nodiscard]] int hits() const;  // every hit scored: rolls that hit (critical and automatic included) plus sustained
-    [[nodiscard]] int rolled_hits() const;  // the rolls (or automatic hits) that hit, without the sustained hits
-    [[nodiscard]] int critical_hits() const;
-    friend bool operator==(const HitRolls&, const HitRolls&) = default;
-};
+// HitOutcome, HitRoll and HitRolls are in attack_types.hpp (M94: the attack flow stores a batch's hit rolls while its
+// wound rolls wait to be made, D-095).
 
 // One hit roll per attack dice. Unmodified 1 fails, unmodified 6 is a critical hit, otherwise the
 // modified result (D-011: net modifier capped to +-1, floor 1) must be >= BS/WS. Each critical hit of a

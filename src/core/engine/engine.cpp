@@ -64,6 +64,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::DeployUnits>(d);
             else if constexpr (std::is_same_v<T, action::RetargetAttacks>)
                 return std::holds_alternative<decision::RetargetAttacks>(d);
+            else if constexpr (std::is_same_v<T, action::RollDice>)
+                return std::holds_alternative<decision::RollDice>(d);  // D-095
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -84,12 +86,26 @@ std::vector<GameEvent> start_game_impl(GameState& state, DiceSource& dice) {
     return events;
 }
 
-// 04 ... 12: the work of an action, on `state` in place. Precondition: validated.
+// 04 ... 12: the work of an action, on `state` in place, up to the next decision (a RollDice included, D-095).
+// Precondition: validated.
 std::vector<GameEvent> apply_in_place(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
     Events events;
     state.pending.reset();
     std::visit([&](const auto& a) { detail::apply_details(state, side, a, dice, events); }, action);
     detail::advance(state, dice, events);
+    return events;
+}
+
+// D-095: the same, then every RollDice that follows answered from the same dice (the roll closure).
+std::vector<GameEvent> apply_in_place_rolling(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
+    Events events = apply_in_place(state, side, action, dice);
+    detail::roll_through(state, dice, events);
+    return events;
+}
+
+std::vector<GameEvent> start_game_rolling(GameState& state, DiceSource& dice) {
+    Events events = start_game_impl(state, dice);
+    detail::roll_through(state, dice, events);
     return events;
 }
 
@@ -130,10 +146,19 @@ std::vector<GameEvent> with_rollback(GameState& state, GameState& backup, Work w
 
 std::vector<GameEvent> start_game(GameState& state) {
     SeededDice dice(state.dice);  // the backup restores the dice position too
-    return with_rollback(state, [&] { return start_game_impl(state, dice); });
+    return with_rollback(state, [&] { return start_game_rolling(state, dice); });
 }
 
 std::vector<GameEvent> start_game(GameState& state, DiceSource& dice) {
+    return with_rollback(state, [&] { return start_game_rolling(state, dice); });
+}
+
+std::vector<GameEvent> start_game_paced(GameState& state) {
+    SeededDice dice(state.dice);
+    return with_rollback(state, [&] { return start_game_impl(state, dice); });
+}
+
+std::vector<GameEvent> start_game_paced(GameState& state, DiceSource& dice) {
     return with_rollback(state, [&] { return start_game_impl(state, dice); });
 }
 
@@ -216,19 +241,40 @@ ValidationResult validate_action(const GameState& state, Side side, const GameAc
 
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
     require_valid(state, side, action);
-    return with_rollback(state, [&] { return apply_in_place(state, side, action, dice); });
+    return with_rollback(state, [&] { return apply_in_place_rolling(state, side, action, dice); });
 }
 
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action, DiceSource& dice,
                                     GameState& backup) {
     require_valid(state, side, action);
-    return with_rollback(state, backup, [&] { return apply_in_place(state, side, action, dice); });
+    return with_rollback(state, backup, [&] { return apply_in_place_rolling(state, side, action, dice); });
 }
 
 std::vector<GameEvent> apply_action(GameState& state, Side side, const GameAction& action) {
     require_valid(state, side, action);
     SeededDice dice(state.dice);
+    return with_rollback(state, [&] { return apply_in_place_rolling(state, side, action, dice); });
+}
+
+std::vector<GameEvent> apply_action_paced(GameState& state, Side side, const GameAction& action, DiceSource& dice) {
+    require_valid(state, side, action);
     return with_rollback(state, [&] { return apply_in_place(state, side, action, dice); });
+}
+
+std::vector<GameEvent> apply_action_paced(GameState& state, Side side, const GameAction& action, DiceSource& dice,
+                                          GameState& backup) {
+    require_valid(state, side, action);
+    return with_rollback(state, backup, [&] { return apply_in_place(state, side, action, dice); });
+}
+
+std::vector<GameEvent> apply_action_paced(GameState& state, Side side, const GameAction& action) {
+    require_valid(state, side, action);
+    SeededDice dice(state.dice);
+    return with_rollback(state, [&] { return apply_in_place(state, side, action, dice); });
+}
+
+bool roll_pending(const GameState& state) {
+    return state.pending.has_value() && std::holds_alternative<decision::RollDice>(state.pending->kind);
 }
 
 }  // namespace wh40k::core

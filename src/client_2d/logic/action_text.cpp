@@ -34,6 +34,21 @@ std::string units(const core::GameState& state, const std::vector<core::UnitId>&
 
 }  // namespace
 
+std::string roll_label(core::RollKind roll) {
+    switch (roll) {
+        case core::RollKind::Advance: return "Advance roll";
+        case core::RollKind::Charge: return "Charge roll";
+        case core::RollKind::BattleShock: return "Battle-shock roll";
+        case core::RollKind::Hazard: return "Hazard rolls";
+        case core::RollKind::RandomAttacks: return "Attack dice";
+        case core::RollKind::Hit: return "Hit rolls";
+        case core::RollKind::Wound: return "Wound rolls";
+        case core::RollKind::Save: return "Save rolls";
+        case core::RollKind::Damage: return "Damage rolls";
+    }
+    return "Roll";
+}
+
 std::string action_label(const core::GameState& state, const core::GameAction& action) {
     namespace a = core::action;
     return std::visit(
@@ -136,6 +151,8 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 }
                 const std::string n = std::to_string(x.retargets.size()) + " weapon" + (x.retargets.size() == 1 ? "" : "s");
                 return "Retarget " + n + " at " + units(state, targets);
+            } else if constexpr (std::is_same_v<T, a::RollDice>) {
+                return "Roll: " + roll_label(x.roll) + " for " + unit_name(state, x.unit);  // D-095
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

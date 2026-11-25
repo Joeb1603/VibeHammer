@@ -82,7 +82,18 @@ struct BatchInProgress {
     std::vector<AllocationGroup> groups;  // 05.03 Create Groups, in unit order
     std::optional<std::vector<std::size_t>> order;  // 05.03 Allocation Order (indices into groups), once declared
     std::optional<std::vector<int>> save_rolls;     // 05.03 Make Save Rolls (unmodified), once made
+    // D-095 (M94): the defender's casualty order (D-013), given while the batch's random D waits for the attacker's
+    // Damage roll (05.04, D-069); a fixed D is resolved with the order at once. Omitted from JSON when absent.
+    std::optional<std::vector<ModelId>> priority{};
     friend bool operator==(const BatchInProgress&, const BatchInProgress&) = default;
+};
+
+// D-095 (M94): a batch selected to be resolved (04.03 Select Enemy Unit), from then until its wound rolls (05.02) are
+// made: its random A (D-069), its hit rolls (05.01) and its wound rolls each wait for a RollDice answer.
+struct BatchRolls {
+    std::size_t batch = 0;         // index into AttackFlow::batches
+    std::optional<HitRolls> hits;  // 05.01, once made
+    friend bool operator==(const BatchRolls&, const BatchRolls&) = default;
 };
 
 // 24.38 [TWIN-LINKED]: a batch's wound rolls, made, while the attacking unit's player chooses which to re-roll
@@ -113,6 +124,9 @@ struct AttackFlow {
     // D-093 (M92): the shooting type the unit was selected with (10.02), which new targets (04.03.03) must also fit.
     // Normal for a fight. Omitted from JSON when Normal.
     ShootingType shooting_type = ShootingType::Normal;
+    // D-095 (M94): the batch whose dice are being rolled, until its wound rolls are made. Omitted from JSON when
+    // absent; never set at a decision other than a RollDice.
+    std::optional<BatchRolls> rolling{};
     friend bool operator==(const AttackFlow&, const AttackFlow&) = default;
 };
 
@@ -196,6 +210,10 @@ struct FlowState {
     std::optional<FightSequence> fight_sequence;  // 12.04, while the Fight step runs
     std::optional<FightInProgress> fight;
     std::vector<UnitId> forced_fights;  // 12.08: units the opponent must still select to fight
+    // D-095 (M94): the battle-shock rolls owed (01.07), in order: the units to test in the Battle-shock step (08.03),
+    // or the unit that has just made a Desperate Escape (09.07). Each waits for a RollDice answer. Omitted from JSON
+    // when empty; never set at a decision other than a RollDice.
+    std::vector<UnitId> battle_shock_tests{};
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

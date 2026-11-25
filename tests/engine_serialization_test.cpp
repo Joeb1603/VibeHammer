@@ -77,11 +77,21 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::RerollWoundRolls{UnitId{2}}},  // M61 (24.38)
         {Side::B, decision::DeployUnits{}},                // M74 (D-081)
         {Side::A, decision::RetargetAttacks{UnitId{1}}},   // M92 (D-093)
+        {Side::B, decision::RollDice{RollKind::Save, UnitId{2}}},  // M94 (D-095)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
         EXPECT_EQ(round_trip(d), d) << describe(d);
     }
+    // M94 (D-095): every roll kind, by its JSON name.
+    for (const RollKind r : {RollKind::Advance, RollKind::Charge, RollKind::BattleShock, RollKind::Hazard,
+                             RollKind::RandomAttacks, RollKind::Hit, RollKind::Wound, RollKind::Save, RollKind::Damage}) {
+        const PendingDecision d{Side::A, decision::RollDice{r, UnitId{3}}};
+        EXPECT_EQ(round_trip(d), d) << describe(d);
+        EXPECT_EQ(Json(d).at("roll").get<std::string>(), roll_kind_name(r));
+        EXPECT_EQ(roll_kind_from_name(roll_kind_name(r)), r);
+    }
+    EXPECT_EQ(roll_kind_from_name("Sixes"), std::nullopt);
 }
 
 TEST(Serialization, StateMidAttackRoundTrips) {
@@ -230,6 +240,7 @@ TEST(Serialization, EveryActionKindRoundTrips) {
                             ModelPlacement{ModelId{8}, Position{40.0f, 20.25f, 0.0f}, 30.0f}}},  // M74 (D-081)
         action::CannotSetUp{UnitId{4}},                                                          // M74 (D-081)
         action::RetargetAttacks{{AttackRetarget{1, UnitId{4}}, AttackRetarget{3, UnitId{5}}}},     // M92 (D-093)
+        action::RollDice{RollKind::Damage, UnitId{1}},                                            // M94 (D-095)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {

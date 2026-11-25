@@ -20,6 +20,7 @@ add_library(wh40k_core STATIC
     engine/movement.cpp
     engine/objectives.cpp
     engine/replay.cpp
+    engine/rolls.cpp
     engine/shooting.cpp
     engine/turn_phases.cpp
     geometry/closest.cpp

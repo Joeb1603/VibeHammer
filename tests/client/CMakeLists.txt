@@ -42,6 +42,7 @@ add_executable(wh40k_client_tests
     m75_test.cpp
     m76_test.cpp
     rules_help_test.cpp
+    m94_test.cpp
     client_logic_test.cpp)
 
 target_link_libraries(wh40k_client_tests PRIVATE wh40k_client_logic GTest::gtest_main)

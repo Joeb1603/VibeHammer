@@ -132,6 +132,28 @@ struct AttackBatch {
     friend bool operator==(const AttackBatch&, const AttackBatch&) = default;
 };
 
+// ---- 05.01 Hit Rolls (the functions are in attack_sequence.hpp) ----
+
+enum class HitOutcome : std::uint8_t { Fail, Hit, CriticalHit, AutoHit };
+
+struct HitRoll {
+    std::optional<int> unmodified;  // nullopt: [TORRENT] automatically hits, no roll is made (24.37)
+    std::optional<int> modified;
+    HitOutcome outcome = HitOutcome::Fail;
+    friend bool operator==(const HitRoll&, const HitRoll&) = default;
+};
+
+struct HitRolls {
+    std::vector<HitRoll> rolls;
+    // 24.36 [SUSTAINED HITS X]: the additional hits scored by critical hits (X each). They are hits, not
+    // critical hits (D-071), and have no roll of their own.
+    int sustained_hits = 0;
+    [[nodiscard]] int hits() const;  // every hit scored: rolls that hit (critical and automatic included) plus sustained
+    [[nodiscard]] int rolled_hits() const;  // the rolls (or automatic hits) that hit, without the sustained hits
+    [[nodiscard]] int critical_hits() const;
+    friend bool operator==(const HitRolls&, const HitRolls&) = default;
+};
+
 // ---- 05.02 Wound Rolls (the functions are in attack_sequence.hpp) ----
 
 enum class WoundOutcome : std::uint8_t { Fail, Wound, CriticalWound };

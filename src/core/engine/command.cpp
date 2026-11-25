@@ -2,6 +2,7 @@
 // Coherency (03.03).
 
 #include <algorithm>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,10 @@ void battle_shock_step(GameState& state, DiceSource& dice, Events& events) {
             events.push_back(event::BattleShockEnded{u.id});
         }
     }
+}
+
+void make_owed_battle_shock_roll(GameState&, DiceSource&, Events&) {
+    throw std::logic_error("D-095: the battle-shock roll is not paced yet");
 }
 
 std::optional<PendingDecision> coherency_decision(const GameState& state) {

@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <utility>
+#include <variant>
 
 #include "core/data/load_error.hpp"
 #include "core/serialization/engine_json.hpp"
@@ -15,26 +16,33 @@ std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Si
 
 }  // namespace
 
-GameSession::GameSession(core::GameState initial) : match_(std::move(initial)) {
+GameSession::GameSession(core::GameState initial, std::array<bool, 2> auto_roll)
+    : match_(std::move(initial), core::RollMode::Paced), auto_roll_(auto_roll) {
     log_.push_back(LogEntry{"Start", match_.events()});  // Match starts the game if it hasn't started
+    roll_automatically();                                  // D-095
 }
 
-GameSession GameSession::new_game(core::GameState scenario, std::optional<std::uint64_t> seed) {
+GameSession::GameSession(core::GameState initial, NoAutoRoll) : match_(std::move(initial), core::RollMode::Paced) {
+    log_.push_back(LogEntry{"Start", match_.events()});
+}
+
+GameSession GameSession::new_game(core::GameState scenario, std::optional<std::uint64_t> seed,
+                                  std::array<bool, 2> auto_roll) {
     if (seed) {
         scenario.dice.seed = *seed;  // M13: seed override at game start
         scenario.dice.position = 0;
     }
-    return GameSession(std::move(scenario));
+    return GameSession(std::move(scenario), auto_roll);
 }
 
 GameSession GameSession::from_steps(core::GameState initial, const std::vector<core::ReplayStep>& steps) {
-    GameSession s(std::move(initial));
+    GameSession s(std::move(initial), NoAutoRoll{});
     for (std::size_t i = 0; i < steps.size(); ++i) {
         if (s.deciding_side() != steps[i].side) {
             throw core::DataError("step " + std::to_string(i + 1) + " is for " + side_name(steps[i].side) +
                                   ", but " + side_name(s.deciding_side()) + " must act");
         }
-        const core::ValidationResult r = s.submit(steps[i].action);
+        const core::ValidationResult r = s.submit_one(steps[i].action);
         if (!r.ok()) {
             throw core::DataError("step " + std::to_string(i + 1) + " is invalid: " + r.reasons.front());
         }
@@ -43,7 +51,7 @@ GameSession GameSession::from_steps(core::GameState initial, const std::vector<c
 }
 
 nlohmann::json GameSession::to_save_json() const {
-    return nlohmann::json{{"format", 1},
+    return nlohmann::json{{"format", core::kReplayFormatRollsRecorded},
                           {"kind", "vibehammer-save"},
                           {"initial", initial()},
                           {"steps", history()},
@@ -53,13 +61,17 @@ nlohmann::json GameSession::to_save_json() const {
 GameSession GameSession::from_save_json(const nlohmann::json& j) {
     try {
         if (!j.is_object() || !j.contains("kind")) {
-            return GameSession(j.get<core::GameState>());  // a bare GameState: no history
+            return GameSession(j.get<core::GameState>(), NoAutoRoll{});  // a bare GameState: no history
         }
-        if (j.at("kind") != "vibehammer-save" || j.at("format") != 1) {
-            throw core::DataError("not a VibeHammer save (format 1)");
+        const nlohmann::json& format = j.at("format");
+        const bool rolls_inline = format == core::kReplayFormatRollsInline;
+        if (j.at("kind") != "vibehammer-save" || (!rolls_inline && format != core::kReplayFormatRollsRecorded)) {
+            throw core::DataError("not a VibeHammer save (format 1 or 2)");
         }
-        GameSession s = from_steps(j.at("initial").get<core::GameState>(),
-                                   j.at("steps").get<std::vector<core::ReplayStep>>());
+        const core::GameState initial = j.at("initial").get<core::GameState>();
+        std::vector<core::ReplayStep> steps = j.at("steps").get<std::vector<core::ReplayStep>>();
+        if (rolls_inline) steps = core::with_roll_steps(initial, steps);  // D-095: format 1, every roll inside its step
+        GameSession s = from_steps(initial, steps);
         if (!(s.state() == j.at("state").get<core::GameState>())) {
             throw core::DataError("the save's state does not match its initial state and steps");
         }
@@ -92,10 +104,31 @@ core::Replay GameSession::to_replay(std::string description) const { return matc
 
 bool GameSession::undo() {
     if (history().empty()) return false;
-    std::vector<core::ReplayStep> steps = history();
-    steps.pop_back();
-    *this = from_steps(initial(), steps);  // deterministic: the dice state is part of GameState
+    truncate(history().size() - 1);
     return true;
+}
+
+void GameSession::truncate(std::size_t n) {
+    const std::vector<core::ReplayStep>& h = history();
+    if (n >= h.size()) return;
+    // D-095: a roll is never taken back on its own: back to before the last step that isn't a roll.
+    while (n > 0 && std::holds_alternative<core::action::RollDice>(h[n].action)) --n;
+    const std::vector<core::ReplayStep> kept(h.begin(), h.begin() + static_cast<std::ptrdiff_t>(n));
+    const std::array<bool, 2> auto_roll = auto_roll_;
+    *this = from_steps(initial(), kept);  // deterministic: the dice state is part of GameState
+    auto_roll_ = auto_roll;
+    roll_automatically();
+}
+
+std::vector<core::GameAction> GameSession::roll_automatically() {
+    std::vector<core::GameAction> made;
+    while (core::roll_pending(state()) && auto_roll(state().pending->side)) {
+        const auto& d = std::get<core::decision::RollDice>(state().pending->kind);
+        const core::GameAction roll = core::action::RollDice{d.roll, d.unit};
+        if (!submit_one(roll).ok()) break;  // never refused (its one legal answer); an engine error stops here
+        made.push_back(roll);
+    }
+    return made;
 }
 
 std::vector<core::GameAction> GameSession::legal() const {
@@ -112,6 +145,24 @@ core::ValidationResult GameSession::check(const core::GameAction& action) const 
 }
 
 core::ValidationResult GameSession::submit(const core::GameAction& action) {
+    const std::size_t before = history().size();
+    const core::ValidationResult v = submit_one(action);
+    if (!v.ok()) return v;
+    roll_automatically();  // D-095
+    if (core::roll_pending(state()) && auto_roll(state().pending->side)) {
+        // An automatic roll failed (an engine error): take the action and its rolls back, as if it had been refused.
+        const core::ValidationResult failed = core::ValidationResult::failure(
+            "Engine error (the action was not applied): a roll after it could not be made");
+        const std::array<bool, 2> auto_roll = auto_roll_;
+        *this = from_steps(initial(), std::vector<core::ReplayStep>(history().begin(),
+                                                                    history().begin() + static_cast<std::ptrdiff_t>(before)));
+        auto_roll_ = auto_roll;
+        return failed;
+    }
+    return v;
+}
+
+core::ValidationResult GameSession::submit_one(const core::GameAction& action) {
     const core::Side side = deciding_side();
     const std::size_t before = match_.events().size();
     core::ValidationResult v;
@@ -125,6 +176,9 @@ core::ValidationResult GameSession::submit(const core::GameAction& action) {
     LogEntry entry;
     entry.label = "Step " + std::to_string(history().size()) + ": " + side_name(side) + " " +
                   std::string(core::action_name(action));
+    if (const auto* r = std::get_if<core::action::RollDice>(&action)) {
+        entry.label += " (" + std::string(core::roll_kind_name(r->roll)) + ")";  // D-095: which roll
+    }
     entry.events.assign(match_.events().begin() + static_cast<std::ptrdiff_t>(before), match_.events().end());
     log_.push_back(std::move(entry));
     return v;

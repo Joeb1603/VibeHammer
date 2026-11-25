@@ -3,6 +3,8 @@
 // PendingDecision: the single source of "who must act now, and how". Decisions are small; the
 // options are computed by legal_actions (engine/engine.hpp).
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -10,6 +12,24 @@
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
+
+// D-095 (M94): the dice roll a RollDice decision waits for, one per roll point (05: "if there is more than one dice to
+// roll, make all of those rolls simultaneously"). Appended at the end only (JSON names, the bots' state_hash).
+enum class RollKind : std::uint8_t {
+    Advance,        // 09.06 Advance roll (D6)
+    Charge,         // 11.02 Make Charge Roll (2D6)
+    BattleShock,    // 01.07 battle-shock roll (2D6): the 08.03 step, or after a Desperate Escape (09.07)
+    Hazard,         // 06.03 hazard rolls: Desperate Escape (09.07) or [HAZARDOUS] (24.15)
+    RandomAttacks,  // 04.03 Gather Attack Dice: an attack batch's random A (D-069)
+    Hit,            // 05.01 Hit Rolls
+    Wound,          // 05.02 Wound Rolls
+    Save,           // 05.03 Make Save Rolls (the opposing player)
+    Damage,         // 05.04 Resolve Damage: an attack batch's random D, one per attack that inflicts damage (D-069)
+};
+
+[[nodiscard]] std::string_view roll_kind_name(RollKind roll);  // "Hit"; also the JSON name
+[[nodiscard]] std::optional<RollKind> roll_kind_from_name(std::string_view name);
+[[nodiscard]] std::string_view roll_rule(RollKind roll);  // the roll's own rule, e.g. "05.01"
 
 namespace decision {
 // 09.02 Move Units: select a friendly unit that has not been selected to move, and its move type.
@@ -100,6 +120,14 @@ struct RetargetAttacks {
     UnitId attacker;
     friend bool operator==(const RetargetAttacks&, const RetargetAttacks&) = default;
 };
+// D-095 (M94): make a dice roll (RollKind). `unit` is the unit the roll is for, and its controlling player rolls: the
+// moving, charging, tested or attacking unit, but for a Save the target unit (05.03: the opposing player makes the save
+// rolls). A Damage roll is the attacking unit's (D-069). Its one answer is action::RollDice with the same roll and unit.
+struct RollDice {
+    RollKind roll = RollKind::Hit;
+    UnitId unit;
+    friend bool operator==(const RollDice&, const RollDice&) = default;
+};
 }  // namespace decision
 
 // Appended at the end only: the bots' state_hash hashes the index (D-054).
@@ -109,7 +137,7 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits,
-                                  decision::RetargetAttacks>;
+                                  decision::RetargetAttacks, decision::RollDice>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)
@@ -128,6 +156,8 @@ struct PendingDecision {
 struct GameState;
 // M61: the rule as it applies in `state`. OrderCasualties is 06.02 when the attack in progress has mortal wounds to
 // inflict ([HAZARDOUS], 24.15) or no attack is in progress (Desperate Escape, 09.07), else 05.04 (D-071, D-072).
+// D-095 (M94): a Hazard roll is 24.15 during an attack and 09.07 otherwise; a BattleShock roll is 08.03 in the
+// Battle-shock step and 09.07 otherwise; every other roll its roll_rule.
 [[nodiscard]] std::string_view decision_rule(const GameState& state, const PendingDecision& d);
 // describe() with that rule.
 [[nodiscard]] std::string describe(const GameState& state, const PendingDecision& d);

@@ -26,9 +26,10 @@ bool UndoGroups::undo(GameSession& session) {
     if (groups_.empty()) return session.undo();
     const std::size_t start = groups_.back().start;
     groups_.pop_back();
-    bool any = false;
-    while (session.history().size() > start && session.undo()) any = true;
-    return any;
+    const std::size_t before = session.history().size();
+    session.truncate(start);  // M94: one rebuild (D-095: never a roll on its own)
+    drop_undone(session.history().size());
+    return session.history().size() < before;
 }
 
 bool UndoGroups::undo_human(GameSession& session) {
@@ -38,9 +39,10 @@ bool UndoGroups::undo_human(GameSession& session) {
     if (i == 0) return false;
     const std::size_t start = groups_[i - 1].start;
     groups_.resize(i - 1);
-    bool any = false;
-    while (session.history().size() > start && session.undo()) any = true;
-    return any;
+    const std::size_t before = session.history().size();
+    session.truncate(start);  // M94: one rebuild (D-095: never a roll on its own)
+    drop_undone(session.history().size());
+    return session.history().size() < before;
 }
 
 std::vector<std::size_t> UndoGroups::starts() const {

@@ -20,7 +20,8 @@ namespace wh40k::core {
 // decision. The Shoot action (M8) and the Fight action (M10) use the same flow once their selections
 // are validated; tests call this directly to start mid-phase. Preconditions (std::logic_error otherwise): the game is in the Shoot or
 // Fight step, nothing else is in progress, the attacker has models, every selection's attacker
-// belongs to it, and every target is an enemy unit.
+// belongs to it, and every target is an enemy unit. D-095 (M94): every dice roll on the way is made at once (as
+// apply_action), so the next decision is never a RollDice.
 std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId attacker,
                                      const AttackContext& context, std::vector<WeaponSelection> selections);
 std::vector<GameEvent> begin_attacks(GameState& state, UnitId attacker, const AttackContext& context,
