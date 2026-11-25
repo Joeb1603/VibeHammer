@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92, M93 and M94 are below. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M91 are done; M92, M93 and M94 are below, then M95, the current one. Their full text (prompts, acceptance checks, results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -307,6 +307,86 @@ Pain / Command Re-roll).
 - The pre-roll card's damage dice are the casualty preview's count (each D at its maximum), so a lower D can roll more.
 - Manual checks by mouse on Windows: pressing Roll in hotseat and against the bot, Undo just after a roll, saving while a
   roll waits, and turning the dice pop-ups off while a roll waits.
+
+---
+
+## M95: Reaction windows, Command Points and the first stratagems (D-096)
+
+**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-25, after a design review).
+**Scope:** roadmap Phase 0 item 3. A window is a decision offered to a side at a trigger, ordered by Rules Sequencing
+(01.03.02, app-only). Its first users are spending CP (15.01) and two core stratagems: Command Re-roll (15.02, just
+after a roll) and Insane Bravery (15.04, just before a battle-shock roll). The user's choices (2026-11-25):
+- one milestone (engine, bot, replays, saves and client together);
+- all replays regenerated as format 3 (each window answer a step);
+- stratagems offered to a human by default, with an "Offer stratagems" setting to stop the offers;
+- the bot uses them behind arena keys, on by default only if they measure better (D-092's keep rule);
+- the "Later" item "Dice pop-up polish" (a gold border on critical dice) folded in.
+
+Roadmap question 4 (BSData) was answered on the side.
+
+**Rules:** 15.01, 15.02, 15.04; app 01.03.02, 01.05.01, 01.05.02, 15.01.01-03, the FAQ's Insane Bravery entry; 01.07,
+04.03, 05.01-05.04, 06.03, 08.02, 08.03, 09.06, 09.07, 11.02, 24.15, 24.38; D-005, D-011, D-018, D-023, D-069, D-072,
+D-095.
+
+**Design** (D-096 has the full text)
+- *The window:*
+  - `decision::UseStratagems{timing, unit}`, answered by `DeclineStratagems` (listed first) or
+    `UseStratagem{stratagem, unit, die}`;
+  - it opens only when its side can use a stratagem there; otherwise play is exactly M94's;
+  - `FlowState::window` holds the roll's dice while it waits and is checked first by `compute_decision` and `advance`.
+- *15.01:*
+  - CP spent, never below 0;
+  - each stratagem once per phase per player, and one stratagem per unit per phase;
+  - 01.07 (no stratagem on one's own battle-shocked unit);
+  - the records in `GameState::stratagems`, the per-phase ones cleared at the end of each phase.
+- *Command Re-roll:*
+  - the window comes just after the roller's Advance, Charge, Hazard, random-A, Hit, Wound, Save and Damage rolls
+    (saves are the defender's);
+  - one die is re-rolled (a charge roll in full; a die Twin-linked re-rolled can't be picked), then modifiers apply.
+  - Each roll point becomes: roll faces, emit its event (unchanged), `after_roll` (open a window or apply at once).
+    Applying is M94's consequence, rebuilt from the faces by the same judge functions.
+- *Damage per attack:* one `RollDice{Damage}` and window per attack that inflicts damage. `plan_damage` replays
+  `inflict_damage` on a copy with the stored rolls; the batch resolves at the end as in M94. `DamageRolled` is the one
+  new event without stratagems.
+- *Insane Bravery:* a window before each 08.03 roll of a unit that isn't battle-shocked; used, the roll passes with no
+  dice; once per battle; never for the 09.07 roll.
+- *The closure:*
+  - inline `apply_action` answers every roll and declines every window, so the bot's simulator, the tests and
+    format-1 play are M94's;
+  - paced play stops at windows;
+  - the M94 and M95 event dumps are identical but for `DamageRolled`.
+- *Format 3:* window answers and per-attack damage recorded. `with_roll_steps` converts format 1 (roll and decline
+  everything) and format 2 (step by step; a save stopped at a roll stays there). All 29 replays are regenerated, with
+  format-2 copies and two M94 saves kept in `tests/data/legacy/`.
+- *Client:*
+  - GameSession `auto_decline` per side;
+  - "Offer stratagems" (default on);
+  - the rolled card's "Command Re-roll (1 CP)" with die picking, its Continue declining;
+  - a pop-up when the dice pop-ups are off;
+  - Insane Bravery on the battle-shock pre-roll card;
+  - Undo never takes a decline back alone;
+  - critical dice in gold.
+- *Bot:* keys `command_reroll` and `insane_bravery`. A side with its keys off declines through the session, so the
+  arena's identity set keeps `state` and `trace`.
+
+**Acceptance**
+- [ ] A window is a decision for the side that can use a stratagem there, offered only then; declining changes
+  nothing; Rules Sequencing orders the sides. 15.01's cost and restrictions are enforced with rule-cited refusals.
+- [ ] Command Re-roll after each of the eight roll kinds re-rolls one die (a charge roll in full) before the roll's
+  result is used; `R15_02_*` tests cover each kind, the roller's side, the refusals and the skipped cases.
+- [ ] A random D is rolled per attack that inflicts damage, each roll a step with its own window.
+- [ ] Insane Bravery passes a battle-shock roll automatically, once per battle, never for a battle-shocked unit.
+- [ ] The closure holds: `apply_action` plays exactly as M94, and paced play with every window declined equals it,
+  for every replay and for random games. The M94 and M95 event dumps differ only by `DamageRolled`.
+- [ ] Formats 1 and 2 load (legacy fixtures); format 3 round-trips; every new state field has a JSON round-trip test
+  and is omitted when empty.
+- [ ] All 29 replays regenerated as format 3 with byte-identical `expect` blocks; `m95_stratagems.json` shows each
+  stratagem.
+- [ ] Bots: the identity set identical to M94 in `state` and `trace`; the keys measured and their defaults set by the
+  keep rule; decision p95 within budget.
+- [ ] Client: the re-roll on the rolled card (Continue declines), the pop-up without dice pop-ups, Insane Bravery on
+  the pre-roll card, "Offer stratagems", Undo past declines, critical dice in gold; logic tests and xvfb screenshots.
+- [ ] Full `ctest` green, warnings as errors.
 
 ---
 
