@@ -514,8 +514,10 @@ void describe_attack_roll(const GameState& state, RollKind roll, RollDiceInfo& i
                 if (!batch.random_attacks.empty()) info.expression = to_string(batch.random_attacks.front().attacks);
             } else if (roll == RollKind::Hit) {
                 info.dice = batch.attack_dice;
+                info.need = batch.profile.skill;  // 05.01: BS or WS
             } else {
                 info.dice = f.rolling->hits.value().hits();
+                info.need = required_wound_roll(batch.profile.strength, target_toughness(unit_ref(state, batch.target)));
             }
             return;
         }

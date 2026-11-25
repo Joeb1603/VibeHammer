@@ -111,6 +111,76 @@ bool enter_or_space() {
            ImGui::IsKeyPressed(ImGuiKey_Space, false);
 }
 
+// A card's window, centred in `area`, in the roller's colour: who rolls, `counter` and the rule, the title, what the
+// roll is for and needs, the weapon's notes, then the dice in `look`, in rows of up to ten. The window is left open
+// for the caller's buttons (ImGui::End is the caller's). `focus_pending`: take the focus once (M48, D-059: not while a
+// button elsewhere is held down; taking it every frame cleared the active item of every other window).
+void begin_card_window(Rectangle area, float ui_scale, const DiceCard& card, Look look, const std::string& counter,
+                       double now, bool& focus_pending) {
+    const Color side = side_color(card.roller);
+    const ImVec4 side_colour(side.r / 255.0f, side.g / 255.0f, side.b / 255.0f, 1.0f);
+    const float die = 40.0f * ui_scale;
+    const float gap = 8.0f * ui_scale;
+    const int count = static_cast<int>(card.dice.size());
+    const int per_row = std::max(1, std::min(count, kDicePerRow));
+    const float dice_w = static_cast<float>(per_row) * die + static_cast<float>(per_row - 1) * gap;
+    const float width = std::max(dice_w, 380.0f * ui_scale) + ImGui::GetStyle().WindowPadding.x * 2.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(area.x + area.width * 0.5f, area.y + area.height * 0.5f), ImGuiCond_Always,
+                            ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, area.height));
+    if (focus_pending && !ImGui::IsAnyItemActive()) {
+        ImGui::SetNextWindowFocus();
+        focus_pending = false;
+    }
+    ImGui::PushStyleColor(ImGuiCol_Border, side_colour);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.12f, 0.15f, 0.97f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ui_scale);
+    ImGui::Begin("##dice", nullptr,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+
+    // Who rolls, what for, and what it needs.
+    ImGui::PushStyleColor(ImGuiCol_Button, side_colour);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, side_colour);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, side_colour);
+    ImGui::SmallButton(card.roller == core::Side::A ? "Side A rolls" : "Side B rolls");
+    ImGui::PopStyleColor(3);
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s  (%s)", counter.c_str(), card.rule.c_str());
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.5f);
+    ImGui::TextUnformatted(card.title.c_str());
+    ImGui::PopFont();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width - ImGui::GetStyle().WindowPadding.x * 2.0f);
+    if (!card.purpose.empty()) ImGui::TextUnformatted(card.purpose.c_str());
+    if (!card.need.empty()) ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", card.need.c_str());
+    draw_effect_lines(card.notes);  // D-037: what the weapon's abilities did
+    ImGui::PopTextWrapPos();
+    ImGui::Spacing();
+
+    // The dice, centred, in rows of up to ten.
+    const int rows = (count + kDicePerRow - 1) / kDicePerRow;
+    const float rows_h = static_cast<float>(rows) * die + static_cast<float>(std::max(0, rows - 1)) * gap;
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float inner = ImGui::GetContentRegionAvail().x;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const int tick = static_cast<int>(now * 18.0);
+    for (int i = 0; i < count; ++i) {
+        const int row = i / kDicePerRow;
+        const int col = i % kDicePerRow;
+        const int in_row = std::min(kDicePerRow, count - row * kDicePerRow);
+        const float row_w = static_cast<float>(in_row) * die + static_cast<float>(in_row - 1) * gap;
+        const ImVec2 p(origin.x + (inner - row_w) * 0.5f + static_cast<float>(col) * (die + gap),
+                       origin.y + static_cast<float>(row) * (die + gap));
+        draw_die_face(dl, p, die, card.dice[static_cast<std::size_t>(i)], look, (tick + i * 5) % 6 + 1);
+    }
+    ImGui::Dummy(ImVec2(inner, rows_h));
+    ImGui::Spacing();
+}
+
 }  // namespace
 
 void DicePopup::push(std::vector<DiceCard> cards) {
@@ -119,6 +189,7 @@ void DicePopup::push(std::vector<DiceCard> cards) {
 }
 
 void DicePopup::clear() {
+    prompt_shown_ = false;
     queue_.clear();
     shown_ = 0;
     revealed_ = false;
@@ -126,6 +197,24 @@ void DicePopup::clear() {
     card_since_.reset();
     revealed_at_.reset();
     focus_pending_ = false;
+}
+
+void DicePopup::start_rolling() {
+    if (queue_.empty() || revealed_ || rolling_since_) return;
+    rolling_since_ = ImGui::GetTime();  // D-095: the Roll was pressed on the pre-roll card; the faces tumble now
+}
+
+bool DicePopup::draw_prompt(Rectangle area, float ui_scale, const DiceCard& card) {
+    const double now = ImGui::GetTime();
+    if (!prompt_shown_) {
+        prompt_shown_ = true;
+        prompt_focus_ = true;
+    }
+    begin_card_window(area, ui_scale, card, Look::FaceDown, "Not rolled yet", now, prompt_focus_);
+    const bool roll = big_button("Roll", true) || enter_or_space();
+    ImGui::End();
+    if (roll) prompt_shown_ = false;
+    return roll;
 }
 
 void DicePopup::advance() {
@@ -182,73 +271,10 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     DiceClickTarget click_target = ImGui::GetIO().WantCaptureMouse ? DiceClickTarget::OtherWindow
                                                                     : DiceClickTarget::BareBoard;
 
-    const Color side = side_color(card.roller);
-    const ImVec4 side_colour(side.r / 255.0f, side.g / 255.0f, side.b / 255.0f, 1.0f);
-    const float die = 40.0f * ui_scale;
-    const float gap = 8.0f * ui_scale;
-    const int count = static_cast<int>(card.dice.size());
-    const int per_row = std::max(1, std::min(count, kDicePerRow));
-    const float dice_w = static_cast<float>(per_row) * die + static_cast<float>(per_row - 1) * gap;
-    const float width = std::max(dice_w, 380.0f * ui_scale) + ImGui::GetStyle().WindowPadding.x * 2.0f;
-
-    ImGui::SetNextWindowPos(ImVec2(area.x + area.width * 0.5f, area.y + area.height * 0.5f), ImGuiCond_Always,
-                            ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, area.height));
-    // M48 (D-059): on top once, when the card first appears, and not while a button elsewhere is held down.
-    // Taking the focus every frame cleared the active item of every other window, so a press on Pause, Step or
-    // the speed box never reached its release while dice showed.
-    if (focus_pending_ && !ImGui::IsAnyItemActive()) {
-        ImGui::SetNextWindowFocus();
-        focus_pending_ = false;
-    }
-    ImGui::PushStyleColor(ImGuiCol_Border, side_colour);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.12f, 0.15f, 0.97f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ui_scale);
-    ImGui::Begin("##dice", nullptr,
-                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
-                     ImGuiWindowFlags_AlwaysAutoResize);
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-
-    // Who rolls, what for, and what it needs.
-    ImGui::PushStyleColor(ImGuiCol_Button, side_colour);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, side_colour);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, side_colour);
-    ImGui::SmallButton(card.roller == core::Side::A ? "Side A rolls" : "Side B rolls");
-    ImGui::PopStyleColor(3);
-    ImGui::SameLine();
     const int total = shown_ + static_cast<int>(queue_.size());
-    ImGui::TextDisabled("Roll %d of %d  (%s)", shown_ + 1, total, card.rule.c_str());
-    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.5f);
-    ImGui::TextUnformatted(card.title.c_str());
-    ImGui::PopFont();
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width - ImGui::GetStyle().WindowPadding.x * 2.0f);
-    if (!card.purpose.empty()) ImGui::TextUnformatted(card.purpose.c_str());
-    if (!card.need.empty()) ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", card.need.c_str());
-    draw_effect_lines(card.notes);  // D-037: what the weapon's abilities did
-    ImGui::PopTextWrapPos();
-    ImGui::Spacing();
-
-    // The dice, centred, in rows of up to ten.
+    const std::string counter = "Roll " + std::to_string(shown_ + 1) + " of " + std::to_string(total);
     const Look look = revealed_ ? Look::Shown : (rolling_since_ ? Look::Tumbling : Look::FaceDown);
-    const int rows = (count + kDicePerRow - 1) / kDicePerRow;
-    const float rows_h = static_cast<float>(rows) * die + static_cast<float>(std::max(0, rows - 1)) * gap;
-    const ImVec2 origin = ImGui::GetCursorScreenPos();
-    const float inner = ImGui::GetContentRegionAvail().x;
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const int tick = static_cast<int>(now * 18.0);
-    for (int i = 0; i < count; ++i) {
-        const int row = i / kDicePerRow;
-        const int col = i % kDicePerRow;
-        const int in_row = std::min(kDicePerRow, count - row * kDicePerRow);
-        const float row_w = static_cast<float>(in_row) * die + static_cast<float>(in_row - 1) * gap;
-        const ImVec2 p(origin.x + (inner - row_w) * 0.5f + static_cast<float>(col) * (die + gap),
-                       origin.y + static_cast<float>(row) * (die + gap));
-        draw_die_face(dl, p, die, card.dice[static_cast<std::size_t>(i)], look, (tick + i * 5) % 6 + 1);
-    }
-    ImGui::Dummy(ImVec2(inner, rows_h));
-    ImGui::Spacing();
+    begin_card_window(area, ui_scale, card, look, counter, now, focus_pending_);
 
     bool advance = false;
     // M49 (D-060): the buttons show exactly when the card isn't paced (dice_buttons_shown: a human's card, or a

@@ -71,6 +71,9 @@ struct RollDiceInfo {
     // (D-051, a random D at its maximum, D-069) says inflicts damage; a lower D can leave more attacks inflicting it.
     int dice = 0;
     std::string expression;  // each roll: "D6", "2D6", or a random characteristic such as "D3+1" (random A, damage)
+    // The result each die (or the 2D6 of a battle-shock roll) needs, where one number says it: a hit roll's BS/WS
+    // (05.01; none for [TORRENT]), a wound roll's required result (05.02), the unit's Leadership (01.06).
+    std::optional<int> need;
     friend bool operator==(const RollDiceInfo&, const RollDiceInfo&) = default;
 };
 [[nodiscard]] std::optional<RollDiceInfo> roll_dice_info(const GameState& state);

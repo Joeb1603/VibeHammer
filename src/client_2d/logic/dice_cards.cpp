@@ -6,10 +6,12 @@
 #include <variant>
 
 #include "core/dice/modifiers.hpp"
+#include "core/engine/engine.hpp"
 #include "core/engine/events.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
 #include "core/state/queries.hpp"
+#include "action_text.hpp"
 #include "event_text.hpp"
 #include "unit_style.hpp"
 
@@ -111,25 +113,72 @@ std::string attack_purpose(const core::GameState& state, const AttackContext& c)
     return text;
 }
 
+// What the batch's hit rolls need (05.01).
+std::string hit_need(const AttackContext& c) {
+    const core::AttackBatch* batch = current_batch(c);
+    if (batch == nullptr) return "";
+    if (!batch->profile.skill) return "Hits automatically (Torrent)";
+    std::string need = "Need " + std::to_string(*batch->profile.skill) + "+ to hit";
+    // D-011: the modifier applied is the capped net (D-073: 10.06 and 17.03 can make it -2).
+    const int net = batch->profile.hit_modifier;
+    const int applied = core::cap_hit_wound_modifier(net);
+    if (applied != 0) {
+        need += " (modifier " + std::string(applied > 0 ? "+" : "") + std::to_string(applied);
+        if (applied != net) need += ", capped from " + std::to_string(net) + ", D-011";
+        need += ")";
+    }
+    return need + "; an unmodified 6 is a critical hit";
+}
+
+// What the batch's wound rolls need (05.02), given the required result.
+std::string wound_need(const AttackContext& c, int required) {
+    std::string need = "Need " + std::to_string(required) + "+ to wound; an unmodified 6 is a critical wound";
+    if (const core::AttackBatch* batch = current_batch(c); batch != nullptr && core::twin_linked(batch->profile)) {
+        need += "; [TWIN-LINKED]: the attacker may re-roll any of them (24.38)";
+    }
+    return need;
+}
+
+// D-069: a random D's damage rolls.
+std::string damage_need(const AttackContext& c) {
+    const core::AttackBatch* batch = current_batch(c);
+    const core::DiceExpr d = batch != nullptr ? batch->profile.damage : core::DiceExpr{};
+    return "Random D (" + core::to_string(d) +
+           "): rolled for each attack that inflicts damage, once its model is selected (D-069); excess damage is lost";
+}
+
+// Who saves against whom (05.03), and what the save rolls need against the first group in allocation order.
+std::string save_purpose(const core::GameState& state, const AttackContext& c, core::UnitId target) {
+    std::string purpose = unit_name(state, target) + " saving";
+    if (c.attacker) purpose += " against " + unit_name(state, *c.attacker);
+    return purpose;
+}
+
+int armour_penetration(const AttackContext& c) {
+    const core::AttackBatch* batch = current_batch(c);
+    return batch != nullptr ? batch->profile.armour_penetration : 0;
+}
+
+std::string save_need(const AttackContext& c) {
+    const int ap = armour_penetration(c);
+    // D-024: core's 05.04 check, against the first group in allocation order (each V1 unit has one group).
+    const core::AllocationGroup* group = c.groups.empty() ? nullptr : &c.groups.front();
+    if (group == nullptr) return "";
+    std::string need;
+    if (group->save) {
+        need = "Need " + std::to_string(std::max(2, *group->save - ap)) + "+ to save (Sv " +
+               std::to_string(*group->save) + "+, AP " + std::to_string(ap) + ")";
+    }
+    if (group->invuln_save) {
+        need += (need.empty() ? "Need " : "; or ") + std::to_string(*group->invuln_save) + "+ invulnerable";
+    }
+    return need.empty() ? "No save" : need + "; an unmodified 1 always fails";
+}
+
 DiceCard hit_card(const core::GameState& state, const AttackContext& c, const core::HitRolls& rolls) {
     DiceCard card{"Hit rolls", attack_purpose(state, c), "", "", "05.01", core::Side::A, {}, attack_notes(state, c)};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
-    if (const core::AttackBatch* batch = current_batch(c)) {
-        if (batch->profile.skill) {
-            card.need = "Need " + std::to_string(*batch->profile.skill) + "+ to hit";
-            // D-011: the modifier applied is the capped net (D-073: 10.06 and 17.03 can make it -2).
-            const int net = batch->profile.hit_modifier;
-            const int applied = core::cap_hit_wound_modifier(net);
-            if (applied != 0) {
-                card.need += " (modifier " + std::string(applied > 0 ? "+" : "") + std::to_string(applied);
-                if (applied != net) card.need += ", capped from " + std::to_string(net) + ", D-011";
-                card.need += ")";
-            }
-            card.need += "; an unmodified 6 is a critical hit";
-        } else {
-            card.need = "Hits automatically (Torrent)";
-        }
-    }
+    card.need = hit_need(c);
     int hits = 0;
     int criticals = 0;
     for (const core::HitRoll& r : rolls.rolls) {
@@ -154,10 +203,7 @@ DiceCard hit_card(const core::GameState& state, const AttackContext& c, const co
 DiceCard wound_card(const core::GameState& state, const AttackContext& c, const core::WoundRolls& rolls) {
     DiceCard card{"Wound rolls", attack_purpose(state, c), "", "", "05.02", core::Side::A, {}};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
-    card.need = "Need " + std::to_string(rolls.required) + "+ to wound; an unmodified 6 is a critical wound";
-    if (const core::AttackBatch* batch = current_batch(c); batch != nullptr && core::twin_linked(batch->profile)) {
-        card.need += "; [TWIN-LINKED]: the attacker may re-roll any of them (24.38)";
-    }
+    card.need = wound_need(c, rolls.required);
     int wounds = 0;
     int criticals = 0;
     for (const core::WoundRoll& r : rolls.rolls) {
@@ -208,6 +254,9 @@ DiceCard reroll_card(const core::GameState& state, const AttackContext& c, const
     return card;
 }
 
+constexpr const char* kRandomANeed =
+    "Random A: rolled for each model and weapon (D-069); [BLAST] and [RAPID FIRE] dice are added after the roll";
+
 // D-069 (04.03): the bonus dice a selection's random A gets after its roll, named by the abilities that give them.
 std::string bonus_text(const core::GameState& state, const AttackContext& c, const core::AttackDiceRoll& r) {
     if (r.bonus <= 0) return "";
@@ -233,7 +282,7 @@ std::string bonus_text(const core::GameState& state, const AttackContext& c, con
 DiceCard attack_dice_card(const core::GameState& state, const AttackContext& c, const core::event::AttackDiceRolled& e) {
     DiceCard card{"Attack dice", attack_purpose(state, c), "", "", "04.03", core::Side::A, {}};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
-    card.need = "Random A: rolled for each model and weapon (D-069); [BLAST] and [RAPID FIRE] dice are added after the roll";
+    card.need = kRandomANeed;
     const core::AttackBatch* batch = current_batch(c);
     const std::string weapon = batch != nullptr ? weapon_name(state, c, *batch) : std::string();
     std::string result;
@@ -261,9 +310,7 @@ std::optional<DiceCard> damage_card(const core::GameState& state, const AttackCo
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);  // the attacker's weapon's D
     const core::AttackBatch* batch = current_batch(c);
     const core::DiceExpr d = batch != nullptr ? batch->profile.damage : core::DiceExpr{};
-    card.need = "Random D (" + core::to_string(d) +
-                "): rolled for each attack that inflicts damage, once its model is selected (D-069); excess damage is "
-                "lost";
+    card.need = damage_need(c);
     std::string text;
     for (const core::SaveStep& s : result.steps) {
         if (!s.damage || !s.damage_roll) continue;
@@ -287,23 +334,10 @@ DiceCard save_card(const core::GameState& state, const AttackContext& c, core::U
                    const std::vector<int>& rolls) {
     DiceCard card{"Save rolls", "", "", "", "05.03", core::Side::A, {}};
     card.roller = side_of(state, target, c.attacker ? other(side_of(state, *c.attacker, core::Side::A)) : core::Side::B);
-    card.purpose = unit_name(state, target) + " saving";
-    const core::AttackBatch* batch = current_batch(c);
-    if (c.attacker) card.purpose += " against " + unit_name(state, *c.attacker);
-    const int ap = batch != nullptr ? batch->profile.armour_penetration : 0;
-    // D-024: core's 05.04 check, against the first group in allocation order (each V1 unit has one group).
+    card.purpose = save_purpose(state, c, target);
+    const int ap = armour_penetration(c);
     const core::AllocationGroup* group = c.groups.empty() ? nullptr : &c.groups.front();
-    if (group != nullptr) {
-        std::string need;
-        if (group->save) {
-            need = "Need " + std::to_string(std::max(2, *group->save - ap)) + "+ to save (Sv " +
-                   std::to_string(*group->save) + "+, AP " + std::to_string(ap) + ")";
-        }
-        if (group->invuln_save) {
-            need += (need.empty() ? "Need " : "; or ") + std::to_string(*group->invuln_save) + "+ invulnerable";
-        }
-        card.need = need.empty() ? "No save" : need + "; an unmodified 1 always fails";
-    }
+    card.need = save_need(c);
     int saved = 0;
     for (const int r : rolls) {
         DieFace d;
@@ -322,12 +356,10 @@ std::vector<DieFace> two_dice(const core::TwoD6& roll, bool pass, bool neutral) 
     return {DieFace{roll.dice[0], pass, false, neutral}, DieFace{roll.dice[1], pass, false, neutral}};
 }
 
-}  // namespace
-
-std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector<LogEntry>& log,
-                                 std::size_t from) {
+// The cards for the roll events in log entries [from, log.size()), with `c` the attack context at the log's end.
+std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEntry>& log, std::size_t from,
+                           AttackContext& c) {
     std::vector<DiceCard> cards;
-    AttackContext c;
     for (std::size_t i = 0; i < log.size(); ++i) {
         const bool show = i >= from;
         for (const core::GameEvent& event : log[i].events) {
@@ -434,6 +466,79 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
         }
     }
     return cards;
+}
+
+}  // namespace
+
+std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector<LogEntry>& log,
+                                 std::size_t from) {
+    AttackContext c;
+    return scan(state, log, from, c);
+}
+
+std::optional<DiceCard> roll_prompt(const core::GameState& state, const std::vector<LogEntry>& log) {
+    const std::optional<core::RollDiceInfo> info = core::roll_dice_info(state);
+    if (!info) return std::nullopt;
+    AttackContext c;
+    (void)scan(state, log, log.size(), c);
+    if (state.flow.attack) {
+        // The batch the roll is for (the log names a batch with a random A only once it is gathered).
+        const core::AttackFlow& f = *state.flow.attack;
+        c.attacker = f.attacker;
+        if (f.rolling) c.batch = f.rolling->batch;
+        if (f.current) c.batch = f.current->batch;
+        if (c.batch && *c.batch < f.batches.size()) {
+            c.batches.resize(std::max(c.batches.size(), f.batches.size()));
+            c.batches[*c.batch] = f.batches[*c.batch];
+        }
+    }
+    DiceCard card;
+    card.title = roll_label(info->roll);
+    card.rule = std::string(core::decision_rule(state, *state.pending));
+    card.roller = info->roller;
+    for (int i = 0; i < info->dice; ++i) card.dice.push_back(DieFace{0, false, false, true});  // face down
+    const std::string unit = unit_name(state, info->unit);
+    const std::string need = info->need ? std::to_string(*info->need) + "+" : std::string();
+    switch (info->roll) {
+        case core::RollKind::Advance:
+            card.purpose = unit + " advancing";
+            card.need = "Add the roll to the unit's Move this phase";
+            break;
+        case core::RollKind::Charge:
+            card.purpose = unit + " charging";
+            card.need = "2D6: how far the charge can move (it must end in engagement range)";
+            break;
+        case core::RollKind::BattleShock:
+            card.purpose = unit;
+            card.need = "2D6: need " + need + " to pass";
+            break;
+        case core::RollKind::Hazard:
+            card.purpose = unit + (state.flow.attack ? " after its attacks ([HAZARDOUS] weapons)" : std::string());
+            card.need = "Each 1-2 fails";
+            break;
+        case core::RollKind::RandomAttacks:
+            card.purpose = attack_purpose(state, c);
+            card.need = kRandomANeed;
+            break;
+        case core::RollKind::Hit:
+            card.purpose = attack_purpose(state, c);
+            card.need = hit_need(c);
+            card.notes = attack_notes(state, c);
+            break;
+        case core::RollKind::Wound:
+            card.purpose = attack_purpose(state, c);
+            card.need = wound_need(c, info->need.value_or(0));
+            break;
+        case core::RollKind::Save:
+            card.purpose = save_purpose(state, c, info->unit);
+            card.need = save_need(c);
+            break;
+        case core::RollKind::Damage:
+            card.purpose = attack_purpose(state, c);
+            card.need = damage_need(c);
+            break;
+    }
+    return card;
 }
 
 }  // namespace wh40k::client

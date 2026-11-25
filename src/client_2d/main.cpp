@@ -270,14 +270,15 @@ public:
                 const core::GameState initial =
                     custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver(), builder_->mission(),
                                         builder_->terrain());
-                start_session(GameSession::new_game(initial, settings_.seed));
+                start_session(GameSession::new_game(initial, settings_.seed, auto_roll_sides()));
                 status_ = "New game: " + initial.scenario_name + ", seed " + std::to_string(settings_.seed) + ". " +
                           players_text();
                 auto_actions_as_group();  // D-036
                 return;
             }
             const fs::path scenario = scenario_path();
-            start_session(GameSession::new_game(core::load_scenario(scenario, kRepoRoot), settings_.seed));
+            start_session(GameSession::new_game(core::load_scenario(scenario, kRepoRoot), settings_.seed,
+                                                auto_roll_sides()));
             status_ = "New game: " + scenario_info(scenario).name + ", seed " + std::to_string(settings_.seed) + ". " +
                       players_text();
             auto_actions_as_group();  // D-036
@@ -447,6 +448,46 @@ public:
         watch_.reset();  // M45
         bot_reason_.clear();
         bot_log_.clear();
+        sync_auto_roll();  // D-095: a loaded game may be waiting for a roll
+    }
+
+    // D-095 (M94): the sides whose rolls the session makes by itself: a bot's, and a human's while the dice pop-ups are
+    // off. With them on, a human's roll waits for the Roll button on its pre-roll card.
+    std::array<bool, 2> auto_roll_sides() const {
+        return {bot_sides_[0] || !settings_.show_dice, bot_sides_[1] || !settings_.show_dice};
+    }
+
+    // D-095: tells the session, and makes a roll that is now automatic at once (in the last Undo group, as the
+    // automatic steps are).
+    void sync_auto_roll() {
+        if (!session_) return;
+        const std::array<bool, 2> sides = auto_roll_sides();
+        session_->set_auto_roll(core::Side::A, sides[0]);
+        session_->set_auto_roll(core::Side::B, sides[1]);
+        if (core::roll_pending(session_->state()) && session_->auto_roll(session_->pending()->side)) {
+            const auto& d = std::get<core::decision::RollDice>(session_->pending()->kind);
+            submit_one(core::action::RollDice{d.roll, d.unit});  // the session makes any that follow
+        }
+    }
+
+    // D-095: a human's roll waits for its Roll button (dice pop-ups on), and no card is still showing.
+    bool human_roll_waiting() const {
+        return mode_ == Mode::Play && session_ && core::roll_pending(session_->state()) &&
+               !session_->auto_roll(session_->pending()->side) && !bot_sides_[core::side_index(session_->pending()->side)];
+    }
+
+    // D-095: the pre-roll card of the human's roll waiting now, if any.
+    std::optional<DiceCard> roll_prompt_card() const {
+        if (!human_roll_waiting() || dice_.active()) return std::nullopt;
+        return roll_prompt(session_->state(), session_->log());
+    }
+
+    // D-095: the player pressed Roll: the roll is made (a step of the session's, but no Undo group of its own: Undo
+    // takes it back with the input that led to it, D-039), its card tumbles at once, then the automatic steps follow.
+    void submit_roll(const core::GameAction& roll) {
+        if (!submit_one(roll)) return;
+        dice_.start_rolling();
+        run_auto_actions_now();
     }
 
     // --dice: keep (1) or also reveal (2) the pop-ups the --steps rolls made; otherwise drop them.
@@ -528,7 +569,11 @@ public:
         for (int i = 0; i < n && mode_ == Mode::Play && session_ && session_->pending() && !bot_deciding(); ++i) {
             const DecisionView view = make_decision_view(session_->legal());
             if (view.buttons.empty()) break;
-            submit(view.buttons.front());
+            if (std::holds_alternative<core::action::RollDice>(view.buttons.front())) {
+                submit_roll(view.buttons.front());  // D-095: as the Roll button on the pre-roll card
+            } else {
+                submit(view.buttons.front());
+            }
         }
     }
 
@@ -689,7 +734,7 @@ private:
     // D-033: dice pop-ups are open. Nothing from the next decision is drawn or accepted meanwhile: the board
     // is inactive (no target line, grey, outline, menu or clicks), there is no move handle, and the action
     // bar shows who is rolling. Everything is rebuilt for the real decision when the last card closes.
-    bool waiting_for_dice() const { return mode_ == Mode::Play && dice_.active(); }
+    bool waiting_for_dice() const { return mode_ == Mode::Play && (dice_.active() || human_roll_waiting()); }
 
     // D-054 (M39): a bot owns the pending decision. Human input (board clicks, drags, the decision panel) is
     // ignored meanwhile; the action bar shows the bot thinking, with Pause and Step.
@@ -2214,7 +2259,7 @@ private:
                 if (const DiceCard* card = dice_.current()) {
                     acting = card->roller;
                 } else if (state().pending) {
-                    acting = state().pending->side;
+                    acting = state().pending->side;  // D-095: a pre-roll card's roller is the pending side
                 }
             }
             const bool deciding = acting.has_value();
@@ -2236,6 +2281,8 @@ private:
                 if (watching()) draw_watch_bar();  // M45: always there in bot vs bot
                 if (const DiceCard* card = dice_.current()) {
                     draw_rolling(*card);  // D-033: the next decision waits for the dice pop-ups
+                } else if (const std::optional<DiceCard> prompt = roll_prompt_card()) {
+                    draw_rolling(*prompt);  // D-095: the roll waits for the Roll button on its card
                 } else if (bot_deciding()) {
                     draw_bot_thinking();  // D-054
                 } else {
@@ -2256,6 +2303,15 @@ private:
         if (has_view()) draw_datasheets();  // D-034
         // D-033: the dice pop-up, over everything else.
         if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale(), bot_dice_pace());
+        // D-095 (M94): a human's roll before it is made: its card face down, with the Roll button.
+        if (has_view() && !end_warning_) {
+            if (const std::optional<DiceCard> prompt = roll_prompt_card()) {
+                if (dice_.draw_prompt(board_area(), ui_scale(), *prompt)) {
+                    const auto& d = std::get<core::decision::RollDice>(session_->pending()->kind);
+                    submit_roll(core::action::RollDice{d.roll, d.unit});
+                }
+            }
+        }
         // M61 (D-072): the [TWIN-LINKED] re-roll pop-up, once the dice have been shown, for a human's decision.
         if (has_view() && mode_ == Mode::Play && session_ && !dice_.active() && !bot_deciding() && !end_warning_) {
             if (RerollPicks* picks = panel_.reroll_picks(*session_)) {
@@ -2460,7 +2516,10 @@ private:
         overlay_toggle(RingKind::WeaponRange, &overlays_.ranges);
         overlay_toggle(RingKind::ChargeDistance, &overlays_.charge);
         ImGui::Spacing();
-        if (ImGui::Checkbox("Show dice pop-ups", &settings_.show_dice) && !settings_.show_dice) dice_.clear();  // D-033
+        if (ImGui::Checkbox("Show dice pop-ups", &settings_.show_dice)) {
+            if (!settings_.show_dice) dice_.clear();  // D-033
+            sync_auto_roll();                         // D-095: with them off, your rolls are made for you
+        }
         if (ImGui::Checkbox("Skip steps with nothing to do", &settings_.skip_empty_steps) && settings_.skip_empty_steps) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
         ImGui::Checkbox("Fix illegal moves", &settings_.fix_moves);  // D-052
