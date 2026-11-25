@@ -497,7 +497,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "scenario": "data/scenarios/incursion_terrain_44x60.json",
     "seed": 80
@@ -507,6 +507,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 5
       },
       "side": "A"
@@ -667,6 +675,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 12,
         "path": [
@@ -815,6 +831,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 1
       },
       "side": "A"
@@ -975,6 +999,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 11,
         "path": [
@@ -1101,6 +1133,30 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           59,
@@ -1112,6 +1168,14 @@
         "target": 13
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Damage",
+        "unit": 4
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -1205,6 +1269,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 58,
         "path": [
@@ -1227,6 +1299,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 10
       },
       "side": "B"
@@ -1367,6 +1447,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 14
       },
       "side": "B"
@@ -1681,6 +1769,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 53,
         "path": [
@@ -1770,6 +1866,38 @@
         "unit": 12
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "RandomAttacks",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 5
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -1966,6 +2094,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 36,
         "path": [
@@ -2100,6 +2236,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 1
       },
       "side": "A"
@@ -2405,6 +2549,30 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           60,
@@ -2415,6 +2583,22 @@
         "target": 13
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Damage",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 4
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -2434,6 +2618,22 @@
           }
         ],
         "type": "Normal",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
         "unit": 3
       },
       "side": "A"
@@ -2488,6 +2688,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 56,
         "path": [
@@ -2516,6 +2724,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 57,
         "path": [
@@ -2538,6 +2754,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 6
       },
       "side": "B"
@@ -2698,6 +2922,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 52,
         "path": [
@@ -2720,6 +2952,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 7
       },
       "side": "B"
@@ -2810,6 +3050,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 63,
         "path": [
@@ -2860,6 +3108,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 9
       },
       "side": "B"
@@ -3084,6 +3340,38 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "RandomAttacks",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           12,
@@ -3117,6 +3405,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 3
       },
       "side": "A"
@@ -3515,6 +3811,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 11,
         "path": [
@@ -3722,6 +4026,46 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 10
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           56
@@ -3729,6 +4073,14 @@
         "target": 10
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Damage",
+        "unit": 4
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -3797,6 +4149,38 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 5
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "A"
@@ -3806,6 +4190,14 @@
         "kind": "EndChargeStep"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "BattleShock",
+        "unit": 10
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -3878,6 +4270,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 57,
         "path": [
@@ -3900,6 +4300,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 13
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 13
       },
       "side": "B"
@@ -3962,6 +4370,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 52,
         "path": [
@@ -3984,6 +4400,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 7
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 7
       },
       "side": "B"
@@ -4068,6 +4492,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 6
       },
       "side": "B"
@@ -4443,6 +4875,38 @@
         "unit": 12
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "RandomAttacks",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 12
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 5
+      },
+      "side": "A"
     },
     {
       "action": {

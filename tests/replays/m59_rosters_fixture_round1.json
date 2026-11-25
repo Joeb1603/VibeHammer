@@ -490,7 +490,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -6670,6 +6670,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
+        "unit": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 48,
         "path": [
@@ -7318,6 +7326,30 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           58,
@@ -7341,6 +7373,14 @@
         "kind": "EndChargeStep"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "BattleShock",
+        "unit": 9
+      },
+      "side": "B"
     }
   ]
 }

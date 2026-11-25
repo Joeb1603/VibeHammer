@@ -115,7 +115,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "scenario": "data/scenarios/v1_skirmish.json",
     "seed": 1
