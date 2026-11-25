@@ -518,7 +518,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "scenario": "tests/data/scenarios/m86_objectives_44x60.json",
     "seed": 86
@@ -528,6 +528,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 3
       },
       "side": "A"

@@ -115,7 +115,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "scenario": "data/scenarios/v1_skirmish.json",
     "seed": 7
@@ -221,6 +221,14 @@
       "action": {
         "kind": "StartMove",
         "move_type": "Advance",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Advance",
         "unit": 2
       },
       "side": "B"

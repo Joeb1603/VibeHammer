@@ -126,7 +126,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -1934,6 +1934,46 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "indices": [
           0,
           2,
@@ -1950,6 +1990,14 @@
         "kind": "RerollWoundRolls"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 2
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -1979,6 +2027,14 @@
     {
       "action": {
         "kind": "DeclareCharge",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Charge",
         "unit": 14
       },
       "side": "B"
@@ -2061,6 +2117,30 @@
         "unit": 14
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 2
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -2150,6 +2230,30 @@
         "unit": 2
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 14
+      },
+      "side": "B"
     },
     {
       "action": {

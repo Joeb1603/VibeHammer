@@ -4,12 +4,14 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
+#include "core/data/load_error.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
@@ -582,4 +584,337 @@ TEST(D095_Closure, AnAttacksRollsAreMadeAsBefore) {
         EXPECT_EQ(expect_closure(v.gs, Side::B, v.shoot, std::vector<int>(20, 1)),
                   (std::vector<RollKind>{RollKind::Hit, RollKind::Hazard}));
     }
+}
+
+// ---- The closure over whole games ----
+
+namespace {
+
+std::vector<ReplayStep> without_rolls(const std::vector<ReplayStep>& steps) {
+    std::vector<ReplayStep> out;
+    for (const ReplayStep& s : steps) {
+        if (!std::holds_alternative<action::RollDice>(s.action)) out.push_back(s);
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
+    // Each saved replay as format 2 (each roll a step: the file itself, or with_roll_steps of a format-1 file), run
+    // paced, and its steps without the rolls run inline: the same events and the same final state, and its expect block.
+    int files = 0;
+    std::size_t rolls = 0;
+    for (const auto& file : replay_files()) {
+        SCOPED_TRACE(file.filename().string());
+        ++files;
+        const Replay saved = load_replay(file);
+        const Replay paced = with_roll_steps(saved, repo_root());
+        EXPECT_EQ(paced.format, kReplayFormatRollsRecorded);
+        Replay at_once = paced;
+        at_once.format = kReplayFormatRollsInline;
+        at_once.steps = without_rolls(paced.steps);
+        if (saved.format == kReplayFormatRollsInline) EXPECT_EQ(at_once.steps, saved.steps);
+        const ReplayResult p = run_replay(paced, repo_root());
+        const ReplayResult i = run_replay(at_once, repo_root());
+        ASSERT_TRUE(p.ok()) << "step " << *p.failed_step << ": " << p.reasons.front();
+        ASSERT_TRUE(i.ok()) << "step " << *i.failed_step << ": " << i.reasons.front();
+        EXPECT_EQ(p.events, i.events);
+        EXPECT_EQ(p.final_state, i.final_state);
+        EXPECT_EQ(replay_expectation(p.final_state), saved.expect);
+        rolls += paced.steps.size() - at_once.steps.size();
+    }
+    EXPECT_GE(files, 28);
+    EXPECT_GT(rolls, 500u);  // the bot games alone roll hundreds of times
+}
+
+TEST(D095_Closure, RandomGamesPlayTheSamePacedAndInline) {
+    // Random legal play through a paced match (each roll answered as it comes), then its choices replayed inline.
+    const std::vector<GameState> scenarios{wh40k::test::load_v1_scenario(), wh40k::test::load_rosters_scenario(),
+                                           load_scenario(repo_root() / "data/scenarios/strike_44x60.json", repo_root())};
+    for (std::size_t n = 0; n < scenarios.size(); ++n) {
+        for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+            SCOPED_TRACE("scenario " + std::to_string(n) + " seed " + std::to_string(seed));
+            GameState initial = scenarios[n];
+            initial.dice = DiceState{seed, 0};
+            Match paced(initial, RollMode::Paced);
+            wh40k::test::TestRng rng(seed * 7);
+            int rolls = 0;
+            for (int i = 0; i < 400 && paced.state().pending; ++i) {
+                const GameAction a = wh40k::test::random_action(paced.state(), rng);
+                rolls += std::holds_alternative<action::RollDice>(a) ? 1 : 0;
+                ASSERT_TRUE(paced.submit(decider(paced.state()), a).ok());
+            }
+            if (roll_pending(paced.state())) continue;  // stopped at a roll: the inline game is past it
+            EXPECT_GT(rolls, 0);
+            Match at_once(initial);
+            for (const ReplayStep& s : without_rolls(paced.steps())) ASSERT_TRUE(at_once.submit(s.side, s.action).ok());
+            EXPECT_EQ(at_once.state(), paced.state());
+            EXPECT_EQ(at_once.events(), paced.events());
+            EXPECT_EQ(with_roll_steps(initial, at_once.steps()), paced.steps());
+        }
+    }
+}
+
+TEST(D095_Closure, AStateWaitingForEachRollRoundTripsAndTheNewFieldsAreOmittedOtherwise) {
+    const auto round_trip = [](const GameState& gs) { return Json(gs).get<GameState>(); };
+    std::vector<GameState> waiting;
+    {
+        Volley v = fleshborer_volley([](WeaponProfile& p) {
+            p.damage = kD3;
+            p.attacks = kD3;
+        });
+        GameState& gs = v.gs;
+        ScriptedDice dice{std::vector<int>(10, 6)};
+        apply_action_paced(gs, Side::B, v.shoot, dice);
+        waiting.push_back(gs);  // RandomAttacks: rolling, no hits
+        roll(gs, dice);
+        waiting.push_back(gs);  // Hit
+        ScriptedDice hits{std::vector<int>(30, 6)};
+        roll(gs, hits);
+        waiting.push_back(gs);  // Wound: rolling with its hit rolls
+        ScriptedDice wounds{std::vector<int>(30, 6)};
+        roll(gs, wounds);
+        waiting.push_back(gs);  // Save
+        ScriptedDice saves{std::vector<int>(30, 1)};
+        roll(gs, saves);
+        apply_action_paced(gs, Side::A, action::OrderCasualties{gs.units[0].id, wh40k::test::model_ids(gs.units[0])});
+        waiting.push_back(gs);  // Damage: the casualty order held
+        EXPECT_TRUE(gs.flow.attack->current->priority.has_value());
+    }
+    {
+        GameState gs = engaged_marines(2);
+        apply_action_paced(gs, Side::A,
+                           action::StartMove{gs.units[0].id, MoveType::FallBack, FallBackMode::DesperateEscape});
+        waiting.push_back(gs);  // Hazard (Desperate Escape)
+    }
+    {
+        GameState gs = charge_step_state(9.9f);
+        apply_action_paced(gs, Side::A, action::DeclareCharge{gs.units[0].id});
+        waiting.push_back(gs);  // Charge
+    }
+    ASSERT_EQ(waiting.size(), 7u);
+    for (const GameState& gs : waiting) {
+        EXPECT_TRUE(roll_pending(gs));
+        EXPECT_EQ(round_trip(gs), gs) << describe(gs, *gs.pending);
+    }
+    EXPECT_TRUE(Json(waiting[1]).at("flow").at("attack").contains("rolling"));
+    EXPECT_TRUE(Json(waiting[2]).at("flow").at("attack").at("rolling").contains("hits"));
+    EXPECT_TRUE(Json(waiting[4]).at("flow").at("attack").at("current").contains("priority"));
+    // No roll waiting: none of the new fields is written.
+    GameState none = wh40k::test::shoot_step_state();
+    const std::string text = Json(none).dump();
+    EXPECT_EQ(text.find("rolling"), std::string::npos);
+    EXPECT_EQ(text.find("priority"), std::string::npos);
+    EXPECT_EQ(text.find("battle_shock_tests"), std::string::npos);
+    GameState shock = wh40k::test::load_v1_scenario();
+    shock.flow.battle_shock_tests = {UnitId{2}};
+    EXPECT_EQ(round_trip(shock), shock);
+}
+
+// ---- The M94 replay: tests/replays/m94_paced_rolls.json (format 2, every kind of roll a step of its own) ----
+
+namespace {
+
+constexpr std::uint64_t kM94Seed = 1;  // picked by D095_Replay.DISABLED_SearchM94Seed
+
+// The milestone's replay, played through a paced match: each roll is a RollDice step answered by its roller. `ok` says
+// whether the seed shows what the replay is about (every kind of roll, a Desperate Escape, and the stop at Side A's
+// second-round Advance); `problem`, the first refused step.
+Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.format = kReplayFormatRollsRecorded;
+    r.description =
+        "M94 (D-095): engine-paced dice rolls, every roll a RollDice step answered by its roller. The V1 scenario with "
+        "4 of the 10 Termagants (below half-strength), 1\" from the Intercessors (engaged), their fleshborers a "
+        "stand-in A D3, D D3 and [HAZARDOUS]. Round 1, Side A: the Intercessors make a Desperate Escape (09.07): Side A "
+        "makes its hazard rolls before the move and its battle-shock roll after it, then passes. Side B: the "
+        "Termagants' battle-shock roll in the Battle-shock step (08.03); they remain stationary and fire every "
+        "fleshborer at the Intercessors: Side B rolls the random A (D-069), the hit and wound rolls, Side A the save "
+        "rolls (05.03) and orders its casualties (D-013), Side B the damage rolls (05.04, once per batch) and then its "
+        "hazard rolls (24.15). The Termagants declare a charge and make the charge roll (11.02), then no charge move. "
+        "Round 2, Side A: any battle-shock roll, then the Intercessors Advance (09.06). Stops at Side A's move of the "
+        "advancing models. Casualties in unit order.";
+    GameState init = wh40k::test::load_v1_scenario();
+    init.units[1].models.resize(4);
+    const float gap = mm_to_inches(*unit_distance(init.units[0], init.units[1]));
+    for (Model& m : init.units[1].models) {
+        m.position.y -= in(gap - 1.0f);
+        WeaponProfile& p = m.weapons[0].profiles[0];
+        p.attacks = kD3;
+        p.damage = kD3;
+        p.abilities.push_back(ability::Hazardous{});
+    }
+    init.dice = DiceState{seed, 0};
+    r.initial.state = init;
+    Match match(init, RollMode::Paced);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed) return;
+        const ValidationResult v = match.submit(decider(match.state()), a);
+        if (!v.ok()) {
+            failed = true;
+            problem = v.reasons.front();
+        }
+    };
+    // Neutral answers (rolls made, casualties in unit order, steps ended) until `done`.
+    auto play_until = [&](auto done) {
+        for (int i = 0; i < 300 && !failed && match.state().pending && !done(match.state()); ++i) {
+            act(wh40k::test::neutral_action(match.state()));
+        }
+    };
+    const UnitId marines = init.units[0].id;
+    const UnitId gants = init.units[1].id;
+    // Round 1, Side A: a Desperate Escape, 3" south.
+    act(action::StartMove{marines, MoveType::FallBack, FallBackMode::DesperateEscape});
+    play_until([](const GameState& gs) { return gs.pending && std::holds_alternative<decision::MoveModels>(gs.pending->kind); });
+    for (const Model& m : match.state().units[0].models) {
+        const Position s = *move_start_position(match.state(), m.id);
+        act(action::ProposeModelMove{m.id, {Position{s.x, s.y - in(3), 0.0f}}});
+    }
+    act(action::CommitUnitMove{});
+    // Side B's turn: its Battle-shock step, then the volley.
+    play_until([](const GameState& gs) {
+        return gs.flow.stage == Stage::Shoot && turn_side(gs) == Side::B && !roll_pending(gs);
+    });
+    if (!failed) {
+        action::Shoot volley{gants, ShootingType::Normal, {}};
+        for (const Model& m : match.state().units[1].models) {
+            volley.shots.push_back(ShotDeclaration{m.id, 0, 0, marines});
+        }
+        act(volley);
+    }
+    play_until([](const GameState& gs) { return gs.flow.stage == Stage::Charge && !roll_pending(gs); });
+    if (!failed && match.state().flow.stage == Stage::Charge) {
+        const auto legal = legal_actions(match.state(), Side::B);
+        if (std::find(legal.begin(), legal.end(), GameAction{action::DeclareCharge{gants}}) == legal.end()) return r;
+        act(action::DeclareCharge{gants});
+        play_until([](const GameState& gs) { return !roll_pending(gs); });
+        if (!failed && match.state().pending &&
+            std::holds_alternative<decision::SelectChargeTargets>(match.state().pending->kind)) {
+            act(action::SkipChargeMove{gants});
+        }
+    }
+    // Round 2, Side A: on to its Move Units step, then an Advance.
+    play_until([](const GameState& gs) {
+        return gs.flow.battle_round == 2 && gs.pending && std::holds_alternative<decision::MoveUnits>(gs.pending->kind);
+    });
+    if (failed || !match.state().pending || turn_side(match.state()) != Side::A) return r;
+    act(action::StartMove{marines, MoveType::Advance, std::nullopt});
+    play_until([](const GameState& gs) { return !roll_pending(gs); });
+    r.steps = match.steps();
+    r.expect = replay_expectation(match.state());
+    std::vector<RollKind> kinds;
+    for (const ReplayStep& s : r.steps) {
+        if (const auto* roll = std::get_if<action::RollDice>(&s.action)) kinds.push_back(roll->roll);
+    }
+    const auto has = [&](RollKind k) { return std::find(kinds.begin(), kinds.end(), k) != kinds.end(); };
+    ok = !failed && has(RollKind::Advance) && has(RollKind::Charge) && has(RollKind::BattleShock) &&
+         has(RollKind::Hazard) && has(RollKind::RandomAttacks) && has(RollKind::Hit) && has(RollKind::Wound) &&
+         has(RollKind::Save) && has(RollKind::Damage) && match.state().pending &&
+         std::holds_alternative<decision::MoveModels>(match.state().pending->kind);
+    return r;
+}
+
+const std::filesystem::path kM94Replay = kReplayDir / "m94_paced_rolls.json";
+
+}  // namespace
+
+TEST(D095_Replay, ThePacedRollsReplayAnswersEveryKindOfRollAsAStep) {
+    const Replay saved = load_replay(kM94Replay);
+    EXPECT_EQ(saved.format, kReplayFormatRollsRecorded);
+    const ReplayResult run = run_replay(saved, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    EXPECT_EQ(replay_expectation(run.final_state), saved.expect);
+    // Every kind of roll, each made by the controlling player of the unit it is for (the target's for a save, 05.03);
+    // the Desperate Escape's two kinds of roll.
+    std::vector<RollKind> kinds;
+    for (const ReplayStep& s : saved.steps) {
+        if (const auto* roll = std::get_if<action::RollDice>(&s.action)) {
+            kinds.push_back(roll->roll);
+            EXPECT_EQ(s.side, run.final_state.find_unit(roll->unit)->side) << roll_kind_name(roll->roll);
+            if (roll->roll == RollKind::Save) EXPECT_EQ(s.side, Side::A);  // the Termagants' volley: the defender rolls
+        }
+    }
+    for (const RollKind k : {RollKind::Advance, RollKind::Charge, RollKind::BattleShock, RollKind::Hazard,
+                             RollKind::RandomAttacks, RollKind::Hit, RollKind::Wound, RollKind::Save, RollKind::Damage}) {
+        EXPECT_NE(std::find(kinds.begin(), kinds.end(), k), kinds.end()) << roll_kind_name(k);
+    }
+    EXPECT_EQ(saved.steps[0].action,
+              (GameAction{action::StartMove{UnitId{1}, MoveType::FallBack, FallBackMode::DesperateEscape}}));
+    EXPECT_EQ(saved.steps[1].action, (GameAction{action::RollDice{RollKind::Hazard, UnitId{1}}}));
+    // The same game with every roll made inside its step (format 1): the same events and state.
+    Replay at_once = saved;
+    at_once.format = kReplayFormatRollsInline;
+    at_once.steps = without_rolls(saved.steps);
+    const ReplayResult inline_run = run_replay(at_once, repo_root());
+    ASSERT_TRUE(inline_run.ok());
+    EXPECT_EQ(inline_run.events, run.events);
+    EXPECT_EQ(inline_run.final_state, run.final_state);
+    // The file is what the builder plays now.
+    bool ok = false;
+    std::string problem;
+    const Replay again = m94_replay(kM94Seed, ok, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));
+}
+
+TEST(D095_Replay, DISABLED_SearchM94Seed) {
+    for (std::uint64_t seed = 1; seed <= 60; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m94_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M94 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
+    ADD_FAILURE() << "no seed in 1..60";
+}
+
+// Writes tests/replays/m94_paced_rolls.json. Run on purpose only:
+//   wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D095_Replay.DISABLED_RegenerateM94Replay
+TEST(D095_Replay, DISABLED_RegenerateM94Replay) {
+    bool ok = false;
+    std::string problem;
+    const Replay r = m94_replay(kM94Seed, ok, problem);
+    ASSERT_TRUE(problem.empty()) << problem;
+    ASSERT_TRUE(ok);
+    const ReplayResult run = run_replay(r, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    save_replay(r, kM94Replay);
+}
+
+// ---- Format 1 (every roll inside its step) still loads; with_roll_steps makes it format 2 ----
+
+TEST(D095_Replays, AFormatOneReplayStillRunsAndConvertsToItsFormatTwoFile) {
+    // tests/data/legacy/ keeps two replays as M93 wrote them (format 1). Each runs as before (every roll inside its
+    // step), and with_roll_steps turns it into exactly the regenerated file.
+    for (const std::string name : {"m8_shooting", "m62_random_characteristics"}) {
+        SCOPED_TRACE(name);
+        const Replay legacy = load_replay(repo_root() / "tests/data/legacy" / (name + "_format1.json"));
+        EXPECT_EQ(legacy.format, kReplayFormatRollsInline);
+        const ReplayResult run = run_replay(legacy, repo_root());
+        ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+        EXPECT_EQ(replay_expectation(run.final_state), legacy.expect);
+        const Replay current = load_replay(kReplayDir / (name + ".json"));
+        EXPECT_EQ(current.format, kReplayFormatRollsRecorded);
+        EXPECT_EQ(Json(with_roll_steps(legacy, repo_root())).dump(2), Json(current).dump(2));
+        EXPECT_EQ(with_roll_steps(current, repo_root()), current);  // format 2: as it is
+    }
+}
+
+TEST(D095_Replays, AnUnknownFormatIsRefusedAndARollStepCantStandInAFormatOneReplay) {
+    Json j = Json(load_replay(kReplayDir / "m8_shooting.json"));
+    j["format"] = 3;
+    EXPECT_THROW((void)j.get<Replay>(), DataError);
+    // Format 1 makes every roll inside its step: a RollDice step there answers nothing (05.01: no roll is waiting).
+    Replay r = load_replay(kReplayDir / "m8_shooting.json");
+    r.format = kReplayFormatRollsInline;
+    const ReplayResult run = run_replay(r, repo_root());
+    ASSERT_FALSE(run.ok());
+    EXPECT_TRUE(std::holds_alternative<action::RollDice>(r.steps.at(*run.failed_step).action));
 }

@@ -28,7 +28,7 @@
     "result": null,
     "stage": "Consolidate"
   },
-  "format": 1,
+  "format": 2,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -660,6 +660,14 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Charge",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "StartChargeMove",
         "targets": [
           1
@@ -754,12 +762,36 @@
     },
     {
       "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "indices": [
           0
         ],
         "kind": "RerollWoundRolls"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 1
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -772,6 +804,30 @@
           5
         ],
         "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
+        "unit": 2
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Save",
+        "unit": 1
       },
       "side": "A"
     },
@@ -822,6 +878,22 @@
           }
         ],
         "kind": "Fight",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Hit",
+        "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "RollDice",
+        "roll": "Wound",
         "unit": 1
       },
       "side": "A"
