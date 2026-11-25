@@ -5,7 +5,10 @@
 // casualties (opposing player, 05.04 via D-013). D-093 (04.03.03) re-targets or drops batches whose target is gone. Once every batch
 // is resolved, the attacking unit makes its [HAZARDOUS] hazard rolls (24.15, 06.03) and its player allocates the
 // mortal wounds (06.02, OrderCasualties for the attacking unit; D-071). A [TWIN-LINKED] batch with a failed wound roll
-// waits for its attacker's RerollWoundRolls answer (24.38, D-011, D-072).
+// waits for its attacker's RerollWoundRolls answer (24.38, D-011, D-072). D-095 (M94): each roll waits for its roller
+// (a RollDice): a batch's random A, hit and wound rolls (the attacking unit's player), its save rolls (the opposing
+// player's), its random D's damage rolls (the attacking unit's player, once per batch, after the casualty order) and
+// the [HAZARDOUS] hazard rolls.
 
 #include <vector>
 

@@ -59,7 +59,8 @@ page, unzip the whole folder and run `VibeHammer.exe`. If SmartScreen warns you,
 
 Follow the decision panel at the top of the screen. Click the board to pick units, targets and casualties,
 and drag models to move them. While you drag a model on an oval base (the Tyrannofex), Q and E turn it 15°
-and Shift+mouse wheel turns it 5°. Every roll shows in a dice pop-up. The event log cites the rule number
+and Shift+mouse wheel turns it 5°. Every roll shows in a dice pop-up, and you make your own rolls: each waits for
+you to press Roll (with "Show dice pop-ups" off, they are made for you). The event log cites the rule number
 behind each step.
 
 ## What's implemented

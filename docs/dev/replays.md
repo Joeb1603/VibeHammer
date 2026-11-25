@@ -25,6 +25,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M87_Replay.DISABLED_RegenerateObjectivesBotGameReplay
 # and m91_bot_game.json (the terrain scenario, seed 6, the bot with the five M91 features on) (M91):
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M91_Replay.DISABLED_RegenerateM91BotGameReplay
+# m94_paced_rolls.json (every kind of roll a step of its own, seed 1) comes from wh40k_tests (M94):
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D095_Replay.DISABLED_RegenerateM94Replay
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -70,3 +72,15 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   `m90_objective_consolidation.json` (its setup 5" further north, so the Terminators start within range of the Centre
   marker and consolidate staying within range; for a marker "within 3" of the objective" is being within range). Every
   other replay stayed byte-identical; the terrain scenario's bot games did not change (`gone_to_ground` defaults to 0).
+- M94 (D-095): **format 2.** Every dice roll is a `RollDice` decision of its roller's, and a format-2 replay records
+  each one as a step (`run_replay` plays it paced: `start_game_paced`, `apply_action_paced`); format 1 (every roll made
+  inside the step that leads to it) still runs inline. All 28 replays were regenerated on purpose as format 2, with
+  their description, initial state and `expect` block unchanged and the same steps once the 1009 roll steps are taken
+  out (a script checked each file against `git show HEAD:`). The core builders still script the players' choices with
+  the rolls inline; `save_if_clean` writes them through `with_roll_steps`, and the "the file is what the builder plays
+  now" checks and every `TheSavedFileMatchesTheGame` compare both sides as format 2. Code that re-applies a file's
+  steps follows its format (`M88_Replay`). `m94_paced_rolls.json` (`D095_Replay`) answers every kind of roll, a
+  Desperate Escape's hazard and battle-shock rolls among them, and is checked against the same game played inline.
+  `tests/data/legacy/` keeps `m8_shooting` and `m62_random_characteristics` as M93 wrote them (format 1) and an M93
+  save: `D095_Replays` and `M94_Saves` load them. `D095_Closure.DISABLED_DumpReplayEvents` (with
+  `WH40K_EVENT_DUMP_DIR`) writes every replay's events and final state: the M93 and M94 dumps were byte-identical.
