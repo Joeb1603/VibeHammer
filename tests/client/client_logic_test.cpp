@@ -1440,15 +1440,19 @@ TEST(M13_Undo, UndoRebuildsTheGameWithoutTheLastAction) {
     GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 5);
     EXPECT_FALSE(s.can_undo());
     std::vector<GameState> states{s.state()};
+    // M94 (D-095): an action and the rolls the session then made for it are one undo; the history's size after each
+    // action, its rolls included.
+    std::vector<std::size_t> sizes{s.history().size()};
     int move_tries = 0;
     for (int i = 0; i < 30 && s.pending(); ++i) {
         ASSERT_TRUE(s.submit(choose(s, move_tries)).ok());
         states.push_back(s.state());
+        sizes.push_back(s.history().size());
     }
     for (std::size_t i = states.size() - 1; i > 0; --i) {
         ASSERT_TRUE(s.undo());
         EXPECT_EQ(s.state(), states[i - 1]) << "after undoing to step " << i - 1;  // dice included
-        EXPECT_EQ(s.history().size(), i - 1);
+        EXPECT_EQ(s.history().size(), sizes[i - 1]);
     }
     EXPECT_FALSE(s.undo());
 }

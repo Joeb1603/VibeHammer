@@ -212,7 +212,7 @@ ValidationResult validate_move_type(const GameState& state, const Unit& u, const
     return ValidationResult::success();
 }
 
-void begin_move(GameState& state, const action::StartMove& a, DiceSource& dice, Events& events) {
+void begin_move(GameState& state, const action::StartMove& a, DiceSource&, Events& events) {
     Unit& u = *state.find_unit(a.unit);
     events.push_back(event::MoveStarted{u.id, a.move_type, a.fall_back_mode});
 
@@ -221,22 +221,12 @@ void begin_move(GameState& state, const action::StartMove& a, DiceSource& dice, 
     mv.type = a.move_type;
     mv.mode = a.fall_back_mode;
 
-    if (a.move_type == MoveType::Advance) {
-        // 09.06 Before Moving: advance roll. D-005: a roll already made this phase is reused.
-        const bool reused = u.phase_flags.advance_roll.has_value();
-        if (!reused) {
-            u.phase_flags.advance_roll = dice.roll_d6();
-        }
-        events.push_back(event::AdvanceRolled{u.id, *u.phase_flags.advance_roll, reused});
+    if (a.move_type == MoveType::Advance && u.phase_flags.advance_roll) {
+        // 09.06 Before Moving: D-005: an advance roll already made this phase is reused (no roll is made).
+        events.push_back(event::AdvanceRolled{u.id, *u.phase_flags.advance_roll, true});
     }
-    if (a.move_type == MoveType::FallBack && a.fall_back_mode == FallBackMode::DesperateEscape &&
-        !u.phase_flags.desperate_escape_hazards_made) {
-        // 09.07 Before Moving: a hazard roll for each model (06.03). D-005: made once per phase.
-        const HazardRolls rolls = make_hazard_rolls(dice, u, static_cast<int>(u.models.size()));
-        u.phase_flags.desperate_escape_hazards_made = true;
-        events.push_back(event::HazardRollsMade{u.id, rolls});
-        mv.pending_mortal_wounds = rolls.mortal_wounds;
-    }
+    // D-095 (M94): a new advance roll (09.06) and a Desperate Escape's hazard rolls (09.07) wait for the unit's player
+    // (move_decision; make_advance_roll, make_desperate_escape_hazard_rolls).
     for (const Model& m : u.models) {
         mv.starts.push_back(ModelStart{m.id, m.position, m.facing_deg});
     }
@@ -246,12 +236,22 @@ void begin_move(GameState& state, const action::StartMove& a, DiceSource& dice, 
 
 // ---- D-095 (M94): the rolls a move waits for ----
 
-void make_advance_roll(GameState&, DiceSource&, Events&) {
-    throw std::logic_error("D-095: the advance roll is not paced yet");
+// 09.06 Before Moving: the advance roll (D6), added to the unit's Move for this move; it stands for the phase (D-005).
+void make_advance_roll(GameState& state, DiceSource& dice, Events& events) {
+    Unit& u = *state.find_unit(move_of(state).unit);
+    u.phase_flags.advance_roll = dice.roll_d6();
+    events.push_back(event::AdvanceRolled{u.id, *u.phase_flags.advance_roll, false});
 }
 
-void make_desperate_escape_hazard_rolls(GameState&, DiceSource&, Events&) {
-    throw std::logic_error("D-095: the Desperate Escape hazard rolls are not paced yet");
+// 09.07 Before Moving: Desperate Escape: a hazard roll for each model (06.03), made once per phase (D-005); the mortal
+// wounds are then allocated by the unit's player (06.02, move_decision).
+void make_desperate_escape_hazard_rolls(GameState& state, DiceSource& dice, Events& events) {
+    MoveInProgress& mv = move_of(state);
+    Unit& u = *state.find_unit(mv.unit);
+    const HazardRolls rolls = make_hazard_rolls(dice, u, static_cast<int>(u.models.size()));
+    u.phase_flags.desperate_escape_hazards_made = true;
+    events.push_back(event::HazardRollsMade{u.id, rolls});
+    mv.pending_mortal_wounds = rolls.mortal_wounds;
 }
 
 // ---- the sub-machine ----
@@ -261,6 +261,13 @@ std::optional<PendingDecision> move_decision(const GameState& state) {
     const Unit& u = *state.find_unit(mv.unit);
     if (is_destroyed(u)) {
         return std::nullopt;  // the move ends (move_progress)
+    }
+    // D-095 (M94): the rolls made Before Moving wait for the unit's player.
+    if (mv.type == MoveType::Advance && !u.phase_flags.advance_roll) {
+        return PendingDecision{u.side, decision::RollDice{RollKind::Advance, u.id}};  // 09.06
+    }
+    if (mv.mode == FallBackMode::DesperateEscape && !u.phase_flags.desperate_escape_hazards_made) {
+        return PendingDecision{u.side, decision::RollDice{RollKind::Hazard, u.id}};  // 09.07 (06.03)
     }
     if (mv.pending_mortal_wounds > 0) {
         // 06.02 Select Model, answered once (D-013). Every mortal wound selects a model, so the player is
@@ -454,7 +461,7 @@ ValidationResult validate_details(const GameState&, Side, const action::CommitUn
     return ValidationResult::success();  // always possible; failing end conditions revert the move (03.01)
 }
 
-void apply_details(GameState& state, Side, const action::CommitUnitMove&, DiceSource& dice, Events& events) {
+void apply_details(GameState& state, Side, const action::CommitUnitMove&, DiceSource&, Events& events) {
     std::vector<std::string> problems = move_end_problems(state);
     if (!problems.empty()) {
         revert_move(state, std::move(problems), events);  // 03.01: the unit cannot make that move
@@ -482,10 +489,9 @@ void apply_details(GameState& state, Side, const action::CommitUnitMove&, DiceSo
         return;
     }
     if (mv.mode == FallBackMode::DesperateEscape && !u.battle_shocked) {
-        // 09.07 After Moving: Desperate Escape battle-shock roll (01.07; one roll, D-015).
-        const BattleShockRoll roll = make_battle_shock_roll(dice, u);
-        apply_battle_shock_roll(u, roll);
-        events.push_back(event::BattleShockRolled{u.id, roll});
+        // 09.07 After Moving: Desperate Escape battle-shock roll (01.07; one roll, D-015). D-095 (M94): it waits for the
+        // unit's player once the move is over (FlowState::battle_shock_tests).
+        state.flow.battle_shock_tests.push_back(u.id);
     }
     finish_move(state);
 }
@@ -515,7 +521,8 @@ std::optional<float> max_move_distance_mm(const GameState& state, ModelId model)
     if (mv.type == MoveType::PileIn) return inches_to_mm(kPileInDistanceInches);                // 12.03
     if (mv.type == MoveType::Consolidation) return inches_to_mm(kConsolidationDistanceInches);  // 12.08
     float max = *m->characteristics.move_mm;  // 09.05 / 09.07: M
-    if (mv.type == MoveType::Advance && u->phase_flags.advance_roll) {
+    if (mv.type == MoveType::Advance) {
+        if (!u->phase_flags.advance_roll) return std::nullopt;  // D-095: the advance roll waits to be made
         max += inches_to_mm(static_cast<float>(*u->phase_flags.advance_roll));  // 09.06: advance roll + M
     }
     return max;

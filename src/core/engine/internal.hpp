@@ -74,8 +74,11 @@ void apply_details(GameState& state, Side side, const action::EndChargeStep& a, 
 
 // ---- command.cpp: 08 Command phase, 03.03 Regaining Coherency ----
 
-void gain_core_cp(GameState& state, Events& events);                           // 08.02
-void battle_shock_step(GameState& state, DiceSource& dice, Events& events);    // 08.03
+void gain_core_cp(GameState& state, Events& events);  // 08.02
+// 08.03: the battle-shock rolls the step owes, one per unit that must make one (FlowState::battle_shock_tests, D-095).
+void battle_shock_step(GameState& state);
+// D-095 (M94): the battle-shock roll owed first (08.03, or 09.07 after a Desperate Escape), for its unit's player.
+[[nodiscard]] std::optional<PendingDecision> battle_shock_decision(const GameState& state);
 // 03.03: the End of Turn step's decision while a unit on the battlefield is not in coherency.
 [[nodiscard]] std::optional<PendingDecision> coherency_decision(const GameState& state);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RestoreCoherency& d);

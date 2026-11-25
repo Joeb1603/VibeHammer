@@ -16,7 +16,8 @@
 namespace wh40k::core {
 
 // The maximum distance `model` may move in the move in progress (its M, plus the advance roll for an
-// Advance move; Rules Appendix: Different Move Characteristics). nullopt if the model isn't moving.
+// Advance move; Rules Appendix: Different Move Characteristics). nullopt if the model isn't moving, or (D-095) while
+// its Advance roll waits to be made.
 [[nodiscard]] std::optional<float> max_move_distance_mm(const GameState& state, ModelId model);
 
 // The position `model` started the move in progress from. nullopt if the model isn't moving.
