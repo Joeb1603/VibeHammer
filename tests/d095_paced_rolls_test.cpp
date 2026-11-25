@@ -14,6 +14,7 @@
 #include "core/engine/movement.hpp"
 #include "core/engine/replay.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/model/keywords.hpp"
 #include "core/serialization/engine_json.hpp"
 #include "core/serialization/json.hpp"
 #include "support/engine_helpers.hpp"
@@ -356,4 +357,229 @@ TEST(D095_Closure, TheBattleShockStepRollsAsBefore) {
     // EndChargeStep: the Fight phase, the end of the turn, then Side B's Command phase and its rolls.
     EXPECT_EQ(expect_closure(gs, Side::A, action::EndChargeStep{}, {6, 6, 1, 1}),
               (std::vector<RollKind>{RollKind::BattleShock, RollKind::BattleShock}));
+}
+
+// ---- 04.03 random A (D-069), 05.01 hit, 05.02 wound, 05.03 save, 05.04 damage rolls; 24.15 hazard rolls ----
+
+namespace {
+
+// Side B's Shoot step in V1 (the Termagants 1" closer) and the Shoot action firing all ten fleshborers at the
+// Intercessors, each fleshborer changed by `change`. Fleshborer: BS4+, S5 against T4, AP0 against Sv3+, D1.
+struct Volley {
+    GameState gs;
+    action::Shoot shoot;
+};
+template <typename Change>
+Volley fleshborer_volley(Change change) {
+    Volley v{wh40k::test::shoot_step_state(Side::B), {}};
+    for (Model& m : v.gs.units[1].models) change(m.weapons[0].profiles[0]);
+    v.shoot = action::Shoot{v.gs.units[1].id, ShootingType::Normal, {}};
+    for (const Model& m : v.gs.units[1].models) {
+        v.shoot.shots.push_back(ShotDeclaration{m.id, 0, 0, v.gs.units[0].id});
+    }
+    return v;
+}
+Volley fleshborer_volley() {
+    return fleshborer_volley([](WeaponProfile&) {});
+}
+
+const DiceExpr kD3{1, 3, 0};
+
+}  // namespace
+
+TEST(D095_RollPoints, AnAttacksRollsWaitForTheirRollersInTurn) {
+    // Hit and wound rolls are the attacking unit's player's (Side B); save rolls the opposing player's (Side A, 05.03);
+    // a random D's damage rolls the attacking unit's player's again (D-069), after the casualty order (D-013).
+    Volley v = fleshborer_volley([](WeaponProfile& p) { p.damage = kD3; });
+    GameState& gs = v.gs;
+    const UnitId marines = gs.units[0].id;
+    const UnitId gants = gs.units[1].id;
+    ScriptedDice none{std::vector<int>{}};
+    const auto shot = apply_action_paced(gs, Side::B, v.shoot, none);
+    EXPECT_EQ(none.consumed(), 0u);
+    EXPECT_EQ(events_of<event::AttackBatchSelected>(shot).size(), 1u);  // gathered: no random A
+    EXPECT_TRUE(events_of<event::HitRollsMade>(shot).empty());
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Hit, gants}}));
+    EXPECT_EQ(decision_rule(gs, *gs.pending), "05.01");
+    RollDiceInfo info = roll_dice_info(gs).value();
+    EXPECT_EQ(info.dice, 10);
+    EXPECT_EQ(info.target, marines);
+
+    ScriptedDice hits{6, 6, 6, 1, 1, 1, 1, 1, 1, 1};
+    const auto hit = roll(gs, hits);
+    EXPECT_EQ(hits.consumed(), 10u);
+    ASSERT_EQ(events_of<event::HitRollsMade>(hit).size(), 1u);
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Wound, gants}}));
+    EXPECT_EQ(roll_dice_info(gs)->dice, 3);
+
+    ScriptedDice wounds{6, 6, 6};
+    const auto wound = roll(gs, wounds);
+    ASSERT_EQ(events_of<event::WoundRollsMade>(wound).size(), 1u);
+    // One allocation group (05.03): its order is declared without asking; the save rolls are the defender's.
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::A, decision::RollDice{RollKind::Save, marines}}));
+    EXPECT_EQ(decision_rule(gs, *gs.pending), "05.03");
+    info = roll_dice_info(gs).value();
+    EXPECT_EQ(info.roller, Side::A);
+    EXPECT_EQ(info.dice, 3);
+    EXPECT_EQ(info.target, marines);
+
+    ScriptedDice saves{1, 1, 1};
+    const auto saved = roll(gs, saves);
+    ASSERT_EQ(events_of<event::SaveRollsMade>(saved).size(), 1u);
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::A, decision::OrderCasualties{marines}}));
+    apply_action_paced(gs, Side::A, action::OrderCasualties{marines, wh40k::test::model_ids(gs.units[0])}, none);
+    EXPECT_EQ(none.consumed(), 0u);
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Damage, gants}}));
+    EXPECT_EQ(decision_rule(gs, *gs.pending), "05.04");
+    info = roll_dice_info(gs).value();
+    EXPECT_EQ(info.expression, "D3");
+    EXPECT_EQ(info.dice, 3);  // three attacks inflict damage (the preview: each D3 at its maximum, D-069)
+    EXPECT_EQ(info.target, marines);
+    EXPECT_EQ(compute_decision(gs), gs.pending);
+
+    ScriptedDice damage{6, 6, 6};  // D3 = 3 each: three W2 Intercessors destroyed
+    const auto resolved = roll(gs, damage);
+    EXPECT_EQ(damage.consumed(), 3u);
+    ASSERT_EQ(events_of<event::SavesResolved>(resolved).size(), 1u);
+    EXPECT_EQ(events_of<event::ModelDestroyed>(resolved).size(), 3u);
+    EXPECT_EQ(gs.units[0].models.size(), 2u);
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::Shoot{}}));
+}
+
+TEST(D095_RollPoints, AFixedDamageAsksForNoDamageRoll) {
+    Volley v = fleshborer_volley();
+    GameState& gs = v.gs;
+    const UnitId marines = gs.units[0].id;
+    ScriptedDice dice{6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 1, 1, 1};
+    apply_action_paced(gs, Side::B, v.shoot, dice);
+    roll(gs, dice);  // hits
+    roll(gs, dice);  // wounds
+    roll(gs, dice);  // saves
+    ASSERT_EQ(gs.pending, (PendingDecision{Side::A, decision::OrderCasualties{marines}}));
+    const auto resolved =
+        apply_action_paced(gs, Side::A, action::OrderCasualties{marines, wh40k::test::model_ids(gs.units[0])}, dice);
+    EXPECT_EQ(dice.remaining(), 0u);
+    ASSERT_EQ(events_of<event::SavesResolved>(resolved).size(), 1u);
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::Shoot{}}));
+}
+
+TEST(D095_RollPoints, NoHitRollForTorrentAndNoWoundRollWithoutHits) {
+    // [TORRENT] hits automatically (24.37): its hit rolls are made at once, with no dice, and the wound rolls wait.
+    {
+        Volley v = fleshborer_volley([](WeaponProfile& p) { p.abilities.push_back(ability::Torrent{}); });
+        ScriptedDice none{std::vector<int>{}};
+        const auto shot = apply_action_paced(v.gs, Side::B, v.shoot, none);
+        EXPECT_EQ(none.consumed(), 0u);
+        ASSERT_EQ(events_of<event::HitRollsMade>(shot).size(), 1u);
+        EXPECT_EQ(events_of<event::HitRollsMade>(shot)[0].rolls.hits(), 10);
+        EXPECT_EQ(v.gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Wound, v.gs.units[1].id}}));
+    }
+    // No hits: the wound rolls are made at once (none), with their required roll, and the attacks are over.
+    {
+        Volley v = fleshborer_volley();
+        ScriptedDice dice{1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+        apply_action_paced(v.gs, Side::B, v.shoot, dice);
+        const auto missed = roll(v.gs, dice);
+        const auto wounds = events_of<event::WoundRollsMade>(missed);
+        ASSERT_EQ(wounds.size(), 1u);
+        EXPECT_TRUE(wounds[0].rolls.rolls.empty());
+        EXPECT_EQ(wounds[0].rolls.required, 4);  // S4 against T4 (05.02)
+        EXPECT_EQ(v.gs.pending, (PendingDecision{Side::B, decision::Shoot{}}));
+    }
+}
+
+TEST(D095_RollPoints, ARandomAIsRolledWhenTheBatchIsGathered) {
+    // D-069: the batch's random A (one D3 per fleshborer here) waits for the attacking unit's player; the batch is
+    // announced once gathered, then its hit rolls wait.
+    Volley v = fleshborer_volley([](WeaponProfile& p) { p.attacks = kD3; });
+    GameState& gs = v.gs;
+    const UnitId gants = gs.units[1].id;
+    ScriptedDice none{std::vector<int>{}};
+    const auto shot = apply_action_paced(gs, Side::B, v.shoot, none);
+    EXPECT_TRUE(events_of<event::AttackBatchSelected>(shot).empty());
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::RandomAttacks, gants}}));
+    EXPECT_EQ(decision_rule(gs, *gs.pending), "04.03");
+    const RollDiceInfo info = roll_dice_info(gs).value();
+    EXPECT_EQ(info.dice, 10);
+    EXPECT_EQ(info.expression, "D3");
+    ScriptedDice attacks{1, 1, 1, 1, 1, 1, 1, 1, 1, 6};  // nine 1s (D3 = 1) and a 6 (D3 = 3): 12 attack dice
+    const auto gathered = roll(gs, attacks);
+    ASSERT_EQ(events_of<event::AttackDiceRolled>(gathered).size(), 1u);
+    const auto selected = events_of<event::AttackBatchSelected>(gathered);
+    ASSERT_EQ(selected.size(), 1u);
+    EXPECT_EQ(selected[0].attack_dice, 12);
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Hit, gants}}));
+    EXPECT_EQ(roll_dice_info(gs)->dice, 12);
+}
+
+TEST(D095_RollPoints, HazardRollsWaitAfterTheAttacksUnlessNoEnemyIsLeft) {
+    // 24.15: ten [HAZARDOUS] fleshborers (one batch): after the attacks, their hazard rolls (one per weapon, made
+    // together) wait for the attacking unit's player.
+    const auto hazardous = [](WeaponProfile& p) { p.abilities.push_back(ability::Hazardous{}); };
+    {
+        Volley v = fleshborer_volley(hazardous);
+        GameState& gs = v.gs;
+        ScriptedDice misses{1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+        apply_action_paced(gs, Side::B, v.shoot, misses);
+        roll(gs, misses);  // every hit roll fails: the attacks are over
+        EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Hazard, gs.units[1].id}}));
+        EXPECT_EQ(decision_rule(gs, *gs.pending), "24.15");
+        EXPECT_EQ(roll_dice_info(gs)->dice, 10);
+        ScriptedDice hazard{1, 6, 6, 6, 6, 6, 6, 6, 6, 6};  // one fails: a mortal wound for Side B to allocate (06.02)
+        const auto rolled = roll(gs, hazard);
+        ASSERT_EQ(events_of<event::HazardRollsMade>(rolled).size(), 1u);
+        EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::OrderCasualties{gs.units[1].id}}));
+    }
+    // D-071: none is made once no enemy model is left.
+    {
+        Volley v = fleshborer_volley(hazardous);
+        v.gs.units[0].models.resize(1);
+        GameState& gs = v.gs;
+        const UnitId marines = gs.units[0].id;
+        ScriptedDice dice{6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 1, 1, 1};
+        apply_action_paced(gs, Side::B, v.shoot, dice);
+        roll(gs, dice);  // hits
+        roll(gs, dice);  // wounds
+        roll(gs, dice);  // saves
+        apply_action_paced(gs, Side::A, action::OrderCasualties{marines, wh40k::test::model_ids(gs.units[0])}, dice);
+        EXPECT_TRUE(is_destroyed(gs.units[0]));
+        EXPECT_FALSE(roll_pending(gs));
+        EXPECT_EQ(gs.flow.stage, Stage::GameOver);  // D-007
+    }
+}
+
+TEST(D095_RollPoints, ATwinLinkedBatchsWoundRollIsMadeBeforeItsRerollsAreChosen) {
+    Volley v = fleshborer_volley([](WeaponProfile& p) { p.abilities.push_back(ability::TwinLinked{}); });
+    GameState& gs = v.gs;
+    ScriptedDice dice{6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 6, 1, 1};
+    apply_action_paced(gs, Side::B, v.shoot, dice);
+    roll(gs, dice);  // hits
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Wound, gs.units[1].id}}));
+    roll(gs, dice);  // wounds: two fail
+    EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RerollWoundRolls{gs.units[1].id}}));
+}
+
+TEST(D095_Closure, AnAttacksRollsAreMadeAsBefore) {
+    {
+        const Volley v = fleshborer_volley([](WeaponProfile& p) { p.damage = kD3; });
+        EXPECT_EQ(expect_closure(v.gs, Side::B, v.shoot, {6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 1, 1, 1}),
+                  (std::vector<RollKind>{RollKind::Hit, RollKind::Wound, RollKind::Save}));
+        GameState gs = v.gs;
+        ScriptedDice dice{6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 1, 1, 1};
+        apply_action(gs, Side::B, v.shoot, dice);
+        const UnitId marines = gs.units[0].id;
+        EXPECT_EQ(expect_closure(gs, Side::A, action::OrderCasualties{marines, wh40k::test::model_ids(gs.units[0])},
+                                 {4, 2, 6}),
+                  (std::vector<RollKind>{RollKind::Damage}));
+    }
+    {
+        const Volley v = fleshborer_volley([](WeaponProfile& p) { p.attacks = kD3; });
+        EXPECT_EQ(expect_closure(v.gs, Side::B, v.shoot, std::vector<int>(40, 1)),
+                  (std::vector<RollKind>{RollKind::RandomAttacks, RollKind::Hit}));
+    }
+    {
+        const Volley v = fleshborer_volley([](WeaponProfile& p) { p.abilities.push_back(ability::Hazardous{}); });
+        EXPECT_EQ(expect_closure(v.gs, Side::B, v.shoot, std::vector<int>(20, 1)),
+                  (std::vector<RollKind>{RollKind::Hit, RollKind::Hazard}));
+    }
 }

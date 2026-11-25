@@ -765,8 +765,11 @@ TEST(M16_BoardInteraction, ShootingIsAClickOnTheShooterThenTheTargetThenAWeapon)
     const ClickResult fire = board.choose(gs, r.menu[1].action);
     ASSERT_TRUE(fire.submit.has_value());
     EXPECT_TRUE(session.check(*fire.submit).ok());
+    const std::size_t before = session.log().size();
     ASSERT_TRUE(session.submit(*fire.submit).ok());
-    EXPECT_FALSE(events_of<event::AttackBatchesGathered>(last_events(session)).empty());
+    // The shot's log entry (M94, D-095: its rolls follow as entries of their own).
+    EXPECT_FALSE(events_of<event::AttackBatchesGathered>(session.log().at(before).events).empty());
+    EXPECT_TRUE(std::holds_alternative<action::Shoot>(session.history().at(before - 1).action));
 }
 
 // D-031: "Custom..." on the target menu opens the per-model editor, starting from the first weapon there.

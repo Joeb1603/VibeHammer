@@ -259,11 +259,16 @@ TEST(M61_ClientText, AHazardCasualtyDecisionIsWaitingFor0602) {
 TEST(M61_Undo, TheAnswerIsItsOwnGroupAndUndoingItReRollsTheSameDice) {
     GameSession session = session_at_the_decision();
     ASSERT_TRUE(session.pending() && std::holds_alternative<decision::RerollWoundRolls>(session.pending()->kind));
-    ASSERT_EQ(session.history().size(), 1u);  // the volley
+    // The volley, then (M94, D-095) its hit and wound rolls, each a step the session made by itself.
+    const std::size_t volley = session.history().size();
+    ASSERT_EQ(volley, 3u);
+    EXPECT_TRUE(std::holds_alternative<action::Shoot>(session.history()[0].action));
+    EXPECT_EQ(session.history()[1].action, (GameAction{action::RollDice{RollKind::Hit, session.state().units[kMarines].id}}));
+    EXPECT_EQ(session.history()[2].action, (GameAction{action::RollDice{RollKind::Wound, session.state().units[kMarines].id}}));
     // D-039: the volley was one input, the re-roll (with what the client then does by itself) is another.
     UndoGroups groups;
     groups.begin(0);
-    groups.end(1);
+    groups.end(volley);
     const GameState at_decision = session.state();
     const RerollPicks picks(session.state());
     groups.begin(session.history().size());
@@ -275,7 +280,7 @@ TEST(M61_Undo, TheAnswerIsItsOwnGroupAndUndoingItReRollsTheSameDice) {
     ASSERT_GT(steps, 1u);
     // Undo takes back the re-roll and what followed automatically: back at the decision, the dice position too.
     ASSERT_TRUE(groups.undo(session));
-    EXPECT_EQ(session.history().size(), 1u);
+    EXPECT_EQ(session.history().size(), volley);
     EXPECT_EQ(session.state(), at_decision);
     // The same answer gives the same dice (D-025).
     groups.begin(session.history().size());
