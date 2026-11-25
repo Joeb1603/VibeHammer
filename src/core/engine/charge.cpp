@@ -42,12 +42,27 @@ void resolve_charge(GameState& state, bool charge_move_made, std::string reason,
 std::optional<PendingDecision> charge_decision(const GameState& state) {
     const ChargeInProgress& c = charge_of(state);
     const Unit& u = *state.find_unit(c.unit);
+    if (!u.phase_flags.charge_roll) {
+        return PendingDecision{u.side, decision::RollDice{RollKind::Charge, c.unit}};  // D-095: 11.02 Make Charge Roll
+    }
     return PendingDecision{u.side, decision::SelectChargeTargets{c.unit}};
 }
 
-// D-095 (M94): 11.02 Make Charge Roll, for the charge in progress.
-void make_charge_roll(GameState&, DiceSource&, Events&) {
-    throw std::logic_error("D-095: the charge roll is not paced yet");
+// D-095 (M94): 11.02 Make Charge Roll, for the charge in progress: the maximum distance of the charge move. With no
+// charge target within it (11.04 Before Moving), the charge fails at once.
+void make_charge_roll(GameState& state, DiceSource& dice, Events& events) {
+    Unit& u = *state.find_unit(charge_of(state).unit);
+    const TwoD6 roll = roll_2d6(dice);
+    u.phase_flags.charge_roll = roll.total();
+    const std::vector<UnitId> targets = eligible_charge_targets(state, u, roll.total());
+    events.push_back(event::ChargeRolled{u.id, roll, targets});
+    if (targets.empty()) {
+        // 11.02 Attempt Charge: no charge move is possible without a charge target (11.04 Before Moving).
+        resolve_charge(state, false,
+                       "11.02: no enemy unit is within 12\" and within the charge roll (" +
+                           std::to_string(roll.total()) + "\") of " + unit_label(u.id) + "; the charge fails",
+                       events);
+    }
 }
 
 // ---- 11.02 Charge: declare a charge, or end the step ----
@@ -77,24 +92,13 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
     return ValidationResult::success();
 }
 
-void apply_details(GameState& state, Side, const action::DeclareCharge& a, DiceSource& dice, Events& events) {
+void apply_details(GameState& state, Side, const action::DeclareCharge& a, DiceSource&, Events& events) {
     Unit& u = *state.find_unit(a.unit);
     u.phase_flags.declared_charge = true;  // 11.02 Declare Charge
     events.push_back(event::ChargeDeclared{u.id});
-    const TwoD6 roll = roll_2d6(dice);  // 11.02 Make Charge Roll: the maximum distance of the charge move
-    u.phase_flags.charge_roll = roll.total();
-    const std::vector<UnitId> targets = eligible_charge_targets(state, u, roll.total());
-    events.push_back(event::ChargeRolled{u.id, roll, targets});
-
     state.flow.activation = Activation{u.id, ActivationKind::Move};  // 01.03: selected to move
     state.flow.charge = ChargeInProgress{u.id};
-    if (targets.empty()) {
-        // 11.02 Attempt Charge: no charge move is possible without a charge target (11.04 Before Moving).
-        resolve_charge(state, false,
-                       "11.02: no enemy unit is within 12\" and within the charge roll (" +
-                           std::to_string(roll.total()) + "\") of " + unit_label(u.id) + "; the charge fails",
-                       events);
-    }
+    // D-095 (M94): 11.02 Make Charge Roll waits for the charging unit's player (charge_decision, make_charge_roll).
 }
 
 ValidationResult validate_details(const GameState&, Side, const action::EndChargeStep&) {

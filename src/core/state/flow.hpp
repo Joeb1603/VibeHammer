@@ -166,8 +166,9 @@ struct MoveInProgress {
     friend bool operator==(const MoveInProgress&, const MoveInProgress&) = default;
 };
 
-// 11.02: a unit that has declared a charge and made its charge roll, until the charge is resolved.
-// While no charge move is in progress, the player selects charge targets (or makes no charge move).
+// 11.02: a unit that has declared a charge, until the charge is resolved. D-095 (M94): first its charge roll waits for
+// its player (a RollDice); then, while no charge move is in progress, the player selects charge targets (or makes no
+// charge move).
 struct ChargeInProgress {
     UnitId unit;
     friend bool operator==(const ChargeInProgress&, const ChargeInProgress&) = default;

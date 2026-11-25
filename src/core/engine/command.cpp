@@ -39,25 +39,37 @@ void gain_core_cp(GameState& state, Events& events) {
     }
 }
 
-void battle_shock_step(GameState& state, DiceSource& dice, Events& events) {
+void battle_shock_step(GameState& state) {
     const Side active = turn_side(state);  // 01.03: no unit is selected in the Command phase
-    for (Unit& u : state.units) {
+    for (const Unit& u : state.units) {
         if (u.side != active || is_destroyed(u)) continue;
-        // 08.03: units that are battle-shocked, or at or below half-strength (Appendix).
-        const bool was_shocked = u.battle_shocked;
-        if (!was_shocked && !at_or_below_half_strength(u)) continue;
-        const BattleShockRoll roll = make_battle_shock_roll(dice, u);  // one roll per unit (D-015)
-        apply_battle_shock_roll(u, roll);
-        events.push_back(event::BattleShockRolled{u.id, roll});
-        if (was_shocked && roll.leadership.success) {
-            u.battle_shocked = false;  // 08.03: it is no longer battle-shocked
-            events.push_back(event::BattleShockEnded{u.id});
-        }
+        // 08.03: units that are battle-shocked, or at or below half-strength (Appendix). D-095 (M94): each one's roll
+        // waits for the active player, in unit order (a roll changes nothing but its own unit, so the units are those
+        // the step started with).
+        if (!u.battle_shocked && !at_or_below_half_strength(u)) continue;
+        state.flow.battle_shock_tests.push_back(u.id);
     }
 }
 
-void make_owed_battle_shock_roll(GameState&, DiceSource&, Events&) {
-    throw std::logic_error("D-095: the battle-shock roll is not paced yet");
+void make_owed_battle_shock_roll(GameState& state, DiceSource& dice, Events& events) {
+    std::vector<UnitId>& owed = state.flow.battle_shock_tests;
+    if (owed.empty()) throw std::logic_error("D-095: no battle-shock roll is owed");
+    Unit& u = *state.find_unit(owed.front());
+    owed.erase(owed.begin());
+    const bool was_shocked = u.battle_shocked;
+    const BattleShockRoll roll = make_battle_shock_roll(dice, u);  // one roll per unit (D-015)
+    apply_battle_shock_roll(u, roll);
+    events.push_back(event::BattleShockRolled{u.id, roll});
+    if (was_shocked && roll.leadership.success) {
+        u.battle_shocked = false;  // 08.03: it is no longer battle-shocked
+        events.push_back(event::BattleShockEnded{u.id});
+    }
+}
+
+std::optional<PendingDecision> battle_shock_decision(const GameState& state) {
+    if (state.flow.battle_shock_tests.empty()) return std::nullopt;
+    const Unit& u = *state.find_unit(state.flow.battle_shock_tests.front());
+    return PendingDecision{u.side, decision::RollDice{RollKind::BattleShock, u.id}};  // 01.07: its player rolls
 }
 
 std::optional<PendingDecision> coherency_decision(const GameState& state) {

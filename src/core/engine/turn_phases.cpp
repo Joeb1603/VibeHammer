@@ -27,7 +27,7 @@ bool is_phase_end(Stage s) {
 
 }  // namespace
 
-void on_enter_stage(GameState& state, DiceSource& dice, Events& events) {
+void on_enter_stage(GameState& state, DiceSource&, Events& events) {
     const Stage stage = state.flow.stage;
     const Side side = turn_side(state);
     if (is_phase_start(stage)) {
@@ -50,7 +50,7 @@ void on_enter_stage(GameState& state, DiceSource& dice, Events& events) {
             gain_core_cp(state, events);  // 08.02
             break;
         case Stage::BattleShock:
-            battle_shock_step(state, dice, events);  // 08.03
+            battle_shock_step(state);  // 08.03: each roll waits for the active player (D-095)
             break;
         case Stage::StartOfMovementPhase:
             for (Unit& u : state.units) {
@@ -117,6 +117,8 @@ void on_leave_stage(GameState& state, Events& events) {
 }
 
 std::optional<PendingDecision> stage_decision(const GameState& state) {
+    // D-095 (M94): a battle-shock roll owed comes first, whatever the step (08.03, or 09.07 after a Desperate Escape).
+    if (auto d = battle_shock_decision(state)) return d;
     const Side side = turn_side(state);
     switch (state.flow.stage) {
         case Stage::MoveUnits:
