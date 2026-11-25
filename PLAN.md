@@ -202,12 +202,97 @@ decision and stays valid.
 
 ---
 
+## M94: Engine-paced dice rolls (D-095)
+
+**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-25; the design below is the agreed plan).
+**Scope:** roadmap Phase 0 item 2 (Option 2 of M20). The engine stops at every roll point with a `RollDice` decision for
+the roller, and the roll is made when the roller submits it. Groundwork for Command Re-roll (15.02 "just after you
+make" the roll), re-roll abilities and Feel No Pain. The user's choices (2026-11-25): one milestone (engine, bot,
+replays, saves and client together); a human's rolls follow "Show dice pop-ups" (on: press Roll; off: automatic), and
+bot rolls are always automatic; format-1 saves and replays migrate on load, new files are format 2.
+
+**Rules:** 01.05, 01.05.02 (app), 04.03, 05.01–05.04, 06.03, 08.03, 09.06, 09.07, 11.02, 24.15; D-033, D-069, D-072.
+
+**Design**
+- *The roll closure (the invariant):* old `apply_action(X)` equals new `apply_action(X)` followed by `RollDice` actions
+  until no roll is pending, with the dice consumed in exactly the same order. If a roll point can't keep the old order,
+  stop and ask.
+- *Types* (all appended to their variants; `state_hash` hashes `kind.index()`): `enum class RollKind { Advance, Charge,
+  BattleShock, Hazard, RandomAttacks, Hit, Wound, Save, Damage }`; `PendingRoll { kind, unit, optional batch }` as
+  `FlowState::roll`; `decision::RollDice{kind, unit}` (rule per kind); `action::RollDice{}` (one legal action). The
+  roller is the unit's owner, except a Save (the target's); a Damage roll is the attacker's. Results waiting for the
+  next roll (hit rolls, the next 05.04 step and its running result) live on the attack flow. New fields are omitted
+  from JSON when empty, round-trip tested, and hashed behind a tag only when set.
+- *Engine flow:* `advance()` and `compute_decision` check `flow.roll` first. `apply_details(RollDice)` makes exactly
+  the dice the old code made at that point, emits the same events, clears `flow.roll` and continues through the
+  existing helper.
+- *Roll points* (one Roll each; 05: "make all of those rolls simultaneously"):
+
+| Point | Today | After M94 |
+|---|---|---|
+| 09.06 Advance | `begin_move` (`movement.cpp`) | `StartMove{Advance}` sets the roll, then `MoveModels`. A reused roll (D-005) asks nothing. |
+| 09.07 Desperate Escape hazards | `begin_move` | a Hazard roll before `OrderCasualties` |
+| 09.07 Desperate Escape battle-shock | at `CommitUnitMove` | a BattleShock roll after the commit |
+| 08.03 Battle-shock step | a loop in `battle_shock_step` (`command.cpp`) | one roll per unit, same unit order, next unit from state |
+| 11.02 Charge | `DeclareCharge` apply | a Charge roll, then `SelectChargeTargets` or failure |
+| D-069 random A | `start_batch` (`attack_flow.cpp`) | a RandomAttacks roll if the batch has random A |
+| 05.01 Hit | `start_batch` | a Hit roll (none for [TORRENT]); results stored |
+| 05.02 Wound | `start_batch` | a Wound roll (none with no hits); Twin-linked's `RerollWoundRolls` follows as now |
+| 05.03 Save | `attack_progress` | a Save roll by the defender after the allocation order |
+| 05.04 random D | inside `resolve_casualties` / `inflict_damage` | a Damage roll per damaging save step with random D |
+| 24.15 Hazardous | `make_attack_hazard_rolls` | a Hazard roll by the attacker after the last batch |
+
+- *Attack sequence:* `start_batch` split into select, random A, hit, wound (M61's `wound_rerolls` pattern,
+  generalised). `resolve_casualties` becomes resumable, one save step per `attack_progress` call; fixed damage never
+  stops. `inflict_damage`'s per-step logic is factored into a single-step function that the pure
+  `resolve_attack_batch` (the bots' odds) also uses. `SavesResolved` is still emitted once per batch.
+- *Closure helper* (engine API, documented in CLAUDE.md): `bool roll_pending(const GameState&)` and
+  `std::vector<GameEvent> roll_through(GameState&, DiceSource&)`. Used by `Simulator::step` after each action (so the
+  bot's scripted-dice analyses of charges, Advances and Desperate Escapes work unchanged), the format-1 migration and
+  the test helper `apply_rolling` (`tests/support/engine_helpers.hpp`).
+- *Replays and saves:* format 2 stores the Roll steps; format 1 loads by running the closure after each step. All 28
+  `tests/replays/` files are regenerated (the 20 of `Replay.DISABLED_RegenerateReplays`, the 8 `wh40k_ai_tests`
+  generators) with byte-identical `expect` blocks; one old replay and one old save go to `tests/data/legacy/` as
+  migration fixtures.
+- *Bot:* in live games a bot side's Rolls are auto-submitted by `next_auto_action`, as lone skips are, so `Bot::decide`
+  traces are unchanged. Arena `steps`/`actions` hashes change by construction; `state` and `trace` must not.
+- *Client:* `AutoSettings` gains a per-side `auto_roll` (bot sides; human sides when `show_dice` is off), joined to the
+  preceding Undo group. With pop-ups on, a human's pending `RollDice` opens a face-down pre-roll card built from the
+  state (`logic/roll_prompt`, like `RerollPicks`: what is rolled, how many dice, what is needed); its Roll submits
+  `RollDice`, and the event cards then open already rolled. Bot cards keep the cosmetic Roll (`DicePace`). A Roll is
+  never its own Undo group. No deadlock with a bot opponent. `--steps` / `--bot-steps` counts include Rolls
+  (`docs/dev/client_flags.md`, `tools/package.ps1`).
+- *Docs:* D-095 (roll points and rollers, the closure, format 2 and migration, auto-rolling, Damage per step); amend
+  D-033 (Option 2 now) and D-072 (the Wound roll is its own step); the roadmap's Phase 0 item 2.
+
+**Work order:** PLAN/D-095 draft; core types, JSON, hash; Advance, Charge, battle-shock, Desperate Escape; random A, hit,
+wound; saves, resumable Damage, Hazardous; `roll_through`, Simulator, `apply_rolling` and the tests that capture
+events from rolling actions (about 100 sites, none weakened); format 2 and migration, replays regenerated; client;
+arena identity runs, full `ctest`, docs, commit, PR, merge.
+
+**Acceptance**
+- [ ] Each roll point is a `RollDice` decision for the roller, and the Roll answer makes the same dice in the same
+  order. `D095_RollPoints` tests cover each point, the roller's side, the skipped cases (Torrent, no hits, fixed D,
+  reused Advance) and a Roll from the wrong side.
+- [ ] `roll_through` equals the old inline behaviour: every regenerated replay's `expect` is byte-identical, and its
+  final state equals the closure-migrated format-1 file.
+- [ ] Format-1 saves and replays load via migration (fixtures in `tests/data/legacy/`); format 2 round-trips. Every
+  new state field has a JSON round-trip test.
+- [ ] Bots: arena `--per-game` `state` and `trace` hashes identical to M93 on the identity set; decision p95 within
+  budget.
+- [ ] Client: with pop-ups on, a human's roll waits for Roll and the faces match the events (logic test); with them off,
+  or for a bot, rolls are automatic; Undo goes back past Rolls; no deadlock against the bot (logic test); xvfb
+  screenshots of a pre-roll card for a hit roll and a save.
+- [ ] Full `ctest` green, warnings as errors.
+
+---
+
 ## Later (post-V1, rough order)
 The long-range map from here to a full game with any army on any mission (phases, order, open questions) is
 `docs/roadmap.md`. The items below are the nearer, smaller ones; each roadmap item still becomes a milestone here first.
 
 - **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
-- **Engine-paced dice rolls (Option 2 of M20):** a PendingDecision before each roll point (hit, wound, save, charge, battle-shock, hazard, advance), so the roll is made when the player presses Roll instead of being revealed after the engine has made it. Needs the attack sequence split into resumable steps, new decisions in `legal_actions`/`validate_action`, and every replay regenerated. M20's pop-up would then answer those decisions instead of revealing pre-made rolls.
+- **Engine-paced dice rolls (Option 2 of M20):** now M94, above.
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
 1. **Terrain** (13): 2D terrain is M88 (D-087–D-089), and the bot's use of it is M89 (D-090). Still to do: the z axis
