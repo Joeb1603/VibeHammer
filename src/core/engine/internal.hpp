@@ -163,8 +163,9 @@ void apply_details(GameState& state, Side side, const action::ResetUnitMove& a, 
 
 // The decision the attack in progress needs (pure), or nullopt if it can progress automatically.
 [[nodiscard]] std::optional<PendingDecision> attack_decision(const GameState& state);
-// One step of automatic attack work (rolls, damage, lost attacks (04.03.03, D-093), finishing). Precondition: an attack is in
-// progress and attack_decision(state) is nullopt.
+// One step of automatic attack work (the rolls that need no dice, a batch selected when it is the only one, damage
+// that needs no roll, lost attacks (04.03.03, D-093), finishing; D-095: every roll with dice is a RollDice decision).
+// Precondition: an attack is in progress and attack_decision(state) is nullopt.
 void attack_progress(GameState& state, DiceSource& dice, Events& events);
 // 04.03: gathers the attack batches and makes `attacker` the selected unit (01.03); the caller then
 // advances. Throws std::logic_error on the begin_attacks preconditions.

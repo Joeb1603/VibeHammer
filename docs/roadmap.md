@@ -60,7 +60,10 @@ feature: an engine milestone, then its client and bot milestones, as M86 / M87 a
 1. **Audit the app-only rules.** *Done in M92 (D-093): the scraped app text overrides the supplied wording.* Compare the 101 *APP* entries in `docs/gdmissions/core_rules/` with the working
    assumptions in D-009, D-010, D-011, D-012, D-015 and D-069. Record each difference as a decision; fix the engine
    where the user agrees the scraped wording is right. This also settles which remaining "known gaps" are closed.
-2. **Engine-paced dice rolls** (planned as M94 in `PLAN.md`, agreed 2026-11-25: Option 2 of M20). Every roll becomes a point the engine
+2. **Engine-paced dice rolls.** *Done in M94 (D-095): every roll is a RollDice decision of its roller's; the game
+   session paces it (a human presses Roll with the dice pop-ups on), replays and saves record it (format 2), and
+   apply_action still makes it inline. A random D is rolled once per batch, and no roll has a window after it yet: the
+   per-attack damage split and the windows are for Command Re-roll and Feel No Pain.* Every roll becomes a point the engine
    can stop at. Command Re-roll, re-roll abilities, Feel No Pain, Fire Overwatch and most reactive stratagems need a
    decision between a roll and its result, so this comes before Phase 1's stratagems. Every replay is regenerated.
 3. **Reaction windows.** A general way for the opposing side to be offered a decision at a trigger ("just after an

@@ -11,7 +11,9 @@ which the bot plays for cover since M89 (D-090). M90 added Objective Consolidati
 the bot's terrain and objective play in every phase behind weight keys, off by default (none measured better, D-092),
 M92 the app-only rules audit (D-093): the scraped app text in `docs/gdmissions/` overrides the AI-sourced wording, and
 M93 its open items (D-094): per-weapon new targets in the client, 40 mm objective markers (14.01.01) on the objective
-scenario, and Gone to Ground in the bot's move score behind a key, off by default.
+scenario, and Gone to Ground in the bot's move score behind a key, off by default. M94 made every dice roll a decision
+of its roller's (D-095): the engine stops at each, a human presses Roll on its card (dice pop-ups on), the game session
+makes the rest, and saves and replays record each roll as a step (format 2).
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
@@ -52,6 +54,7 @@ tests/                    wh40k_tests: GoogleTest for wh40k_core, run via CTest
   replays/*.json          saved replays; each must replay cleanly (regression tests, D-014)
   data/scenarios/*.json   test-only fixture scenarios (roster units on smaller boards, custom battles; not in the client's list)
   data/armies/*.json      test-only army lists (custom battles of the M73 and M77 replays)
+  data/legacy/            format-1 replays and an M93 save: the fixtures of D-095's migration to format 2
 ```
 
 ## Build and test (Windows, VS 2026 Community, CMake 4.x)
@@ -117,8 +120,13 @@ std::vector<GameEvent>  start_game(GameState&);                                 
 Side                    active_side(const GameState&);                              // 01.03
 // apply_action/start_game also have DiceSource& overloads so engine tests can use ScriptedDice.
 // apply_action also has a (..., DiceSource&, GameState& backup) overload that reuses a scratch rollback copy (M54, D-068).
+// D-095 (M94): every dice roll is a RollDice decision for its roller. apply_action/start_game answer each one inline,
+// from the same dice (as before M94); apply_action_paced/start_game_paced (the same overloads) stop at it, as
+// GameSession and format-2 replays play. Answering every RollDice after a paced action gives exactly the inline result.
+bool                    roll_pending(const GameState&);                             // a RollDice is pending
+std::optional<RollDiceInfo> roll_dice_info(const GameState&);                       // what it rolls, for display
 ```
-- `GameState` holds a **`PendingDecision`** describing whose input the engine is waiting for, and of what kind (choose unit to move, choose move type, place model, select targets, order allocation groups, pick model to remove, pile-in, pass, ...). Every action answers the current pending decision. Reactive decisions belong to the opposing side (allocation order, model removal, etc.) and flow through this same mechanism.
+- `GameState` holds a **`PendingDecision`** describing whose input the engine is waiting for, and of what kind (choose unit to move, choose move type, place model, select targets, order allocation groups, pick model to remove, pile-in, pass, make a dice roll, ...). Every action answers the current pending decision. Reactive decisions belong to the opposing side (allocation order, model removal, save rolls, etc.) and flow through this same mechanism.
 - `GameAction` and `GameEvent` are `std::variant`s of small serializable structs. Events drive UI animation and the dice/combat log, and they carry rule numbers.
 - `ValidationResult` reasons cite rules, e.g. `"03.03: model 4 is more than 2\" from every other model in its unit"`.
 
