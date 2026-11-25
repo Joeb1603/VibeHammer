@@ -96,6 +96,14 @@ binary, and the M90 binary stays the reference for every run. The head-to-head p
 M91's): the variant with `--weights-a <keys>` against the reference with `--weights-b <keys at 0>` and the reverse, each
 with `--first A` and `--first B`, 100 games each (seeds 1–100); one standard deviation is about 10 games in the 400.
 
+M94 (D-095) makes every dice roll a step of its own in a `GameSession` (the arena plays through one: the session makes
+both bots' rolls), so each game's `steps` and `actions` change by construction, and nothing else may. The proof: all
+thirteen runs above, 200 games each (2,600 games), identical to the M93 binary in every field but `steps` and `actions`
+(every `state` and `trace` the same; every game has more steps). From M94 on, compare the per-game lines without those
+two fields against an older binary, or whole against the M94 binary, which is the reference for every run. The M91,
+M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps too). The bot's simulations roll inline
+(`apply_action`), so its decisions do the same work as before.
+
 ## Deployment and the summary
 
 - The deployment step only exists in a scenario with `"deployment": "alternating"` (D-081). The bot sets up by M77's
