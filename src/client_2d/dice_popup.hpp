@@ -38,6 +38,14 @@ public:
     void reveal() { revealed_ = true; }
     // M45: the watch bar's Step while a card shows: reveal its faces, or close it once they show.
     void advance();
+    // D-095 (M94): the current card's faces tumble at once, as if Roll had been pressed on it (the player pressed Roll
+    // on the pre-roll card that made these dice). Nothing if no card shows, or it is already rolling or rolled.
+    void start_rolling();
+
+    // D-095 (M94): a human's roll before it is made (core's RollDice decision): the card face down with a Roll button
+    // (Enter / Space too). Drawn while no card is queued; true when Roll is pressed, and the caller then makes the
+    // roll (submits the RollDice) and calls start_rolling.
+    bool draw_prompt(Rectangle area, float ui_scale, const DiceCard& card);
 
     // The card being shown, if any (the action bar follows its roller while dice show, D-033).
     [[nodiscard]] const DiceCard* current() const noexcept { return queue_.empty() ? nullptr : &queue_.front(); }
@@ -57,6 +65,8 @@ private:
     std::optional<double> card_since_;     // when the current card was first drawn (D-054 pacing)
     std::optional<double> revealed_at_;    // when its result was first shown
     bool focus_pending_ = false;           // M48: take the focus once, when a card first appears
+    bool prompt_shown_ = false;            // D-095: a pre-roll card is up (it takes the focus once)
+    bool prompt_focus_ = false;
 };
 
 }  // namespace wh40k::client

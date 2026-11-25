@@ -20,6 +20,10 @@ struct LeadershipRoll {
 // otherwise: Synapse-style roll changes and units without Ld are out of scope).
 [[nodiscard]] LeadershipRoll make_leadership_roll(DiceSource& dice, const Unit& unit);
 
+// 01.06: the result a leadership roll for `unit` needs: its best (lowest) Ld; nullopt if no model has one. M94: also
+// for showing a battle-shock roll before it is made (D-095).
+[[nodiscard]] std::optional<int> leadership_target(const Unit& unit);
+
 // 01.07 Battle-shock roll: a leadership roll; if it fails, the unit becomes battle-shocked.
 struct BattleShockRoll {
     LeadershipRoll leadership;

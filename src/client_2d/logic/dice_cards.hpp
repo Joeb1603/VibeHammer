@@ -5,6 +5,7 @@
 // when the action was applied, and the cards are built from its events. No rendering.
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,5 +45,10 @@ struct DiceCard {
 // last entry, for unit names and sides.
 [[nodiscard]] std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector<LogEntry>& log,
                                                std::size_t from);
+
+// D-095 (M94): the card for the pending RollDice before it is made: who rolls, what for and what it needs, with its
+// dice face down (DieFace::value 0; core's roll_dice_info gives how many). The log gives the attack's context, as for
+// dice_cards. nullopt unless a RollDice is pending.
+[[nodiscard]] std::optional<DiceCard> roll_prompt(const core::GameState& state, const std::vector<LogEntry>& log);
 
 }  // namespace wh40k::client

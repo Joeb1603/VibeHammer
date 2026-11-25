@@ -5,7 +5,7 @@
 
 namespace wh40k::core {
 
-LeadershipRoll make_leadership_roll(DiceSource& dice, const Unit& unit) {
+std::optional<int> leadership_target(const Unit& unit) {
     // 01.06: "equal to or greater than one or more of the Ld characteristics" == >= the lowest one.
     std::optional<int> best;
     for (const Model& m : unit.models) {
@@ -13,6 +13,11 @@ LeadershipRoll make_leadership_roll(DiceSource& dice, const Unit& unit) {
             best = m.characteristics.leadership;
         }
     }
+    return best;
+}
+
+LeadershipRoll make_leadership_roll(DiceSource& dice, const Unit& unit) {
+    const std::optional<int> best = leadership_target(unit);
     if (!best) {
         throw std::logic_error("01.06: unit '" + unit.name + "' has no model with an Ld characteristic");
     }

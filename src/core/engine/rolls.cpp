@@ -9,6 +9,7 @@
 
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
+#include "core/rules/leadership.hpp"
 
 namespace wh40k::core {
 
@@ -88,6 +89,9 @@ std::optional<RollDiceInfo> roll_dice_info(const GameState& state) {
         case RollKind::BattleShock:
             info.dice = 2;  // 11.02 / 01.07: 2D6
             info.expression = "2D6";
+            if (const Unit* u = state.find_unit(d.unit); u != nullptr && d.roll == RollKind::BattleShock) {
+                info.need = leadership_target(*u);  // 01.06
+            }
             break;
         case RollKind::Hazard:
             if (state.flow.attack) {
