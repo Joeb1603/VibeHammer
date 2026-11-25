@@ -1,7 +1,9 @@
 #pragma once
 
-// The dice roll pop-up (M20, D-033): one DiceCard at a time over the board, face-down until the player
-// presses Roll, then the real faces (already rolled by the engine), the result and Continue. Display only.
+// The dice roll pop-up (M20, D-033): one DiceCard at a time over the board, face-down until Roll is pressed, then the
+// real faces, the result and Continue. These cards show rolls the engine has already made (a bot's, or any roll made
+// with the pop-ups off), so their Roll only reveals them. D-095 (M94): a human's roll that waits to be made is shown by
+// draw_prompt instead, and its Roll makes it (the caller submits the RollDice), after which its card tumbles at once.
 
 #include <imgui.h>
 #include <raylib.h>

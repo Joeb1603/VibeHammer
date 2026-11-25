@@ -5,6 +5,8 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <string>
@@ -27,7 +29,8 @@ const std::filesystem::path kLegacySave =
     std::filesystem::path(WH40K_REPO_ROOT) / "tests" / "data" / "legacy" / "m93_save_format1.json";
 
 // A short V1 game (the Termagants 1" closer) played by random legal actions through a session: moves, shots, charges
-// and fights, every roll made inside the action that led to it. Seeds chosen so the game shoots and charges.
+// and fights, the session making every roll (auto_roll), each a step of its own. Seeds chosen so the game shoots and
+// charges.
 GameSession random_session_game(std::uint64_t seed, std::uint64_t rng_seed, int actions) {
     GameState scenario = wh40k::test::load_v1_scenario_closer();
     GameSession s = GameSession::new_game(std::move(scenario), seed);
@@ -41,16 +44,42 @@ GameSession random_session_game(std::uint64_t seed, std::uint64_t rng_seed, int 
     return s;
 }
 
+// The save M93 wrote for the same game (format 1, every roll made inside the step that led to it): this session's
+// format-2 save with its roll steps taken out. D-095's roll closure makes them the same: without its rolls the history
+// is M93's, and the state is the same.
+nlohmann::json format1_save(const GameSession& s) {
+    nlohmann::json j = s.to_save_json();
+    j["format"] = kReplayFormatRollsInline;
+    nlohmann::json steps = nlohmann::json::array();
+    for (const nlohmann::json& step : j.at("steps")) {
+        if (step.at("action").at("kind") != "RollDice") steps.push_back(step);
+    }
+    j["steps"] = std::move(steps);
+    return j;
+}
+
+std::string read_text(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
 }  // namespace
 
-// Writes tests/data/legacy/m93_save_format1.json: a save made by the M93 engine (format 1, every roll inside its action),
-// kept as the fixture for D-095's migration of format-1 saves. M94 ran it once, before any roll point moved. Run on
-// purpose only (it must be run with an M93 engine to make a format-1 file):
+// Writes tests/data/legacy/m93_save_format1.json, the fixture for D-095's migration of format-1 saves: the format-1
+// save of random_session_game(5, 11, 50), as M93 wrote it (M94 wrote it first with the M93 engine). Run on purpose only:
 //   wh40k_client_tests --gtest_also_run_disabled_tests --gtest_filter=M94_Legacy.DISABLED_WriteFormat1Save
 TEST(M94_Legacy, DISABLED_WriteFormat1Save) {
-    const GameSession s = random_session_game(5, 11, 50);
     std::filesystem::create_directories(kLegacySave.parent_path());
-    s.save(kLegacySave);
+    std::ofstream out(kLegacySave, std::ios::binary);
+    out << format1_save(random_session_game(5, 11, 50)).dump(2) << '\n';
+}
+
+TEST(M94_Legacy, TheSaveFixtureIsTheM93SaveOfTheSameGame) {
+    // The fixture M93's engine wrote is, byte for byte, this game's save with its roll steps taken out: so it is a
+    // format-1 save of the game M94_Saves loads, and the generator above rewrites the same file.
+    const std::string fixture = read_text(kLegacySave);
+    ASSERT_FALSE(fixture.empty());
+    EXPECT_EQ(format1_save(random_session_game(5, 11, 50)).dump(2) + "\n", fixture);
 }
 
 namespace {

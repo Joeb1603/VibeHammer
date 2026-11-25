@@ -1,8 +1,8 @@
 #pragma once
 
 // Dice roll pop-ups (M20, D-033): the rolls in the game log, one card per roll event, with what the roll
-// is for, what it needs and each die's result. Presentation only: the engine has already made every roll
-// when the action was applied, and the cards are built from its events. No rendering.
+// is for, what it needs and each die's result, built from the events of rolls already made. D-095 (M94): roll_prompt
+// is the card of a roll still waiting to be made (a RollDice decision), its dice face down. No rendering.
 
 #include <cstddef>
 #include <optional>

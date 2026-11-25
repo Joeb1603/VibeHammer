@@ -2520,6 +2520,8 @@ private:
             if (!settings_.show_dice) dice_.clear();  // D-033
             sync_auto_roll();                         // D-095: with them off, your rolls are made for you
         }
+        ImGui::SetItemTooltip("Show each dice roll in a pop-up. On: you make your own rolls with its Roll button. "
+                              "Off: your rolls are made for you, as the bot's always are.");
         if (ImGui::Checkbox("Skip steps with nothing to do", &settings_.skip_empty_steps) && settings_.skip_empty_steps) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
         ImGui::Checkbox("Fix illegal moves", &settings_.fix_moves);  // D-052
