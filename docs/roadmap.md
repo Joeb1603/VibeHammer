@@ -256,18 +256,25 @@ Answered by the user on 2026-11-20:
 2. **How army rules are written:** left to Claude; the effect layer (Phase 4).
 3. **What "any army" leaves out:** Legends and similar content; standard legal units only for now.
 
+4. **Where the army rules text comes from.** Answered on 2026-11-25 (M95), from the fetch tool's cache of the pinned
+   commit (`data/.cache/bsdata/0f9035541630ae6d83869bab34b63d909767d081/`, gitignored, downloaded in M59). BSData's
+   repository itself can't be reached from a cloud session: the session's GitHub access only reaches the user's own
+   repositories, so adding BSData was refused and the git proxy refuses an anonymous read. At that commit:
+   - **army rules** are there, as shared rules: Chaos Space Marines' Dark Pacts; the Tyranids' Synapse, Shadow in
+     the Warp, Synaptic Web and Insidious Ambushers;
+   - **detachments** are there with their rule text: 17 for Chaos Space Marines and 14 for the Tyranids (the
+     Tyranid library also holds 12 Genestealer Cults detachments);
+   - **enhancements** are there with their text and points: 62 for Chaos Space Marines (the Tyranid ones are linked
+     another way and were not counted);
+   - **stratagems are not**: no text in the stratagem form (WHEN, TARGET, EFFECT) is in any catalogue or in the
+     game-system file `Warhammer 40,000.json`.
+
+   So Phase 4 can read datasheet abilities, army rules, detachment rules and enhancements from BSData with the fetch
+   tool. Each detachment's stratagems have to come from the app or the codexes, supplied by the user. The core
+   stratagems are in `docs/rules/` (section 15).
+
 Still open:
 
-4. **Where the army rules text comes from.** The user gave permission to check BSData, and `raw.githubusercontent.com`
-   and `api.github.com` were added to the cloud environment for it, but the check could not be made from the cloud
-   session: every repository of the BSData organisation was refused there (other public repositories were readable),
-   so it is not known from here whether that is this session's GitHub restriction or the repositories themselves.
-   It needs one run on the user's machine: download a catalogue (for example `Tyranids.json`) and
-   `Warhammer 40,000.json` at the pinned commit and look for detachment rules, stratagems and enhancement text.
-   What the repo already shows: the catalogues have an Enhancements subtree under units (the fetch tool skips it)
-   and modifiers that name a detachment (D-079 mentions "Devotees of Destruction"), so detachments and enhancements
-   are at least present as selections. Nothing here shows stratagem text. If the text is not in BSData it has to
-   come from the app or the codexes, supplied by the user.
 5. **Faction order** after Chaos Space Marines and Tyranids.
 6. **Networking** ("Later", item 6) is not on this roadmap. Is it part of "complete"?
 
