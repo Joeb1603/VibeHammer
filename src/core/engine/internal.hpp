@@ -8,6 +8,7 @@
 
 #include "core/dice/dice.hpp"
 #include "core/engine/actions.hpp"
+#include "core/engine/engine.hpp"
 #include "core/engine/events.hpp"
 #include "core/engine/validation.hpp"
 #include "core/state/game_state.hpp"
@@ -201,6 +202,25 @@ void start_first_battle_round(GameState& state, DiceSource& dice, Events& events
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::CannotSetUp& a);
 void apply_details(GameState& state, Side side, const action::DeployUnit& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::CannotSetUp& a, DiceSource& dice, Events& events);
+
+// ---- rolls.cpp: D-095 (M94) engine-paced dice rolls ----
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RollDice& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::RollDice& a);
+void apply_details(GameState& state, Side side, const action::RollDice& a, DiceSource& dice, Events& events);
+// Answers every pending RollDice for its roller from `dice`, advancing after each (the roll closure): what
+// apply_action does after the action itself.
+void roll_through(GameState& state, DiceSource& dice, Events& events);
+
+// The rolls, each made where the action that led to it made it before M94 (with the same dice and events):
+void make_advance_roll(GameState& state, DiceSource& dice, Events& events);                  // 09.06, movement.cpp
+void make_desperate_escape_hazard_rolls(GameState& state, DiceSource& dice, Events& events);  // 09.07, movement.cpp
+void make_charge_roll(GameState& state, DiceSource& dice, Events& events);                   // 11.02, charge.cpp
+void make_owed_battle_shock_roll(GameState& state, DiceSource& dice, Events& events);        // 01.07, command.cpp
+// Random A (D-069), hit, wound, save and damage rolls, and [HAZARDOUS] hazard rolls (24.15); attack_flow.cpp.
+void make_attack_roll(GameState& state, RollKind roll, DiceSource& dice, Events& events);
+// The dice of the attack in progress's pending roll (RollDiceInfo::dice, ::expression, ::target); attack_flow.cpp.
+void describe_attack_roll(const GameState& state, RollKind roll, RollDiceInfo& info);
 
 // ---- helpers ----
 // Every non-empty subset of `ids` (at most 2^10 - 1), in bit order: the target sets legal_actions lists

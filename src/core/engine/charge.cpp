@@ -45,6 +45,11 @@ std::optional<PendingDecision> charge_decision(const GameState& state) {
     return PendingDecision{u.side, decision::SelectChargeTargets{c.unit}};
 }
 
+// D-095 (M94): 11.02 Make Charge Roll, for the charge in progress.
+void make_charge_roll(GameState&, DiceSource&, Events&) {
+    throw std::logic_error("D-095: the charge roll is not paced yet");
+}
+
 // ---- 11.02 Charge: declare a charge, or end the step ----
 
 std::vector<GameAction> legal_for(const GameState& state, const decision::Charge&) {

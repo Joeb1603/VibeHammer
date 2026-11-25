@@ -3,6 +3,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 
 #include "core/data/datasheet.hpp"
 #include "core/data/load_error.hpp"
@@ -47,7 +48,7 @@ void to_json(nlohmann::json& j, const Replay& v) {
 }
 void from_json(const nlohmann::json& j, Replay& v) {
     j.at("format").get_to(v.format);
-    if (v.format != 1) {
+    if (v.format != kReplayFormatRollsInline && v.format != kReplayFormatRollsRecorded) {
         throw DataError("replay: unsupported format " + std::to_string(v.format));
     }
     j.at("description").get_to(v.description);
@@ -87,10 +88,11 @@ GameState replay_initial_state(const Replay& replay, const std::filesystem::path
 }
 
 ReplayResult run_replay(const Replay& replay, const std::filesystem::path& repo_root) {
+    const bool paced = replay.format == kReplayFormatRollsRecorded;  // D-095
     ReplayResult r;
     r.final_state = replay_initial_state(replay, repo_root);
     if (r.final_state.flow.stage == Stage::NotStarted) {
-        auto events = start_game(r.final_state);
+        auto events = paced ? start_game_paced(r.final_state) : start_game(r.final_state);
         r.events.insert(r.events.end(), events.begin(), events.end());
     }
     for (std::size_t i = 0; i < replay.steps.size(); ++i) {
@@ -101,10 +103,45 @@ ReplayResult run_replay(const Replay& replay, const std::filesystem::path& repo_
             r.reasons = std::move(v.reasons);
             return r;
         }
-        auto events = apply_action(r.final_state, step.side, step.action);
+        auto events = paced ? apply_action_paced(r.final_state, step.side, step.action)
+                            : apply_action(r.final_state, step.side, step.action);
         r.events.insert(r.events.end(), events.begin(), events.end());
     }
     return r;
+}
+
+namespace {
+
+// D-095: answers every pending RollDice in `match` (a paced one) for its roller, recording each.
+void record_pending_rolls(Match& match) {
+    while (roll_pending(match.state())) {
+        const auto& d = std::get<decision::RollDice>(match.state().pending->kind);
+        const ValidationResult v = match.submit(match.state().pending->side, action::RollDice{d.roll, d.unit});
+        if (!v.ok()) throw std::logic_error("D-095: a pending roll was refused: " + v.reasons.front());
+    }
+}
+
+}  // namespace
+
+std::vector<ReplayStep> with_roll_steps(GameState initial, const std::vector<ReplayStep>& steps) {
+    Match match(std::move(initial), RollMode::Paced);
+    record_pending_rolls(match);
+    for (std::size_t i = 0; i < steps.size(); ++i) {
+        const ValidationResult v = match.submit(steps[i].side, steps[i].action);
+        if (!v.ok()) {
+            throw DataError("step " + std::to_string(i + 1) + " is invalid: " + v.reasons.front());
+        }
+        record_pending_rolls(match);
+    }
+    return match.steps();
+}
+
+Replay with_roll_steps(const Replay& replay, const std::filesystem::path& repo_root) {
+    if (replay.format == kReplayFormatRollsRecorded) return replay;
+    Replay out = replay;
+    out.format = kReplayFormatRollsRecorded;
+    out.steps = with_roll_steps(replay_initial_state(replay, repo_root), replay.steps);
+    return out;
 }
 
 nlohmann::json replay_expectation(const GameState& state) {
@@ -132,9 +169,9 @@ nlohmann::json replay_expectation(const GameState& state) {
 
 // ---- Match ----
 
-Match::Match(GameState initial) : initial_(std::move(initial)), state_(initial_) {
+Match::Match(GameState initial, RollMode mode) : initial_(std::move(initial)), state_(initial_), mode_(mode) {
     if (state_.flow.stage == Stage::NotStarted) {
-        events_ = start_game(state_);
+        events_ = mode_ == RollMode::Paced ? start_game_paced(state_) : start_game(state_);
     }
 }
 
@@ -144,7 +181,8 @@ ValidationResult Match::submit(Side side, const GameAction& action) {
         return v;
     }
     SeededDice dice(state_.dice);  // as apply_action's 3-argument overload, with the reused scratch copy (M54)
-    auto events = apply_action(state_, side, action, dice, scratch_.state);
+    auto events = mode_ == RollMode::Paced ? apply_action_paced(state_, side, action, dice, scratch_.state)
+                                           : apply_action(state_, side, action, dice, scratch_.state);
     events_.insert(events_.end(), events.begin(), events.end());
     steps_.push_back(ReplayStep{side, action});
     return v;
@@ -152,6 +190,7 @@ ValidationResult Match::submit(Side side, const GameAction& action) {
 
 Replay Match::to_replay(std::string description) const {
     Replay r;
+    r.format = mode_ == RollMode::Paced ? kReplayFormatRollsRecorded : kReplayFormatRollsInline;
     r.description = std::move(description);
     r.initial.state = initial_;
     r.steps = steps_;

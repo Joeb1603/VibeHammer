@@ -391,6 +391,7 @@ void to_json(Json& j, const BatchInProgress& v) {
     j = Json{{"batch", v.batch}, {"wounds", v.wounds}, {"groups", v.groups}};
     put_opt(j, "order", v.order);
     put_opt(j, "save_rolls", v.save_rolls);
+    if (v.priority) j["priority"] = *v.priority;  // D-095: omitted when absent
 }
 void from_json(const Json& j, BatchInProgress& v) {
     j.at("batch").get_to(v.batch);
@@ -398,6 +399,20 @@ void from_json(const Json& j, BatchInProgress& v) {
     j.at("groups").get_to(v.groups);
     get_opt(j, "order", v.order);
     get_opt(j, "save_rolls", v.save_rolls);
+    v.priority.reset();
+    if (const auto it = j.find("priority"); it != j.end() && !it->is_null()) {
+        v.priority = it->get<std::vector<ModelId>>();
+    }
+}
+
+void to_json(Json& j, const BatchRolls& v) {
+    j = Json{{"batch", v.batch}};
+    if (v.hits) j["hits"] = *v.hits;  // 05.01, once made
+}
+void from_json(const Json& j, BatchRolls& v) {
+    j.at("batch").get_to(v.batch);
+    v.hits.reset();
+    if (const auto it = j.find("hits"); it != j.end() && !it->is_null()) v.hits = it->get<HitRolls>();
 }
 
 void to_json(Json& j, const PendingWoundRerolls& v) { j = Json{{"batch", v.batch}, {"rolls", v.rolls}}; }
@@ -418,6 +433,7 @@ void to_json(Json& j, const AttackFlow& v) {
     if (v.pending_mortal_wounds != 0) j["pending_mortal_wounds"] = v.pending_mortal_wounds;
     if (v.wound_rerolls) j["wound_rerolls"] = *v.wound_rerolls;  // 24.38 (D-072); omitted when absent
     if (v.shooting_type != ShootingType::Normal) j["shooting_type"] = v.shooting_type;  // D-093; omitted when Normal
+    if (v.rolling) j["rolling"] = *v.rolling;  // D-095; omitted when absent
 }
 void from_json(const Json& j, AttackFlow& v) {
     j.at("attacker").get_to(v.attacker);
@@ -435,6 +451,8 @@ void from_json(const Json& j, AttackFlow& v) {
     }
     v.shooting_type = ShootingType::Normal;
     if (const auto it = j.find("shooting_type"); it != j.end()) it->get_to(v.shooting_type);
+    v.rolling.reset();
+    if (const auto it = j.find("rolling"); it != j.end() && !it->is_null()) v.rolling = it->get<BatchRolls>();
 }
 
 void to_json(Json& j, const FlowState& v) {
@@ -447,6 +465,7 @@ void to_json(Json& j, const FlowState& v) {
     put_opt(j, "fight_sequence", v.fight_sequence);
     put_opt(j, "fight", v.fight);
     j["forced_fights"] = v.forced_fights;
+    if (!v.battle_shock_tests.empty()) j["battle_shock_tests"] = v.battle_shock_tests;  // D-095; omitted when empty
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -460,6 +479,8 @@ void from_json(const Json& j, FlowState& v) {
     get_opt(j, "fight_sequence", v.fight_sequence);
     get_opt(j, "fight", v.fight);
     j.at("forced_fights").get_to(v.forced_fights);
+    v.battle_shock_tests.clear();
+    if (const auto it = j.find("battle_shock_tests"); it != j.end()) it->get_to(v.battle_shock_tests);
 }
 
 // D-076 (M67): the exact totals (numerators over the common denominator) and their display forms.
@@ -529,6 +550,9 @@ void to_json(Json& j, const PendingDecision& v) {
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder> ||
                                  std::is_same_v<T, decision::OrderCasualties>) {
                 j["target"] = k.target;
+            } else if constexpr (std::is_same_v<T, decision::RollDice>) {
+                j["roll"] = k.roll;  // D-095
+                j["unit"] = k.unit;
             }
         },
         v.kind);
@@ -554,6 +578,7 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "RerollWoundRolls") v.kind = decision::RerollWoundRolls{j.at("attacker").get<UnitId>()};
     else if (kind == "DeployUnits") v.kind = decision::DeployUnits{};  // D-081
     else if (kind == "RetargetAttacks") v.kind = decision::RetargetAttacks{j.at("attacker").get<UnitId>()};  // D-093
+    else if (kind == "RollDice") v.kind = decision::RollDice{j.at("roll").get<RollKind>(), j.at("unit").get<UnitId>()};
     else bad_enum("PendingDecision", j);
 }
 

@@ -33,6 +33,7 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.fight_sequence.reset();
     state.flow.fight.reset();
     state.flow.forced_fights.clear();
+    state.flow.battle_shock_tests.clear();  // D-095
     state.pending.reset();
     events.push_back(event::GameOver{winner, std::move(reason), std::move(points), vp});
 }

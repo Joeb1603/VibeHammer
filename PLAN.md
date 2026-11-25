@@ -204,80 +204,74 @@ decision and stays valid.
 
 ## M94: Engine-paced dice rolls (D-095)
 
-**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-25; the design below is the agreed plan).
+**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-25; the design below is the agreed plan, revised
+the same day after a design review: decisions derived from flow state, `apply_action` keeps rolling inline, auto-rolls
+in `GameSession`, random damage once per batch).
 **Scope:** roadmap Phase 0 item 2 (Option 2 of M20). The engine stops at every roll point with a `RollDice` decision for
 the roller, and the roll is made when the roller submits it. Groundwork for Command Re-roll (15.02 "just after you
 make" the roll), re-roll abilities and Feel No Pain. The user's choices (2026-11-25): one milestone (engine, bot,
 replays, saves and client together); a human's rolls follow "Show dice pop-ups" (on: press Roll; off: automatic), and
-bot rolls are always automatic; format-1 saves and replays migrate on load, new files are format 2.
+bot rolls are always automatic; every roll is recorded as a step (format-2 saves and replays; format 1 migrates on
+load; all 28 test replays regenerated); a random D is rolled once per batch (the per-attack split waits for Feel No
+Pain / Command Re-roll).
 
 **Rules:** 01.05, 01.05.02 (app), 04.03, 05.01–05.04, 06.03, 08.03, 09.06, 09.07, 11.02, 24.15; D-033, D-069, D-072.
 
 **Design**
-- *The roll closure (the invariant):* old `apply_action(X)` equals new `apply_action(X)` followed by `RollDice` actions
-  until no roll is pending, with the dice consumed in exactly the same order. If a roll point can't keep the old order,
-  stop and ask.
-- *Types* (all appended to their variants; `state_hash` hashes `kind.index()`): `enum class RollKind { Advance, Charge,
-  BattleShock, Hazard, RandomAttacks, Hit, Wound, Save, Damage }`; `PendingRoll { kind, unit, optional batch }` as
-  `FlowState::roll`; `decision::RollDice{kind, unit}` (rule per kind); `action::RollDice{}` (one legal action). The
-  roller is the unit's owner, except a Save (the target's); a Damage roll is the attacker's. Results waiting for the
-  next roll (hit rolls, the next 05.04 step and its running result) live on the attack flow. New fields are omitted
-  from JSON when empty, round-trip tested, and hashed behind a tag only when set.
-- *Engine flow:* `advance()` and `compute_decision` check `flow.roll` first. `apply_details(RollDice)` makes exactly
-  the dice the old code made at that point, emits the same events, clears `flow.roll` and continues through the
-  existing helper.
-- *Roll points* (one Roll each; 05: "make all of those rolls simultaneously"):
+- *The roll closure (the invariant):* the old `apply_action(X)` equals the paced `apply_action_paced(X)` followed by
+  `RollDice` answers until no roll is pending: the same dice in the same order, the same events, the same state. If a
+  roll point can't keep it, stop and ask.
+- *One machine, two ways to apply:* the engine always stops at a `RollDice`. `apply_action` / `start_game` (every
+  existing overload) answer each pending `RollDice` for its roller with the same dice, inside the same rollback scope:
+  the M93 behaviour, so the bot's `Simulator`, the M39 guard, the existing tests and format-1 replays are unchanged.
+  `apply_action_paced` / `start_game_paced` stop at the next decision, a `RollDice` included (used by `Match` in
+  `RollMode::Paced`, so by `GameSession`, by format-2 replays and by the D095 tests). Also `roll_pending(state)` and a
+  read-only `roll_dice_info(state)` (who rolls what, how many dice) for the client's pre-roll card (D-024).
+- *Types* (appended to their variants): `enum class RollKind { Advance, Charge, BattleShock, Hazard, RandomAttacks,
+  Hit, Wound, Save, Damage }`; `decision::RollDice{roll, unit}` and `action::RollDice{roll, unit}` (one legal action;
+  validated against the pending decision). The roller is the unit's owner: for a Save the unit is the target (05.03),
+  for a Damage roll the attacker (D-069). New state, each omitted from JSON when empty and hashed behind a tag when set:
+  `AttackFlow::rolling` (a selected batch until its wound roll, with its hit rolls), `BatchInProgress::priority` (the
+  casualty order while a random D waits), `FlowState::battle_shock_tests` (the battle-shock rolls owed). None is ever
+  set at a non-Roll decision, so states at the bots' decisions are as at M93.
+- *Roll points* (each decision derived from the flow state; one Roll each, 05: "make all of those rolls
+  simultaneously"):
 
 | Point | Today | After M94 |
 |---|---|---|
-| 09.06 Advance | `begin_move` (`movement.cpp`) | `StartMove{Advance}` sets the roll, then `MoveModels`. A reused roll (D-005) asks nothing. |
+| 09.06 Advance | `begin_move` (`movement.cpp`) | `StartMove{Advance}`, then a Roll, then `MoveModels`. A reused roll (D-005) asks nothing. |
 | 09.07 Desperate Escape hazards | `begin_move` | a Hazard roll before `OrderCasualties` |
-| 09.07 Desperate Escape battle-shock | at `CommitUnitMove` | a BattleShock roll after the commit |
-| 08.03 Battle-shock step | a loop in `battle_shock_step` (`command.cpp`) | one roll per unit, same unit order, next unit from state |
+| 09.07 Desperate Escape battle-shock | at `CommitUnitMove` | the commit owes a BattleShock roll (the battle-shock queue) |
+| 08.03 Battle-shock step | a loop in `battle_shock_step` (`command.cpp`) | the queue, filled on entering the step: one roll per unit, in unit order |
 | 11.02 Charge | `DeclareCharge` apply | a Charge roll, then `SelectChargeTargets` or failure |
 | D-069 random A | `start_batch` (`attack_flow.cpp`) | a RandomAttacks roll if the batch has random A |
 | 05.01 Hit | `start_batch` | a Hit roll (none for [TORRENT]); results stored |
 | 05.02 Wound | `start_batch` | a Wound roll (none with no hits); Twin-linked's `RerollWoundRolls` follows as now |
 | 05.03 Save | `attack_progress` | a Save roll by the defender after the allocation order |
-| 05.04 random D | inside `resolve_casualties` / `inflict_damage` | a Damage roll per damaging save step with random D |
+| 05.04 random D | inside `resolve_casualties` | one Damage roll per batch, by the attacker, after the casualty order |
 | 24.15 Hazardous | `make_attack_hazard_rolls` | a Hazard roll by the attacker after the last batch |
 
-- *Attack sequence:* `start_batch` split into select, random A, hit, wound (M61's `wound_rerolls` pattern,
-  generalised). `resolve_casualties` becomes resumable, one save step per `attack_progress` call; fixed damage never
-  stops. `inflict_damage`'s per-step logic is factored into a single-step function that the pure
-  `resolve_attack_batch` (the bots' odds) also uses. `SavesResolved` is still emitted once per batch.
-- *Closure helper* (engine API, documented in CLAUDE.md): `bool roll_pending(const GameState&)` and
-  `std::vector<GameEvent> roll_through(GameState&, DiceSource&)`. Used by `Simulator::step` after each action (so the
-  bot's scripted-dice analyses of charges, Advances and Desperate Escapes work unchanged), the format-1 migration and
-  the test helper `apply_rolling` (`tests/support/engine_helpers.hpp`).
-- *Replays and saves:* format 2 stores the Roll steps; format 1 loads by running the closure after each step. All 28
-  `tests/replays/` files are regenerated (the 20 of `Replay.DISABLED_RegenerateReplays`, the 8 `wh40k_ai_tests`
-  generators) with byte-identical `expect` blocks; one old replay and one old save go to `tests/data/legacy/` as
-  migration fixtures.
-- *Bot:* in live games a bot side's Rolls are auto-submitted by `next_auto_action`, as lone skips are, so `Bot::decide`
-  traces are unchanged. Arena `steps`/`actions` hashes change by construction; `state` and `trace` must not.
-- *Client:* `AutoSettings` gains a per-side `auto_roll` (bot sides; human sides when `show_dice` is off), joined to the
-  preceding Undo group. With pop-ups on, a human's pending `RollDice` opens a face-down pre-roll card built from the
-  state (`logic/roll_prompt`, like `RerollPicks`: what is rolled, how many dice, what is needed); its Roll submits
-  `RollDice`, and the event cards then open already rolled. Bot cards keep the cosmetic Roll (`DicePace`). A Roll is
-  never its own Undo group. No deadlock with a bot opponent. `--steps` / `--bot-steps` counts include Rolls
-  (`docs/dev/client_flags.md`, `tools/package.ps1`).
-- *Docs:* D-095 (roll points and rollers, the closure, format 2 and migration, auto-rolling, Damage per step); amend
-  D-033 (Option 2 now) and D-072 (the Wound roll is its own step); the roadmap's Phase 0 item 2.
-
-**Work order:** PLAN/D-095 draft; core types, JSON, hash; Advance, Charge, battle-shock, Desperate Escape; random A, hit,
-wound; saves, resumable Damage, Hazardous; `roll_through`, Simulator, `apply_rolling` and the tests that capture
-events from rolling actions (about 100 sites, none weakened); format 2 and migration, replays regenerated; client;
-arena identity runs, full `ctest`, docs, commit, PR, merge.
+- *Replays and saves:* format 2 records the Roll steps; format 1 is played inline (replays) or converted with
+  `with_roll_steps` (saves, the generators). All 28 `tests/replays/` files are regenerated with byte-identical `expect`
+  blocks; old copies (m8, m62) and an M93 save are kept in `tests/data/legacy/` as migration fixtures.
+- *Bot:* in live games `GameSession` rolls for bot sides, so `Bot::decide` never gets a `RollDice` (its fallback answers
+  one anyway). Arena `steps`/`actions` change by construction; `state` and `trace` must not.
+- *Client:* `GameSession` has a per-side `auto_roll` (bot sides; human sides when `show_dice` is off): a pending
+  `RollDice` for such a side is submitted at once, each Roll a step. Undo never takes a Roll back on its own. With
+  pop-ups on, a human's pending `RollDice` shows a face-down pre-roll card (`logic/roll_prompt`); its Roll submits
+  `RollDice` (joining the previous input's Undo group), and the event cards then open already rolling. Bot cards keep
+  the cosmetic Roll (`DicePace`). `--steps` counts Roll clicks; `--bot-steps` still counts bot decisions.
+- *Docs:* D-095; amend D-033, D-069, D-072, D-014, D-025, D-039; CLAUDE.md's engine API; the roadmap's Phase 0 item 2.
 
 **Acceptance**
 - [ ] Each roll point is a `RollDice` decision for the roller, and the Roll answer makes the same dice in the same
   order. `D095_RollPoints` tests cover each point, the roller's side, the skipped cases (Torrent, no hits, fixed D,
-  reused Advance) and a Roll from the wrong side.
-- [ ] `roll_through` equals the old inline behaviour: every regenerated replay's `expect` is byte-identical, and its
-  final state equals the closure-migrated format-1 file.
-- [ ] Format-1 saves and replays load via migration (fixtures in `tests/data/legacy/`); format 2 round-trips. Every
-  new state field has a JSON round-trip test.
+  reused Advance, no Hazardous roll with no enemy left) and a refused Roll (wrong side, kind or unit).
+- [ ] The closure holds: the existing tests pass unchanged through the inline `apply_action`; every regenerated
+  replay's `expect` is byte-identical; its steps without the Roll steps are the old ones; the paced and inline runs of
+  every replay give the same events and state; the M93 and M94 event dumps of all 28 replays are identical.
+- [ ] Format-1 saves and replays load (fixtures in `tests/data/legacy/`); format 2 round-trips. Every new state field
+  has a JSON round-trip test.
 - [ ] Bots: arena `--per-game` `state` and `trace` hashes identical to M93 on the identity set; decision p95 within
   budget.
 - [ ] Client: with pop-ups on, a human's roll waits for Roll and the faces match the events (logic test); with them off,

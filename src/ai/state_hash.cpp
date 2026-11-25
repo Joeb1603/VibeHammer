@@ -130,6 +130,11 @@ void add(Fnv1a& h, const core::FlowState& f) {
             if (a.current->save_rolls) {
                 for (const int r : *a.current->save_rolls) h.i32(r);
             }
+            // M94 (D-095): only while a random D waits for its Damage roll, so other states hash as before.
+            if (a.current->priority) {
+                h.u64(0x7072696full);  // "prio"
+                for (const core::ModelId id : *a.current->priority) add(h, id);
+            }
         }
         // M60 (24.15): only when set, so a state without hazard rolls hashes as before.
         if (a.hazard_rolls != 0 || a.pending_mortal_wounds != 0) {
@@ -142,6 +147,17 @@ void add(Fnv1a& h, const core::FlowState& f) {
             h.u64(a.wound_rerolls->batch);
             h.u64(a.wound_rerolls->rolls.rolls.size());
             for (const core::WoundRoll& r : a.wound_rerolls->rolls.rolls) h.i32(r.unmodified);
+        }
+        // M94 (D-095): only while a batch's dice are being rolled, so other states hash as before.
+        if (a.rolling) {
+            h.u64(0x726f6c6cull);  // "roll"
+            h.u64(a.rolling->batch);
+            h.flag(a.rolling->hits.has_value());
+            if (a.rolling->hits) {
+                h.u64(a.rolling->hits->rolls.size());
+                for (const core::HitRoll& r : a.rolling->hits->rolls) h.i32(r.unmodified.value_or(0));
+                h.i32(a.rolling->hits->sustained_hits);
+            }
         }
         // M92 (D-093): AttackFlow::shooting_type is not hashed. It only narrows the new targets of 04.03.03, and the
         // batches hashed above already differ by its effects (10.05 / 10.06), so every older state hashes as before.
@@ -195,6 +211,11 @@ void add(Fnv1a& h, const core::FlowState& f) {
     }
     h.u64(f.forced_fights.size());
     for (const core::UnitId u : f.forced_fights) add(h, u);
+    // M94 (D-095): only while battle-shock rolls are owed, so other states hash as before.
+    if (!f.battle_shock_tests.empty()) {
+        h.u64(0x6273686bull);  // "bshk"
+        for (const core::UnitId u : f.battle_shock_tests) add(h, u);
+    }
 }
 
 // The decision's kind and the unit it is about (every kind holds at most one id).
@@ -207,6 +228,7 @@ void add(Fnv1a& h, const core::PendingDecision& d) {
             if constexpr (requires { k.unit; }) add(h, k.unit);
             if constexpr (requires { k.target; }) add(h, k.target);
             if constexpr (requires { k.attacker; }) add(h, k.attacker);
+            if constexpr (requires { k.roll; }) h.u64(static_cast<std::uint64_t>(k.roll));  // M94: RollDice
             (void)sizeof(K);
         },
         d.kind);

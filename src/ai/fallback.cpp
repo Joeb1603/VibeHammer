@@ -75,6 +75,9 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
         if (auto d = deploy_policy(state, state.pending->side, legal)) return d->action;
         return std::nullopt;
     }
+    // D-095 (M94): make the roll (its one answer). GameSession rolls for a bot's side itself, so the bot only meets one
+    // when a roll is pending after a load or an undo.
+    if (const auto* d = std::get_if<decision::RollDice>(&kind)) return action::RollDice{d->roll, d->unit};
     return std::nullopt;
 }
 

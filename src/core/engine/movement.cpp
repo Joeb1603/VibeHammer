@@ -244,6 +244,16 @@ void begin_move(GameState& state, const action::StartMove& a, DiceSource& dice, 
     state.flow.move = std::move(mv);
 }
 
+// ---- D-095 (M94): the rolls a move waits for ----
+
+void make_advance_roll(GameState&, DiceSource&, Events&) {
+    throw std::logic_error("D-095: the advance roll is not paced yet");
+}
+
+void make_desperate_escape_hazard_rolls(GameState&, DiceSource&, Events&) {
+    throw std::logic_error("D-095: the Desperate Escape hazard rolls are not paced yet");
+}
+
 // ---- the sub-machine ----
 
 std::optional<PendingDecision> move_decision(const GameState& state) {

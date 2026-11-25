@@ -194,6 +194,14 @@ void from_json(const Json& j, ModelPlacement& v) {
     v.facing_deg = j.contains("facing_deg") ? j.at("facing_deg").get<float>() : 0.0f;  // validation checks it
 }
 
+// ---- D-095: the dice roll a RollDice decision waits for ----
+void to_json(Json& j, RollKind v) { j = std::string(roll_kind_name(v)); }
+void from_json(const Json& j, RollKind& v) {
+    const std::optional<RollKind> r = j.is_string() ? roll_kind_from_name(j.get<std::string>()) : std::nullopt;
+    if (!r) json_detail::bad_enum("RollKind", j);
+    v = *r;
+}
+
 // ---- actions ----
 namespace action {
 
@@ -254,6 +262,9 @@ void to_json(Json& j, const GameAction& v) {
                 j["unit"] = a.unit;  // D-081
             } else if constexpr (std::is_same_v<T, RetargetAttacks>) {
                 j["retargets"] = a.retargets;  // 04.03.03 (D-093)
+            } else if constexpr (std::is_same_v<T, RollDice>) {
+                j["roll"] = a.roll;  // D-095
+                j["unit"] = a.unit;
             }
         },
         v);
@@ -320,6 +331,8 @@ void from_json(const Json& j, GameAction& v) {
         v = CannotSetUp{j.at("unit").get<UnitId>()};
     } else if (kind == "RetargetAttacks") {
         v = RetargetAttacks{j.at("retargets").get<std::vector<AttackRetarget>>()};  // D-093
+    } else if (kind == "RollDice") {
+        v = RollDice{j.at("roll").get<RollKind>(), j.at("unit").get<UnitId>()};  // D-095
     } else {
         bad_enum("GameAction", j);
     }

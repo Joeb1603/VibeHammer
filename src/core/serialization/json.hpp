@@ -128,6 +128,8 @@ void to_json(Json& j, const BatchInProgress& v);
 void from_json(const Json& j, BatchInProgress& v);
 void to_json(Json& j, const PendingWoundRerolls& v);
 void from_json(const Json& j, PendingWoundRerolls& v);
+void to_json(Json& j, const BatchRolls& v);  // D-095
+void from_json(const Json& j, BatchRolls& v);
 void to_json(Json& j, const AttackFlow& v);
 void from_json(const Json& j, AttackFlow& v);
 void to_json(Json& j, const FlowState& v);

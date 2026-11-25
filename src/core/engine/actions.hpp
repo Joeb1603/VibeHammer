@@ -14,6 +14,7 @@
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
+#include "core/state/decision.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -191,6 +192,12 @@ struct RetargetAttacks {
     std::vector<AttackRetarget> retargets;
     friend bool operator==(const RetargetAttacks&, const RetargetAttacks&) = default;
 };
+// D-095 (M94): make the roll the pending RollDice decision waits for (the same roll and unit). Never a template.
+struct RollDice {
+    RollKind roll = RollKind::Hit;
+    UnitId unit;
+    friend bool operator==(const RollDice&, const RollDice&) = default;
+};
 }  // namespace action
 
 // New alternatives are appended at the end, so every existing index stays the same.
@@ -202,7 +209,7 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::EndConsolidations, action::RemoveModelForCoherency,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties, action::RerollWoundRolls, action::DeployUnit,
-                                action::CannotSetUp, action::RetargetAttacks>;
+                                action::CannotSetUp, action::RetargetAttacks, action::RollDice>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"

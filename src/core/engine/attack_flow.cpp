@@ -387,6 +387,14 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
     start_batch(state, dice, options.front(), events);  // only one option (otherwise a decision)
 }
 
+// ---- D-095 (M94): the rolls an attack waits for ----
+
+void make_attack_roll(GameState&, RollKind, DiceSource&, Events&) {
+    throw std::logic_error("D-095: the attack's rolls are not paced yet");
+}
+
+void describe_attack_roll(const GameState&, RollKind, RollDiceInfo&) {}
+
 // ---- 04.03 SelectAttackBatch ----
 
 std::vector<GameAction> legal_for(const GameState& state, const decision::SelectAttackBatch&) {
@@ -699,6 +707,7 @@ std::vector<GameEvent> begin_attacks(GameState& state, DiceSource& dice, UnitId 
     state.pending.reset();
     detail::start_attacks(state, attacker, context, std::move(selections), events);
     detail::advance(state, dice, events);
+    detail::roll_through(state, dice, events);  // D-095: every roll made at once, as apply_action
     return events;
 }
 
