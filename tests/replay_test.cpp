@@ -76,12 +76,14 @@ void expect_replays_identically(const Match& match) {
 // Writes a regenerated replay only if nothing has failed so far: an ASSERT inside a scripting lambda
 // returns from the lambda, not the test, so a failed step must not let a different game overwrite a
 // committed regression replay.
+// M94 (D-095): the builders script the players' choices with every roll made inside its step (format 1); the file is
+// written as format 2, each roll a step of its own (with_roll_steps), the game unchanged.
 void save_if_clean(const Replay& replay, const std::filesystem::path& path) {
     if (::testing::Test::HasFailure()) {
         ADD_FAILURE() << "not writing " << path << ": an earlier step failed";
         return;
     }
-    save_replay(replay, path);
+    save_replay(with_roll_steps(replay, repo_root()), path);
 }
 
 // M60 (D-071): the Havocs vs Hive Tyrant fixture with the Tyrant's bonesword replaced by a heavy venom cannon (a
@@ -1937,7 +1939,8 @@ TEST(D093_Replay, TheRetargetReplayGivesTheLostWeaponANewTarget) {
     const Replay again = m92_replay(kM92Seed, ok, problem);
     EXPECT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(ok);
-    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+    // The file is what the builder plays now, both compared as format 2 (M94, D-095: each roll a step).
+    EXPECT_EQ(Json(with_roll_steps(again, repo_root())).dump(2), Json(with_roll_steps(saved, repo_root())).dump(2));
 }
 
 // M74 (D-081): the replay's scenario file is the stock armies' custom battle set up by hand.
@@ -1974,7 +1977,8 @@ TEST(D081_Replay, TheHandDeploymentReplaySetsUpAndStartsBattleRoundOne) {
     const Replay again = m74_replay(ok, problem);
     EXPECT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(ok);
-    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+    // The file is what the builder plays now, both compared as format 2 (M94, D-095: each roll a step).
+    EXPECT_EQ(Json(with_roll_steps(again, repo_root())).dump(2), Json(with_roll_steps(saved, repo_root())).dump(2));
 }
 
 // M86 (D-084): the saved replay takes the Centre, scores both sides and stops at Side A's round-3 Move Units decision.
@@ -1997,7 +2001,8 @@ TEST(D084_Replay, TheObjectiveReplayTakesTheCentreAndScoresBothSides) {
     const Replay again = m86_replay(kM86Seed, ok, problem);
     EXPECT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(ok);
-    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+    // The file is what the builder plays now, both compared as format 2 (M94, D-095: each roll a step).
+    EXPECT_EQ(Json(with_roll_steps(again, repo_root())).dump(2), Json(with_roll_steps(saved, repo_root())).dump(2));
 }
 
 // M90 (D-091): the saved replay destroys the Termagants, consolidates the Terminators onto the Centre (Objective
@@ -2025,7 +2030,8 @@ TEST(D091_Replay, TheObjectiveConsolidationReplayTakesTheCentre) {
     const Replay again = m90_replay(kM90Seed, ok, problem);
     EXPECT_TRUE(problem.empty()) << problem;
     EXPECT_TRUE(ok);
-    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));  // the file is what the builder plays now
+    // The file is what the builder plays now, both compared as format 2 (M94, D-095: each roll a step).
+    EXPECT_EQ(Json(with_roll_steps(again, repo_root())).dump(2), Json(with_roll_steps(saved, repo_root())).dump(2));
 }
 
 TEST(Replay, DISABLED_SearchM90Seed) {

@@ -179,6 +179,7 @@ BotGame play_custom_bot_game(std::uint64_t seed = kReplaySeed) {
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
     g.record = play_bot_session(session, normal_bot(), normal_bot(), 5000);
     g.replay.steps = session.history();
+    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }
@@ -218,7 +219,8 @@ TEST(M73_Replay, TheCustomBotGameReplaysToItsResultWithCoreOnly) {
 TEST(M73_Replay, TheSavedFileMatchesTheGame) {
     // Normal vs Normal with the replay's seed plays exactly the saved game now (D-054: the bots are deterministic),
     // with nothing rejected, reverted or answered by the fallback.
-    const Replay saved = load_replay(saved_path());
+    // M94 (D-095): compared as format 2 (each roll a step), however the file was written.
+    const Replay saved = with_roll_steps(load_replay(saved_path()), repo_root());
     const BotGame g = play_custom_bot_game();
     EXPECT_TRUE(g.record.finished);
     EXPECT_EQ(g.record.rejected, 0u);

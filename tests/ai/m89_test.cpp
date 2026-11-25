@@ -491,6 +491,7 @@ CoverGame play_cover_bot_game(std::uint64_t seed = kCoverSeed) {
     // M91 (D-092): the M89 game, pinned to the M91 keys at 0 (the saved file is the M90 bot's).
     g.record = play_bot_session(session, m90_bot(), m90_bot(), 5000);
     g.replay.steps = session.history();
+    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
     g.replay.expect = replay_expectation(session.state());
     for (const ReplayStep& st : g.replay.steps) {
         if (const auto* p = std::get_if<action::ProposeModelMove>(&st.action); p != nullptr && p->path.size() == 2) {
@@ -536,7 +537,8 @@ TEST(M89_Replay, TheCoverBotGameReplaysToItsResultWithCoreOnly) {
 TEST(M89_Replay, TheSavedFileMatchesTheGame) {
     // The bot with the replay's seed plays exactly the saved game now (D-054), with nothing rejected, reverted or
     // answered by the fallback, and it shows a hidden unit refused to a shooter (13.09).
-    const Replay saved = load_replay(cover_replay_path());
+    // M94 (D-095): compared as format 2 (each roll a step), however the file was written.
+    const Replay saved = with_roll_steps(load_replay(cover_replay_path()), repo_root());
     const CoverGame g = play_cover_bot_game();
     EXPECT_TRUE(g.record.finished);
     EXPECT_EQ(g.record.rejected, 0u);
