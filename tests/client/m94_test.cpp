@@ -12,6 +12,7 @@
 
 #include "core/engine/engine.hpp"
 #include "dice_cards.hpp"
+#include "saved_game.hpp"
 #include "session.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
@@ -214,4 +215,24 @@ TEST(M94_Saves, AGameSavedWhileARollWaitsLoadsStillWaitingForIt) {
     EXPECT_EQ(loaded.state(), s.state());
     EXPECT_TRUE(roll_pending(loaded.state()));  // no roll is made by loading
     EXPECT_EQ(loaded.history(), s.history());
+}
+
+// Writes two hotseat saves for screenshots of the pre-roll card (xvfb-run, --load): one waiting for Side A's hit
+// rolls, one for Side B's save rolls. Run on purpose only:
+//   WH40K_SCREEN_DIR=<dir> wh40k_client_tests --gtest_also_run_disabled_tests --gtest_filter=M94_Screens.*
+TEST(M94_Screens, DISABLED_WriteSavesWaitingForARoll) {
+    const char* dir = std::getenv("WH40K_SCREEN_DIR");
+    if (dir == nullptr) GTEST_SKIP() << "set WH40K_SCREEN_DIR";
+    GameSession hit(shoot_step(1), {false, false});
+    ASSERT_TRUE(hit.submit(rifle_volley(hit.state())).ok());
+    ASSERT_TRUE(roll_pending(hit.state()));
+    save_game_file(std::filesystem::path(dir) / "m94_hit_prompt.json", hit, SavePlayers{});
+    for (std::uint64_t seed = 0; seed < 20; ++seed) {
+        GameSession save(shoot_step(seed), {true, false});
+        ASSERT_TRUE(save.submit(rifle_volley(save.state())).ok());
+        if (!roll_pending(save.state())) continue;
+        save_game_file(std::filesystem::path(dir) / "m94_save_prompt.json", save, SavePlayers{});
+        return;
+    }
+    FAIL() << "no seed wounded the Termagants";
 }
