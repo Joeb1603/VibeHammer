@@ -26,6 +26,8 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   and consolidations). Any other value exits 2. The features on: `--weights
   plan_terrain=1,aim_terrain=1,hold_fire=1,objective_charge=1,objective_fight=1`. M93 (D-094) adds `gone_to_ground`
   (0 or 1, default 0: measured +8 games in 400, not better): 13.11.01 in the move score's guess of the enemy's reply.
+  M95 (D-096) adds `command_reroll` and `insane_bravery` (0 or 1 each): the bot plays Command Re-roll (15.02) and
+  Insane Bravery (15.04). With both 0 its session declines every reaction window for it, so it never sees one.
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -103,6 +105,12 @@ thirteen runs above, 200 games each (2,600 games), identical to the M93 binary i
 two fields against an older binary, or whole against the M94 binary, which is the reference for every run. The M91,
 M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps too). The bot's simulations roll inline
 (`apply_action`), so its decisions do the same work as before.
+
+M95 (D-096) adds a step for each reaction window the session declines for a bot whose stratagem keys are off (at the
+defaults, every window), and rolls a random D per attack, so `steps` and `actions` change again and nothing else may.
+The proof: all thirteen runs, 200 games each (2,600 games), are identical to the M94 binary in every field but `steps`
+and `actions` (every `state` and `trace` the same; no game has fewer steps). The M95 binary is the reference for every
+run. The M91, M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps too).
 
 ## Deployment and the summary
 
