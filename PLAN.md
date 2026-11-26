@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M94 are done; M95 is below, the current one. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M94 are done; M95 is below, then M96, the current one. Their full text (prompts, acceptance checks, results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -289,6 +289,80 @@ D-095.
   measured), no CP is kept back for a later window, and advance rolls are never re-rolled.
 - The rest of the core stratagems: M96 (Fire Overwatch, Snap Shooting, Heroic Intervention, Counteroffensive), then
   "Later" item 4.
+
+---
+
+## M96: Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive (D-097)
+
+**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-26, after a design pass on M95's code).
+**Scope:** the opponent-turn core stratagems, on M95's reaction windows: Fire Overwatch with Snap Shooting (15.08,
+15.09), Heroic Intervention (15.11) and Counteroffensive (15.12). The user chose them on 2026-11-25, with M96 in the same
+session as M95. The user's rulings:
+- [TORRENT] still hits automatically when snap shooting;
+- a snap shot's 6 is not a critical hit (the app's 15.09, data v963);
+- Fire Overwatch and Heroic Intervention are offered only when they can do something;
+- a snap shot never re-targets;
+- Counteroffensive: play returns to Fights First at once, a pass stays allowed (the requirement lapses), and the window
+  follows any enemy fight.
+
+**Rules:**
+- PDF: 15.01, 15.08–15.12, 04.01–04.03, 10.02, 11.02, 11.04, 12.04, 17.03, 24.13, 24.16, 24.37, 01.03, 01.07.
+- App: 01.03.02, 07.02.01 Out of Phase Rules, 14.02.01, 15.09 (v963); FAQ Q2, Q45, Q50, Q55, Q56, Q62, Q71.
+- Decisions: D-018, D-020, D-084, D-091, D-093, D-095, D-096.
+
+**Design** (D-097 has the full text)
+- *Windows:*
+  - `WindowTiming::EndOfPhase`, opened on entering the End of Movement and End of Charge phase steps for the player
+    whose turn it isn't;
+  - `WindowTiming::AfterAttacks`, just after a unit has fought in the Fight step, for the other player;
+  - the window's roll and unit become optional;
+  - `UseStratagem` gains Heroic Intervention's mode;
+  - each opens only when a stratagem there can do something.
+- *Fire Overwatch:* a `SnapShoot{unit}` decision, answered by `Shoot{unit, Snap, shots}`.
+  - Snap shooting allows one target within 24" that is visible and eligible.
+  - Only an unmodified 6 hits, and it is not critical; [TORRENT] still hits automatically.
+  - There is no hit re-roll and no re-target, and [HEAVY] and 17.03 are off (07.02.01).
+- *Heroic Intervention:*
+  - the mode is chosen with the stratagem, then its player makes the charge roll;
+  - Into the Fray caps the roll at 6 and costs 2CP;
+  - the targets are filtered by the mode, and the charge move gives Fights First until the end of the turn.
+- *Counteroffensive:*
+  - the unit gets Fights First for the phase and is its player's next selection;
+  - from Resolve Remaining Combats, play goes back to Fights First;
+  - a pass stays allowed.
+- *14.02.01:* objective control is determined on entering each End of Phase step, before any window.
+- *Format 4:* the new windows are recorded; format 3 converts by declining them, and every replay is regenerated.
+- *Client:*
+  - the window asks for the unit and the mode;
+  - snap shooting uses the shot editor;
+  - the cards and the log say what each stratagem did.
+- *Bot:*
+  - three keys (0 or 1), with heuristics from the existing odds;
+  - the session declines a window that offers only stratagems a side doesn't play;
+  - the defaults come from D-092's keep rule.
+
+**Acceptance**
+- [ ] Each stratagem is offered only at its WHEN, to the right player, for a TARGET it can act on. 15.01's cost and
+  restrictions and 01.07 are enforced with rule-cited refusals, and declining changes nothing.
+- [ ] Snap shooting: one target within 24", visible and eligible; only an unmodified 6 hits (not critical); [TORRENT]
+  automatic; no hit re-roll or re-target; [HEAVY] and 17.03 off. `R15_09_*` tests each.
+- [ ] Heroic Intervention: Leap to Defend and Into the Fray (the cap, 2CP, the 6" targets). The charge is the unit's
+  player's, and the move gives Fights First. `R15_11_*`.
+- [ ] Counteroffensive: Fights First for the phase; the unit is its player's next selection; the return to Fights
+  First, the pass and the lapse; it fights between two enemy Fights First units. `R15_12_*`.
+- [ ] 14.02.01: control is determined before the window; every event dump is unchanged.
+- [ ] The closure holds (inline declines every window). Format 4 round-trips. Formats 1 to 3 load, and the legacy
+  fixtures convert. Every new field has a JSON round-trip test and is omitted when absent.
+- [ ] Every replay is regenerated as format 4 with only declines added, and the M95/M96 event dumps are byte-identical.
+  `m96_reactions.json` shows each stratagem.
+- [ ] Bots:
+  - the identity set at `command_reroll=0` matches M95 in every field but `steps` and `actions`;
+  - at the defaults, every `state` is the same;
+  - the keys are measured, with their defaults set by the keep rule;
+  - p95 is within budget.
+- [ ] Client: each window asks for its unit and mode; snap shooting in the shot editor; the texts; logic tests and xvfb
+  screenshots.
+- [ ] Full `ctest` green, warnings as errors.
 
 ---
 
