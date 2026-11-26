@@ -40,7 +40,8 @@ add_executable(wh40k_ai_tests
     m94_test.cpp
     m95_test.cpp
     m96_test.cpp
-    m97_test.cpp)
+    m97_test.cpp
+    m98_test.cpp)
 
 target_link_libraries(wh40k_ai_tests PRIVATE wh40k_ai GTest::gtest_main)
 target_include_directories(wh40k_ai_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)

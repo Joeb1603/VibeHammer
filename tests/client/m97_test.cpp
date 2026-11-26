@@ -161,8 +161,11 @@ TEST(M97_Picks, TheSelectionOffersEachEnemyUnitWithItsFirstLegalModel) {
     EXPECT_NE(effect_hint(s.state()).find("six D6, each 4+"), std::string::npos);
     EXPECT_EQ(action_label(s.state(), choices[0].action),
               "Model " + std::to_string(choices[0].model.v) + " at Termagants (2)");
-    // The board leaves it to the bar (sidebar mode).
-    EXPECT_FALSE(BoardInteraction(s.state(), s.legal_offered()).active());
+    // M98 (D-100, amending D-099 part 8): the board picks it too, with the same buttons in its bar (sidebar mode in M97).
+    const BoardInteraction board(s.state(), s.legal_offered());
+    EXPECT_TRUE(board.active());
+    EXPECT_TRUE(board.picking_effect());
+    EXPECT_EQ(board.effect_buttons(s.state()), choices);
 }
 
 TEST(M97_Picks, CrushingImpactsWindowAndSelectionNameTheModelsT) {

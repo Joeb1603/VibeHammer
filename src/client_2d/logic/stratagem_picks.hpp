@@ -37,8 +37,15 @@ struct EffectChoice {
 };
 
 // The pending selection's answers, one per enemy unit (in unit order), each with its first legal model (model order);
-// empty unless a SelectModelAndEnemy decision is pending. Built from the engine's legal answers (D-024).
-[[nodiscard]] std::vector<EffectChoice> effect_choices(const core::GameState& state);
+// empty unless a SelectModelAndEnemy decision is pending. Built from the engine's legal answers (D-024). D-100 (M98):
+// with `model` (chosen on the board), that model's answers only.
+[[nodiscard]] std::vector<EffectChoice> effect_choices(const core::GameState& state,
+                                                       std::optional<core::ModelId> model = std::nullopt);
+// D-100 (M98): why `enemy` can't be picked at the pending selection: the engine's reason (validate_action) for the pair
+// of `model` (chosen on the board), or else of the stratagem unit's model closest to `enemy` (01.04, edge to edge).
+// nullopt when that pair can be picked, `enemy` isn't an enemy unit on the battlefield, or no selection is pending.
+[[nodiscard]] std::optional<std::string> effect_refusal_text(const core::GameState& state, core::UnitId enemy,
+                                                             std::optional<core::ModelId> model = std::nullopt);
 // What the selection is about, for the action bar: "Explosives: pick the enemy unit (15.05)".
 [[nodiscard]] std::string effect_headline(const core::GameState& state);
 // One line on what follows: the dice and what each needs.

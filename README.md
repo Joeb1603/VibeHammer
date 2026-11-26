@@ -66,7 +66,8 @@ goes on), and Insane Bravery on a battle-shock roll's card. In your opponent's t
 Overwatch at the end of their Movement phase, Heroic Intervention (in either mode) at the end of their Charge phase and
 Counteroffensive just after one of their units has fought, one button per unit. In your own Shooting phase the action
 bar offers Explosives for a unit with grenades, and just after your monster ends a charge move the panel offers Crushing
-Impact; each then asks for the enemy unit (one button each). With "Offer stratagems" off you are never asked. The event log cites the rule number behind each step.
+Impact; each then asks for the enemy unit: click it on the board (to choose the model that throws or rolls, click
+that model first), or use its button. With "Offer stratagems" off you are never asked. The event log cites the rule number behind each step.
 
 ## What's implemented
 

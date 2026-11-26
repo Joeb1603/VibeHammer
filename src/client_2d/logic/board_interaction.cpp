@@ -243,6 +243,11 @@ BoardInteraction::BoardInteraction(const core::GameState& state, std::vector<cor
         actor_ = f->unit;
         actor_fixed_ = true;
         melee_.emplace(state, f->unit);
+    } else if (const auto* e = std::get_if<d::SelectModelAndEnemy>(&kind)) {
+        // D-100 (M98): 15.05 / 15.06's selection: click an enemy unit (optionally a model of the unit first).
+        mode_ = Mode::PickEffect;
+        actor_ = e->unit;
+        actor_fixed_ = true;
     }
     base_mode_ = mode_;
 }
@@ -253,6 +258,38 @@ std::vector<core::GameAction> BoardInteraction::actions_of(core::UnitId unit) co
         if (board_unit(action) == unit) out.push_back(action);
     }
     return out;
+}
+
+std::vector<core::action::SelectModelAndEnemy> BoardInteraction::effect_pairs() const {
+    std::vector<a::SelectModelAndEnemy> out;
+    for (const core::GameAction& action : legal_) {
+        if (const auto* s = std::get_if<a::SelectModelAndEnemy>(&action)) out.push_back(*s);
+    }
+    return out;
+}
+
+std::optional<core::GameAction> BoardInteraction::effect_answer(core::UnitId enemy) const {
+    const std::vector<a::SelectModelAndEnemy> pairs = effect_pairs();
+    if (effect_model_) {
+        for (const a::SelectModelAndEnemy& p : pairs) {
+            if (p.enemy == enemy && p.model == *effect_model_) return p;
+        }
+        return std::nullopt;
+    }
+    for (const a::SelectModelAndEnemy& p : pairs) {
+        if (p.enemy == enemy) return p;  // the first legal model for it, as the bar's button (effect_choices)
+    }
+    return std::nullopt;
+}
+
+std::vector<EffectChoice> BoardInteraction::effect_buttons(const core::GameState& state) const {
+    if (mode_ != Mode::PickEffect) return {};
+    return effect_choices(state, effect_model_);
+}
+
+std::optional<std::string> BoardInteraction::effect_refusal(const core::GameState& state, core::UnitId unit) const {
+    if (mode_ != Mode::PickEffect || unit == actor_ || clickable(unit)) return std::nullopt;
+    return effect_refusal_text(state, unit, effect_model_);
 }
 
 std::vector<core::UnitId> BoardInteraction::target_options() const {
@@ -292,6 +329,9 @@ bool BoardInteraction::clickable(core::UnitId unit) const {
             const auto choices = melee_->choices();
             return std::any_of(choices.begin(), choices.end(), [&](const MeleeChoice& c) { return c.target == unit; });
         }
+        case Mode::PickEffect:
+            // D-100: the actor (to choose its model), and the enemy units of the answers (the chosen model's only).
+            return unit == actor_ || effect_answer(unit).has_value();
     }
     return false;
 }
@@ -305,6 +345,7 @@ bool BoardInteraction::waiting_for_click() const {
         case Mode::Targets:
         case Mode::Melee:
         case Mode::RemoveModel:
+        case Mode::PickEffect:
             return true;
         case Mode::PickCasualties:
             return picks_ && !picks_->done();
@@ -326,6 +367,7 @@ std::string BoardInteraction::prompt(const core::GameState& state) const {
     if (mode_ == Mode::Shoot && actor_) return "Pick a target for the " + unit_name(state, *actor_);
     if (mode_ == Mode::Targets) return "Pick the enemy units to " + target_verb_;
     if (mode_ == Mode::Melee && actor_) return "Pick a target for the " + unit_name(state, *actor_) + "'s attacks";
+    if (mode_ == Mode::PickEffect) return effect_headline(state);  // D-100: "Explosives: pick the enemy unit (15.05)"
     if ((mode_ == Mode::CustomShot || mode_ == Mode::CustomMelee) && actor_) {
         std::string text = (mode_ == Mode::CustomShot ? "Custom shot: " : "Custom fight: ") + unit_name(state, *actor_);
         if (custom_target_) text += " at " + unit_name(state, *custom_target_);
@@ -375,6 +417,25 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
             return "The " + name + " is out of coherency (03.03 Regaining Coherency): click a model to remove, "
                    "then confirm.";
         }
+        case Mode::PickEffect: {
+            // D-100 (M98): what to click, then what the dice do.
+            const std::string name = unit_name(state, *actor_);
+            const auto* d = state.pending ? std::get_if<core::decision::SelectModelAndEnemy>(&state.pending->kind)
+                                          : nullptr;
+            const bool explosives = d != nullptr && d->stratagem == core::Stratagem::Explosives;
+            const std::string verb = explosives ? "throws" : "rolls";
+            const std::string target = explosives ? "the enemy unit to throw at" : "the engaged enemy unit";
+            const std::string dice = explosives ? "Six D6: each 4+ is a mortal wound."
+                                                : "A D6 per point of the model's T: each 5+ is a mortal wound on the enemy "
+                                                  "unit, each 1 one on your unit (at most 6 each).";
+            if (effect_model_) {
+                return "Model " + std::to_string(effect_model_->v) + " of the " + name + " " + verb + ": click " + target +
+                       ". Click the model again, or Esc, to drop it. " + dice;
+            }
+            const std::string who = explosives ? "the first model of the " + name + " that can throw at it throws"
+                                               : "the first model of the " + name + " engaged with it rolls";
+            return "Click " + target + " (" + who + "), or first click the model that " + verb + ". " + dice;
+        }
         case Mode::PickCasualties: {
             const std::string name = unit_name(state, *actor_);
             if (!picks_ || !picks_->preview()) return "";
@@ -404,6 +465,12 @@ std::string BoardInteraction::hint(const core::GameState& state) const {
 }
 
 bool BoardInteraction::model_dimmed(core::UnitId unit, core::ModelId model) const {
+    if (mode_ == Mode::PickEffect) {
+        // D-100: a model of the actor in no legal answer can't be chosen.
+        if (unit != actor_) return false;
+        const std::vector<a::SelectModelAndEnemy> pairs = effect_pairs();
+        return std::none_of(pairs.begin(), pairs.end(), [&](const a::SelectModelAndEnemy& p) { return p.model == model; });
+    }
     if (mode_ != Mode::PickCasualties || unit != actor_ || !picks_ || picks_->done()) return false;
     return !picks_->can_pick(model);
 }
@@ -421,6 +488,17 @@ bool keep_selection(std::optional<core::UnitId> selected, std::optional<core::Un
 ClickResult BoardInteraction::click_model(const core::GameState& state, core::UnitId unit, core::ModelId model) {
     if (mode_ == Mode::PickCasualties) {
         if (unit == actor_ && picks_) picks_->pick(state, model);  // D-051: ignored unless it may be picked
+        return {};
+    }
+    if (mode_ == Mode::PickEffect) {
+        if (unit != actor_) return click(state, unit);  // an enemy unit: its answer
+        // D-100: a model of the actor chooses it (a second click drops it); a model in no answer does nothing.
+        if (model_dimmed(unit, model)) return {};
+        if (effect_model_ == model) {
+            effect_model_.reset();
+        } else {
+            effect_model_ = model;
+        }
         return {};
     }
     if (mode_ != Mode::RemoveModel) return click(state, unit);
@@ -444,6 +522,12 @@ ClickResult BoardInteraction::click(const core::GameState& state, core::UnitId u
             return {};
         case Mode::Melee:
             return melee_menu(state, unit);
+        case Mode::PickEffect: {
+            if (unit == actor_) return {};  // its models are clicked one at a time (click_model)
+            const std::optional<core::GameAction> answer = effect_answer(unit);  // D-100
+            if (!answer) return {};
+            return ClickResult{answer, {}};
+        }
         case Mode::PickActor:
             return pick_actor(state, unit);
         case Mode::Shoot: {
@@ -683,6 +767,7 @@ ClickResult BoardInteraction::choose(const core::GameState& state, const MenuEnt
 void BoardInteraction::cancel() {
     targets_.clear();
     chosen_model_.reset();
+    effect_model_.reset();  // D-100: back to the first model that can
     custom_.reset();
     custom_melee_.reset();
     custom_target_.reset();
@@ -713,6 +798,7 @@ std::vector<core::GameAction> BoardInteraction::step_buttons() const {
     std::vector<core::GameAction> out;
     if (custom_editor()) return out;  // the panel's Back and Shoot / Fight only (D-031, D-032)
     if (mode_ == Mode::RemoveModel) return out;  // D-042: a model is clicked, then confirmed
+    if (mode_ == Mode::PickEffect) return out;   // D-100: the selection's buttons are effect_buttons
     if (mode_ == Mode::PickCasualties) {  // D-051: or skip the picking with the default order (D-058)
         if (picks_ && !picks_->picks().empty()) {
             // M47: finish from the picks so far: the picks, then the default order for the rest.

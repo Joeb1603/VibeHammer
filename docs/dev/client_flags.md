@@ -6,7 +6,8 @@ The client's mouse input can't be scripted, so in a cloud session check the UI t
 - `--load <save.json>` starts on a saved game. It can't be combined with `--scenario`, `--replay` or `--seed`.
 - `--pick-dice <i,j,...>` picks wound dice in the first re-roll pop-up. Since M95 it also picks Command Re-roll's die
   (D-096) on the first card or pop-up of a window that has dice to pick.
-- `--pick-models <id,...>` picks models in the first casualty pick.
+- `--pick-models <id,...>` picks models in the first casualty pick. Since M98 the first id also chooses the model at
+  15.05 / 15.06's selection on the board (D-100).
 - `--click-units <id,...>` clicks units on the board and opens the last target's weapon menu.
 - `--turn <model>:<deg>[:<dx>,<dy>]` makes a scripted turned drag of an oval model.
 - `--window <w>x<h>` opens the window at that size instead of maximized.
@@ -56,5 +57,16 @@ declines a stratagem ("Offer stratagems" off, or a bot whose key is 0) is never 
 - at Side B's Crushing Impact window, just after the Hive Tyrant's charge (the monsters fixture);
 - at its selection ("Legionaries 2 (model 37, T10: 10 dice)");
 - waiting for its ten D6: `--steps 1 --dice 2` shows the card, the 5+s green, the 1s failed and the rest grey.
+
+M98 (D-100): the selection is also picked on the board. Its enemy units and the stratagem's unit can be clicked, and
+every other unit is grey. A click on an enemy unit submits its answer: the chosen model's, or else the first legal
+model's. A click on a model of the stratagem's unit first chooses that model (a gold fill and ring); a second click or
+Esc drops it. A model in no answer is dimmed. Hovering a grey enemy unit gives the engine's reason ("Can't be picked:
+15.05: unit 11 is not within 8" of model 8"). The bar keeps its buttons, narrowed to the chosen model's answers.
+`M98_Screens.DISABLED_WriteSavesWaitingForTheSelection` writes two saves:
+- Explosives' selection in the monsters fixture (Side A first), with the Hive Tyrant within 8" of the rank's east end
+  and the Tyrant Guard of its west end. `--pick-models 8` chooses model 8 (the bar then has only the Tyrant's button,
+  and the Guard turns grey); `--zoom 1.5` shows the rank;
+- Crushing Impact's selection after the Hive Tyrant's charge; `--pick-models 37` chooses the Tyrant's model.
 
 A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows.

@@ -1626,11 +1626,14 @@ MoveScore refine_move_score(MoveScoreContext& ctx, const PlannedEnd& plan, const
     const analysis::TurnAllowance allow = allowance_of(plan);
     const bool may_charge = allow.charge && !engaged_stay;
     if (with_charge_prospect && may_charge) {
+        // D-100 (M98): with the crushing_impact key on, each charge move's value counts Crushing Impact at its end.
+        const bool crush = ctx.weights().crushing_impact > 0.0;
         if (shoot.other) {
             prospect = charge_prospect(ctx.cache(), after, ctx.unit().id, seed, shoot.other->models_destroyed,
-                                       ctx.other(shoot.other->index).id);
+                                       ctx.other(shoot.other->index).id, nullptr, nullptr, crush);
         } else {
-            prospect = charge_prospect(ctx.cache(), after, ctx.unit().id, seed, shoot.models_destroyed);
+            prospect = charge_prospect(ctx.cache(), after, ctx.unit().id, seed, shoot.models_destroyed, std::nullopt,
+                                       nullptr, nullptr, crush);
         }
     }
     MoveScore s = score_impl(ctx, plan, shoot, prospect ? &*prospect : nullptr);

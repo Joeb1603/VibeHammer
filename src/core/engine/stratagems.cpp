@@ -782,4 +782,17 @@ std::optional<WindowInfo> window_info(const GameState& state) {
     return info;
 }
 
+std::optional<std::string> forecast_stratagem_problem(const GameState& state, Side side, Stratagem stratagem,
+                                                      WindowTiming timing, std::optional<UnitId> window_unit,
+                                                      UnitId target, std::optional<StratagemMode> mode) {
+    // D-100 (M98): the window as open_window would build it (no roll, no dice), and the check its offers come from.
+    const StratagemWindow w{timing, std::nullopt, window_unit, 0, {}, {}, {}};
+    if (detail::is_roll_stratagem(stratagem) || detail::is_roll_window(w)) return detail::when_text(stratagem);
+    // D-007 comes first, as in open_window: no window once the battle is over or a side has no models left.
+    if (state.result || !detail::side_has_models(state, Side::A) || !detail::side_has_models(state, Side::B)) {
+        return std::string("D-007: the battle is over, so no window opens");
+    }
+    return detail::reaction_problem(state, side, stratagem, w, target, mode);
+}
+
 }  // namespace wh40k::core

@@ -20,6 +20,7 @@
 #include "core/rules/shooting.hpp"
 #include "core/state/queries.hpp"
 #include "normal/fight.hpp"
+#include "normal/stratagems.hpp"
 #include "normal/value.hpp"
 #include "simulator.hpp"
 #include "state_hash.hpp"
@@ -636,7 +637,7 @@ std::optional<ChargeCredit> charge_credit(const core::GameState& state, core::Un
 std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const core::GameState& state,
                                               core::UnitId unit, std::uint64_t seed, double enemy_losses,
                                               std::optional<core::UnitId> losses_from, const ArmyPlan* plan,
-                                              const ChargeObjectives* objectives) {
+                                              const ChargeObjectives* objectives, bool crushing_impact) {
     const core::Unit* u0 = state.find_unit(unit);
     if (u0 == nullptr || u0->models.empty()) return std::nullopt;
     const core::Side side = u0->side;
@@ -691,6 +692,7 @@ std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const 
                 plan_charge_move(after_roll, side, id, std::vector<core::UnitId>(t.begin(), t.end()), seed, {});
             if (!move) return false;
             value[r] = charged_value(cache, move->after, id, t, turns, credit ? &*credit : nullptr, objectives);
+            if (crushing_impact) value[r] += crushing_impact_value(move->after, id);  // D-100 (M98)
             eng[r] = move->score.engaged;
             if (move->score.engaged == static_cast<int>(u.models.size())) full_roll = *roll;
             return true;
@@ -763,7 +765,7 @@ std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core
         if (u == nullptr || u->side != side) continue;
         std::optional<ChargeProspect> p =
             charge_prospect(cache, state, d->unit, seed, 0.0, std::nullopt, plan ? &*plan : nullptr,
-                            objectives ? &*objectives : nullptr);
+                            objectives ? &*objectives : nullptr, weights.crushing_impact > 0.0);
         if (!p) continue;
         if (plan && p->gain > kBetter) gaining.push_back(*p);
         if (!best || p->gain > best->gain + kBetter) best = std::move(p);
@@ -850,15 +852,19 @@ std::optional<PolicyResult> decide_charge_targets(analysis::OddsCache& cache, co
         const std::optional<ChargeCredit> credit =
             s->targets.size() == 1 ? charge_credit(state, d.unit, s->targets.front(), army ? &*army : nullptr)
                                    : std::nullopt;
-        const double v = charged_value(cache, plan->after, d.unit, s->targets, turns, credit ? &*credit : nullptr,
-                                       objectives ? &*objectives : nullptr);
+        double v = charged_value(cache, plan->after, d.unit, s->targets, turns, credit ? &*credit : nullptr,
+                                 objectives ? &*objectives : nullptr);
+        // D-100 (M98): what Crushing Impact is expected to gain at the move's end, with its key on.
+        const double crush = weights.crushing_impact > 0.0 ? crushing_impact_value(plan->after, d.unit) : 0.0;
+        if (crush > 0.0) v += crush;
         if (!best || v > best_value + kBetter) {
             best_value = v;
             best_reason = client::unit_display_name(state, u->id) + ": charge move into " + names_of(state, s->targets) + " (roll " +
                           std::to_string(roll) + "): " + std::to_string(plan->score.engaged) + " of " +
                           std::to_string(u->models.size()) + " models engaged, " +
                           std::to_string(plan->score.contacts) + " in base contact (" + signed_value(v) +
-                          " against " + signed_value(hold) + " for holding)";
+                          " against " + signed_value(hold) + " for holding" +
+                          (crush > 0.0 ? "; Crushing Impact " + signed_value(crush) : std::string()) + ")";
             best = std::move(plan);
         }
     }

@@ -15,6 +15,7 @@
 #include "melee_plan.hpp"
 #include "rules_help.hpp"
 #include "shot_plan.hpp"
+#include "stratagem_picks.hpp"
 
 namespace wh40k::client {
 
@@ -56,9 +57,22 @@ public:
     [[nodiscard]] const std::vector<core::UnitId>& chosen_targets() const noexcept { return targets_; }
     // D-042: removing a model to restore coherency: models are clicked one at a time, then confirmed.
     // D-051: picking casualties: the models that take the damage are clicked one at a time, then confirmed.
+    // D-100 (M98): 15.05 / 15.06's selection: a model of the stratagem's unit may be clicked before the enemy unit.
     [[nodiscard]] bool picking_model() const noexcept {
-        return mode_ == Mode::RemoveModel || mode_ == Mode::PickCasualties;
+        return mode_ == Mode::RemoveModel || mode_ == Mode::PickCasualties || mode_ == Mode::PickEffect;
     }
+    // D-100 (M98): 15.05 Explosives' or 15.06 Crushing Impact's selection (SelectModelAndEnemy): click an enemy unit,
+    // optionally after a model of the stratagem's unit (the actor).
+    [[nodiscard]] bool picking_effect() const noexcept { return mode_ == Mode::PickEffect; }
+    // The model of the actor chosen for the selection (a gold ring), if any.
+    [[nodiscard]] std::optional<core::ModelId> effect_model() const noexcept {
+        return mode_ == Mode::PickEffect ? effect_model_ : std::nullopt;
+    }
+    // The selection's bar buttons: one per enemy unit, the chosen model's answers once one is chosen (effect_choices).
+    [[nodiscard]] std::vector<EffectChoice> effect_buttons(const core::GameState& state) const;
+    // Why a hovered enemy unit can't be picked at the selection (the engine's reason; effect_refusal_text), else
+    // nullopt.
+    [[nodiscard]] std::optional<std::string> effect_refusal(const core::GameState& state, core::UnitId unit) const;
     [[nodiscard]] std::optional<core::ModelId> chosen_model() const noexcept { return chosen_model_; }
     // D-051: the casualty picks so far (nullptr unless picking casualties).
     [[nodiscard]] const CasualtyPicks* casualty_picks() const noexcept { return picks_ ? &*picks_ : nullptr; }
@@ -75,9 +89,10 @@ public:
     // Whether `unit` is drawn grey: while waiting for a click, every unit that can't be clicked; when no
     // unit is left to act (only the end-phase button), every unit (D-029).
     [[nodiscard]] bool greyed(core::UnitId unit) const;
-    // Picking targets (shooting, charge, pile-in): a line follows the cursor from the actor.
+    // Picking targets (shooting, charge, pile-in; D-100: the selection's enemy unit): a line follows the cursor from
+    // the actor.
     [[nodiscard]] bool picking_target() const noexcept {
-        return mode_ == Mode::Shoot || mode_ == Mode::Targets || mode_ == Mode::Melee;
+        return mode_ == Mode::Shoot || mode_ == Mode::Targets || mode_ == Mode::Melee || mode_ == Mode::PickEffect;
     }
     [[nodiscard]] std::string hint(const core::GameState& state) const;
     // The panel's headline while picking a target ("Pick a target for the Intercessor Squad"), else empty.
@@ -107,6 +122,7 @@ public:
     // The other legal actions that don't belong to a unit on the board: Commit move, Make no charge move, ...
     // Picking casualties (D-051, D-058): "Use default order", which finishes from the picks so far (the picks,
     // then the default order for the rest); none once every casualty is picked (Confirm covers it).
+    // D-100: none at the selection (its buttons are effect_buttons, with their own labels).
     [[nodiscard]] std::vector<core::GameAction> step_buttons() const;
     // D-058 (M47): the label of the casualty step button: "Use default order", or "Default order for the rest"
     // once a model is picked.
@@ -137,9 +153,14 @@ private:
         CustomMelee, // "Custom..." was picked on a fight target: each model's choice is edited in the panel
         RemoveModel, // RestoreCoherency: click a model of the unit, then confirm its removal (D-042)
         PickCasualties, // OrderCasualties: click the models that take the damage, then confirm (D-051)
+        PickEffect,     // SelectModelAndEnemy: click an enemy unit, optionally a model of the actor first (D-100)
     };
 
     [[nodiscard]] std::vector<core::GameAction> actions_of(core::UnitId unit) const;
+    // D-100: the selection's legal answers (SelectModelAndEnemy), in the engine's order (model, then unit).
+    [[nodiscard]] std::vector<core::action::SelectModelAndEnemy> effect_pairs() const;
+    // D-100: the answer for `enemy`: the chosen model's pair, else the first legal model's; nullopt if none.
+    [[nodiscard]] std::optional<core::GameAction> effect_answer(core::UnitId enemy) const;
     [[nodiscard]] std::vector<core::UnitId> target_options() const;
     ClickResult pick_actor(const core::GameState& state, core::UnitId unit);
     ClickResult start_targets(core::UnitId unit);
@@ -152,6 +173,7 @@ private:
     bool actor_fixed_ = false;  // given by the decision (charge targets, overrun pile-in)
     std::vector<core::UnitId> targets_;
     std::optional<core::ModelId> chosen_model_;  // RemoveModel: the model clicked
+    std::optional<core::ModelId> effect_model_;  // PickEffect: the model of the actor chosen (D-100)
     std::optional<CasualtyPicks> picks_;         // PickCasualties: the models picked so far (D-051)
     std::optional<core::GameAction> default_order_;  // PickCasualties: "Use default order" (D-058's order)
     std::optional<ShotPlan> shot_;
