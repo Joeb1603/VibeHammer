@@ -138,6 +138,8 @@ void to_json(Json& j, const FlowState& v);
 void from_json(const Json& j, FlowState& v);
 void to_json(Json& j, const StratagemRecord& v);  // D-096
 void from_json(const Json& j, StratagemRecord& v);
+void to_json(Json& j, const StratagemEffect& v);  // D-099
+void from_json(const Json& j, StratagemEffect& v);
 void to_json(Json& j, const PointsTally& v);
 void from_json(const Json& j, PointsTally& v);
 void to_json(Json& j, const ObjectiveArea& v);

@@ -49,11 +49,11 @@ public:
     [[nodiscard]] static GameSession from_steps(core::GameState initial, const std::vector<core::ReplayStep>& steps);
 
     // ---- save / load (D-025) ----
-    // {"format": 4, "kind": "vibehammer-save", "initial", "steps", "state"}: the initial state and the
+    // {"format": 5, "kind": "vibehammer-save", "initial", "steps", "state"}: the initial state and the
     // accepted steps (so undo and replay export keep working), plus the current state as a check. D-095 (M94): every
     // roll is a step; a format-1 save (every roll inside its action) loads with its rolls added as steps. D-096 (M95),
-    // D-097 (M96): every window's answer is a step too; a format-2 or format-3 save loads with the windows it couldn't
-    // record declined.
+    // D-097 (M96), D-099 (M97): every window's answer is a step too; a format-2, 3 or 4 save loads with the windows it
+    // couldn't record declined.
     [[nodiscard]] nlohmann::json to_save_json() const;
     // Rebuilds the game from "initial" + "steps" and checks it matches "state" (core::DataError if not). No roll is
     // made automatically (a game saved while a player's roll waited still waits; roll_automatically makes it).
@@ -111,6 +111,12 @@ public:
     [[nodiscard]] const std::optional<core::PendingDecision>& pending() const noexcept { return state().pending; }
     // legal_actions for the side whose decision is pending (empty when nothing is pending).
     [[nodiscard]] std::vector<core::GameAction> legal() const;
+    // D-099 (M97): legal() without the stratagem answers the deciding side declines: every one when its auto_decline is
+    // on ("Offer stratagems" off), else those in its declined list (a bot's keys at 0). 15.05 Explosives answers the
+    // Shoot decision, so this keeps the Shoot step of such a side as it was (its buttons, the empty-step skip).
+    [[nodiscard]] std::vector<core::GameAction> legal_offered() const;
+    // Whether the deciding side declines `s` (auto_decline, or its declined list).
+    [[nodiscard]] bool declines(core::Side side, core::Stratagem s) const;
     // The side that must act now (the pending decision's side, or the active side).
     [[nodiscard]] core::Side deciding_side() const;
 

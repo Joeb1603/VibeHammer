@@ -39,11 +39,14 @@ struct ReplayInitial {
 // one Damage roll per attack that inflicts damage (format 2 made a batch's in one).
 // D-097 (M96): format 4 also records the answers to the windows that follow no roll (15.08 Fire Overwatch and 15.11
 // Heroic Intervention at the end of a phase, 15.12 Counteroffensive after a fight), and what they lead to (a snap shot,
-// a heroic charge). Formats 1 to 3 are converted.
+// a heroic charge).
+// D-099 (M97): format 5 also records the answers to the windows just after a charge move (15.06 Crushing Impact) and
+// what they lead to (its selection, roll and casualties). Formats 1 to 4 are converted.
 inline constexpr int kReplayFormatRollsInline = 1;
 inline constexpr int kReplayFormatRollsRecorded = 2;
 inline constexpr int kReplayFormatWindowsRecorded = 3;
 inline constexpr int kReplayFormatReactionsRecorded = 4;
+inline constexpr int kReplayFormatOwnTurnStratagems = 5;
 
 struct Replay {
     int format = kReplayFormatRollsInline;
@@ -76,28 +79,33 @@ struct ReplayResult {
 };
 
 // Builds the initial state, starts the game if needed, then validates and applies every step: format 1 with every
-// roll made and every window declined inside its step (start_game, apply_action); format 4 stopping at each roll and
-// window for its recorded step (start_game_paced, apply_action_paced; D-095, D-096, D-097); format 3 as format 4 with
-// D-097's windows declined; format 2 as format 4 with every window declined and a batch's further Damage rolls made
-// where it recorded one (D-096: the same game).
+// roll made and every window declined inside its step (start_game, apply_action); format 5 stopping at each roll and
+// window for its recorded step (start_game_paced, apply_action_paced; D-095, D-096, D-097, D-099); format 4 as format 5
+// with D-099's windows (AfterChargeMove) declined; format 3 with D-097's and D-099's declined; format 2 with every
+// window declined and a batch's further Damage rolls made where it recorded one (D-096: the same game).
 [[nodiscard]] ReplayResult run_replay(const Replay& replay, const std::filesystem::path& repo_root);
 
-// D-095 (M94), D-096 (M95), D-097 (M96): a format-1 step list from `initial` (started here if it hasn't started) as
-// format 4: played through a paced Match, with each roll and window that the start and every step lead to recorded as
-// its step (each roll made, each window declined). The game is the same (the closure). Throws DataError on a step that
-// doesn't validate.
+// D-095 (M94), D-096 (M95), D-097 (M96), D-099 (M97): a format-1 step list from `initial` (started here if it hasn't
+// started) as format 5: played through a paced Match, with each roll and window that the start and every step lead to
+// recorded as its step (each roll made, each window declined). The game is the same (the closure). Throws DataError on
+// a step that doesn't validate.
 [[nodiscard]] std::vector<ReplayStep> with_roll_steps(GameState initial, const std::vector<ReplayStep>& steps);
 // D-096: the same from a format-2 step list, step by step: each window waiting before a recorded step is declined,
 // after a recorded Damage roll the batch's further Damage rolls are made (format 2 made them in one), and the windows
 // waiting at the end are declined; a roll waiting at the end stays (a save can stop at one).
 [[nodiscard]] std::vector<ReplayStep> with_roll_steps_from_format2(GameState initial,
                                                                    const std::vector<ReplayStep>& steps);
-// D-097: the same from a format-3 step list: each of D-097's windows (EndOfPhase, AfterAttacks) waiting before a
-// recorded step or at the end is declined; the recorded steps answer every roll and M95 window.
+// D-097: the same from a format-3 step list: each of D-097's windows (EndOfPhase, AfterAttacks) and D-099's
+// (AfterChargeMove) waiting before a recorded step or at the end is declined; the recorded steps answer every roll and
+// M95 window.
 [[nodiscard]] std::vector<ReplayStep> with_roll_steps_from_format3(GameState initial,
                                                                    const std::vector<ReplayStep>& steps);
-// The same for a replay: a format-4 replay is returned as it is; a format-1, 2 or 3 one comes back as format 4, its
-// other fields unchanged (its expect block holds: the final state is the same).
+// D-099 (M97): the same from a format-4 step list: each of D-099's windows (AfterChargeMove) waiting before a recorded
+// step or at the end is declined.
+[[nodiscard]] std::vector<ReplayStep> with_roll_steps_from_format4(GameState initial,
+                                                                   const std::vector<ReplayStep>& steps);
+// The same for a replay: a format-5 replay is returned as it is; a format-1 to 4 one comes back as format 5, its other
+// fields unchanged (its expect block holds: the final state is the same).
 [[nodiscard]] Replay with_roll_steps(const Replay& replay, const std::filesystem::path& repo_root);
 
 // What a replay file's `expect` block records: result, stage, battle round, and every model's
@@ -107,7 +115,7 @@ struct ReplayResult {
 // D-095 (M94): how a Match applies its steps. Inline: every roll is made inside the step that leads to it
 // (start_game, apply_action), so a RollDice is never pending and never recorded (a format-1 replay); D-096: every
 // window is declined there too. Paced: the match stops at each roll and window, a player answers it with a step, which
-// is recorded like any other (format 3).
+// is recorded like any other (format 5).
 enum class RollMode : std::uint8_t { Inline, Paced };
 
 // A game in progress with its log: the initial state, every accepted step and every event.
@@ -127,7 +135,7 @@ public:
     [[nodiscard]] const std::vector<GameEvent>& events() const noexcept { return events_; }
 
     // A replay of this match from its initial state, with the current state as its expectation: format 1 for an
-    // Inline match, format 4 for a Paced one (D-095, D-096, D-097).
+    // Inline match, format 5 for a Paced one (D-095, D-096, D-097, D-099).
     [[nodiscard]] Replay to_replay(std::string description) const;
 
 private:

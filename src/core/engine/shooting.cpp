@@ -26,6 +26,11 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::Shoot&
             }
         }
     }
+    // D-099 (M97): 15.05 Explosives, for each unit it can target, after every Shoot template (the earlier answers keep
+    // their indices).
+    for (const UnitId u : explosives_targets(state, side)) {
+        out.push_back(action::UseStratagem{Stratagem::Explosives, u, std::nullopt});
+    }
     return out;
 }
 

@@ -89,14 +89,17 @@ TEST(M96_Bots, FireOverwatchIsOnByDefaultAndPlaysFollowsEachKey) {
     for (const Stratagem s : {Stratagem::InsaneBravery, Stratagem::HeroicIntervention, Stratagem::Counteroffensive}) {
         EXPECT_FALSE(d.plays(s)) << stratagem_name(s);
     }
+    // M97 (D-099): Explosives and Crushing Impact too, off until measured.
     EXPECT_EQ(d.declined_stratagems(), (std::vector<Stratagem>{Stratagem::InsaneBravery, Stratagem::HeroicIntervention,
-                                                               Stratagem::Counteroffensive}));
+                                                               Stratagem::Counteroffensive, Stratagem::Explosives,
+                                                               Stratagem::CrushingImpact}));
     EXPECT_EQ(wh40k::test::without_stratagems().declined_stratagems().size(), kAllStratagems.size());
     const BotConfig on = all_three();
     EXPECT_TRUE(on.plays(Stratagem::FireOverwatch));
     EXPECT_TRUE(on.plays(Stratagem::HeroicIntervention));
     EXPECT_TRUE(on.plays(Stratagem::Counteroffensive));
-    EXPECT_EQ(on.declined_stratagems(), std::vector<Stratagem>{Stratagem::InsaneBravery});
+    EXPECT_EQ(on.declined_stratagems(), (std::vector<Stratagem>{Stratagem::InsaneBravery, Stratagem::Explosives,
+                                                                Stratagem::CrushingImpact}));
     BotConfig only_fo = wh40k::test::without_stratagems();
     only_fo.move.fire_overwatch = 1.0;
     EXPECT_TRUE(only_fo.plays_stratagems());

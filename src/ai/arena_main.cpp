@@ -101,6 +101,9 @@ void apply_weights(const std::string& text, wh40k::ai::normal::MoveWeights& w) {
             if (d != 0.0 && d != 1.0) throw std::invalid_argument(key + " is 0 or 1");
             (key == "fire_overwatch" ? w.fire_overwatch
                                      : key == "heroic_intervention" ? w.heroic_intervention : w.counteroffensive) = d;
+        } else if (key == "explosives" || key == "crushing_impact") {  // M97 (D-099): 0 or 1
+            if (d != 0.0 && d != 1.0) throw std::invalid_argument(key + " is 0 or 1");
+            (key == "explosives" ? w.explosives : w.crushing_impact) = d;
         } else if (key == "gone_to_ground") {  // M93 (D-094): 0 or 1
             if (d != 0.0 && d != 1.0) throw std::invalid_argument("gone_to_ground is 0 or 1");
             w.gone_to_ground = d;

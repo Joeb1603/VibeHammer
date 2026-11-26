@@ -683,7 +683,7 @@ TEST(D096_RandomPlay, GamesThatUseStratagemsStayValidAndReplay) {
             }
             // The game as a format-3 replay plays the same.
             const Replay replay = match.to_replay("random play with stratagems");
-            EXPECT_EQ(replay.format, kReplayFormatReactionsRecorded);  // D-097 (M96): format 4
+            EXPECT_EQ(replay.format, kReplayFormatOwnTurnStratagems);  // D-097 (M96): format 4; D-099 (M97): 5
             const ReplayResult again = run_replay(Json(replay).get<Replay>(), repo_root());
             ASSERT_TRUE(again.ok()) << "step " << *again.failed_step << ": " << again.reasons.front();
             EXPECT_EQ(again.final_state, match.state());
@@ -730,7 +730,7 @@ GameAction m95_window_answer(const GameState& gs) {
 Replay m95_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
-    r.format = kReplayFormatReactionsRecorded;  // M96 (D-097): format 4
+    r.format = kReplayFormatOwnTurnStratagems;  // M96 (D-097): format 4; M97 (D-099): 5
     r.description =
         "M95 (D-096): reaction windows and the first stratagems; each stratagem used, and each window declined, is a "
         "step of its own. The V1 scenario with 4 of the 10 Termagants (below half-strength) 8\" from the Intercessors, "
@@ -831,7 +831,7 @@ Replay m95_replay(std::uint64_t seed, bool& ok, std::string& problem) {
 
 TEST(D096_Replay, TheStratagemsReplayUsesEachStratagemAsAStep) {
     const Replay saved = load_replay(kM95Replay);
-    EXPECT_EQ(saved.format, kReplayFormatReactionsRecorded);  // regenerated as format 4 in M96 (D-097)
+    EXPECT_EQ(saved.format, kReplayFormatOwnTurnStratagems);  // regenerated as format 4 in M96, 5 in M97 (D-099)
     const ReplayResult run = run_replay(saved, repo_root());
     ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
     EXPECT_EQ(replay_expectation(run.final_state), saved.expect);

@@ -42,4 +42,19 @@ each shown by `--load <save> --screenshot <png>`:
 - at Heroic Intervention's window, Leap to Defend and Into the Fray with their costs;
 - at Counteroffensive's window, after the Intercessors have fought.
 
+M97 (D-099): 15.05 Explosives is a button in the Shoot step's action bar ("Explosives (1 CP): <unit>", its unit
+outlined in gold while hovered); after it, and after 15.06 Crushing Impact (its window as M96's, just after a charge
+move), a bar asks for the enemy unit, one button per enemy unit with its first legal model (Crushing Impact's with the
+model's T), the enemy unit and the model outlined in gold while hovered. `--steps` takes the first button. A side that
+declines a stratagem ("Offer stratagems" off, or a bot whose key is 0) is never shown its answers
+(`GameSession::legal_offered`). `M97_Screens.DISABLED_WriteSavesWaitingForTheNewSteps` writes six saves, each shown by
+`--load <save> --screenshot <png>`:
+- at Side A's Shoot step (V1, the Termagants 6" away), with the Explosives button;
+- at its selection (one button: the Termagants);
+- waiting for its six D6: the face-down card ("6 dice: each 4+ is 1 mortal wound on Termagants"); `--steps 1 --dice 2`
+  shows it rolled;
+- at Side B's Crushing Impact window, just after the Hive Tyrant's charge (the monsters fixture);
+- at its selection ("Legionaries 2 (model 37, T10: 10 dice)");
+- waiting for its ten D6: `--steps 1 --dice 2` shows the card, the 5+s green, the 1s failed and the rest grey.
+
 A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows.

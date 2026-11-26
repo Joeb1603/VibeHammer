@@ -230,6 +230,9 @@ struct FlowState {
     // D-097 (M96): 15.08 Fire Overwatch's unit, until it shoots using snap shooting (the SnapShoot decision). Omitted
     // from JSON when absent.
     std::optional<UnitId> snap_shooter{};
+    // D-099 (M97): the effect of 15.05 Explosives or 15.06 Crushing Impact in progress, from the stratagem's use until its
+    // mortal wounds are inflicted. Omitted from JSON when absent.
+    std::optional<StratagemEffect> effect{};
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

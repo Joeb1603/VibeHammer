@@ -47,7 +47,18 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
         }
         return std::nullopt;  // the fallback's one-target snap shot
     }
+    if (std::holds_alternative<decision::SelectModelAndEnemy>(kind)) {
+        // M97 (D-099): 15.05 / 15.06's selection: the enemy unit (Explosives) or the pair (Crushing Impact) worth the most.
+        if (const auto pick = normal::best_effect_pair(gs)) return single(pick->action, pick->why);
+        return std::nullopt;  // the fallback's first legal pair
+    }
     if (std::holds_alternative<decision::Shoot>(kind)) {
+        // M97 (D-099): 15.05 Explosives first (its unit can still shoot afterwards, and can't use it once it has shot).
+        if (weights.explosives > 0.0) {
+            if (const auto pick = normal::best_explosives(gs, legal); pick && pick->value >= normal::kExplosivesMinShare) {
+                return single(pick->action, pick->why);
+            }
+        }
         // M87 (D-086): the objective part of the aim, under a mission.
         const double fire = normal::objectives_on(gs, weights) ? weights.objective_fire : 0.0;
         // M91 (D-092): the decision's terrain (its sight, shared by the aim, the plan and the hold-fire score).

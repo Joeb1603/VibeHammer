@@ -2,7 +2,8 @@
 
 // D-096 (M95): stratagems (15) and the reaction windows they are used in (01.03.02 Rules Sequencing, app-only). A window
 // is a timing at which a side can use one or more of its rules; the engine offers it as a UseStratagems decision only
-// when that side can use a stratagem there.
+// when that side can use a stratagem there. D-099 (M97): Explosives is used at the Shoot decision instead (no window),
+// and the effects of Explosives and Crushing Impact run as a StratagemEffect.
 
 #include <array>
 #include <cstddef>
@@ -16,13 +17,16 @@
 
 namespace wh40k::core {
 
-// 15: the stratagems the engine implements. Appended at the end only (JSON names, the bots' state_hash).
+// 15: the stratagems the engine implements (declared in core/state/decision.hpp). Appended at the end only (JSON names,
+// the bots' state_hash).
 enum class Stratagem : std::uint8_t {
     CommandReroll,       // 15.02 Command Re-roll (1CP)
     InsaneBravery,       // 15.04 Insane Bravery (1CP, once per battle)
     FireOverwatch,       // 15.08 Fire Overwatch (1CP; D-097, M96)
     HeroicIntervention,  // 15.11 Heroic Intervention (1CP; Into the Fray +1CP)
     Counteroffensive,    // 15.12 Counteroffensive (2CP)
+    Explosives,          // 15.05 Explosives (1CP; D-099, M97; the PDF's number, D-098)
+    CrushingImpact,      // 15.06 Crushing Impact (1CP; D-099)
 };
 
 // D-097 (M96): 15.11 Heroic Intervention's modes, selected before the charge roll (with the stratagem). Appended only.
@@ -32,9 +36,10 @@ enum class StratagemMode : std::uint8_t {
 };
 
 // Every stratagem the engine implements, in enum order (D-097: for the clients' and the bots' lists).
-inline constexpr std::array<Stratagem, 5> kAllStratagems{Stratagem::CommandReroll, Stratagem::InsaneBravery,
-                                                         Stratagem::FireOverwatch, Stratagem::HeroicIntervention,
-                                                         Stratagem::Counteroffensive};
+inline constexpr std::array<Stratagem, 7> kAllStratagems{Stratagem::CommandReroll,      Stratagem::InsaneBravery,
+                                                         Stratagem::FireOverwatch,      Stratagem::HeroicIntervention,
+                                                         Stratagem::Counteroffensive,   Stratagem::Explosives,
+                                                         Stratagem::CrushingImpact};
 
 [[nodiscard]] std::string_view stratagem_name(Stratagem s);  // "Command Re-roll", as the rules name it
 [[nodiscard]] std::string_view stratagem_key(Stratagem s);   // "CommandReroll"; also the JSON name
@@ -75,6 +80,21 @@ struct StratagemWindow {
     std::vector<int> faces;         // AfterRoll: the roll's dice, as rolled (and as re-rolled)
     std::vector<std::size_t> rerolled{};  // 01.05.02: the dice already re-rolled, ascending (Twin-linked's too)
     friend bool operator==(const StratagemWindow&, const StratagemWindow&) = default;
+};
+
+// D-099 (M97): the EFFECT of 15.05 Explosives or 15.06 Crushing Impact, once the stratagem is used on `unit` and its CP
+// are paid (15.01), until its mortal wounds are inflicted: the model and enemy unit selected (SelectModelAndEnemy), the
+// roll (RollDice), then the enemy unit's casualties and the unit's (OrderCasualties, 06.02). Omitted from JSON when
+// absent (FlowState::effect).
+struct StratagemEffect {
+    Stratagem stratagem = Stratagem::Explosives;
+    UnitId unit;                   // the stratagem's target: the EXPLOSIVES/GRENADES or MONSTER/VEHICLE unit
+    std::optional<ModelId> model;  // steps 1-2, once selected: the model of the unit
+    std::optional<UnitId> enemy;   // and the enemy unit
+    bool rolled = false;           // step 3: the dice are rolled
+    int enemy_mortal_wounds = 0;   // the mortal wounds still to inflict on the enemy unit (after the cap)
+    int unit_mortal_wounds = 0;    // Crushing Impact: the mortal wounds still to inflict on the unit (after the cap)
+    friend bool operator==(const StratagemEffect&, const StratagemEffect&) = default;
 };
 
 // 01.03.02 Rules Sequencing, for the optional rules (stratagems) of one timing: the active player's first, then the

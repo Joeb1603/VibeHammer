@@ -499,6 +499,9 @@ void apply_details(GameState& state, Side, const action::CommitUnitMove&, DiceSo
         u.turn_flags.fights_first = true;
         finish_move(state);
         resolve_charge(state, true, "", events);  // 11.02 Attempt Charge: the charge is resolved
+        // D-099 (M97): just after the unit ends its charge move, 15.06 Crushing Impact's window (in its player's own
+        // Charge phase only, so never after a heroic charge).
+        open_window(state, WindowTiming::AfterChargeMove, mv.unit);
         return;
     }
     if (mv.mode == FallBackMode::DesperateEscape && !u.battle_shocked) {

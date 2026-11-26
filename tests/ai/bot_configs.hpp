@@ -14,6 +14,8 @@ inline wh40k::ai::BotConfig without_stratagems(wh40k::ai::BotConfig c = {}) {
     c.move.fire_overwatch = 0.0;  // M96 (D-097): the opponent-turn stratagems too
     c.move.heroic_intervention = 0.0;
     c.move.counteroffensive = 0.0;
+    c.move.explosives = 0.0;  // M97 (D-099): the own-turn stratagems too
+    c.move.crushing_impact = 0.0;
     return c;
 }
 

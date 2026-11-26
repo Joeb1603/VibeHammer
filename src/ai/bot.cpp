@@ -56,7 +56,13 @@ BotChoice Bot::decide(const core::GameState& state, core::Side side) {
     }
     const std::uint64_t hash = state_hash(state);
     const bool looping = guard_.visit(hash);
-    const std::vector<core::GameAction> legal = core::legal_actions(state, side);
+    std::vector<core::GameAction> legal = core::legal_actions(state, side);
+    // D-099 (M97): the answers of stratagems the bot doesn't play are not its to take (as GameSession::legal_offered):
+    // 15.05 Explosives answers the Shoot decision.
+    std::erase_if(legal, [this](const core::GameAction& a) {
+        const auto* use = std::get_if<core::action::UseStratagem>(&a);
+        return use != nullptr && !config_.plays(use->stratagem);
+    });
 
     std::optional<PolicyResult> chosen;
     if (!looping && !legal.empty()) {

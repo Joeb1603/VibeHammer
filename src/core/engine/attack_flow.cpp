@@ -561,6 +561,8 @@ void make_attack_roll(GameState& state, RollKind roll, DiceSource& dice, Events&
         case RollKind::Advance:
         case RollKind::Charge:
         case RollKind::BattleShock:
+        case RollKind::Explosives:      // D-099: a stratagem's effect, not an attack
+        case RollKind::CrushingImpact:
             break;
     }
     throw std::logic_error("attack flow: an attack makes no " + std::string(roll_kind_name(roll)) + " roll");
@@ -608,6 +610,8 @@ void apply_attack_roll(GameState& state, RollKind roll, std::size_t batch, const
         case RollKind::Advance:
         case RollKind::Charge:
         case RollKind::BattleShock:
+        case RollKind::Explosives:      // D-099: a stratagem's effect, not an attack
+        case RollKind::CrushingImpact:
             break;
     }
     throw std::logic_error("attack flow: no " + std::string(roll_kind_name(roll)) + " roll waits in a window");
@@ -645,6 +649,8 @@ event::RerolledRoll attack_roll_result(const GameState& state, RollKind roll, st
         case RollKind::Advance:
         case RollKind::Charge:
         case RollKind::BattleShock:
+        case RollKind::Explosives:      // D-099: a stratagem's effect, not an attack
+        case RollKind::CrushingImpact:
             break;
     }
     throw std::logic_error("attack flow: no " + std::string(roll_kind_name(roll)) + " roll is re-rolled here");
@@ -693,6 +699,8 @@ void describe_attack_roll(const GameState& state, RollKind roll, RollDiceInfo& i
         case RollKind::Advance:
         case RollKind::Charge:
         case RollKind::BattleShock:
+        case RollKind::Explosives:      // D-099: a stratagem's effect, not an attack
+        case RollKind::CrushingImpact:
             return;
     }
 }
@@ -940,7 +948,9 @@ void apply_details(GameState& state, Side, const action::RetargetAttacks& a, Dic
 }
 
 void apply_details(GameState& state, Side, const action::OrderCasualties& a, DiceSource& dice, Events& events) {
-    if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
+    if (state.flow.effect) {
+        resolve_effect_casualties(state, a.target, a.priority, events);  // 06.02 (D-099: 15.05, 15.06)
+    } else if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
         resolve_attack_mortal_wounds(state, a.priority, events);  // 06.02 ([HAZARDOUS] hazards, 24.15)
     } else if (state.flow.attack) {
         AttackFlow& f = *state.flow.attack;

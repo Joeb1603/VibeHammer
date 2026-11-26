@@ -266,6 +266,19 @@ void add(Fnv1a& h, const core::FlowState& f) {
         h.u64(0x73686f6full);  // "shoo"
         add(h, *f.snap_shooter);
     }
+    // M97 (D-099): 15.05 / 15.06's effect only while it is in progress, behind a tag, so every other state hashes as
+    // before.
+    if (f.effect) {
+        const core::StratagemEffect& e = *f.effect;
+        h.u64(0x65666663ull);  // "effc"
+        h.u64(static_cast<std::uint64_t>(e.stratagem));
+        add(h, e.unit);
+        h.u64(e.model ? e.model->v + 1ull : 0ull);
+        h.u64(e.enemy ? e.enemy->v + 1ull : 0ull);
+        h.u64(e.rolled ? 1u : 0u);
+        h.i32(e.enemy_mortal_wounds);
+        h.i32(e.unit_mortal_wounds);
+    }
 }
 
 // The decision's kind and the unit it is about (every kind holds at most one id).
@@ -291,6 +304,9 @@ void add(Fnv1a& h, const core::PendingDecision& d) {
             if constexpr (requires { k.attacker; }) add(h, k.attacker);
             if constexpr (requires { k.roll; }) h.u64(static_cast<std::uint64_t>(k.roll));  // M94: RollDice
             if constexpr (requires { k.timing; }) h.u64(static_cast<std::uint64_t>(k.timing));  // M95: UseStratagems
+            if constexpr (requires { k.stratagem; }) {
+                h.u64(static_cast<std::uint64_t>(k.stratagem));  // M97 (D-099): SelectModelAndEnemy
+            }
             (void)sizeof(K);
         },
         d.kind);

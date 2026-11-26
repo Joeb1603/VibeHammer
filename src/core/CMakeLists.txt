@@ -14,6 +14,7 @@ add_library(wh40k_core STATIC
     engine/charge.cpp
     engine/command.cpp
     engine/deployment.cpp
+    engine/effects.cpp
     engine/engine.cpp
     engine/events.cpp
     engine/fight.cpp
@@ -45,6 +46,7 @@ add_library(wh40k_core STATIC
     rules/mortal_wounds.cpp
     rules/move_types.cpp
     rules/shooting.cpp
+    rules/stratagem_effects.cpp
     rules/terrain.cpp
     rules/unit_strength.cpp
     serialization/engine_json.cpp

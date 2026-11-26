@@ -435,7 +435,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "scenario": "data/scenarios/incursion_terrain_44x60.json",
     "seed": 6
@@ -7533,6 +7533,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "EndChargeStep"
       },
       "side": "B"
@@ -9757,6 +9763,12 @@
     {
       "action": {
         "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },

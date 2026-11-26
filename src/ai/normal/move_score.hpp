@@ -159,6 +159,11 @@ struct MoveWeights {
     double fire_overwatch = 1.0;       // 15.08 Fire Overwatch (with 15.09 snap shooting)
     double heroic_intervention = 0.0;  // 15.11 Heroic Intervention
     double counteroffensive = 0.0;     // 15.12 Counteroffensive
+    // M97 (D-099): the own-turn stratagems that end in mortal wounds (normal/stratagems.hpp), 0 or 1 each, off until
+    // measured. At 0 the session hides Explosives' answers from the bot (GameSession::legal_offered) and declines Crushing
+    // Impact's window for it, so it never sees either.
+    double explosives = 0.0;       // 15.05 Explosives
+    double crushing_impact = 0.0;  // 15.06 Crushing Impact
 };
 
 // M87 (D-086): the objective terms are on: a mission, and an objective weight (objective, objective_approach or

@@ -513,6 +513,31 @@ void from_json(const Json& j, StratagemRecord& v) {
     j.at("used_this_battle").get_to(v.used_this_battle);
 }
 
+// D-099 (M97): the effect of 15.05 Explosives or 15.06 Crushing Impact in progress. What isn't selected, rolled or owed
+// yet is omitted.
+void to_json(Json& j, const StratagemEffect& v) {
+    j = Json{{"stratagem", v.stratagem}, {"unit", v.unit}};
+    if (v.model) j["model"] = *v.model;
+    if (v.enemy) j["enemy"] = *v.enemy;
+    if (v.rolled) j["rolled"] = true;
+    if (v.enemy_mortal_wounds != 0) j["enemy_mortal_wounds"] = v.enemy_mortal_wounds;
+    if (v.unit_mortal_wounds != 0) j["unit_mortal_wounds"] = v.unit_mortal_wounds;
+}
+void from_json(const Json& j, StratagemEffect& v) {
+    j.at("stratagem").get_to(v.stratagem);
+    j.at("unit").get_to(v.unit);
+    v.model.reset();
+    if (const auto it = j.find("model"); it != j.end() && !it->is_null()) v.model = it->get<ModelId>();
+    v.enemy.reset();
+    if (const auto it = j.find("enemy"); it != j.end() && !it->is_null()) v.enemy = it->get<UnitId>();
+    v.rolled = j.value("rolled", false);
+    v.enemy_mortal_wounds = j.value("enemy_mortal_wounds", 0);
+    v.unit_mortal_wounds = j.value("unit_mortal_wounds", 0);
+    if (v.enemy_mortal_wounds < 0 || v.unit_mortal_wounds < 0) {
+        throw DataError("state JSON: D-099: a stratagem's mortal wounds can't be negative: " + j.dump());
+    }
+}
+
 void to_json(Json& j, const FlowState& v) {
     j = Json{{"stage", v.stage}, {"battle_round", v.battle_round}, {"turn_in_round", v.turn_in_round}};
     put_opt(j, "activation", v.activation);
@@ -526,6 +551,7 @@ void to_json(Json& j, const FlowState& v) {
     if (!v.battle_shock_tests.empty()) j["battle_shock_tests"] = v.battle_shock_tests;  // D-095; omitted when empty
     if (v.window) j["window"] = *v.window;  // D-096; omitted when absent
     if (v.snap_shooter) j["snap_shooter"] = *v.snap_shooter;  // D-097 (15.08); omitted when absent
+    if (v.effect) j["effect"] = *v.effect;  // D-099 (15.05, 15.06); omitted when absent
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -545,6 +571,8 @@ void from_json(const Json& j, FlowState& v) {
     if (const auto it = j.find("window"); it != j.end() && !it->is_null()) v.window = it->get<StratagemWindow>();
     v.snap_shooter.reset();
     if (const auto it = j.find("snap_shooter"); it != j.end() && !it->is_null()) v.snap_shooter = it->get<UnitId>();
+    v.effect.reset();
+    if (const auto it = j.find("effect"); it != j.end() && !it->is_null()) v.effect = it->get<StratagemEffect>();
 }
 
 // D-076 (M67): the exact totals (numerators over the common denominator) and their display forms.
@@ -622,6 +650,9 @@ void to_json(Json& j, const PendingDecision& v) {
                 if (k.unit) j["unit"] = *k.unit;  // D-097: an EndOfPhase window has none
             } else if constexpr (std::is_same_v<T, decision::SnapShoot>) {
                 j["unit"] = k.unit;  // D-097 (15.08, 15.09)
+            } else if constexpr (std::is_same_v<T, decision::SelectModelAndEnemy>) {
+                j["stratagem"] = k.stratagem;  // D-099 (15.05, 15.06)
+                j["unit"] = k.unit;
             }
         },
         v.kind);
@@ -653,7 +684,9 @@ void from_json(const Json& j, PendingDecision& v) {
         if (const auto it = j.find("unit"); it != j.end() && !it->is_null()) d.unit = it->get<UnitId>();  // D-097
         v.kind = d;
     } else if (kind == "SnapShoot") v.kind = decision::SnapShoot{j.at("unit").get<UnitId>()};  // D-097
-    else bad_enum("PendingDecision", j);
+    else if (kind == "SelectModelAndEnemy") {
+        v.kind = decision::SelectModelAndEnemy{j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>()};  // D-099
+    } else bad_enum("PendingDecision", j);
 }
 
 }  // namespace wh40k::core

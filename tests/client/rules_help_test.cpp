@@ -92,6 +92,9 @@ TEST(M24_RulesHelp, EveryKeywordOnTheDatasheetsHasPlainHelp) {
     }
     EXPECT_EQ(keyword_help("Infantry").title, "INFANTRY");
     EXPECT_EQ(keyword_help("Explosives").rule, "15.05");
+    EXPECT_TRUE(keyword_help("Explosives").in_this_game);  // M97 (D-099)
+    EXPECT_TRUE(keyword_help("Grenades").in_this_game);
+    EXPECT_NE(keyword_help("Monster").summary.find("15.06"), std::string::npos);
     EXPECT_FALSE(keyword_help("Infantry").in_this_game);  // no terrain yet
 }
 

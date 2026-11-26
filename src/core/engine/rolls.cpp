@@ -55,6 +55,10 @@ void apply_details(GameState& state, Side, const action::RollDice& a, DiceSource
         case RollKind::Damage:
             make_attack_roll(state, a.roll, dice, events);
             return;
+        case RollKind::Explosives:
+        case RollKind::CrushingImpact:
+            make_effect_roll(state, dice, events);  // D-099: 15.05 / 15.06 step 3
+            return;
     }
     throw std::logic_error("D-095: unknown roll");
 }
@@ -114,6 +118,10 @@ RollDiceInfo detail::describe_roll(const GameState& state, const decision::RollD
         case RollKind::Save:
         case RollKind::Damage:
             detail::describe_attack_roll(state, d.roll, info);
+            break;
+        case RollKind::Explosives:
+        case RollKind::CrushingImpact:
+            detail::describe_effect_roll(state, info);  // D-099: six D6, or D6 per T; each a D6
             break;
     }
     return info;

@@ -31,9 +31,13 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D096_Replay.DISABLED_RegenerateM95Replay
 # and m96_reactions.json (Fire Overwatch, Heroic Intervention and Counteroffensive, seed 1) likewise (M96):
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replay.DISABLED_RegenerateM96Replay
+# and m97_stratagems.json (Explosives and Crushing Impact, seed 1) likewise (M97):
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D099_Replay.DISABLED_RegenerateM97Replay
 # M96's check that a format change adds only declines: the old files (git show HEAD:) in a directory, each new file
 # must be its old file converted by with_roll_steps:
 WH40K_FORMAT3_DIR=<dir> ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replays.DISABLED_CompareWithFormat3Files
+# M97's check, the same for format 4 -> 5 (the old files in a directory; it also counts the declines added):
+WH40K_FORMAT4_DIR=<dir> ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D099_Replays.DISABLED_CompareWithFormat4Files
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -146,3 +150,34 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   `DISABLED_DumpReplayEvents` dumps of the 30 older replays are byte-identical with no filter: a game without the new
   stratagems gains no event, and 14.02.01's move (objective control on entering the End of Phase step) changes no
   event's order.
+- M97 (D-099): **format 5.** The window just after a charge move (15.06 Crushing Impact, `WindowTiming::AfterChargeMove`)
+  is a `UseStratagems` decision too, and a format-5 replay records each answer, with what it leads to (the selection,
+  `SelectModelAndEnemy`; the roll, `RollDice{CrushingImpact}`; the casualties). 15.05 Explosives answers the Shoot
+  decision (`UseStratagem` beside the Shoot templates), so it needed no format change of its own. All 31 replays were
+  regenerated on purpose as format 5. `D099_Replays.DISABLED_CompareWithFormat4Files` checked each against its format-4
+  file (`git show HEAD:`): every new file is exactly the old one converted by `with_roll_steps` (the same description,
+  initial state and `expect`), with only declines added: 11 of them, in the 8 replays where a MONSTER ends a charge move
+  in its own Charge phase with CP to spend (m60, m61, m63, m65, m68, m73, m87, m91). Formats 1 to 4 still load:
+  - `run_replay`, `with_roll_steps`, `Timeline` and `GameSession::from_save_json` convert them;
+  - format 4 is converted by declining every AfterChargeMove window before each recorded step and at the end
+    (`with_roll_steps_from_format4`); format 3 declines those and D-097's; formats 1 and 2 as before.
+  - `tests/data/legacy/` adds the M96 files `m8_shooting_format4.json`, `m62_random_characteristics_format4.json` (their
+    games have no such window: `D095_Replays` turns each into the current file),
+    `m60_hazard_and_extra_attacks_format4.json` (its Hive Tyrant's charge gains a decline: `D099_Replays`) and an M96
+    save after the Tyrant's charge, `m96_save_monster_charge_format4.json` (`M97_Saves`: it loads with the window
+    declined, the same game played now).
+
+  `m97_stratagems.json` (`D099_Replay`, seed 1, picked by `D099_Replay.DISABLED_SearchM97Seed`): the monsters fixture
+  (D-073) with Side A first.
+  - Side A's Shoot step: Explosives on the Legionaries (GRENADES), one of them and the Hive Tyrant 2.04" away selected;
+    six D6, each 4+ a mortal wound on the Tyrant; then the Legionaries shoot at it (Explosives doesn't select a unit to
+    shoot).
+  - Side B's Charge step: the Hive Tyrant charges the Legionaries and Side B uses Crushing Impact just after the charge
+    move: ten D6 (its T), each 5+ a mortal wound on the Legionaries (Side A's casualty order), then each 1 one on the
+    Tyrant (Side B's). The replay stops at the Pile In step.
+
+  The bot plays neither stratagem by default (its keys are 0 until measured, D-099); the bot-game generators play
+  without stratagems anyway (`without_stratagems()` turns the new keys off too), so their files changed only by the
+  new windows' declines. `D095_Closure.EverySavedReplayPlaysTheSamePacedAndInline` checks the three stratagem replays
+  paced only. The M96 and M97 `DISABLED_DumpReplayEvents` dumps of the 31 older replays are byte-identical with no
+  filter: declining a window emits nothing.

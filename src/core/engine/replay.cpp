@@ -49,7 +49,8 @@ void to_json(nlohmann::json& j, const Replay& v) {
 void from_json(const nlohmann::json& j, Replay& v) {
     j.at("format").get_to(v.format);
     if (v.format != kReplayFormatRollsInline && v.format != kReplayFormatRollsRecorded &&
-        v.format != kReplayFormatWindowsRecorded && v.format != kReplayFormatReactionsRecorded) {
+        v.format != kReplayFormatWindowsRecorded && v.format != kReplayFormatReactionsRecorded &&
+        v.format != kReplayFormatOwnTurnStratagems) {
         throw DataError("replay: unsupported format " + std::to_string(v.format));
     }
     j.at("description").get_to(v.description);
@@ -123,16 +124,18 @@ void more_damage_rolls(Match& match) {
     }
 }
 
-// D-097: a window of a timing M96 added (one that follows no roll): format 3 recorded none.
-bool reaction_window_pending(const GameState& state) {
+// D-097, D-099: a window of a timing `format` didn't record: format 3 none of D-097's (EndOfPhase, AfterAttacks) and
+// D-099's (AfterChargeMove); format 4 none of D-099's.
+bool unrecorded_window_pending(const GameState& state, int format) {
     if (!window_pending(state)) return false;
     const WindowTiming t = std::get<decision::UseStratagems>(state.pending->kind).timing;
-    return t == WindowTiming::EndOfPhase || t == WindowTiming::AfterAttacks;
+    if (t == WindowTiming::AfterChargeMove) return format < kReplayFormatOwnTurnStratagems;
+    return format < kReplayFormatReactionsRecorded && (t == WindowTiming::EndOfPhase || t == WindowTiming::AfterAttacks);
 }
 
-// D-097: declines every window of D-097's timings waiting in `match` (format 3 recorded none).
-void decline_reaction_windows(Match& match) {
-    while (reaction_window_pending(match.state())) {
+// Declines every window waiting in `match` of a timing `format` didn't record.
+void decline_unrecorded_windows(Match& match, int format) {
+    while (unrecorded_window_pending(match.state(), format)) {
         const ValidationResult v = match.submit(match.state().pending->side, action::DeclineStratagems{});
         if (!v.ok()) throw std::logic_error("D-097: a window could not be declined: " + v.reasons.front());
     }
@@ -156,14 +159,17 @@ std::optional<std::pair<std::size_t, ValidationResult>> play_format2(Match& matc
     return std::nullopt;
 }
 
-// D-097: plays a format-3 step list in `match` step by step (see with_roll_steps_from_format3), as play_format2.
-std::optional<std::pair<std::size_t, ValidationResult>> play_format3(Match& match, const std::vector<ReplayStep>& steps) {
+// D-097, D-099: plays a format-3 or format-4 step list in `match` step by step (see with_roll_steps_from_format3 and
+// with_roll_steps_from_format4), as play_format2.
+std::optional<std::pair<std::size_t, ValidationResult>> play_format3_or_4(Match& match,
+                                                                          const std::vector<ReplayStep>& steps,
+                                                                          int format) {
     for (std::size_t i = 0; i < steps.size(); ++i) {
-        decline_reaction_windows(match);
+        decline_unrecorded_windows(match, format);
         ValidationResult v = match.submit(steps[i].side, steps[i].action);
         if (!v.ok()) return std::make_pair(i, std::move(v));
     }
-    decline_reaction_windows(match);
+    decline_unrecorded_windows(match, format);
     return std::nullopt;
 }
 
@@ -171,11 +177,12 @@ std::optional<std::pair<std::size_t, ValidationResult>> play_format3(Match& matc
 
 ReplayResult run_replay(const Replay& replay, const std::filesystem::path& repo_root) {
     ReplayResult r;
-    if (replay.format == kReplayFormatRollsRecorded || replay.format == kReplayFormatWindowsRecorded) {
-        // D-096: format 2, and D-097: format 3, played as their format-4 form (the same game).
+    if (replay.format == kReplayFormatRollsRecorded || replay.format == kReplayFormatWindowsRecorded ||
+        replay.format == kReplayFormatReactionsRecorded) {
+        // D-096: format 2, D-097: format 3, and D-099: format 4, played as their format-5 form (the same game).
         Match match(replay_initial_state(replay, repo_root), RollMode::Paced);
         auto failed = replay.format == kReplayFormatRollsRecorded ? play_format2(match, replay.steps)
-                                                                  : play_format3(match, replay.steps);
+                                                                  : play_format3_or_4(match, replay.steps, replay.format);
         if (failed) {
             r.failed_step = failed->first;
             r.reasons = std::move(failed->second.reasons);
@@ -184,7 +191,7 @@ ReplayResult run_replay(const Replay& replay, const std::filesystem::path& repo_
         r.events = match.events();
         return r;
     }
-    const bool paced = replay.format == kReplayFormatReactionsRecorded;  // D-095, D-096, D-097
+    const bool paced = replay.format == kReplayFormatOwnTurnStratagems;  // D-095, D-096, D-097, D-099
     r.final_state = replay_initial_state(replay, repo_root);
     if (r.final_state.flow.stage == Stage::NotStarted) {
         auto events = paced ? start_game_paced(r.final_state) : start_game(r.final_state);
@@ -229,7 +236,16 @@ std::vector<ReplayStep> with_roll_steps_from_format2(GameState initial, const st
 
 std::vector<ReplayStep> with_roll_steps_from_format3(GameState initial, const std::vector<ReplayStep>& steps) {
     Match match(std::move(initial), RollMode::Paced);
-    if (auto failed = play_format3(match, steps)) {
+    if (auto failed = play_format3_or_4(match, steps, kReplayFormatWindowsRecorded)) {
+        throw DataError("step " + std::to_string(failed->first + 1) + " is invalid: " +
+                        failed->second.reasons.front());
+    }
+    return match.steps();
+}
+
+std::vector<ReplayStep> with_roll_steps_from_format4(GameState initial, const std::vector<ReplayStep>& steps) {
+    Match match(std::move(initial), RollMode::Paced);
+    if (auto failed = play_format3_or_4(match, steps, kReplayFormatReactionsRecorded)) {
         throw DataError("step " + std::to_string(failed->first + 1) + " is invalid: " +
                         failed->second.reasons.front());
     }
@@ -237,11 +253,13 @@ std::vector<ReplayStep> with_roll_steps_from_format3(GameState initial, const st
 }
 
 Replay with_roll_steps(const Replay& replay, const std::filesystem::path& repo_root) {
-    if (replay.format == kReplayFormatReactionsRecorded) return replay;
+    if (replay.format == kReplayFormatOwnTurnStratagems) return replay;
     Replay out = replay;
-    out.format = kReplayFormatReactionsRecorded;
+    out.format = kReplayFormatOwnTurnStratagems;
     GameState initial = replay_initial_state(replay, repo_root);
-    if (replay.format == kReplayFormatWindowsRecorded) {
+    if (replay.format == kReplayFormatReactionsRecorded) {
+        out.steps = with_roll_steps_from_format4(std::move(initial), replay.steps);  // D-099
+    } else if (replay.format == kReplayFormatWindowsRecorded) {
         out.steps = with_roll_steps_from_format3(std::move(initial), replay.steps);
     } else if (replay.format == kReplayFormatRollsRecorded) {
         out.steps = with_roll_steps_from_format2(std::move(initial), replay.steps);
@@ -297,7 +315,7 @@ ValidationResult Match::submit(Side side, const GameAction& action) {
 
 Replay Match::to_replay(std::string description) const {
     Replay r;
-    r.format = mode_ == RollMode::Paced ? kReplayFormatReactionsRecorded : kReplayFormatRollsInline;
+    r.format = mode_ == RollMode::Paced ? kReplayFormatOwnTurnStratagems : kReplayFormatRollsInline;
     r.description = std::move(description);
     r.initial.state = initial_;
     r.steps = steps_;

@@ -51,7 +51,7 @@ BotGame play_bot_game_replay() {
     const BotConfig bot = wh40k::test::without_stratagems();
     g.record = play_bot_session(session, bot, bot, 5000, nullptr, &g.trace);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
+    g.replay.format = kReplayFormatOwnTurnStratagems;  // M94 (D-095) to M97 (D-099): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

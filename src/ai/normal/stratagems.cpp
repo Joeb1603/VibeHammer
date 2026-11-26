@@ -21,6 +21,7 @@
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/rules/random_characteristics.hpp"
+#include "core/rules/stratagem_effects.hpp"
 #include "core/state/queries.hpp"
 #include "unit_style.hpp"
 
@@ -306,7 +307,117 @@ const core::Unit* engaged_enemy_fights_first(const GameState& gs, const core::Un
     return pick;
 }
 
+// ---- D-099 (M97): Explosives and Crushing Impact ----
+
+constexpr double kExplosivesHit = 1.0 / 2.0;  // 15.05: a 4+ on a D6
+constexpr double kCrushFive = 1.0 / 3.0;      // 15.06: a 5+
+constexpr double kCrushOne = 1.0 / 6.0;       // 15.06: a 1
+
+std::string two_places(double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.2f", v);
+    return buf;
+}
+
+// 15.05: six D6 at 4+ as a share of `enemy`.
+double explosives_value(const GameState& state, const core::Unit& enemy) {
+    const std::vector<double> pmf =
+        analysis::capped_binomial(core::kExplosivesDice, kExplosivesHit, core::kExplosivesDice);
+    return unit_share(state, enemy, analysis::mortal_wound_model_equivalents(enemy, pmf));
+}
+
+// 15.06: `model`'s T D6: the 5+s as a share of `enemy`, less the 1s as a share of `unit`, each capped at 6.
+double crush_gain(const GameState& state, const core::Unit& unit, const core::Model& model, const core::Unit& enemy) {
+    const int t = model.characteristics.toughness;
+    const double them = unit_share(state, enemy, analysis::mortal_wound_model_equivalents(
+                                                     enemy, analysis::capped_binomial(t, kCrushFive, core::kCrushingImpactCap)));
+    const double us = unit_share(state, unit, analysis::mortal_wound_model_equivalents(
+                                                  unit, analysis::capped_binomial(t, kCrushOne, core::kCrushingImpactCap)));
+    return them - us;
+}
+
+struct PairValue {
+    core::EffectPair pair;
+    double value = 0.0;
+};
+
+// Explosives' enemy unit worth the most for `unit`, with the first legal model for it (ties keep the first).
+std::optional<PairValue> best_explosives_pair(const GameState& state, const core::Unit& unit) {
+    std::optional<PairValue> best;
+    std::vector<core::UnitId> seen;
+    for (const core::EffectPair& p : core::explosives_pairs(state, unit)) {
+        if (std::find(seen.begin(), seen.end(), p.enemy) != seen.end()) continue;
+        seen.push_back(p.enemy);
+        const core::Unit* enemy = state.find_unit(p.enemy);
+        if (enemy == nullptr) continue;
+        const double v = explosives_value(state, *enemy);
+        if (!best || v > best->value + kBetter) best = PairValue{p, v};
+    }
+    return best;
+}
+
+// Crushing Impact's pair with the best gain for `unit` (ties keep the first).
+std::optional<PairValue> best_crush_pair(const GameState& state, const core::Unit& unit) {
+    std::optional<PairValue> best;
+    for (const core::EffectPair& p : core::crushing_impact_pairs(state, unit)) {
+        const core::Unit* enemy = state.find_unit(p.enemy);
+        const core::Model* model = core::find_model(unit, p.model);
+        if (enemy == nullptr || model == nullptr) continue;
+        const double v = crush_gain(state, unit, *model, *enemy);
+        if (!best || v > best->value + kBetter) best = PairValue{p, v};
+    }
+    return best;
+}
+
 }  // namespace
+
+std::optional<ReactionPick> best_explosives(const GameState& state, const std::vector<core::GameAction>& legal) {
+    std::optional<ReactionPick> best;
+    for (const core::GameAction& a : legal) {
+        const auto* use = std::get_if<core::action::UseStratagem>(&a);
+        if (use == nullptr || use->stratagem != core::Stratagem::Explosives) continue;
+        const core::Unit* unit = state.find_unit(use->unit);
+        if (unit == nullptr) continue;
+        const std::optional<PairValue> p = best_explosives_pair(state, *unit);
+        if (!p || (best && !(p->value > best->value + kBetter))) continue;
+        best = ReactionPick{a, p->value,
+                            client::unit_display_name(state, use->unit) + ": Explosives at " +
+                                client::unit_display_name(state, p->pair.enemy) + " (" + two_places(p->value) +
+                                " of it for 1 CP, 15.05)"};
+    }
+    return best;
+}
+
+std::optional<ReactionPick> best_crushing_impact(const GameState& state) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    if (!w || w->timing != core::WindowTiming::AfterChargeMove || !w->unit ||
+        !offered(*w, core::Stratagem::CrushingImpact)) {
+        return std::nullopt;
+    }
+    const core::Unit* unit = state.find_unit(*w->unit);
+    if (unit == nullptr) return std::nullopt;
+    const std::optional<PairValue> p = best_crush_pair(state, *unit);
+    if (!p) return std::nullopt;
+    return ReactionPick{core::action::UseStratagem{core::Stratagem::CrushingImpact, unit->id, std::nullopt}, p->value,
+                        client::unit_display_name(state, unit->id) + ": Crushing Impact on " +
+                            client::unit_display_name(state, p->pair.enemy) + " (a gain of " + two_places(p->value) +
+                            " for 1 CP, 15.06)"};
+}
+
+std::optional<ReactionPick> best_effect_pair(const GameState& state) {
+    if (!state.pending || !state.flow.effect) return std::nullopt;
+    const auto* d = std::get_if<core::decision::SelectModelAndEnemy>(&state.pending->kind);
+    if (d == nullptr) return std::nullopt;
+    const core::Unit* unit = state.find_unit(d->unit);
+    if (unit == nullptr) return std::nullopt;
+    const std::optional<PairValue> p = d->stratagem == core::Stratagem::Explosives ? best_explosives_pair(state, *unit)
+                                                                                    : best_crush_pair(state, *unit);
+    if (!p) return std::nullopt;
+    return ReactionPick{core::action::SelectModelAndEnemy{p->pair.model, p->pair.enemy}, p->value,
+                        std::string(core::stratagem_name(d->stratagem)) + ": model " +
+                            std::to_string(p->pair.model.v) + " and " +
+                            client::unit_display_name(state, p->pair.enemy) + " (" + two_places(p->value) + ")"};
+}
 
 std::optional<ReactionPick> best_fire_overwatch(analysis::OddsCache& cache, const GameState& state) {
     const std::optional<core::WindowInfo> w = core::window_info(state);
@@ -414,6 +525,8 @@ std::optional<RerollPick> best_command_reroll(analysis::OddsCache& cache, const 
             return charge(state, *w);
         case core::RollKind::Advance:
         case core::RollKind::BattleShock:
+        case core::RollKind::Explosives:      // M97 (D-099): no window follows either (15.02 lists neither)
+        case core::RollKind::CrushingImpact:
             break;
     }
     return std::nullopt;
@@ -437,6 +550,15 @@ PolicyResult decide_stratagems(analysis::OddsCache& cache, const GameState& stat
             }
         }
         return PolicyResult{decline, "No stratagem at the end of the phase: none is worth its CP", {}};
+    }
+    if (w->timing == core::WindowTiming::AfterChargeMove) {
+        // D-099 (M97): just after a charge move, 15.06 Crushing Impact.
+        if (weights.crushing_impact > 0.0) {
+            if (const auto pick = best_crushing_impact(state); pick && pick->value >= kCrushMinGain) {
+                return PolicyResult{pick->action, pick->why, {}};
+            }
+        }
+        return PolicyResult{decline, "No Crushing Impact: it gains too little for its CP", {}};
     }
     if (w->timing == core::WindowTiming::AfterAttacks) {
         if (weights.counteroffensive > 0.0) {

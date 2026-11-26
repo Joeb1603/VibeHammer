@@ -80,23 +80,27 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::RollDice{RollKind::Save, UnitId{2}}},  // M94 (D-095)
         {Side::B, decision::UseStratagems{WindowTiming::AfterRoll, UnitId{2}}},  // M95 (D-096)
         {Side::B, decision::SnapShoot{UnitId{2}}},                               // M96 (D-097)
+        {Side::A, decision::SelectModelAndEnemy{Stratagem::Explosives, UnitId{1}}},  // M97 (D-099)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
         EXPECT_EQ(round_trip(d), d) << describe(d);
     }
     // M94 (D-095): every roll kind, by its JSON name.
+    // M97 (D-099): Explosives and CrushingImpact too.
     for (const RollKind r : {RollKind::Advance, RollKind::Charge, RollKind::BattleShock, RollKind::Hazard,
-                             RollKind::RandomAttacks, RollKind::Hit, RollKind::Wound, RollKind::Save, RollKind::Damage}) {
+                             RollKind::RandomAttacks, RollKind::Hit, RollKind::Wound, RollKind::Save, RollKind::Damage,
+                             RollKind::Explosives, RollKind::CrushingImpact}) {
         const PendingDecision d{Side::A, decision::RollDice{r, UnitId{3}}};
         EXPECT_EQ(round_trip(d), d) << describe(d);
         EXPECT_EQ(Json(d).at("roll").get<std::string>(), roll_kind_name(r));
         EXPECT_EQ(roll_kind_from_name(roll_kind_name(r)), r);
     }
     EXPECT_EQ(roll_kind_from_name("Sixes"), std::nullopt);
-    // M95 (D-096): every window timing, by its JSON name (M96, D-097: EndOfPhase and AfterAttacks too).
+    // M95 (D-096): every window timing, by its JSON name (M96, D-097: EndOfPhase and AfterAttacks too; M97, D-099:
+    // AfterChargeMove).
     for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll, WindowTiming::EndOfPhase,
-                                 WindowTiming::AfterAttacks}) {
+                                 WindowTiming::AfterAttacks, WindowTiming::AfterChargeMove}) {
         const PendingDecision d{Side::A, decision::UseStratagems{t, UnitId{3}}};
         EXPECT_EQ(round_trip(d), d) << describe(d);
         EXPECT_EQ(Json(d).at("timing").get<std::string>(), window_timing_name(t));
@@ -107,6 +111,11 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
     const PendingDecision no_unit{Side::B, decision::UseStratagems{WindowTiming::EndOfPhase, std::nullopt}};
     EXPECT_EQ(round_trip(no_unit), no_unit) << describe(no_unit);
     EXPECT_FALSE(Json(no_unit).contains("unit"));
+    // M97 (D-099): the selection names its stratagem by its JSON name.
+    const PendingDecision crush{Side::B, decision::SelectModelAndEnemy{Stratagem::CrushingImpact, UnitId{4}}};
+    EXPECT_EQ(round_trip(crush), crush) << describe(crush);
+    EXPECT_EQ(Json(crush).at("stratagem").get<std::string>(), "CrushingImpact");
+    EXPECT_EQ(decision_rule(crush), "15.06");
 }
 
 TEST(Serialization, StateMidAttackRoundTrips) {
@@ -258,6 +267,7 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::RollDice{RollKind::Damage, UnitId{1}},                                            // M94 (D-095)
         action::UseStratagem{Stratagem::CommandReroll, UnitId{2}, std::size_t{3}},                // M95 (D-096)
         action::DeclineStratagems{},                                                              // M95 (D-096)
+        action::SelectModelAndEnemy{ModelId{4}, UnitId{7}},                                       // M97 (D-099)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {
@@ -280,9 +290,13 @@ TEST(Serialization, EveryActionKindRoundTrips) {
     action::to_json(j, whole);
     EXPECT_FALSE(j.contains("die"));
     EXPECT_EQ(j.at("stratagem").get<std::string>(), "InsaneBravery");
-    for (const Stratagem s : {Stratagem::CommandReroll, Stratagem::InsaneBravery}) {
+    for (const Stratagem s : kAllStratagems) {  // M97 (D-099): every implemented stratagem
         EXPECT_EQ(stratagem_from_key(stratagem_key(s)), s);
     }
+    EXPECT_EQ(stratagem_key(Stratagem::Explosives), "Explosives");
+    EXPECT_EQ(stratagem_key(Stratagem::CrushingImpact), "CrushingImpact");
+    EXPECT_EQ(round_trip_action(action::UseStratagem{Stratagem::Explosives, UnitId{1}, std::nullopt}),
+              GameAction{(action::UseStratagem{Stratagem::Explosives, UnitId{1}, std::nullopt})});
     EXPECT_EQ(stratagem_from_key("Smokescreen"), std::nullopt);
 }
 
@@ -373,6 +387,9 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::DiceRerolled{RollKind::Save, UnitId{2}, std::size_t{1}, {1, 2}, {1, 6},
                             event::SaveRollsMade{UnitId{2}, {1, 6}}},                                          // M95
         event::BattleShockPassedAutomatically{UnitId{2}},                                                     // M95
+        event::ModelAndEnemySelected{Stratagem::Explosives, UnitId{1}, ModelId{3}, UnitId{2}},                // M97
+        event::StratagemDiceRolled{Stratagem::CrushingImpact, UnitId{4}, ModelId{40}, UnitId{1},
+                                   {1, 5, 6, 3, 1, 2, 5, 4, 6, 1}, 4, 3},                                      // M97
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {
@@ -384,6 +401,11 @@ TEST(Serialization, EveryEventKindRoundTrips) {
     EXPECT_EQ(round_trip_event(event::GameOver{std::nullopt, "draw"}), GameEvent{(event::GameOver{std::nullopt, "draw"})});
     const event::ChargeResolved failed{UnitId{1}, false, "11.02: unit 1 does not make a charge move; the charge fails"};
     EXPECT_EQ(round_trip_event(failed), GameEvent{failed});
+    // M97 (D-099): the two effect events cite their stratagem's rule.
+    EXPECT_EQ(event_rule(event::ModelAndEnemySelected{Stratagem::CrushingImpact, UnitId{4}, ModelId{40}, UnitId{1}}),
+              "15.06");
+    EXPECT_EQ(event_rule(event::StratagemDiceRolled{Stratagem::Explosives, UnitId{1}, ModelId{3}, UnitId{2}, {4}, 1, 0}),
+              "15.05");
 }
 
 TEST(Serialization, UnknownKindsAreDataErrors) {

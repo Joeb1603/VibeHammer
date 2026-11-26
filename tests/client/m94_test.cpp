@@ -210,7 +210,7 @@ TEST(M94_Saves, AnM93SaveLoadsWithItsRollsAsSteps) {
     EXPECT_EQ(loaded.state(), again.state());
     EXPECT_EQ(loaded.history(), again.history());
     EXPECT_GT(loaded.history().size(), 50u);  // its 50 steps and their rolls
-    EXPECT_EQ(loaded.to_save_json().at("format"), 4);  // D-096 (M95): saved again as format 3; D-097 (M96): 4
+    EXPECT_EQ(loaded.to_save_json().at("format"), 5);  // saved again as format 3 in M95, 4 in M96, 5 in M97 (D-099)
     EXPECT_EQ(GameSession::from_save_json(loaded.to_save_json()).state(), loaded.state());
 }
 

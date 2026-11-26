@@ -307,6 +307,20 @@ std::string body(const core::GameEvent& e) {
                        std::visit([](const auto& r) { return body(core::GameEvent{r}); }, x.result);
             } else if constexpr (std::is_same_v<T, ev::BattleShockPassedAutomatically>) {
                 return "Battle-shock roll for " + unit(x.unit) + ": passed automatically (no dice rolled)";
+            } else if constexpr (std::is_same_v<T, ev::ModelAndEnemySelected>) {
+                // D-099 (M97): "Explosives: model 3 of unit 1 selects unit 2".
+                return std::string(core::stratagem_name(x.stratagem)) + ": " + model(x.model) + " of " + unit(x.unit) +
+                       " selects " + unit(x.enemy);
+            } else if constexpr (std::is_same_v<T, ev::StratagemDiceRolled>) {
+                // D-099: "Explosives dice: 4 1 6 2 5 3 -> 3 mortal wounds on unit 2 (each 4+)"; Crushing Impact's 5+s on
+                // the enemy unit and 1s on its own unit, each at most 6.
+                const auto wounds = [](int n) { return std::to_string(n) + " mortal wound" + (n == 1 ? "" : "s"); };
+                std::string text = std::string(core::stratagem_name(x.stratagem)) + " dice: " + ints(x.dice) + " -> ";
+                if (x.stratagem == core::Stratagem::Explosives) {
+                    return text + wounds(x.enemy_mortal_wounds) + " on " + unit(x.enemy) + " (each 4+)";
+                }
+                return text + wounds(x.enemy_mortal_wounds) + " on " + unit(x.enemy) + " (each 5+), " +
+                       wounds(x.unit_mortal_wounds) + " on " + unit(x.unit) + " (each 1; at most 6 per unit)";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -344,7 +358,8 @@ bool is_roll_event(const core::GameEvent& event) {
            std::holds_alternative<ev::ChargeRolled>(event) || std::holds_alternative<ev::HazardRollsMade>(event) ||
            std::holds_alternative<ev::BattleShockRolled>(event) || std::holds_alternative<ev::DamageRolled>(event) ||
            std::holds_alternative<ev::DiceRerolled>(event) ||
-           std::holds_alternative<ev::BattleShockPassedAutomatically>(event);  // D-096
+           std::holds_alternative<ev::BattleShockPassedAutomatically>(event) ||  // D-096
+           std::holds_alternative<ev::StratagemDiceRolled>(event);              // D-099
 }
 
 std::string format_event(const core::GameEvent& event) {

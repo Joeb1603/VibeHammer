@@ -182,6 +182,17 @@ struct SampledOutcome {
 // loss counted as model_equivalents counts it (a wound off a W-wound model is 1/W). 0 for no roll.
 [[nodiscard]] double hazard_model_equivalents(const core::Unit& firer, int rolls);
 
+// ---- mortal wounds from a stratagem (06.02; D-099, M97) ----
+
+// The distribution of the successes of `n` dice that each succeed with chance `p`, with every count above `cap` folded
+// into `cap` (15.06: at most 6 mortal wounds per unit): out[k] is the chance of k, k = 0..min(n, cap).
+[[nodiscard]] std::vector<double> capped_binomial(int n, double p, int cap);
+// The model equivalents `unit` is expected to lose to a number of mortal wounds distributed as `pmf` (pmf[k]: the
+// chance of k): each count inflicted on a copy by core's inflict_mortal_wounds (06.02, the engine's first candidate
+// each time), the loss counted as hazard_model_equivalents counts it (a wound off a W-wound model is 1/W).
+// hazard_model_equivalents stays as it is (its sums are part of the identity proofs).
+[[nodiscard]] double mortal_wound_model_equivalents(const core::Unit& unit, std::span<const double> pmf);
+
 // 24.30 [RAPID FIRE]: is `gap_mm` within half the profile's range? The same test select_weapon_target records
 // (consistency-tested against it); false for a melee profile.
 [[nodiscard]] bool within_half_range(const core::WeaponProfile& profile, float gap_mm);

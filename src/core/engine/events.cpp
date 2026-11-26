@@ -67,7 +67,11 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::DiceRerolled>) return {"DiceRerolled", "15.02"};
     else if constexpr (std::is_same_v<T, event::BattleShockPassedAutomatically>) {
         return {"BattleShockPassedAutomatically", "15.04"};
-    } else static_assert(sizeof(T) == 0, "unhandled event");
+    }
+    // D-099 (M97): their rule is their stratagem's (event_rule); 15.05 here.
+    else if constexpr (std::is_same_v<T, event::ModelAndEnemySelected>) return {"ModelAndEnemySelected", "15.05"};
+    else if constexpr (std::is_same_v<T, event::StratagemDiceRolled>) return {"StratagemDiceRolled", "15.05"};
+    else static_assert(sizeof(T) == 0, "unhandled event");
 }
 
 }  // namespace
@@ -85,6 +89,11 @@ std::string_view event_rule(const GameEvent& e) {
             if constexpr (std::is_same_v<T, event::GameOver>) {
                 if (x.vp) return "D-084";
                 if (x.points) return "D-076";
+            }
+            // D-099 (M97): 15.05 Explosives or 15.06 Crushing Impact.
+            if constexpr (std::is_same_v<T, event::ModelAndEnemySelected> ||
+                          std::is_same_v<T, event::StratagemDiceRolled>) {
+                return stratagem_rule(x.stratagem);
             }
             return name_rule<T>().rule;
         },

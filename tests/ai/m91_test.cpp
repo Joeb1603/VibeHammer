@@ -390,12 +390,14 @@ TEST(M91_Regression, TheNewKeysAtZeroPlayTheTerrainAndObjectiveScenariosAsM90) {
     } pins[] = {{kTerrainScenario, "14b0b35639105408", "e3f0d22c61823516", "54c0dfee123ead1b"},
                 // M93 (D-094): the objective scenario's objectives are markers (14.01.01), so its game is pinned under
                 // M93's rules (M90's pins: 0f541058be8987ce, 7d146f09e35eecf6, a4954478d7e5ca05).
-                {kObjectiveScenario, "8507c4b7457ea109", "a72929b923c9055d", "1991fde7d6fe9d5c"}};
+                {kObjectiveScenario, "cf67a8a2342b8257", "a72929b923c9055d", "1991fde7d6fe9d5c"}};
     // M94 (D-095): each roll is a step of its own, so the actions hashes changed (dd02111be5230c80 and
     // ab644a7bf2f340a3 before); the states and the traces did not. M95 (D-096): each declined window is a step too, and
     // a random D is rolled per attack, so they changed again (bb8f3dbb43e36153 and d8f001f46a0e9dd8 at M94); the states
     // and the traces did not. M96 (D-097): the windows that follow no roll are declined steps too, so they changed
-    // again (7af6666cb29a26c5 and eb8b53f897ee6117 at M95); the states and the traces did not.
+    // again (7af6666cb29a26c5 and eb8b53f897ee6117 at M95); the states and the traces did not. M97 (D-099): Crushing
+    // Impact's windows after a MONSTER's charge are declined steps too, so the objective scenario's changed again
+    // (8507c4b7457ea109 at M96; the terrain scenario's game has no such window); the states and the traces did not.
     for (const auto& pin : pins) {
         SCOPED_TRACE(pin.scenario);
         const GameState scenario = load_scenario(repo_root() / pin.scenario, repo_root());
@@ -457,7 +459,7 @@ M91Game play_m91_bot_game(std::uint64_t seed = kM91Seed) {
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
     g.record = play_bot_session(session, config(m91_weights()), config(m91_weights()), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
+    g.replay.format = kReplayFormatOwnTurnStratagems;  // M94 (D-095) to M97 (D-099): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

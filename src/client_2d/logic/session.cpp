@@ -52,7 +52,7 @@ GameSession GameSession::from_steps(core::GameState initial, const std::vector<c
 }
 
 nlohmann::json GameSession::to_save_json() const {
-    return nlohmann::json{{"format", core::kReplayFormatReactionsRecorded},  // D-096, D-097
+    return nlohmann::json{{"format", core::kReplayFormatOwnTurnStratagems},  // D-096, D-097, D-099
                           {"kind", "vibehammer-save"},
                           {"initial", initial()},
                           {"steps", history()},
@@ -68,9 +68,10 @@ GameSession GameSession::from_save_json(const nlohmann::json& j) {
         const bool rolls_inline = format == core::kReplayFormatRollsInline;
         const bool rolls_recorded = format == core::kReplayFormatRollsRecorded;
         const bool windows_recorded = format == core::kReplayFormatWindowsRecorded;
-        if (j.at("kind") != "vibehammer-save" ||
-            (!rolls_inline && !rolls_recorded && !windows_recorded && format != core::kReplayFormatReactionsRecorded)) {
-            throw core::DataError("not a VibeHammer save (format 1, 2, 3 or 4)");
+        const bool reactions_recorded = format == core::kReplayFormatReactionsRecorded;
+        if (j.at("kind") != "vibehammer-save" || (!rolls_inline && !rolls_recorded && !windows_recorded &&
+                                                  !reactions_recorded && format != core::kReplayFormatOwnTurnStratagems)) {
+            throw core::DataError("not a VibeHammer save (format 1, 2, 3, 4 or 5)");
         }
         const core::GameState initial = j.at("initial").get<core::GameState>();
         std::vector<core::ReplayStep> steps = j.at("steps").get<std::vector<core::ReplayStep>>();
@@ -79,6 +80,8 @@ GameSession GameSession::from_save_json(const nlohmann::json& j) {
         if (rolls_recorded) steps = core::with_roll_steps_from_format2(initial, steps);
         // D-097: format 3, without the windows that follow no roll (15.08, 15.11, 15.12).
         if (windows_recorded) steps = core::with_roll_steps_from_format3(initial, steps);
+        // D-099: format 4, without the windows just after a charge move (15.06).
+        if (reactions_recorded) steps = core::with_roll_steps_from_format4(initial, steps);
         GameSession s = from_steps(initial, steps);
         if (!(s.state() == j.at("state").get<core::GameState>())) {
             throw core::DataError("the save's state does not match its initial state and steps");
@@ -172,6 +175,23 @@ std::vector<core::GameAction> GameSession::roll_automatically() {
 std::vector<core::GameAction> GameSession::legal() const {
     if (!state().pending) return {};
     return core::legal_actions(state(), state().pending->side);
+}
+
+bool GameSession::declines(core::Side side, core::Stratagem s) const {
+    if (auto_decline(side)) return true;
+    const std::vector<core::Stratagem>& declined = declined_[core::side_index(side)];
+    return std::find(declined.begin(), declined.end(), s) != declined.end();
+}
+
+std::vector<core::GameAction> GameSession::legal_offered() const {
+    std::vector<core::GameAction> out = legal();
+    if (!state().pending) return out;
+    const core::Side side = state().pending->side;
+    std::erase_if(out, [&](const core::GameAction& a) {
+        const auto* u = std::get_if<core::action::UseStratagem>(&a);
+        return u != nullptr && declines(side, u->stratagem);
+    });
+    return out;
 }
 
 core::Side GameSession::deciding_side() const {

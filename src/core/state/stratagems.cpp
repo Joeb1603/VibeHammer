@@ -9,6 +9,8 @@ std::string_view stratagem_name(Stratagem s) {
         case Stratagem::FireOverwatch: return "Fire Overwatch";
         case Stratagem::HeroicIntervention: return "Heroic Intervention";
         case Stratagem::Counteroffensive: return "Counteroffensive";
+        case Stratagem::Explosives: return "Explosives";
+        case Stratagem::CrushingImpact: return "Crushing Impact";
     }
     return "?";
 }
@@ -20,13 +22,14 @@ std::string_view stratagem_key(Stratagem s) {
         case Stratagem::FireOverwatch: return "FireOverwatch";
         case Stratagem::HeroicIntervention: return "HeroicIntervention";
         case Stratagem::Counteroffensive: return "Counteroffensive";
+        case Stratagem::Explosives: return "Explosives";
+        case Stratagem::CrushingImpact: return "CrushingImpact";
     }
     return "?";
 }
 
 std::optional<Stratagem> stratagem_from_key(std::string_view key) {
-    for (const Stratagem s : {Stratagem::CommandReroll, Stratagem::InsaneBravery, Stratagem::FireOverwatch,
-                              Stratagem::HeroicIntervention, Stratagem::Counteroffensive}) {
+    for (const Stratagem s : kAllStratagems) {
         if (stratagem_key(s) == key) return s;
     }
     return std::nullopt;
@@ -39,6 +42,8 @@ std::string_view stratagem_rule(Stratagem s) {
         case Stratagem::FireOverwatch: return "15.08";
         case Stratagem::HeroicIntervention: return "15.11";
         case Stratagem::Counteroffensive: return "15.12";
+        case Stratagem::Explosives: return "15.05";      // D-098: the PDF's numbers
+        case Stratagem::CrushingImpact: return "15.06";
     }
     return "?";
 }
@@ -50,6 +55,8 @@ int stratagem_cost(Stratagem s) {
         case Stratagem::FireOverwatch: return 1;       // 15.08: 1CP
         case Stratagem::HeroicIntervention: return 1;  // 15.11: 1CP (Into the Fray: +1CP, stratagem_use_cost)
         case Stratagem::Counteroffensive: return 2;    // 15.12: 2CP
+        case Stratagem::Explosives: return 1;          // 15.05: 1CP
+        case Stratagem::CrushingImpact: return 1;      // 15.06: 1CP
     }
     return 0;
 }

@@ -490,7 +490,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "state": {
       "battle_rounds": 5,

@@ -268,6 +268,9 @@ TEST(M67_StateHash, StatesWithoutPointsHashAsBefore) {
                                      wh40k::test::load_tyrannofex_fixture_closer(26.0f)}) {
         for (std::uint64_t seed = 1; seed <= 3; ++seed) {
             for (const GameState& gs : states_from(initial, seed, 300)) {
+                // M97 (D-099): random play can use Explosives at the Shoot step. A state with a stratagem's record or
+                // effect (M95's and M97's state, each hashed behind its own tag) didn't exist at M66: not compared.
+                if (gs.flow.effect || !gs.stratagems[0].empty() || !gs.stratagems[1].empty()) continue;
                 ASSERT_EQ(state_hash(gs), m66_state_hash(gs)) << "seed " << seed << " state " << states;
                 ++states;
             }
@@ -276,6 +279,7 @@ TEST(M67_StateHash, StatesWithoutPointsHashAsBefore) {
     EXPECT_GT(states, 1000);
     // The roster scenario's states with the points and the option taken out hash as M66 hashed them.
     for (const GameState& gs : states_from(wh40k::test::load_rosters_scenario_closer(26.0f), 4, 300)) {
+        if (gs.flow.effect || !gs.stratagems[0].empty() || !gs.stratagems[1].empty()) continue;  // as above (M97)
         ASSERT_EQ(state_hash(without_points(gs)), m66_state_hash(gs));
         ++states;
     }

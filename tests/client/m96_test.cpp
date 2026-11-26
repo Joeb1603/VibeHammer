@@ -259,7 +259,7 @@ TEST(M96_Saves, AnM95SaveLoadsWithTheNewWindowsDeclined) {
     EXPECT_EQ(loaded.state(), again.state());
     EXPECT_EQ(loaded.history(), again.history());
     EXPECT_EQ(loaded.to_save_json(), again.to_save_json());
-    EXPECT_EQ(loaded.to_save_json().at("format"), kReplayFormatReactionsRecorded);
+    EXPECT_EQ(loaded.to_save_json().at("format"), kReplayFormatOwnTurnStratagems);  // M97 (D-099): format 5
     EXPECT_GT(loaded.history().size(), 79u);  // its 79 steps and the declines of the new windows
 }
 

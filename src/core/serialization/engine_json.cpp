@@ -290,6 +290,9 @@ void to_json(Json& j, const GameAction& v) {
                 j["unit"] = a.unit;
                 if (a.die) j["die"] = *a.die;  // omitted when absent (a charge roll, Insane Bravery)
                 if (a.mode) j["mode"] = *a.mode;  // D-097: omitted when absent (every stratagem but 15.11)
+            } else if constexpr (std::is_same_v<T, SelectModelAndEnemy>) {
+                j["model"] = a.model;  // D-099 (15.05, 15.06)
+                j["enemy"] = a.enemy;
             }
         },
         v);
@@ -365,6 +368,8 @@ void from_json(const Json& j, GameAction& v) {
         v = a;
     } else if (kind == "DeclineStratagems") {
         v = DeclineStratagems{};  // D-096
+    } else if (kind == "SelectModelAndEnemy") {
+        v = SelectModelAndEnemy{j.at("model").get<ModelId>(), j.at("enemy").get<UnitId>()};  // D-099
     } else {
         bad_enum("GameAction", j);
     }
@@ -552,6 +557,19 @@ void to_json(Json& j, const GameEvent& v) {
                 j["result"] = std::visit([](const auto& r) { return Json(GameEvent{r}); }, e.result);
             } else if constexpr (std::is_same_v<T, BattleShockPassedAutomatically>) {
                 j["unit"] = e.unit;  // 15.04 (D-096)
+            } else if constexpr (std::is_same_v<T, ModelAndEnemySelected>) {
+                j["stratagem"] = e.stratagem;  // 15.05 / 15.06 (D-099)
+                j["unit"] = e.unit;
+                j["model"] = e.model;
+                j["enemy"] = e.enemy;
+            } else if constexpr (std::is_same_v<T, StratagemDiceRolled>) {
+                j["stratagem"] = e.stratagem;  // 15.05 / 15.06 (D-099)
+                j["unit"] = e.unit;
+                j["model"] = e.model;
+                j["enemy"] = e.enemy;
+                j["dice"] = e.dice;
+                j["enemy_mortal_wounds"] = e.enemy_mortal_wounds;
+                j["unit_mortal_wounds"] = e.unit_mortal_wounds;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -723,6 +741,14 @@ void from_json(const Json& j, GameEvent& v) {
         v = std::move(d);
     } else if (kind == "BattleShockPassedAutomatically") {
         v = BattleShockPassedAutomatically{j.at("unit").get<UnitId>()};  // D-096
+    } else if (kind == "ModelAndEnemySelected") {
+        v = ModelAndEnemySelected{j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(),
+                                  j.at("model").get<ModelId>(), j.at("enemy").get<UnitId>()};  // D-099
+    } else if (kind == "StratagemDiceRolled") {
+        v = StratagemDiceRolled{j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(),
+                                j.at("model").get<ModelId>(),       j.at("enemy").get<UnitId>(),
+                                j.at("dice").get<std::vector<int>>(), j.at("enemy_mortal_wounds").get<int>(),
+                                j.at("unit_mortal_wounds").get<int>()};  // D-099
     } else {
         bad_enum("GameEvent", j);
     }

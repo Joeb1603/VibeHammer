@@ -10,6 +10,7 @@
 #include "core/engine/events.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/attacks.hpp"
+#include "core/rules/stratagem_effects.hpp"
 #include "core/state/queries.hpp"
 #include "action_text.hpp"
 #include "event_text.hpp"
@@ -497,6 +498,34 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                         card.roll = core::RollKind::BattleShock;
                         card.unit = e.unit;
                         cards.push_back(card);
+                    } else if constexpr (std::is_same_v<T, ev::StratagemDiceRolled>) {
+                        if (!show) return;
+                        // D-099 (M97): 15.05 Explosives' six D6 (each 4+ a mortal wound on the enemy unit), or 15.06
+                        // Crushing Impact's T D6 (each 5+ one on the enemy unit, each 1 one on the unit, at most 6 each).
+                        const bool explosives = e.stratagem == core::Stratagem::Explosives;
+                        const std::string unit = unit_name(state, e.unit);
+                        const std::string enemy = unit_name(state, e.enemy);
+                        DiceCard card{explosives ? "Explosives dice" : "Crushing Impact dice",
+                                      explosives ? unit + "'s Explosives at " + enemy
+                                                 : unit + "'s Crushing Impact on " + enemy,
+                                      explosives ? "Each 4+ is 1 mortal wound on " + enemy
+                                                 : "Each 5+ is 1 mortal wound on " + enemy + ", each 1 is 1 on " + unit +
+                                                       " (at most 6 each)",
+                                      "", std::string(core::stratagem_rule(e.stratagem)),
+                                      side_of(state, e.unit, core::Side::A), {}};
+                        const int success = explosives ? core::kExplosivesSuccess : core::kCrushingImpactSuccess;
+                        for (const int r : e.dice) {
+                            // A Crushing Impact 1 is a failure (it wounds the unit); a 2 to 4 does nothing.
+                            const bool neutral = !explosives && r != core::kCrushingImpactFailure && r < success;
+                            card.dice.push_back(DieFace{r, r >= success, false, neutral});
+                        }
+                        card.result = plural(e.enemy_mortal_wounds, "mortal wound", "mortal wounds") + " on " + enemy;
+                        if (!explosives) {
+                            card.result += ", " + plural(e.unit_mortal_wounds, "mortal wound", "mortal wounds") + " on " +
+                                           unit;
+                        }
+                        identify(card, explosives ? core::RollKind::Explosives : core::RollKind::CrushingImpact, e.unit);
+                        cards.push_back(card);
                     } else if constexpr (std::is_same_v<T, ev::DiceRerolled>) {
                         // 15.02 (D-096): the roll's card again, from the rebuilt roll event (which also updates the
                         // attack context, as the first roll did).
@@ -584,6 +613,21 @@ DiceCard prompt_card(const core::GameState& state, const std::vector<LogEntry>& 
             card.purpose = attack_purpose(state, c);
             card.need = damage_need(c);
             break;
+        case core::RollKind::Explosives: {
+            // D-099 (M97): 15.05's six D6 at the enemy unit selected.
+            const std::string enemy = info->target ? unit_name(state, *info->target) : std::string("the enemy unit");
+            card.purpose = unit + "'s Explosives at " + enemy;
+            card.need = std::to_string(info->dice) + " dice: each " + need + " is 1 mortal wound on " + enemy;
+            break;
+        }
+        case core::RollKind::CrushingImpact: {
+            // D-099: 15.06's D6 per T of the model selected: 5+s on the enemy unit, 1s on the unit, at most 6 each.
+            const std::string enemy = info->target ? unit_name(state, *info->target) : std::string("the enemy unit");
+            card.purpose = unit + "'s Crushing Impact on " + enemy;
+            card.need = std::to_string(info->dice) + " dice (T): each " + need + " is 1 mortal wound on " + enemy +
+                        ", each 1 is 1 on " + unit + " (at most 6 each)";
+            break;
+        }
     }
     return card;
 }

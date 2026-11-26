@@ -483,7 +483,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "scenario": "data/scenarios/rosters_44x60.json",
     "seed": 1

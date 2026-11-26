@@ -2,9 +2,65 @@
 
 #include <algorithm>
 
+#include "core/rules/stratagem_effects.hpp"
 #include "unit_style.hpp"
 
 namespace wh40k::client {
+
+namespace {
+
+const core::StratagemEffect* pending_selection(const core::GameState& state) {
+    if (!state.pending || !std::holds_alternative<core::decision::SelectModelAndEnemy>(state.pending->kind)) {
+        return nullptr;
+    }
+    return state.flow.effect ? &*state.flow.effect : nullptr;
+}
+
+}  // namespace
+
+std::vector<EffectChoice> effect_choices(const core::GameState& state) {
+    std::vector<EffectChoice> out;
+    const core::StratagemEffect* e = pending_selection(state);
+    if (e == nullptr) return out;
+    const std::vector<core::GameAction> legal = core::legal_actions(state, state.pending->side);
+    const core::Unit* unit = state.find_unit(e->unit);
+    for (const core::Unit& enemy : state.units) {  // unit order
+        for (const core::GameAction& a : legal) {  // model order: the first legal model for this enemy unit
+            const auto* s = std::get_if<core::action::SelectModelAndEnemy>(&a);
+            if (s == nullptr || s->enemy != enemy.id) continue;
+            std::string label = unit_display_name(state, enemy.id) + " (model " + std::to_string(s->model.v);
+            if (e->stratagem == core::Stratagem::CrushingImpact && unit != nullptr) {
+                for (const core::Model& m : unit->models) {
+                    if (m.id != s->model) continue;
+                    const int dice = core::effect_dice(e->stratagem, m);
+                    label += ", T" + std::to_string(m.characteristics.toughness) + ": " + std::to_string(dice) + " dice";
+                }
+            }
+            out.push_back(EffectChoice{a, label + ")", enemy.id, s->model});
+            break;
+        }
+    }
+    return out;
+}
+
+std::string effect_headline(const core::GameState& state) {
+    const core::StratagemEffect* e = pending_selection(state);
+    if (e == nullptr) return "";
+    return std::string(core::stratagem_name(e->stratagem)) + ": pick the enemy unit (" +
+           std::string(core::stratagem_rule(e->stratagem)) + ")";
+}
+
+std::string effect_hint(const core::GameState& state) {
+    const core::StratagemEffect* e = pending_selection(state);
+    if (e == nullptr) return "";
+    if (e->stratagem == core::Stratagem::Explosives) {
+        return "One model of " + unit_display_name(state, e->unit) +
+               " throws at an unengaged enemy unit within 8\" that it can see: six D6, each 4+ is a mortal wound.";
+    }
+    return "A model of " + unit_display_name(state, e->unit) +
+           " engaged with the enemy unit rolls a D6 per point of its T: each 5+ is a mortal wound on the enemy unit, "
+           "each 1 one on your unit (at most 6 each).";
+}
 
 StratagemPicks::StratagemPicks(const core::GameState& state) : info_(core::window_info(state)) {
     if (!info_ || info_->whole_roll) return;
@@ -83,6 +139,7 @@ std::string StratagemPicks::decline_label() const {
 std::string StratagemPicks::headline() const {
     if (!info_) return "";
     // D-097 (M96): the windows that follow no roll, by what they offer.
+    if (offers(core::Stratagem::CrushingImpact)) return "Crushing Impact? (15.06)";  // D-099 (M97)
     if (offers(core::Stratagem::FireOverwatch)) return "Fire Overwatch? (15.08)";
     if (offers(core::Stratagem::HeroicIntervention)) return "Heroic Intervention? (15.11)";
     if (offers(core::Stratagem::Counteroffensive)) return "Counteroffensive? (15.12)";
@@ -93,6 +150,10 @@ std::string StratagemPicks::headline() const {
 std::string StratagemPicks::hint() const {
     if (!info_) return "";
     const std::string cp = std::to_string(info_->command_points) + " CP";
+    if (offers(core::Stratagem::CrushingImpact)) {
+        return "You have " + cp + ". Crushing Impact: a model of your unit engaged with an enemy unit rolls a D6 per "
+               "point of its T: each 5+ is a mortal wound on that enemy unit, each 1 one on your unit (at most 6 each).";
+    }
     if (offers(core::Stratagem::FireOverwatch)) {
         return "You have " + cp + ". Fire Overwatch: one of your unengaged units shoots now at one visible enemy unit "
                "within 24\" (snap shooting: only a 6 hits, and it is not critical).";

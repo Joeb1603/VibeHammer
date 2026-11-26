@@ -274,6 +274,33 @@ void apply_attack_roll(GameState& state, RollKind roll, std::size_t batch, const
                                                      const std::vector<int>& faces);
 // 15.04: the front battle-shock test (08.03) passes automatically (01.05.01): no dice; command.cpp.
 void pass_battle_shock_automatically(GameState& state, UnitId unit, Events& events);
+// D-099 (M97): 15.05 Explosives at the Shoot decision (10.02): why `side` can't use it on `target`, or nullopt; and the
+// units it can target, in unit order (legal_for(Shoot) lists them after the Shoot templates).
+[[nodiscard]] std::optional<std::string> explosives_problem(const GameState& state, Side side, UnitId target);
+[[nodiscard]] std::vector<UnitId> explosives_targets(const GameState& state, Side side);
+
+// ---- effects.cpp: D-099 (M97) the EFFECT of 15.05 Explosives and 15.06 Crushing Impact (FlowState::effect) ----
+
+// 15.01 step 3: the stratagem's effect starts once its CP are paid (the selection, the roll, the mortal wounds follow).
+void start_effect(GameState& state, Stratagem stratagem, UnitId unit);
+// The decision the effect in progress needs (pure): the selection, the roll, then the enemy unit's and the unit's
+// casualties (06.02); nullopt once there is nothing left to do (effect_progress then ends it).
+[[nodiscard]] std::optional<PendingDecision> effect_decision(const GameState& state);
+// Ends the effect in progress (its decisions are all answered, or the 1s are not inflicted: D-099 section 6).
+void effect_progress(GameState& state, Events& events);
+// 15.05 / 15.06 step 3: the effect's dice (RollDice{Explosives} or RollDice{CrushingImpact}): no window follows.
+void make_effect_roll(GameState& state, DiceSource& dice, Events& events);
+// The effect's roll for roll_dice_info (the dice, their number and the result each needs).
+void describe_effect_roll(const GameState& state, RollDiceInfo& info);
+// 06.02 for the effect's mortal wounds on `target` (the enemy unit or the stratagem's unit), with its player's
+// casualty priority (D-013).
+void resolve_effect_casualties(GameState& state, UnitId target, const std::vector<ModelId>& priority, Events& events);
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectModelAndEnemy& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
+                                                const action::SelectModelAndEnemy& a);
+void apply_details(GameState& state, Side side, const action::SelectModelAndEnemy& a, DiceSource& dice,
+                   Events& events);
 
 // ---- helpers ----
 // Every non-empty subset of `ids` (at most 2^10 - 1), in bit order: the target sets legal_actions lists

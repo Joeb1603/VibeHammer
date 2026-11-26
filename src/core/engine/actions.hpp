@@ -208,13 +208,21 @@ struct UseStratagem {
     std::optional<std::size_t> die;
     // D-097 (M96): 15.11 Heroic Intervention's mode (Leap to Defend or Into the Fray), chosen with the stratagem before
     // the charge roll; absent for every other stratagem. For the windows that follow no roll (15.08, 15.11, 15.12),
-    // `unit` is the friendly unit the player targets.
+    // `unit` is the friendly unit the player targets. D-099 (M97): 15.05 Explosives also answers the Shoot decision
+    // (10.02), its `unit` the EXPLOSIVES/GRENADES unit; 15.06 Crushing Impact's is the window's unit.
     std::optional<StratagemMode> mode{};
     friend bool operator==(const UseStratagem&, const UseStratagem&) = default;
 };
 // D-096 (M95): use no stratagem in the open window (the rules there are optional, 01.03.02). Changes nothing else.
 struct DeclineStratagems {
     friend bool operator==(const DeclineStratagems&, const DeclineStratagems&) = default;
+};
+// D-099 (M97): 15.05 / 15.06 EFFECT steps 1-2: this model of the stratagem's unit, and this enemy unit (one legal pair,
+// core/rules/stratagem_effects.hpp). Never a template.
+struct SelectModelAndEnemy {
+    ModelId model;
+    UnitId enemy;
+    friend bool operator==(const SelectModelAndEnemy&, const SelectModelAndEnemy&) = default;
 };
 }  // namespace action
 
@@ -228,7 +236,7 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties, action::RerollWoundRolls, action::DeployUnit,
                                 action::CannotSetUp, action::RetargetAttacks, action::RollDice,
-                                action::UseStratagem, action::DeclineStratagems>;
+                                action::UseStratagem, action::DeclineStratagems, action::SelectModelAndEnemy>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"

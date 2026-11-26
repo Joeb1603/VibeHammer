@@ -372,7 +372,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "scenario": "data/scenarios/incursion_objectives_44x60.json",
     "seed": 29
@@ -4022,6 +4022,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "DeclareCharge",
         "unit": 8
       },
@@ -6516,6 +6522,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "DeclareCharge",
         "unit": 10
       },
@@ -8341,6 +8353,12 @@
     {
       "action": {
         "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
