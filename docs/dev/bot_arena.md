@@ -31,7 +31,8 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   `command_reroll` defaults to 1 (measured +44 games in 400), `insane_bravery` to 0 (+8, not better). M96 (D-097) adds
   `fire_overwatch`, `heroic_intervention` and `counteroffensive` (0 or 1 each): the opponent-turn stratagems (15.08 with
   15.09's snap shot, 15.11, 15.12). The session declines a window that offers the bot only stratagems whose key is 0,
-  so at 0 it never sees one. Their defaults: M96_DEFAULTS_PLACEHOLDER.
+  so at 0 it never sees one. `fire_overwatch` defaults to 1 (measured +26 games in 400), `heroic_intervention` and
+  `counteroffensive` to 0 (+2 and +0, not better).
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -130,7 +131,12 @@ added, no game with fewer). At the defaults every per-game field but `steps`, `a
 M95 binary (every `state`): the default bot's session now declines Insane Bravery's windows itself, so its trace loses
 those decline lines and gains none. The M78, M87, M89 and M91 pins re-pinned `actions` (and `M78_Arena`'s steps).
 
-M96_H2H_PLACEHOLDER
+M96's head-to-head (D-092's procedure on the terrain scenario, 400 games per variant against the bot at M96's other
+defaults) gave Fire Overwatch +26 (213-187), Heroic Intervention +2 (201-199), Counteroffensive +0 (200-200) and all
+three +24 (212-188). So Fire Overwatch is on by default and the default bot's games change on purpose again: the M96
+binary at the defaults is the reference for every run, and `--weights fire_overwatch=0` plays the default identity runs
+above. The older bots' pins and the bot-game replays play without stratagems (`without_stratagems()` turns the new keys
+off too).
 
 ## Deployment and the summary
 

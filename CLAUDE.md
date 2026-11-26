@@ -21,7 +21,7 @@ Insane Bravery behind a key, off. M96 added the opponent-turn stratagems (D-097)
 Overwatch with snap shooting at the end of the opponent's Movement phase (15.08, 15.09), Heroic Intervention at the end
 of their Charge phase (15.11), Counteroffensive just after one of their units has fought (15.12); objective control is
 determined on entering a phase's end (14.02.01), and saves and replays record the new answers (format 4). The bot plays
-each behind a key (D-097's results give the defaults).
+Fire Overwatch by default (it measured better), Heroic Intervention and Counteroffensive behind keys, off.
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
