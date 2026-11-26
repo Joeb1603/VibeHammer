@@ -8,12 +8,22 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/engine/actions.hpp"
 #include "core/engine/engine.hpp"
 #include "core/state/game_state.hpp"
 
 namespace wh40k::client {
+
+// D-097 (M96): one answer to a window that follows no roll (15.08, 15.11, 15.12): a stratagem, its mode and the friendly
+// unit it targets, with its button label ("Fire Overwatch (1 CP): Termagants", "Into the Fray (2 CP): Hive Tyrant").
+struct ReactionChoice {
+    core::GameAction action;
+    std::string label;
+    core::UnitId unit;
+    friend bool operator==(const ReactionChoice&, const ReactionChoice&) = default;
+};
 
 class StratagemPicks {
 public:
@@ -35,13 +45,19 @@ public:
     // Whether Command Re-roll can be submitted now: it is offered, and a die is picked (a charge roll needs none).
     [[nodiscard]] bool reroll_ready() const;
 
+    // D-097 (M96): the window follows no roll (Fire Overwatch, Heroic Intervention, Counteroffensive), and its answers
+    // other than the decline, in the engine's order (by stratagem, then mode, then unit).
+    [[nodiscard]] bool reaction_window() const noexcept { return info_ && !info_->roll; }
+    [[nodiscard]] std::vector<ReactionChoice> reactions(const core::GameState& state) const;
+
     // The answers: decline (the window's first answer, D-096), Command Re-roll of the picked die, Insane Bravery.
     [[nodiscard]] static core::GameAction decline() { return core::action::DeclineStratagems{}; }
     [[nodiscard]] std::optional<core::GameAction> command_reroll() const;
     [[nodiscard]] std::optional<core::GameAction> insane_bravery() const;
 
     // Button labels: "Command Re-roll (1 CP)", "Insane Bravery (1 CP)", and the decline's ("Keep the roll" after a
-    // roll, "Roll normally" before one). The hint says what each stratagem does.
+    // roll, "Roll normally" before one, "No stratagem" for a window that follows no roll). The hint says what each
+    // stratagem does.
     [[nodiscard]] std::string reroll_label() const;
     [[nodiscard]] std::string insane_bravery_label() const;
     [[nodiscard]] std::string decline_label() const;

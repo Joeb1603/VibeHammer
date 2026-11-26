@@ -118,8 +118,10 @@ std::string body(const core::GameEvent& e) {
             } else if constexpr (std::is_same_v<T, ev::ChargeRolled>) {
                 std::string targets;
                 for (const auto t : x.eligible_targets) targets += (targets.empty() ? "" : ", ") + unit(t);
+                // M96 (D-097): 15.11 Into the Fray: "= 9, Into the Fray 6\"".
+                const std::string capped = x.capped ? ", Into the Fray " + std::to_string(*x.capped) + "\"" : "";
                 return "Charge roll: " + ints({x.roll.dice[0], x.roll.dice[1]}) + " = " +
-                       std::to_string(x.roll.total()) + "\" -> " +
+                       std::to_string(x.roll.total()) + "\"" + capped + " -> " +
                        (targets.empty() ? std::string("no unit can be a charge target") : "can charge " + targets);
             } else if constexpr (std::is_same_v<T, ev::ChargeTargetsSelected>) {
                 std::string targets;
@@ -287,9 +289,12 @@ std::string body(const core::GameEvent& e) {
                 return "Damage roll for " + model(x.model) + " of " + unit(x.target) + ": " +
                        characteristic_roll_text(x.damage, x.roll);
             } else if constexpr (std::is_same_v<T, ev::StratagemUsed>) {
-                // D-096: "Side A uses Command Re-roll on unit 1: 1 CP (2 CP left)".
-                return side(x.side) + " uses " + std::string(core::stratagem_name(x.stratagem)) + " on " + unit(x.unit) +
-                       ": " + std::to_string(x.cost) + " CP (" + std::to_string(x.cp_left) + " CP left)";
+                // D-096: "Side A uses Command Re-roll on unit 1: 1 CP (2 CP left)". D-097: Heroic Intervention's mode,
+                // "Side B uses Heroic Intervention (Into the Fray) on unit 3: 2 CP (1 CP left)".
+                const std::string mode =
+                    x.mode ? " (" + std::string(core::stratagem_mode_name(*x.mode)) + ")" : std::string();
+                return side(x.side) + " uses " + std::string(core::stratagem_name(x.stratagem)) + mode + " on " +
+                       unit(x.unit) + ": " + std::to_string(x.cost) + " CP (" + std::to_string(x.cp_left) + " CP left)";
             } else if constexpr (std::is_same_v<T, ev::DiceRerolled>) {
                 // D-096: "Re-roll: 1 -> 5; Hit rolls (batch 0): ...".
                 std::string changed;

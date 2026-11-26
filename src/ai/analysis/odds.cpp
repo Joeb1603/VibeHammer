@@ -217,7 +217,7 @@ const HitWoundOdds& OddsCache::hit_wound(const core::AttackProfile& profile, int
     ++lookups_;
     const HitWoundKey key{opt_or(profile.skill), profile.torrent,         profile.strength, profile.hit_modifier,
                           profile.wound_modifier,  toughness, core::sustained_hits(profile),
-                          core::twin_linked(profile)};
+                          core::twin_linked(profile), profile.snap_shooting};
     auto it = hit_wound_.find(key);
     if (it == hit_wound_.end()) {
         ++computed_;
@@ -646,7 +646,8 @@ std::vector<core::AttackBatch> shooting_batches(const core::GameState& state, co
     const core::Unit* unit = state.find_unit(shooter);
     if (unit == nullptr || !core::shot_problems(state, *unit, type, shots).empty()) return {};
     const auto selections = core::make_weapon_selections(state, *unit, type, shots);
-    return core::gather_attack_batches(state, selections, core::shooting_context(state, *unit));
+    // M96 (D-097): the type's context (15.09 snap shooting: only a 6 hits, no [HEAVY]); the same for 10.04-10.06.
+    return core::gather_attack_batches(state, selections, core::shooting_context(state, *unit, type));
 }
 
 std::vector<core::AttackBatch> melee_batches(const core::GameState& state, core::UnitId attacker,

@@ -70,8 +70,9 @@ public:
     [[nodiscard]] std::size_t lookups() const noexcept { return lookups_; }
 
 private:
-    // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X, [TWIN-LINKED])
-    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool>;
+    // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X, [TWIN-LINKED], M96
+    // (D-097): 15.09 snap shooting)
+    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
     // (dice, sides, modifier)

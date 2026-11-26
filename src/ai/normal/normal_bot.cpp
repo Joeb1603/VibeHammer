@@ -37,7 +37,16 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     analysis::OddsCache cache;  // per decision: the bot keeps no state between decisions but its plan memo
     const DecisionKind& kind = gs.pending->kind;
     // M95 (D-096): a reaction window, only with a stratagem key on (otherwise the session declines it).
-    if (std::holds_alternative<decision::UseStratagems>(kind)) return normal::decide_stratagems(cache, gs, side, weights);
+    if (std::holds_alternative<decision::UseStratagems>(kind)) {
+        return normal::decide_stratagems(cache, gs, side, weights, seed);
+    }
+    if (const auto* snap = std::get_if<decision::SnapShoot>(&kind)) {
+        // M96 (D-097): 15.08 Fire Overwatch's snap shot, at the one target worth the most (15.09).
+        if (const auto c = normal::plan_snap_shooting(cache, gs, snap->unit)) {
+            return single(action::Shoot{c->unit, c->type, c->shots}, "Snap shooting (15.09): " + normal::describe_shooting(gs, *c));
+        }
+        return std::nullopt;  // the fallback's one-target snap shot
+    }
     if (std::holds_alternative<decision::Shoot>(kind)) {
         // M87 (D-086): the objective part of the aim, under a mission.
         const double fire = normal::objectives_on(gs, weights) ? weights.objective_fire : 0.0;

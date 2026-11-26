@@ -31,6 +31,11 @@ enum class StratagemMode : std::uint8_t {
     IntoTheFray,   // +1CP; the charge roll is at most 6; any enemy unit within 6" can be a charge target
 };
 
+// Every stratagem the engine implements, in enum order (D-097: for the clients' and the bots' lists).
+inline constexpr std::array<Stratagem, 5> kAllStratagems{Stratagem::CommandReroll, Stratagem::InsaneBravery,
+                                                         Stratagem::FireOverwatch, Stratagem::HeroicIntervention,
+                                                         Stratagem::Counteroffensive};
+
 [[nodiscard]] std::string_view stratagem_name(Stratagem s);  // "Command Re-roll", as the rules name it
 [[nodiscard]] std::string_view stratagem_key(Stratagem s);   // "CommandReroll"; also the JSON name
 [[nodiscard]] std::optional<Stratagem> stratagem_from_key(std::string_view key);

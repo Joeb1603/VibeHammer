@@ -3,12 +3,21 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <span>
+#include <string>
 #include <variant>
 #include <vector>
 
 #include "analysis/charge_odds.hpp"
 #include "core/engine/engine.hpp"
+#include "core/geometry/distance.hpp"
+#include "core/model/keywords.hpp"
+#include "core/rules/charge.hpp"
+#include "core/rules/fight.hpp"
+#include "normal/charge.hpp"
+#include "normal/shooting.hpp"
+#include "normal/value.hpp"
 #include "core/rules/attack_sequence.hpp"
 #include "core/rules/mortal_wounds.hpp"
 #include "core/rules/random_characteristics.hpp"
@@ -20,6 +29,8 @@ namespace wh40k::ai::normal {
 namespace {
 
 using core::GameState;
+
+constexpr double kBetter = 1e-9;  // D-097: a choice must beat the current one by more than this (ties keep it)
 
 // The roll window's unit (M95's windows each have one; D-097's EndOfPhase windows have none).
 const core::Unit* window_unit(const GameState& gs, const core::WindowInfo& w) {
@@ -188,7 +199,198 @@ std::optional<RerollPick> charge(const GameState& gs, const core::WindowInfo& w)
     return RerollPick{std::nullopt, analysis::p_charge_roll_covers(*gap), "re-rolls a charge that reaches no target"};
 }
 
+std::string percent(double p) { return std::to_string(static_cast<int>(std::lround(p * 100))) + "%"; }
+
+std::string shares(double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.2f", v);
+    return buf;
+}
+
+// D-097: one heroic charge's gain over holding, per 2D6 total (the mode's distance: Into the Fray caps it at 6).
+struct HeroicGain {
+    double gain = 0.0;
+    double p_success = 0.0;
+    std::vector<core::UnitId> targets;
+};
+std::optional<HeroicGain> heroic_gain(analysis::OddsCache& cache, const GameState& gs, core::UnitId unit,
+                                      core::StratagemMode mode, std::uint64_t seed) {
+    const core::Unit* u = gs.find_unit(unit);
+    if (u == nullptr || u->models.empty()) return std::nullopt;
+    const core::Side side = u->side;
+    const core::GameAction declare = core::action::UseStratagem{core::Stratagem::HeroicIntervention, unit, std::nullopt, mode};
+    if (!core::validate_action(gs, side, declare).ok()) return std::nullopt;
+    const int turns = turns_left(gs);
+    const double hold = hold_value(cache, gs, unit);
+    // The mode's possible targets, closest first (at most three, as M42's charges), then every non-empty set of them.
+    std::vector<core::UnitId> enemies =
+        core::eligible_charge_targets(gs, *u, static_cast<int>(core::kChargeRangeInches), mode);
+    std::stable_sort(enemies.begin(), enemies.end(), [&](core::UnitId a, core::UnitId b) {
+        return core::unit_distance(*u, *gs.find_unit(a)).value_or(0.0f) <
+               core::unit_distance(*u, *gs.find_unit(b)).value_or(0.0f);
+    });
+    if (enemies.size() > 3) enemies.resize(3);
+    std::sort(enemies.begin(), enemies.end(), [](core::UnitId a, core::UnitId b) { return a.v < b.v; });
+    const auto distance_of = [mode](std::size_t total) {
+        return mode == core::StratagemMode::IntoTheFray ? std::min<std::size_t>(total, 6) : total;
+    };
+    std::array<bool, 13> any{};
+    std::array<double, 13> best{};  // by distance
+    std::optional<HeroicGain> out;
+    double best_set = -1.0;
+    const auto& pmf = analysis::two_d6_pmf();
+    for (std::uint32_t mask = 1; mask < (1u << enemies.size()); ++mask) {
+        std::vector<core::UnitId> set;
+        for (std::size_t i = 0; i < enemies.size(); ++i) {
+            if ((mask >> i) & 1u) set.push_back(enemies[i]);
+        }
+        std::array<bool, 13> planned{};
+        std::array<double, 13> value{};  // by distance (the state after the roll depends only on it)
+        const auto check = [&](const GameState& after_roll, core::UnitId id, std::span<const core::UnitId> t) {
+            const std::optional<int> roll = after_roll.find_unit(id)->phase_flags.charge_roll;
+            if (!roll || *roll < 0 || *roll > 12) return false;
+            const auto d = static_cast<std::size_t>(*roll);
+            if (planned[d]) return true;
+            const std::optional<ChargePlan> move =
+                plan_charge_move(after_roll, side, id, std::vector<core::UnitId>(t.begin(), t.end()), seed, {});
+            if (!move) return false;
+            planned[d] = true;
+            value[d] = charged_value(cache, move->after, id, t, turns);
+            return true;
+        };
+        const std::optional<analysis::ChargeOdds> odds = analysis::charge_odds(gs, unit, set, check, declare);
+        if (!odds) continue;
+        double gain = 0.0;
+        for (std::size_t r = 0; r <= 12; ++r) {
+            if (!odds->success_by_total[r]) continue;
+            const std::size_t d = distance_of(r);
+            gain += pmf[r] * std::max(0.0, value[d] - hold);
+            if (!any[d] || value[d] > best[d]) {
+                any[d] = true;
+                best[d] = value[d];
+            }
+        }
+        if (gain > best_set + kBetter) {
+            best_set = gain;
+            if (!out) out = HeroicGain{};
+            out->targets = set;
+        }
+    }
+    if (!out) return std::nullopt;
+    for (std::size_t r = 0; r <= 12; ++r) {
+        const std::size_t d = distance_of(r);
+        if (!any[d]) continue;
+        out->gain += pmf[r] * std::max(0.0, best[d] - hold);
+        out->p_success += pmf[r];
+    }
+    return out;
+}
+
+const core::Unit* engaged_enemy_fights_first(const GameState& gs, const core::Unit& ours) {
+    // The enemy's eligible Fights First unit engaged with `ours` whose fight on it is worth the most (first found on a tie).
+    const core::Unit* pick = nullptr;
+    double most = -1.0;
+    analysis::OddsCache cache;
+    for (const core::Unit& e : gs.units) {
+        if (e.side == ours.side || core::is_destroyed(e)) continue;
+        if (!core::eligible_to_fight(gs, e) || !core::is_fights_first_unit(e)) continue;
+        const std::vector<core::UnitId> engaged = core::engaged_enemy_units(gs, e);
+        if (std::find(engaged.begin(), engaged.end(), ours.id) == engaged.end()) continue;
+        const std::optional<analysis::MeleePlanValue> theirs = analysis::best_melee(cache, gs, e.id, ours.id);
+        const double v = theirs ? theirs->outcome.model_equivalents : 0.0;
+        if (v > most) {
+            most = v;
+            pick = &e;
+        }
+    }
+    return pick;
+}
+
 }  // namespace
+
+std::optional<ReactionPick> best_fire_overwatch(analysis::OddsCache& cache, const GameState& state) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    if (!w || w->timing != core::WindowTiming::EndOfPhase) return std::nullopt;
+    std::optional<ReactionPick> best;
+    for (const core::StratagemOption& o : w->options) {
+        if (o.stratagem != core::Stratagem::FireOverwatch) continue;
+        for (const core::UnitId u : o.targets) {
+            const std::optional<ShootingChoice> c = plan_snap_shooting(cache, state, u);
+            if (!c) continue;
+            if (!best || c->value > best->value + kBetter) {
+                best = ReactionPick{core::action::UseStratagem{core::Stratagem::FireOverwatch, u, std::nullopt},
+                                    c->value,
+                                    client::unit_display_name(state, u) + ": Fire Overwatch, a snap shot worth " +
+                                        shares(c->value) + " (" + describe_shooting(state, *c) + ")"};
+            }
+        }
+    }
+    return best;
+}
+
+std::optional<ReactionPick> best_heroic_intervention(analysis::OddsCache& cache, const GameState& state,
+                                                     std::uint64_t seed) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    if (!w || w->timing != core::WindowTiming::EndOfPhase) return std::nullopt;
+    std::optional<ReactionPick> best;
+    for (const core::StratagemOption& o : w->options) {  // Leap to Defend first (the cheaper wins a tie)
+        if (o.stratagem != core::Stratagem::HeroicIntervention || !o.mode || o.cost <= 0) continue;
+        for (const core::UnitId u : o.targets) {
+            const std::optional<HeroicGain> g = heroic_gain(cache, state, u, *o.mode, seed);
+            if (!g) continue;
+            const double per_cp = g->gain / o.cost;
+            if (!best || per_cp > best->value + kBetter) {
+                best = ReactionPick{
+                    core::action::UseStratagem{core::Stratagem::HeroicIntervention, u, std::nullopt, *o.mode}, per_cp,
+                    client::unit_display_name(state, u) + ": Heroic Intervention (" +
+                        std::string(core::stratagem_mode_name(*o.mode)) + "), " + percent(g->p_success) +
+                        " to charge, " + shares(g->gain) + " over holding (" + std::to_string(o.cost) + " CP)"};
+            }
+        }
+    }
+    return best;
+}
+
+std::optional<ReactionPick> best_counteroffensive(analysis::OddsCache& cache, const GameState& state) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    if (!w || w->timing != core::WindowTiming::AfterAttacks || !state.flow.fight_sequence) return std::nullopt;
+    const core::Side side = w->side;
+    // Only when it changes who fights next: in a Fights First step (finish_fight has already returned to it for any
+    // eligible Fights First unit) the enemy selects next when we have no eligible Fights First unit and it has one.
+    if (state.flow.fight_sequence->sub_step != core::FightSubStep::FightsFirst) return std::nullopt;
+    for (const core::Unit& u : state.units) {
+        if (u.side == side && core::eligible_to_fight(state, u) && core::is_fights_first_unit(u)) return std::nullopt;
+    }
+    std::optional<ReactionPick> best;
+    for (const core::StratagemOption& o : w->options) {
+        if (o.stratagem != core::Stratagem::Counteroffensive || o.cost <= 0) continue;
+        for (const core::UnitId id : o.targets) {
+            const core::Unit& ours = *state.find_unit(id);
+            const core::Unit* enemy = engaged_enemy_fights_first(state, ours);
+            if (enemy == nullptr) continue;  // the enemy's next fights don't touch it
+            const std::optional<analysis::MeleePlanValue> mine = analysis::best_melee(cache, state, id, enemy->id);
+            const std::optional<analysis::MeleePlanValue> theirs = analysis::best_melee(cache, state, enemy->id, id);
+            if (!mine || !theirs) continue;
+            const double our_size = static_cast<double>(ours.models.size());
+            const double their_size = static_cast<double>(enemy->models.size());
+            // Fighting first, our unit keeps the share of its fight the enemy's strike would have taken, and takes away
+            // the share of the enemy's strike its own kills remove.
+            const double kept = std::min(1.0, theirs->outcome.models_destroyed / our_size) *
+                                unit_share(state, *enemy, mine->outcome.model_equivalents);
+            const double prevented = std::min(1.0, mine->outcome.models_destroyed / their_size) *
+                                     unit_share(state, ours, theirs->outcome.model_equivalents);
+            const double per_cp = (kept + prevented) / o.cost;
+            if (!best || per_cp > best->value + kBetter) {
+                best = ReactionPick{core::action::UseStratagem{core::Stratagem::Counteroffensive, id, std::nullopt},
+                                    per_cp,
+                                    client::unit_display_name(state, id) + ": Counteroffensive, it fights before " +
+                                        client::unit_display_name(state, enemy->id) + " (" + shares(kept + prevented) +
+                                        " for " + std::to_string(o.cost) + " CP)"};
+            }
+        }
+    }
+    return best;
+}
 
 std::optional<RerollPick> best_command_reroll(analysis::OddsCache& cache, const GameState& state) {
     const std::optional<core::WindowInfo> w = core::window_info(state);
@@ -218,11 +420,33 @@ std::optional<RerollPick> best_command_reroll(analysis::OddsCache& cache, const 
 }
 
 PolicyResult decide_stratagems(analysis::OddsCache& cache, const GameState& state, core::Side,
-                               const MoveWeights& weights) {
+                               const MoveWeights& weights, std::uint64_t seed) {
     const core::GameAction decline = core::action::DeclineStratagems{};
     const std::optional<core::WindowInfo> w = core::window_info(state);
     if (!w) return PolicyResult{decline, "No stratagem", {}};
-    if (!w->unit) return PolicyResult{decline, "No stratagem", {}};  // D-097's EndOfPhase windows: not played yet
+    // D-097 (M96): the windows that follow no roll.
+    if (w->timing == core::WindowTiming::EndOfPhase) {
+        if (weights.fire_overwatch > 0.0) {
+            if (const auto pick = best_fire_overwatch(cache, state); pick && pick->value >= kOverwatchMinShare) {
+                return PolicyResult{pick->action, pick->why, {}};
+            }
+        }
+        if (weights.heroic_intervention > 0.0) {
+            if (const auto pick = best_heroic_intervention(cache, state, seed); pick && pick->value >= kHeroicMinGain) {
+                return PolicyResult{pick->action, pick->why, {}};
+            }
+        }
+        return PolicyResult{decline, "No stratagem at the end of the phase: none is worth its CP", {}};
+    }
+    if (w->timing == core::WindowTiming::AfterAttacks) {
+        if (weights.counteroffensive > 0.0) {
+            if (const auto pick = best_counteroffensive(cache, state); pick && pick->value >= kCounterMinGain) {
+                return PolicyResult{pick->action, pick->why, {}};
+            }
+        }
+        return PolicyResult{decline, "No Counteroffensive: it changes nothing worth its CP", {}};
+    }
+    if (!w->unit) return PolicyResult{decline, "No stratagem", {}};
     const std::string unit = client::unit_display_name(state, *w->unit);
     if (weights.insane_bravery > 0.0 && offered(*w, core::Stratagem::InsaneBravery) && w->next_roll &&
         w->next_roll->need) {

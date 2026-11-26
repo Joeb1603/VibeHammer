@@ -474,11 +474,15 @@ public:
         for (const core::Side side : {core::Side::A, core::Side::B}) {
             session_->set_auto_roll(side, rolls[core::side_index(side)]);
             session_->set_auto_decline(side, declines[core::side_index(side)]);
+            // D-097 (M96): a bot's session also declines the windows that offer only stratagems its config doesn't play.
+            session_->set_declined_stratagems(side, bot_sides_[core::side_index(side)]
+                                                        ? driver_.config().declined_stratagems()
+                                                        : std::vector<core::Stratagem>{});
         }
         if (core::roll_pending(session_->state()) && session_->auto_roll(session_->pending()->side)) {
             const auto& d = std::get<core::decision::RollDice>(session_->pending()->kind);
             submit_one(core::action::RollDice{d.roll, d.unit});  // the session makes any that follow
-        } else if (core::window_pending(session_->state()) && session_->auto_decline(session_->pending()->side)) {
+        } else if (session_->declines_window()) {
             submit_one(core::action::DeclineStratagems{});
         }
     }
@@ -486,7 +490,7 @@ public:
     // D-096: a human's reaction window waits for its answer.
     bool human_window_waiting() const {
         return mode_ == Mode::Play && session_ && core::window_pending(session_->state()) &&
-               !session_->auto_decline(session_->pending()->side) && !bot_sides_[core::side_index(session_->pending()->side)];
+               !session_->declines_window() && !bot_sides_[core::side_index(session_->pending()->side)];
     }
 
     // D-096: a human's roll with a window before it (Insane Bravery) waits on the roll's face-down card (the dice
@@ -2638,8 +2642,10 @@ private:
                               "Off: your rolls are made for you, as the bot's always are.");
         if (ImGui::Checkbox("Offer stratagems", &settings_.offer_stratagems)) sync_auto_answers();  // D-096
         ImGui::SetItemTooltip("Ask you whenever you can use a stratagem: Command Re-roll just after one of your rolls, "
-                              "Insane Bravery just before a battle-shock roll (15.02, 15.04). Off: you are never asked, "
-                              "and keep your CP.");
+                              "Insane Bravery just before a battle-shock roll (15.02, 15.04); in your opponent's turn, "
+                              "Fire Overwatch at the end of their Movement phase, Heroic Intervention at the end of their "
+                              "Charge phase, and Counteroffensive just after one of their units has fought (15.08, 15.11, "
+                              "15.12). Off: you are never asked, and keep your CP.");
         if (ImGui::Checkbox("Skip steps with nothing to do", &settings_.skip_empty_steps) && settings_.skip_empty_steps) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
         ImGui::Checkbox("Fix illegal moves", &settings_.fix_moves);  // D-052

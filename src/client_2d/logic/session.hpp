@@ -91,6 +91,19 @@ public:
     void set_auto_decline(core::Side side, bool on) noexcept { auto_decline_[core::side_index(side)] = on; }
     [[nodiscard]] bool auto_decline(core::Side side) const noexcept { return auto_decline_[core::side_index(side)]; }
 
+    // ---- D-097 (M96): declines per stratagem ----
+    // The stratagems `side` doesn't play (a bot's keys at 0): a window that offers it only these is declined at once, a
+    // step of its own, as auto_decline does every window. Kept by undo.
+    void set_declined_stratagems(core::Side side, std::vector<core::Stratagem> declined) {
+        declined_[core::side_index(side)] = std::move(declined);
+    }
+    [[nodiscard]] const std::vector<core::Stratagem>& declined_stratagems(core::Side side) const noexcept {
+        return declined_[core::side_index(side)];
+    }
+    // Whether the session declines the pending window by itself (its side's auto_decline, or it offers that side only
+    // stratagems it doesn't play). False when no window is pending.
+    [[nodiscard]] bool declines_window() const;
+
     [[nodiscard]] std::uint64_t seed() const noexcept { return match_.initial_state().dice.seed; }
 
     [[nodiscard]] const core::GameState& state() const noexcept { return match_.state(); }
@@ -121,6 +134,7 @@ private:
     std::vector<LogEntry> log_;
     std::array<bool, 2> auto_roll_{true, true};
     std::array<bool, 2> auto_decline_{true, true};  // D-096
+    std::array<std::vector<core::Stratagem>, 2> declined_{};  // D-097
 };
 
 }  // namespace wh40k::client

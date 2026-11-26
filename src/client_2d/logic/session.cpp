@@ -1,5 +1,6 @@
 #include "session.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <utility>
 #include <variant>
@@ -128,10 +129,26 @@ void GameSession::truncate(std::size_t n) {
     const std::vector<core::ReplayStep> kept(h.begin(), h.begin() + static_cast<std::ptrdiff_t>(n));
     const std::array<bool, 2> auto_roll = auto_roll_;
     const std::array<bool, 2> auto_decline = auto_decline_;
+    const std::array<std::vector<core::Stratagem>, 2> declined = declined_;
     *this = from_steps(initial(), kept);  // deterministic: the dice state is part of GameState
     auto_roll_ = auto_roll;
     auto_decline_ = auto_decline;
+    declined_ = declined;
     roll_automatically();
+}
+
+bool GameSession::declines_window() const {
+    if (!core::window_pending(state())) return false;
+    const core::Side side = state().pending->side;
+    if (auto_decline(side)) return true;
+    const std::vector<core::Stratagem>& declined = declined_[core::side_index(side)];
+    if (declined.empty()) return false;
+    // D-097: every stratagem the window offers is one the side doesn't play.
+    const std::optional<core::WindowInfo> info = core::window_info(state());
+    if (!info) return false;
+    return std::all_of(info->options.begin(), info->options.end(), [&](const core::StratagemOption& o) {
+        return std::find(declined.begin(), declined.end(), o.stratagem) != declined.end();
+    });
 }
 
 std::vector<core::GameAction> GameSession::roll_automatically() {
@@ -141,8 +158,8 @@ std::vector<core::GameAction> GameSession::roll_automatically() {
         core::GameAction answer;
         if (const auto* d = std::get_if<core::decision::RollDice>(&state().pending->kind); d && auto_roll(side)) {
             answer = core::action::RollDice{d->roll, d->unit};
-        } else if (core::window_pending(state()) && auto_decline(side)) {
-            answer = core::action::DeclineStratagems{};  // D-096
+        } else if (declines_window()) {
+            answer = core::action::DeclineStratagems{};  // D-096, D-097
         } else {
             break;
         }
@@ -170,18 +187,19 @@ core::ValidationResult GameSession::submit(const core::GameAction& action) {
     const core::ValidationResult v = submit_one(action);
     if (!v.ok()) return v;
     roll_automatically();  // D-095, D-096
-    const bool stuck = (core::roll_pending(state()) && auto_roll(state().pending->side)) ||
-                       (core::window_pending(state()) && auto_decline(state().pending->side));
+    const bool stuck = (core::roll_pending(state()) && auto_roll(state().pending->side)) || declines_window();
     if (stuck) {
         // An automatic answer failed (an engine error): take the action and its answers back, as if it had been refused.
         const core::ValidationResult failed = core::ValidationResult::failure(
             "Engine error (the action was not applied): a roll after it could not be made");
         const std::array<bool, 2> auto_roll = auto_roll_;
         const std::array<bool, 2> auto_decline = auto_decline_;
+        const std::array<std::vector<core::Stratagem>, 2> declined = declined_;
         *this = from_steps(initial(), std::vector<core::ReplayStep>(history().begin(),
                                                                     history().begin() + static_cast<std::ptrdiff_t>(before)));
         auto_roll_ = auto_roll;
         auto_decline_ = auto_decline;
+        declined_ = declined;
         return failed;
     }
     return v;

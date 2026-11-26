@@ -74,11 +74,12 @@ const std::array<double, 7>& d6_pmf() {
 }
 
 std::optional<ChargeOdds> charge_odds(const core::GameState& state, core::UnitId unit,
-                                      std::span<const core::UnitId> targets, const PlacementCheck& placement) {
+                                      std::span<const core::UnitId> targets, const PlacementCheck& placement,
+                                      const std::optional<core::GameAction>& declaring) {
     const core::Unit* u = state.find_unit(unit);
     if (u == nullptr || targets.empty()) return std::nullopt;
     const core::Side side = u->side;
-    const core::GameAction declare = core::action::DeclareCharge{unit};
+    const core::GameAction declare = declaring.value_or(core::GameAction{core::action::DeclareCharge{unit}});
     if (!core::validate_action(state, side, declare).ok()) return std::nullopt;
 
     ChargeOdds odds;

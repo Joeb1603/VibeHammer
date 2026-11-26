@@ -6,6 +6,7 @@
 #include "casualty_plan.hpp"
 #include "core/engine/engine.hpp"
 #include "core/engine/movement.hpp"
+#include "core/rules/shooting.hpp"
 #include "deploy_policy.hpp"
 #include "melee_plan.hpp"
 
@@ -39,6 +40,24 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
         return action::ResetUnitMove{};
     }
     if (std::holds_alternative<decision::Shoot>(kind)) return action::EndShootStep{};
+    if (const auto* d = std::get_if<decision::SnapShoot>(&kind)) {
+        // M96 (D-097): Fire Overwatch's snap shot can't be skipped: each model's first option at the first option's
+        // target (one weapon a model, D-016's fill: 24.07 and 15.09's one target always hold).
+        const core::Unit* u = state.find_unit(d->unit);
+        if (u == nullptr) return std::nullopt;
+        const std::vector<ShotDeclaration> options = shot_options(state, *u, ShootingType::Snap);
+        if (options.empty()) return std::nullopt;
+        action::Shoot s{d->unit, ShootingType::Snap, {}};
+        for (const Model& m : u->models) {
+            for (const ShotDeclaration& o : options) {
+                if (o.model == m.id && o.target == options.front().target) {
+                    s.shots.push_back(o);
+                    break;
+                }
+            }
+        }
+        return s;
+    }
     if (std::holds_alternative<decision::Charge>(kind)) return action::EndChargeStep{};
     if (const auto* d = std::get_if<decision::SelectChargeTargets>(&kind)) return action::SkipChargeMove{d->unit};
     if (std::holds_alternative<decision::PileIn>(kind)) return action::EndPileIns{};
