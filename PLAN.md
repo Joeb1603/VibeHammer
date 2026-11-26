@@ -246,7 +246,20 @@ D-095.
     clean.
   - With Command Re-roll on, the default bot's games change on purpose. The M95 binary at the defaults is the arena's
     new reference. The bot-game replays and the per-game pins of older bots are played by the bot without stratagems
-    (`tests/ai/bot_configs.hpp`), so they stayed as they were.
+    (`tests/ai/bot_configs.hpp`), so they stayed as they were. A spot check confirmed it: at `--weights
+    command_reroll=0` the final binary repeats the identity runs line for line (V1 and the terrain scenario, 400 games).
+  - Decision p95 at the defaults, M94 against M95 (100 games, each pair run side by side):
+
+    | Scenario | p95, M94 | p95, M95 | Wall time |
+    |---|---|---|---|
+    | Terrain, Side A first | 18.0 ms | 15.7 ms | +4% |
+    | Objectives | 12.3 ms | 10.8 ms | +0% |
+    | Random armies on terrain | 14.0 ms | 11.5 ms | +2% |
+
+    The p95 is lower partly because each window answer is a near-instant decision of its own. Far inside the 500 ms
+    budget. The package smoke test (`--bot both --bot-steps 5`) took 5 of 5.
+  - On the objective scenario (seeds 1-100), both bots playing Command Re-roll, the Chaos Space Marines won 36 games
+    instead of 26: M87's open balance item moves.
 - *Client:* the session declines for its auto sides (`auto_decline`, from "Offer stratagems" and the bot's keys).
   `StratagemPicks` holds the human's pick. Each dice card carries its roll's identity, so the window's buttons go on
   the rolled card. xvfb screenshots:
