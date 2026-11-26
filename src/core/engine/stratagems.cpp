@@ -189,7 +189,7 @@ event::RerolledRoll rerolled_result(const GameState& state, const StratagemWindo
 // Closes the window: an AfterRoll window applies its roll; a BeforeRoll window offers the next battle-shock test's
 // window when Insane Bravery has taken the test (otherwise the test's RollDice follows).
 void close_window(GameState& state, Events& events) {
-    const StratagemWindow w = window_of(state);
+    const StratagemWindow w = std::move(window_of(state));  // moved out: the window is gone from the state now
     state.flow.window.reset();
     if (w.timing == WindowTiming::AfterRoll) {
         apply_roll(state, w, events);

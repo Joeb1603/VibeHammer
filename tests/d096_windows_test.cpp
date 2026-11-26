@@ -404,6 +404,35 @@ TEST(R15_02_CommandReroll, DesperateEscapeHazardsAreCountedAgain) {
     EXPECT_EQ(gs.pending, (PendingDecision{Side::A, decision::MoveModels{marines}}));  // nothing to allocate
 }
 
+TEST(R15_02_CommandReroll, HazardousRollsAfterTheAttacksAreCountedAgain) {
+    // 24.15: after the volley, one hazard roll per [HAZARDOUS] weapon, the attacker's; its failures are counted when the
+    // window closes.
+    Volley v = fleshborer_volley([](WeaponProfile& p) { p.abilities.push_back(ability::Hazardous{}); });
+    GameState& gs = v.gs;
+    const UnitId gants = gs.units[1].id;
+    ScriptedDice dice{std::vector<int>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
+    paced(gs, v.shoot, dice);
+    roll(gs, dice);  // ten misses
+    decline(gs);
+    while (roll_pending(gs) && std::get<decision::RollDice>(gs.pending->kind).roll != RollKind::Hazard) {
+        roll(gs, dice);  // no hits: nothing to roll
+        if (window_pending(gs)) decline(gs);
+    }
+    ASSERT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Hazard, gants}}));
+    roll(gs, dice);  // 1, then nine 6s: one failure
+    ASSERT_EQ(gs.pending, window(Side::B, WindowTiming::AfterRoll, gants));
+    EXPECT_EQ(window_info(gs)->faces.size(), 10u);
+    EXPECT_EQ(gs.flow.attack->pending_mortal_wounds, 0);  // counted when the window closes
+    const auto used = paced(gs, action::UseStratagem{Stratagem::CommandReroll, gants, 0}, dice);
+    const event::DiceRerolled rerolled = the_reroll(used);
+    const auto* now = std::get_if<event::HazardRollsMade>(&rerolled.result);
+    ASSERT_NE(now, nullptr);
+    EXPECT_EQ(now->rolls.failures, 0);
+    EXPECT_EQ(now->rolls.mortal_wounds, 0);
+    EXPECT_EQ(gs.units[1].models.size(), 10u);  // no mortal wound to allocate
+    EXPECT_FALSE(gs.flow.attack.has_value() && gs.flow.attack->pending_mortal_wounds > 0);
+}
+
 TEST(R15_02_CommandReroll, ABattleShockedUnitsRollsHaveNoWindow) {
     GameState gs = engaged_marines(2);
     gs.units[0].battle_shocked = true;  // 01.07: its player can't target it with stratagems

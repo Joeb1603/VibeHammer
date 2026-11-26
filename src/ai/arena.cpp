@@ -260,7 +260,9 @@ TeamworkStats TeamworkCounter::stats() const {
 GameRecord play_bot_game(const core::GameState& scenario, std::uint64_t seed, BotConfig a, BotConfig b,
                          std::size_t step_cap, std::vector<double>* decision_ms, std::vector<std::string>* trace,
                          std::vector<core::Side>* decision_sides) {
-    client::GameSession session = client::GameSession::new_game(scenario, seed);
+    // D-096 (M95): a bot that plays no stratagem never sees a window: its session declines them.
+    client::GameSession session =
+        client::GameSession::new_game(scenario, seed, {true, true}, {!a.plays_stratagems(), !b.plays_stratagems()});
     return play_bot_session(session, a, b, step_cap, decision_ms, trace, decision_sides);
 }
 
@@ -269,6 +271,8 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
                             std::vector<core::Side>* decision_sides) {
     GameRecord rec;
     rec.seed = session.seed();
+    session.set_auto_decline(core::Side::A, !a.plays_stratagems());  // D-096: from now on (play_bot_game sets it at once)
+    session.set_auto_decline(core::Side::B, !b.plays_stratagems());
     const std::array<int, 2> wounds_at_start = wounds_left(session.state());
     std::array<Bot, 2> bots{Bot(a), Bot(b)};
     // As the client runs a bot game: skip steps with nothing to do, never auto-allocate for a bot (D-054).
@@ -518,7 +522,8 @@ PerGameReport run_per_game(const ScenarioForSeed& scenario_for, int games, std::
     const auto t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < games; ++i) {
         const std::uint64_t s = first_seed + static_cast<std::uint64_t>(i);
-        client::GameSession session = client::GameSession::new_game(scenario_for(s), s);
+        client::GameSession session =
+            client::GameSession::new_game(scenario_for(s), s, {true, true}, {!a.plays_stratagems(), !b.plays_stratagems()});
         std::vector<std::string> lines;
         const GameRecord g = play_bot_session(session, a, b, step_cap, &ms, &lines);
         std::string trace;
