@@ -32,7 +32,11 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   `fire_overwatch`, `heroic_intervention` and `counteroffensive` (0 or 1 each): the opponent-turn stratagems (15.08 with
   15.09's snap shot, 15.11, 15.12). The session declines a window that offers the bot only stratagems whose key is 0,
   so at 0 it never sees one. `fire_overwatch` defaults to 1 (measured +26 games in 400), `heroic_intervention` and
-  `counteroffensive` to 0 (+2 and +0, not better).
+  `counteroffensive` to 0 (+2 and +0, not better). M97 (D-099) adds `explosives` and `crushing_impact` (0 or 1 each):
+  the own-turn stratagems that end in mortal wounds (15.05 at the Shoot decision, 15.06 just after a charge move). At 0
+  the session hides Explosives' answers from the bot (`GameSession::legal_offered`; the bot's own list leaves them out
+  too) and declines Crushing Impact's window, so the bot never sees either. Both default to 0 (Explosives measured +6
+  games in 400, Crushing Impact -10, both -4: not better).
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -137,6 +141,16 @@ three +24 (212-188). So Fire Overwatch is on by default and the default bot's ga
 binary at the defaults is the reference for every run, and `--weights fire_overwatch=0` plays the default identity runs
 above. The older bots' pins and the bot-game replays play without stratagems (`without_stratagems()` turns the new keys
 off too).
+
+M97 (D-099) adds a step for each Crushing Impact window (just after a MONSTER or VEHICLE ends a charge move in its own
+Charge phase, with CP to spend) declined by the session for a bot whose `crushing_impact` key is 0, and hides Explosives'
+answers from it, so `steps` and `actions` change and nothing else may. IDENTITY_ARENA_TBD The M89 and M91 pins re-pinned
+`actions` (the M89 terrain game and the M91 objective game have such windows).
+
+M97's head-to-head (D-092's procedure on the terrain scenario, 400 games per variant against the bot at M97's other
+defaults) gave Explosives +6 (203-197), Crushing Impact -10 (195-205) and both -4 (198-202), every run clean. So both
+keys stay off by default and the default bot plays as at M96: the M96 binary at the defaults stays the reference for every
+run (`steps` and `actions` aside). `without_stratagems()` turns the new keys off too.
 
 ## Deployment and the summary
 

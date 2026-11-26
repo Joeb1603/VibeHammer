@@ -95,7 +95,7 @@ Impact; each then asks for the enemy unit (one button each). With "Offer stratag
 - **The bot** (`src/ai`) plays only through the same validated actions a human uses, and it never sees the
   game's future dice. It plans its shooting, charges, fights and moves from the odds, and it uses Command Re-roll
   where the odds say a re-roll is worth the CP and Fire Overwatch where a snap shot is (Insane Bravery, Heroic
-  Intervention and Counteroffensive are tuning switches, off). (Until M85 there were three
+  Intervention, Counteroffensive, Explosives and Crushing Impact are tuning switches, off). (Until M85 there were three
   levels, Easy, Normal and Hard; the one bot is Normal. The others are in git under the tag `bots-three-levels`.)
 - **Custom battles:** an army builder for Chaos Space Marines against Tyranids at Incursion size (1000
   points) on the 44" x 60" battlefield. Points by unit size and wargear, unit sizes, wargear options and

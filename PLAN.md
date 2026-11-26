@@ -141,7 +141,7 @@ Open items still carried are listed under "Later" below.
 
 ---
 
-## M97: Explosives and Crushing Impact (D-099)
+## M97: Explosives and Crushing Impact (D-099) ✅ (done; the manual mouse checks open)
 
 **Effort:** xhigh (two rule areas on M95's and M96's windows). **Plan mode:** done. The design was agreed on 2026-11-26
 in M96's session, where the user chose to design it. Implement it in a fresh session.
@@ -220,33 +220,43 @@ strategic reserves (20), and Smokescreen (15.10) for a SMOKE unit. In the data:
    Then the full `ctest`, then commit, push, the PR and the rebase merge.
 
 **Acceptance**
-- [ ] **Offers:**
+- [x] **Offers:**
   - each stratagem only at its WHEN and for a TARGET with a legal pair;
   - 15.01's cost and records, and 01.07, enforced, with rule-cited refusals;
   - declining or not using one changes nothing, and the closure holds.
-- [ ] **Explosives:**
+- [x] **Explosives:**
   - at the Shoot step, with one model and one unengaged, visible enemy unit within 8" of it;
   - six D6, with a mortal wound per 4+;
   - the unit can still shoot. `R15_05_*`.
-- [ ] **Crushing Impact:**
+- [x] **Crushing Impact:**
   - the window only after the unit's own charge move;
   - an engaged enemy unit and a model engaged with it, then T D6;
   - the 1s and the 5+s, each capped at 6;
   - the enemy's mortal wounds first, with D-007 first. `R15_06_*`.
-- [ ] **Format 5:**
+- [x] **Format 5:**
   - it round-trips, and formats 1–4 load and convert;
   - the 31 replays are regenerated with only declines added, and the event dumps are byte-identical;
   - `m97_stratagems.json` shows both stratagems.
-- [ ] **Bots:**
+- [x] **Bots:**
   - the identity set at the defaults has every `state` equal to M96's;
   - the two keys are measured by D-092's keep rule, and the defaults are set by it;
   - p95 is within budget.
-- [ ] **Client:** the Explosives button, the selection bar, the window, the cards and the log; logic tests and xvfb
+- [x] **Client:** the Explosives button, the selection bar, the window, the cards and the log; logic tests and xvfb
   screenshots.
-- [ ] **Full `ctest`** green, with warnings as errors.
+- [x] **Full `ctest`** green, with warnings as errors.
 
-**Open items, known now:**
-- The bot's charge planning doesn't price Crushing Impact.
+**Results** (D-099 part 11 has them in full): the M96 and M97 event dumps of the 31 older replays are byte-identical with
+no filter; the 31 replays regenerated as format 5 are each their format-4 file converted (11 declines added, in the 8
+replays named); `m97_stratagems.json` shows both stratagems (Explosives: 3 mortal wounds on the Hive Tyrant, then the
+Legionaries shoot; Crushing Impact: 2 on the Legionaries, then 1 on the Tyrant). IDENTITY_PLAN_TBD Head-to-heads (400
+games each, all clean): Explosives +6, Crushing Impact -10, both -4, so both keys stay off by default. P95_PLAN_TBD The full
+`ctest` is green.
+
+**Open items.**
+- Manual checks by mouse on Windows: Explosives at the Shoot step and its selection, Crushing Impact's window after a
+  monster's charge, both in hotseat and against the bot (keys on), and Undo after each.
+- The bot's charge planning doesn't price Crushing Impact (it is judged only at the window), and Explosives' valuation
+  doesn't weigh the CP against a later Command Re-roll. The thresholds were not tuned (one setting measured).
 - The selection is made with buttons, not by clicking on the board.
 - Explosives isn't offered in the Start or End of Shooting phase steps, which have no decision in the engine.
 
