@@ -52,6 +52,10 @@ LaunchOptions parse_launch_args(const std::vector<std::string>& args) {
             else if (key == "--seed") o.seed = std::stoull(value);
             else if (key == "--scenario") o.scenario = value;
             else if (key == "--dice") o.dice = std::stoi(value);
+            else if (key == "--dice-popups") {
+                if (value != "0" && value != "1") throw std::invalid_argument("not 0 or 1");
+                o.dice_popups = value == "1";
+            }
             else if (key == "--menu") {
                 if (value != "0" && value != "1") throw std::invalid_argument("not 0 or 1");
                 o.menu = value == "1";

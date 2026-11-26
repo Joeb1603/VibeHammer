@@ -80,6 +80,7 @@ struct LaunchOptions {
     std::optional<std::uint64_t> seed;
     std::optional<std::string> scenario;
     int dice = 0;       // --dice: 1 keeps the dice pop-ups from --steps, 2 also shows the first card's faces
+    std::optional<bool> dice_popups;  // --dice-popups 0|1 (M95): the "Show dice pop-ups" setting for a scripted run
     bool menu = false;  // --menu 1: show the start screen even with other flags (M38)
     BotSides bots{false, false};        // --bot (M39)
     bool bots_given = false;            // --bot was given (it overrides a --load save's players)

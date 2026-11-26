@@ -175,9 +175,40 @@ std::string save_need(const AttackContext& c) {
     return need.empty() ? "No save" : need + "; an unmodified 1 always fails";
 }
 
+// D-096 (M95): the roll a card shows, as core names it (decision::RollDice's kind and unit).
+void identify(DiceCard& card, core::RollKind roll, std::optional<core::UnitId> unit) {
+    card.roll = roll;
+    if (unit) card.unit = *unit;
+}
+
+// D-096: the card of a Command Re-roll (15.02): the roll's own card built from its new dice, the re-rolled die (each
+// die of a charge roll, re-rolled in full) marked, with its old and new faces.
+void mark_reroll(DiceCard& card, const core::event::DiceRerolled& e) {
+    card.title = "Command Re-roll: " + card.title;
+    card.rule = "15.02";
+    std::string change;
+    const auto faces = [](const std::vector<int>& dice) {
+        std::string text;
+        for (const int d : dice) text += (text.empty() ? "" : " + ") + std::to_string(d);
+        return text;
+    };
+    if (e.die) {
+        if (*e.die < card.dice.size()) card.dice[*e.die].rerolled = true;
+        if (*e.die < e.before.size() && *e.die < e.after.size()) {
+            change = "Re-rolled die " + std::to_string(*e.die + 1) + ": " + std::to_string(e.before[*e.die]) + " -> " +
+                     std::to_string(e.after[*e.die]);
+        }
+    } else {
+        for (DieFace& d : card.dice) d.rerolled = true;
+        change = "Re-rolled: " + faces(e.before) + " -> " + faces(e.after);
+    }
+    if (!change.empty()) card.result = change + ". " + card.result;
+}
+
 DiceCard hit_card(const core::GameState& state, const AttackContext& c, const core::HitRolls& rolls) {
     DiceCard card{"Hit rolls", attack_purpose(state, c), "", "", "05.01", core::Side::A, {}, attack_notes(state, c)};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
+    identify(card, core::RollKind::Hit, c.attacker);
     card.need = hit_need(c);
     int hits = 0;
     int criticals = 0;
@@ -203,6 +234,7 @@ DiceCard hit_card(const core::GameState& state, const AttackContext& c, const co
 DiceCard wound_card(const core::GameState& state, const AttackContext& c, const core::WoundRolls& rolls) {
     DiceCard card{"Wound rolls", attack_purpose(state, c), "", "", "05.02", core::Side::A, {}};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
+    identify(card, core::RollKind::Wound, c.attacker);
     card.need = wound_need(c, rolls.required);
     int wounds = 0;
     int criticals = 0;
@@ -226,6 +258,8 @@ DiceCard wound_card(const core::GameState& state, const AttackContext& c, const 
 DiceCard reroll_card(const core::GameState& state, const AttackContext& c, const core::event::WoundRollsRerolled& e) {
     DiceCard card{"Wound re-rolls", attack_purpose(state, c), "", "", "24.38", core::Side::A, {}};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
+    // No roll identity (D-096): the card shows only the re-rolled dice, so the window after it can't use it; the window's
+    // pop-up shows the batch's dice (window_card).
     card.need = "Need " + std::to_string(e.rolls.required) +
                 "+ to wound ([TWIN-LINKED]: each die re-rolled once, before modifiers); an unmodified 6 is a critical "
                 "wound";
@@ -282,6 +316,7 @@ std::string bonus_text(const core::GameState& state, const AttackContext& c, con
 DiceCard attack_dice_card(const core::GameState& state, const AttackContext& c, const core::event::AttackDiceRolled& e) {
     DiceCard card{"Attack dice", attack_purpose(state, c), "", "", "04.03", core::Side::A, {}};
     if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);
+    identify(card, core::RollKind::RandomAttacks, c.attacker);
     card.need = kRandomANeed;
     const core::AttackBatch* batch = current_batch(c);
     const std::string weapon = batch != nullptr ? weapon_name(state, c, *batch) : std::string();
@@ -304,6 +339,7 @@ DiceCard attack_dice_card(const core::GameState& state, const AttackContext& c, 
 DiceCard damage_roll_card(const core::GameState& state, const AttackContext& c, const core::event::DamageRolled& e) {
     DiceCard card{roll_label(core::RollKind::Damage), attack_purpose(state, c), damage_need(c), "", "05.04",
                   side_of(state, e.attacker, core::Side::A), {}};
+    identify(card, core::RollKind::Damage, e.attacker);
     for (const int face : e.roll.dice) card.dice.push_back(DieFace{face, true, false, true});
     std::string line = characteristic_roll_text(e.damage, e.roll);
     line = line.substr(line.find("-> ") + 3);  // "4+1 = 5"
@@ -315,6 +351,7 @@ DiceCard save_card(const core::GameState& state, const AttackContext& c, core::U
                    const std::vector<int>& rolls) {
     DiceCard card{"Save rolls", "", "", "", "05.03", core::Side::A, {}};
     card.roller = side_of(state, target, c.attacker ? other(side_of(state, *c.attacker, core::Side::A)) : core::Side::B);
+    identify(card, core::RollKind::Save, target);  // 05.03: the defender's roll, for its own unit
     card.purpose = save_purpose(state, c, target);
     const int ap = armour_penetration(c);
     const core::AllocationGroup* group = c.groups.empty() ? nullptr : &c.groups.front();
@@ -344,8 +381,7 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
     for (std::size_t i = 0; i < log.size(); ++i) {
         const bool show = i >= from;
         for (const core::GameEvent& event : log[i].events) {
-            std::visit(
-                [&](const auto& e) {
+            const auto handle = [&](const auto& e, const auto& self) -> void {
                     using T = std::decay_t<decltype(e)>;
                     if constexpr (std::is_same_v<T, ev::ShootingStarted>) {
                         c.selections = e.selections;
@@ -408,6 +444,7 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                                       side_of(state, e.unit, core::Side::A), {DieFace{e.roll, true, false, true}}};
                         card.result = "+" + std::to_string(e.roll) + "\" to Move" +
                                       (e.reused ? " (the roll from earlier this phase)" : "");
+                        identify(card, core::RollKind::Advance, e.unit);
                         cards.push_back(card);
                     } else if constexpr (std::is_same_v<T, ev::ChargeRolled>) {
                         if (!show) return;
@@ -417,6 +454,7 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                                       two_dice(e.roll, true, true)};
                         card.result = std::to_string(e.roll.total()) + "\" charge";
                         if (e.eligible_targets.empty()) card.result += ": no unit can be reached";
+                        identify(card, core::RollKind::Charge, e.unit);
                         cards.push_back(card);
                     } else if constexpr (std::is_same_v<T, ev::HazardRollsMade>) {
                         if (!show) return;
@@ -430,6 +468,7 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                         for (const int r : e.rolls.rolls) card.dice.push_back(DieFace{r, r > 2, false, false});
                         card.result = plural(e.rolls.failures, "failure", "failures") + ": " +
                                       plural(e.rolls.mortal_wounds, "mortal wound", "mortal wounds");
+                        identify(card, core::RollKind::Hazard, e.unit);
                         cards.push_back(card);
                     } else if constexpr (std::is_same_v<T, ev::BattleShockRolled>) {
                         if (!show) return;
@@ -439,10 +478,28 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                                       side_of(state, e.unit, core::Side::A), two_dice(l.roll, l.success, false)};
                         card.result = std::to_string(l.roll.total()) + ": " +
                                       (l.success ? "passed" : (e.roll.becomes_battle_shocked ? "battle-shocked" : "failed"));
+                        card.roll = core::RollKind::BattleShock;
+                        card.unit = e.unit;
                         cards.push_back(card);
+                    } else if constexpr (std::is_same_v<T, ev::BattleShockPassedAutomatically>) {
+                        if (!show) return;
+                        // 15.04 (D-096): Insane Bravery: the test is passed with no dice (01.05.01).
+                        DiceCard card{"Battle-shock roll", unit_name(state, e.unit),
+                                      "Insane Bravery: the test is passed automatically, with no dice rolled",
+                                      "Passed automatically (Insane Bravery)", "15.04",
+                                      side_of(state, e.unit, core::Side::A), {}};
+                        card.roll = core::RollKind::BattleShock;
+                        card.unit = e.unit;
+                        cards.push_back(card);
+                    } else if constexpr (std::is_same_v<T, ev::DiceRerolled>) {
+                        // 15.02 (D-096): the roll's card again, from the rebuilt roll event (which also updates the
+                        // attack context, as the first roll did).
+                        const std::size_t before = cards.size();
+                        std::visit([&](const auto& roll) { self(roll, self); }, e.result);
+                        if (show && cards.size() > before) mark_reroll(cards.back(), e);
                     }
-                },
-                event);
+            };
+            std::visit([&](const auto& e) { handle(e, handle); }, event);
         }
     }
     return cards;
@@ -456,9 +513,11 @@ std::vector<DiceCard> dice_cards(const core::GameState& state, const std::vector
     return scan(state, log, from, c);
 }
 
-std::optional<DiceCard> roll_prompt(const core::GameState& state, const std::vector<LogEntry>& log) {
-    const std::optional<core::RollDiceInfo> info = core::roll_dice_info(state);
-    if (!info) return std::nullopt;
+namespace {
+
+// The face-down card of roll `info` (pending now, or the one a BeforeRoll window comes before), `rule` its rule.
+DiceCard prompt_card(const core::GameState& state, const std::vector<LogEntry>& log, const core::RollDiceInfo* info,
+                     std::string rule) {
     AttackContext c;
     (void)scan(state, log, log.size(), c);
     if (state.flow.attack) {
@@ -474,8 +533,10 @@ std::optional<DiceCard> roll_prompt(const core::GameState& state, const std::vec
     }
     DiceCard card;
     card.title = roll_label(info->roll);
-    card.rule = std::string(core::decision_rule(state, *state.pending));
+    card.rule = std::move(rule);
     card.roller = info->roller;
+    card.roll = info->roll;
+    card.unit = info->unit;
     for (int i = 0; i < info->dice; ++i) card.dice.push_back(DieFace{0, false, false, true});  // face down
     const std::string unit = unit_name(state, info->unit);
     const std::string need = info->need ? std::to_string(*info->need) + "+" : std::string();
@@ -519,6 +580,39 @@ std::optional<DiceCard> roll_prompt(const core::GameState& state, const std::vec
             break;
     }
     return card;
+}
+
+}  // namespace
+
+std::optional<DiceCard> roll_prompt(const core::GameState& state, const std::vector<LogEntry>& log) {
+    const std::optional<core::RollDiceInfo> info = core::roll_dice_info(state);
+    if (!info) return std::nullopt;
+    return prompt_card(state, log, &*info, std::string(core::decision_rule(state, *state.pending)));
+}
+
+std::optional<DiceCard> window_prompt(const core::GameState& state, const std::vector<LogEntry>& log) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    if (!w || w->timing != core::WindowTiming::BeforeRoll || !w->next_roll) return std::nullopt;
+    const core::PendingDecision roll{w->next_roll->roller, core::decision::RollDice{w->next_roll->roll, w->next_roll->unit}};
+    return prompt_card(state, log, &*w->next_roll, std::string(core::decision_rule(state, roll)));
+}
+
+std::optional<DiceCard> window_card(const core::GameState& state, const std::vector<LogEntry>& log) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    if (!w || !w->result) return std::nullopt;
+    AttackContext c;
+    (void)scan(state, log, log.size(), c);  // the attack's context at the log's end
+    const core::GameEvent roll = std::visit([](const auto& e) { return core::GameEvent{e}; }, *w->result);
+    const std::vector<LogEntry> one{LogEntry{"", {roll}}};
+    std::vector<DiceCard> cards = scan(state, one, 0, c);
+    if (cards.empty()) return std::nullopt;
+    return cards.back();
+}
+
+bool is_window_card(const core::GameState& state, const DiceCard& card) {
+    const std::optional<core::WindowInfo> w = core::window_info(state);
+    return w && w->timing == core::WindowTiming::AfterRoll && card.roll == w->roll && card.unit == w->unit &&
+           card.roller == w->side;
 }
 
 }  // namespace wh40k::client

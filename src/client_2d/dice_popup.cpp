@@ -51,9 +51,18 @@ void draw_die_face(ImDrawList* dl, ImVec2 p, float size, const DieFace& die, Die
         fill = die.pass ? rgba(60, 160, 85) : rgba(95, 95, 100);
         pip = die.pass ? rgba(255, 255, 255) : rgba(200, 200, 200);
     }
-    // Criticals aren't highlighted yet (PLAN.md Later: a gold border; DieFace::critical carries it).
+    // M95: a critical hit or wound (an unmodified 6, DieFace::critical) has a gold border once its face shows.
+    const bool gold = look == Look::Shown && die.critical;
     dl->AddRectFilled(p, q, fill, round);
-    dl->AddRect(p, q, edge, round, 0, edge_w);
+    dl->AddRect(p, q, gold ? rgba(240, 195, 60) : edge, round, 0, gold ? std::max(2.5f, size * 0.08f) : edge_w);
+    if (look == Look::Shown && die.rerolled) {
+        // D-096: the die Command Re-roll replaced (15.02): a blue "R" in its top-right corner.
+        const ImVec2 c(q.x, p.y);
+        dl->AddCircleFilled(c, size * 0.18f, rgba(90, 160, 235));
+        const char* mark = "R";
+        const ImVec2 ts = ImGui::CalcTextSize(mark);
+        dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), rgba(20, 20, 30), mark);
+    }
     if (look == Look::FaceDown) {
         const char* text = "?";
         const ImVec2 ts = ImGui::CalcTextSize(text);
@@ -116,7 +125,7 @@ bool enter_or_space() {
 // for the caller's buttons (ImGui::End is the caller's). `focus_pending`: take the focus once (M48, D-059: not while a
 // button elsewhere is held down; taking it every frame cleared the active item of every other window).
 void begin_card_window(Rectangle area, float ui_scale, const DiceCard& card, Look look, const std::string& counter,
-                       double now, bool& focus_pending) {
+                       double now, bool& focus_pending, StratagemPicks* picks = nullptr) {
     const Color side = side_color(card.roller);
     const ImVec4 side_colour(side.r / 255.0f, side.g / 255.0f, side.b / 255.0f, 1.0f);
     const float die = 40.0f * ui_scale;
@@ -176,9 +185,53 @@ void begin_card_window(Rectangle area, float ui_scale, const DiceCard& card, Loo
         const ImVec2 p(origin.x + (inner - row_w) * 0.5f + static_cast<float>(col) * (die + gap),
                        origin.y + static_cast<float>(row) * (die + gap));
         draw_die_face(dl, p, die, card.dice[static_cast<std::size_t>(i)], look, (tick + i * 5) % 6 + 1);
+        // D-096 (M95): a window's dice, once shown, are picked with a click (Command Re-roll's die, 15.02).
+        if (picks != nullptr && look == Look::Shown) {
+            const std::size_t k = static_cast<std::size_t>(i);
+            const ImVec2 cursor = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos(p);
+            ImGui::PushID(i);
+            const bool clicked = ImGui::InvisibleButton("##pick", ImVec2(die, die));
+            const bool hovered = ImGui::IsItemHovered();
+            ImGui::PopID();
+            ImGui::SetCursorScreenPos(cursor);
+            if (clicked) picks->pick(k);
+            const ImVec2 q(p.x + die, p.y + die);
+            const float ring = 3.0f * ui_scale;
+            if (picks->picked() == k) {
+                // Picked: a blue ring around the die and a blue "R" in its corner, as the re-rolled die is marked on
+                // the re-roll's card (gold is the critical dice's border).
+                const ImU32 blue = IM_COL32(90, 160, 235, 255);
+                dl->AddRect(ImVec2(p.x - ring * 1.5f, p.y - ring * 1.5f), ImVec2(q.x + ring * 1.5f, q.y + ring * 1.5f),
+                            blue, die * 0.25f, 0, ring);
+                const ImVec2 c(q.x, p.y);
+                dl->AddCircleFilled(c, die * 0.18f, blue);
+                const char* mark = "R";
+                const ImVec2 ts = ImGui::CalcTextSize(mark);
+                dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), IM_COL32(20, 20, 30, 255), mark);
+            } else if (hovered && picks->pickable(k)) {
+                dl->AddRect(p, q, IM_COL32(90, 160, 235, 160), die * 0.18f, 0, 1.5f);
+            }
+        }
     }
     ImGui::Dummy(ImVec2(inner, rows_h));
     ImGui::Spacing();
+}
+
+// D-096 (M95): a window's line and buttons, under the card's result: Command Re-roll (once a die is picked; a charge
+// roll needs none), then the decline, green, which Enter / Space press too. The answer, when one is pressed.
+std::optional<core::GameAction> window_buttons(StratagemPicks& picks) {
+    std::optional<core::GameAction> answer;
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s %s", picks.headline().c_str(), picks.hint().c_str());
+    ImGui::PopTextWrapPos();
+    if (picks.offers(core::Stratagem::CommandReroll)) {
+        ImGui::BeginDisabled(!picks.reroll_ready());
+        if (big_button(picks.reroll_label().c_str(), false)) answer = picks.command_reroll();
+        ImGui::EndDisabled();
+    }
+    if (big_button(picks.decline_label().c_str(), true) || enter_or_space()) answer = StratagemPicks::decline();
+    return answer;
 }
 
 }  // namespace
@@ -217,6 +270,46 @@ bool DicePopup::draw_prompt(Rectangle area, float ui_scale, const DiceCard& card
     return roll;
 }
 
+std::optional<core::GameAction> DicePopup::draw_window(Rectangle area, float ui_scale, const DiceCard& card,
+                                                       StratagemPicks& picks) {
+    const double now = ImGui::GetTime();
+    if (!window_shown_) {
+        window_shown_ = true;
+        window_focus_ = true;
+    }
+    begin_card_window(area, ui_scale, card, Look::Shown, "Rolled", now, window_focus_, &picks);
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.3f);
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextUnformatted(card.result.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::PopFont();
+    const std::optional<core::GameAction> answer = window_buttons(picks);
+    ImGui::End();
+    if (answer) window_shown_ = false;
+    return answer;
+}
+
+WindowPromptChoice DicePopup::draw_window_prompt(Rectangle area, float ui_scale, const DiceCard& card,
+                                                 const StratagemPicks& picks) {
+    const double now = ImGui::GetTime();
+    if (!prompt_shown_) {
+        prompt_shown_ = true;
+        prompt_focus_ = true;
+    }
+    begin_card_window(area, ui_scale, card, Look::FaceDown, "Not rolled yet", now, prompt_focus_);
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s %s", picks.headline().c_str(), picks.hint().c_str());
+    ImGui::PopTextWrapPos();
+    WindowPromptChoice choice = WindowPromptChoice::None;
+    if (picks.offers(core::Stratagem::InsaneBravery) && big_button(picks.insane_bravery_label().c_str(), false)) {
+        choice = WindowPromptChoice::Stratagem;
+    }
+    if (big_button("Roll", true) || enter_or_space()) choice = WindowPromptChoice::Roll;
+    ImGui::End();
+    if (choice != WindowPromptChoice::None) prompt_shown_ = false;
+    return choice;
+}
+
 void DicePopup::advance() {
     if (queue_.empty()) return;
     if (!revealed_) {
@@ -237,8 +330,9 @@ void DicePopup::next() {
     if (queue_.empty()) shown_ = 0;
 }
 
-void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pace) {
-    if (queue_.empty()) return;
+std::optional<core::GameAction> DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pace,
+                                                StratagemPicks* picks) {
+    if (queue_.empty()) return std::nullopt;
     const DiceCard& card = queue_.front();
     const double now = ImGui::GetTime();
     if (!card_since_) {
@@ -274,9 +368,12 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
     const int total = shown_ + static_cast<int>(queue_.size());
     const std::string counter = "Roll " + std::to_string(shown_ + 1) + " of " + std::to_string(total);
     const Look look = revealed_ ? Look::Shown : (rolling_since_ ? Look::Tumbling : Look::FaceDown);
-    begin_card_window(area, ui_scale, card, look, counter, now, focus_pending_);
+    // D-096: the window's dice are picked only on a human's card (no pace) whose faces show.
+    StratagemPicks* window = pace.has_value() || !revealed_ ? nullptr : picks;
+    begin_card_window(area, ui_scale, card, look, counter, now, focus_pending_, window);
 
     bool advance = false;
+    std::optional<core::GameAction> answer;
     // M49 (D-060): the buttons show exactly when the card isn't paced (dice_buttons_shown: a human's card, or a
     // bot's while the bots are paused or the setting is off). A paced card has a dim line instead; Enter / Space
     // and a click on the pop-up or the bare board still skip its wait.
@@ -289,7 +386,10 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
         ImGui::PopFont();
         const bool last = queue_.size() == 1;
         const char* label = last ? (needs_roll(card) ? "Done" : "OK") : "Continue";
-        if (buttons) {
+        if (window != nullptr) {
+            answer = window_buttons(*window);  // D-096: the window's answer closes the card
+            advance = answer.has_value();
+        } else if (buttons) {
             if (big_button(label, true) || enter_or_space()) advance = true;
         } else {
             dim_button_row("Continuing...");
@@ -319,6 +419,7 @@ void DicePopup::draw(Rectangle area, float ui_scale, std::optional<DicePace> pac
         }
     }
     if (advance || auto_advance) next();
+    return answer;
 }
 
 }  // namespace wh40k::client

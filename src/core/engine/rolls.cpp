@@ -80,11 +80,14 @@ void roll_through(GameState& state, DiceSource& dice, Events& events) {
 
 std::optional<RollDiceInfo> roll_dice_info(const GameState& state) {
     if (!roll_pending(state)) return std::nullopt;
-    const auto& d = std::get<decision::RollDice>(state.pending->kind);
+    return detail::describe_roll(state, std::get<decision::RollDice>(state.pending->kind), state.pending->side);
+}
+
+RollDiceInfo detail::describe_roll(const GameState& state, const decision::RollDice& d, Side roller) {
     RollDiceInfo info;
     info.roll = d.roll;
     info.unit = d.unit;
-    info.roller = state.pending->side;
+    info.roller = roller;
     info.expression = "D6";
     switch (d.roll) {
         case RollKind::Advance:

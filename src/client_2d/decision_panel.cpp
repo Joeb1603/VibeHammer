@@ -172,6 +172,7 @@ void DecisionPanel::sync(const GameSession& session) {
     casualties_.reset();
     rerolls_ = RerollPicks(session.state());  // M61: inactive unless the decision is RerollWoundRolls
     retargets_ = RetargetPicks(session.state());  // M93: inactive unless the decision is RetargetAttacks
+    stratagems_ = StratagemPicks(session.state());  // M95: inactive unless a reaction window is pending
     auto_move_message_.clear();
     for (const core::GameAction& t : view_.templates) {
         if (const auto* s = std::get_if<core::action::Shoot>(&t)) {
@@ -234,6 +235,26 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
         }
         if (rerolls_.custom() && row.button("Re-roll selected (" + std::to_string(rerolls_.selected().size()) + ")")) {
             chosen = rerolls_.action();
+        }
+        ImGui::EndTable();
+        return chosen;
+    }
+    // M95 (D-096): a reaction window. The decline comes first (--steps takes it), then the stratagems; Command Re-roll's
+    // die is picked on the dice (the rolled card or the window's pop-up).
+    if (stratagems_.active()) {
+        if (!begin_bar(stratagems_.decline_label())) return std::nullopt;
+        headline(gs, session.pending()->side, stratagems_.headline());
+        ImGui::TextWrapped("%s", stratagems_.hint().c_str());
+        ImGui::TableNextColumn();
+        ButtonRow row;
+        if (row.button(stratagems_.decline_label())) chosen = StratagemPicks::decline();
+        if (stratagems_.offers(core::Stratagem::CommandReroll)) {
+            ImGui::BeginDisabled(!stratagems_.reroll_ready());
+            if (row.button(stratagems_.reroll_label())) chosen = stratagems_.command_reroll();
+            ImGui::EndDisabled();
+        }
+        if (const auto bravery = stratagems_.insane_bravery()) {
+            if (row.button(stratagems_.insane_bravery_label())) chosen = bravery;
         }
         ImGui::EndTable();
         return chosen;

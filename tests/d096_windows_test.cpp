@@ -161,6 +161,7 @@ TEST(R15_02_CommandReroll, AChargeRollIsReRolledInFullBeforeItsResultIsUsed) {
     EXPECT_EQ(info.side, Side::A);
     EXPECT_EQ(info.command_points, 1);
     EXPECT_TRUE(info.whole_roll);
+    EXPECT_FALSE(info.next_roll.has_value());  // the roll is made
     EXPECT_EQ(info.faces, (std::vector<int>{1, 1}));
     ASSERT_EQ(info.options.size(), 1u);
     EXPECT_EQ(info.options[0].stratagem, Stratagem::CommandReroll);
@@ -514,8 +515,14 @@ TEST(R15_04_InsaneBravery, DeclinedTheRollIsMadeAsUsual) {
     GameState gs = side_b_battle_shock_step();
     const UnitId first = gs.units[1].id;
     ASSERT_TRUE(window_pending(gs));
+    // The window describes the roll it comes before (the client's pre-roll card), as roll_dice_info will once it waits.
+    const std::optional<RollDiceInfo> next = window_info(gs)->next_roll;
+    ASSERT_TRUE(next.has_value());
+    EXPECT_EQ(next->dice, 2);
+    EXPECT_EQ(next->roller, Side::B);
     decline(gs);
     EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::BattleShock, first}}));
+    EXPECT_EQ(roll_dice_info(gs), next);
     ScriptedDice dice{6, 6};
     roll(gs, dice);
     // The next unit's window, just before its roll.
