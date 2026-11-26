@@ -17,6 +17,7 @@
 #include <variant>
 #include <vector>
 
+#include "bot_configs.hpp"
 #include "analysis/threat.hpp"
 #include "arena.hpp"
 #include "auto_actions.hpp"
@@ -141,6 +142,7 @@ MoveWeights m90_keys(MoveWeights w = {}) {
     w.hold_fire = 0.0;
     w.objective_charge = 0.0;
     w.objective_fight = 0.0;
+    w.command_reroll = 0.0;  // M95 (D-096): no stratagem, as the bot played then
     return w;
 }
 BotConfig m90_bot(MoveWeights w = {}) {
@@ -638,13 +640,16 @@ constexpr const char* kM86ObjectivesState = "3301929fd89fbaf9";
 
 TEST(M87_Regression, TheRostersAndTheObjectiveScenarioWithoutObjectiveWeightsPlayAsAtM86) {
     // Without a mission nothing M87 adds is on; with both objective weights 0 a mission game plays as at M86 too.
-    const PerGameReport rosters = run_per_game(wh40k::test::load_rosters_scenario(), 1, 1, BotConfig{}, BotConfig{});
+    // M95 (D-096): the M86 bot played no stratagem.
+    const BotConfig m86_rosters = wh40k::test::without_stratagems();
+    const PerGameReport rosters = run_per_game(wh40k::test::load_rosters_scenario(), 1, 1, m86_rosters, m86_rosters);
     EXPECT_TRUE(rosters.clean);
     EXPECT_EQ(per_game_field(rosters.text, "actions"), kM86Actions);
     EXPECT_EQ(per_game_field(rosters.text, "state"), kM86RostersState);
     EXPECT_EQ(per_game_field(rosters.text, "trace"), kM86Trace);
     BotConfig m86;
     m86.move = zero_objectives();
+    m86 = wh40k::test::without_stratagems(m86);
     const PerGameReport mission = run_per_game(m86_objectives(), 1, 1, m86, m86);
     EXPECT_TRUE(mission.clean);
     EXPECT_EQ(per_game_field(mission.text, "actions"), kM86Actions);

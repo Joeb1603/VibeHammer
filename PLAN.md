@@ -198,23 +198,84 @@ D-095.
   arena's identity set keeps `state` and `trace`.
 
 **Acceptance**
-- [ ] A window is a decision for the side that can use a stratagem there, offered only then; declining changes
+- [x] A window is a decision for the side that can use a stratagem there, offered only then; declining changes
   nothing; Rules Sequencing orders the sides. 15.01's cost and restrictions are enforced with rule-cited refusals.
-- [ ] Command Re-roll after each of the eight roll kinds re-rolls one die (a charge roll in full) before the roll's
+- [x] Command Re-roll after each of the eight roll kinds re-rolls one die (a charge roll in full) before the roll's
   result is used; `R15_02_*` tests cover each kind, the roller's side, the refusals and the skipped cases.
-- [ ] A random D is rolled per attack that inflicts damage, each roll a step with its own window.
-- [ ] Insane Bravery passes a battle-shock roll automatically, once per battle, never for a battle-shocked unit.
-- [ ] The closure holds: `apply_action` plays exactly as M94, and paced play with every window declined equals it,
+- [x] A random D is rolled per attack that inflicts damage, each roll a step with its own window.
+- [x] Insane Bravery passes a battle-shock roll automatically, once per battle, never for a battle-shocked unit.
+- [x] The closure holds: `apply_action` plays exactly as M94, and paced play with every window declined equals it,
   for every replay and for random games. The M94 and M95 event dumps differ only by `DamageRolled`.
-- [ ] Formats 1 and 2 load (legacy fixtures); format 3 round-trips; every new state field has a JSON round-trip test
+- [x] Formats 1 and 2 load (legacy fixtures); format 3 round-trips; every new state field has a JSON round-trip test
   and is omitted when empty.
-- [ ] All 29 replays regenerated as format 3 with byte-identical `expect` blocks; `m95_stratagems.json` shows each
+- [x] All 29 replays regenerated as format 3 with byte-identical `expect` blocks; `m95_stratagems.json` shows each
   stratagem.
-- [ ] Bots: the identity set identical to M94 in `state` and `trace`; the keys measured and their defaults set by the
+- [x] Bots: the identity set identical to M94 in `state` and `trace`; the keys measured and their defaults set by the
   keep rule; decision p95 within budget.
-- [ ] Client: the re-roll on the rolled card (Continue declines), the pop-up without dice pop-ups, Insane Bravery on
+- [x] Client: the re-roll on the rolled card (Continue declines), the pop-up without dice pop-ups, Insane Bravery on
   the pre-roll card, "Offer stratagems", Undo past declines, critical dice in gold; logic tests and xvfb screenshots.
-- [ ] Full `ctest` green, warnings as errors.
+- [x] Full `ctest` green, warnings as errors.
+
+**Results.**
+- *The closure:* the M94 and M95 dumps of all 29 older replays (every event and the final state, with
+  `WH40K_EVENT_DUMP_WITHOUT=DamageRolled`) are byte-identical. `D095_Closure` now declines every window: paced play
+  equals inline play for every replay without a stratagem, for random games and for each roll point. A game that
+  uses a stratagem has no inline twin, so it is checked paced only.
+- *Replays:* all 29 regenerated as format 3 (scripted against `git show HEAD:`): the same initial state and `expect`,
+  and the same steps once the roll and decline steps are taken out. They gained 958 decline steps and 8 damage rolls;
+  only `m94_paced_rolls.json`'s description changed. New `m95_stratagems.json` (seed 266) uses each stratagem:
+  - Side A re-rolls a missed hit (1 to 5) and, as the defender, a failed save (1 to 3).
+  - Side B passes a test with Insane Bravery, and re-rolls a D3 damage roll (1 to 2, killing the Intercessor) and a
+    charge roll that reached no target (7 to 8, which reaches it).
+  - The M94 format-2 saves load (one still waiting for its save roll).
+- *Bots:*
+  - Two keys, `command_reroll` and `insane_bravery`, with heuristics in `normal/stratagems.cpp`. A re-roll must be
+    expected to gain a quarter of a model (in model equivalents); a charge that reaches no target is re-rolled when a
+    new 2D6 reaches one at least a quarter of the time; Insane Bravery is used for a test that fails that often.
+  - With both off, the identity set (13 runs, 2,600 games) is identical to the M94 binary in every per-game field but
+    `steps` and `actions`.
+  - D-092's head-to-head on the terrain scenario, 400 games each against the bot playing no stratagem:
+
+    | Keys on | Wins | Losses | Margin |
+    |---|---|---|---|
+    | `command_reroll` | 222 | 178 | +44 |
+    | `insane_bravery` | 204 | 196 | +8 |
+    | both | 223 | 177 | +46 |
+
+    By the keep rule (10 more wins of 400), Command Re-roll is on by default and Insane Bravery off. Every run was
+    clean.
+  - With Command Re-roll on, the default bot's games change on purpose. The M95 binary at the defaults is the arena's
+    new reference. The bot-game replays and the per-game pins of older bots are played by the bot without stratagems
+    (`tests/ai/bot_configs.hpp`), so they stayed as they were.
+- *Client:* the session declines for its auto sides (`auto_decline`, from "Offer stratagems" and the bot's keys).
+  `StratagemPicks` holds the human's pick. Each dice card carries its roll's identity, so the window's buttons go on
+  the rolled card. xvfb screenshots:
+  - the hit card with its window's buttons, a picked die and two gold criticals;
+  - the defender's save card;
+  - the window's pop-up, with the dice pop-ups on and off;
+  - Insane Bravery on the battle-shock roll's face-down card.
+- *As built, beside the design* (D-096 part 9):
+  - `WindowInfo` also gives the roll a window comes before, and an AfterRoll window's roll judged from its dice.
+  - The card's decline reads "Keep the roll".
+  - `--pick-dice` picks a window's die too, and `--dice-popups 0|1` is new.
+  - The [TWIN-LINKED] re-roll card carries no window (it shows only the re-rolled dice).
+- *Tests changed, each checked:*
+  - The D095 helpers decline windows.
+  - The client's history counts include the declines.
+  - The per-game pins re-pinned `actions` (M78's steps too) with every `state` and `trace` unchanged.
+  - M39's live session declines as the client does.
+  - The bot-game generators and the older bots' pins play without stratagems.
+
+**Open items.**
+- Manual checks by mouse on Windows:
+  - re-rolling by hand, in hotseat and against the bot;
+  - Undo just after a re-roll;
+  - turning "Offer stratagems" off while a window waits;
+  - watching the bot's Command Re-roll.
+- The bot: Insane Bravery stays off (+8, within one standard deviation). The thresholds were not tuned (one setting
+  measured), no CP is kept back for a later window, and advance rolls are never re-rolled.
+- The rest of the core stratagems: M96 (Fire Overwatch, Snap Shooting, Heroic Intervention, Counteroffensive), then
+  "Later" item 4.
 
 ---
 
@@ -222,7 +283,7 @@ D-095.
 The long-range map from here to a full game with any army on any mission (phases, order, open questions) is
 `docs/roadmap.md`. The items below are the nearer, smaller ones; each roadmap item still becomes a milestone here first.
 
-- **Dice pop-up polish:** highlight critical hits and wounds on the dice (e.g. a gold border). `DieFace::critical` already carries it, and the result line already counts them.
+- **Dice pop-up polish:** done in M95 (a shown critical die has a gold border).
 - **Engine-paced dice rolls (Option 2 of M20):** done in M94 (D-095).
 0. **Deployment step:** done in M74 (engine), M76 (client) and M77 (the bots' heuristic), in the custom-battles batch
    (M71–M77). What is left of it is under item 5, "Open items carried from M71–M77".
@@ -241,7 +302,10 @@ The long-range map from here to a full game with any army on any mission (phases
    - **Bot personalities** (after M87): Aggressive (values kills and charges, takes risks) and Tactical (values
      objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
-4. **Core stratagems** (15): Command Re-roll, Fire Overwatch, Heroic Intervention, etc. These are new reactive PendingDecisions.
+4. **Core stratagems** (15): M95 (D-096) built reaction windows, CP spending (15.01), Command Re-roll and Insane Bravery.
+   Still to do: Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive (M96, agreed), then Epic
+   Challenge, Explosives, Crushing Impact, Rapid Ingress and Smokescreen (each with the rules it needs: actions,
+   reserves, SMOKE units).
 5. **More unit types** (M59–M70 added the fetch-tool fixes, Hazardous, Sustained Hits, Extra Attacks, Twin-linked,
    Random Characteristics, 17.01/17.03 and oval bases). Still to do:
    - **Weapon abilities:** Lethal Hits (24.23), Devastating Wounds (24.10), Anti-X (24.03), Melta (24.25), Lance

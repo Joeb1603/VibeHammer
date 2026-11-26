@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+#include "bot_configs.hpp"
 #include "analysis/odds.hpp"
 #include "analysis/threat.hpp"
 #include "arena.hpp"
@@ -718,7 +719,8 @@ BotGame play_rosters_bot_game(std::uint64_t seed = kRostersSeed) {
     g.replay.initial.scenario = wh40k::test::kRostersScenario;
     g.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
-    g.record = play_bot_session(session, normal_bot(), normal_bot(), 5000);
+    // M95 (D-096): the bot as it was when the file was written (no stratagem).
+    g.record = play_bot_session(session, wh40k::test::without_stratagems(), wh40k::test::without_stratagems(), 5000);
     g.replay.steps = session.history();
     g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     g.replay.expect = replay_expectation(session.state());

@@ -12,6 +12,7 @@
 #include <variant>
 #include <vector>
 
+#include "bot_configs.hpp"
 #include "analysis/odds.hpp"
 #include "arena.hpp"
 #include "auto_fight_move.hpp"
@@ -113,7 +114,8 @@ BotGame play_fight_move_game() {
     g.replay.initial.scenario = kFightMoveScenario;
     g.replay.initial.seed = kFightMoveSeed;
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{}, BotConfig{});
+    // M95 (D-096): the bot as it was when the file was written (no stratagem).
+    g.record = play_bot_session(session, wh40k::test::without_stratagems(), wh40k::test::without_stratagems());
     g.replay.steps = session.history();
     g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     g.replay.expect = replay_expectation(session.state());

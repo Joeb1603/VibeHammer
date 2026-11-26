@@ -5,6 +5,7 @@
 
 #include <variant>
 
+#include "bot_configs.hpp"
 #include "analysis/charge_odds.hpp"
 #include "analysis/odds.hpp"
 #include "arena.hpp"
@@ -64,11 +65,19 @@ GameState after_charge_roll(float gap_in, std::vector<int> dice) {
 
 }  // namespace
 
-TEST(M95_Bots, WithTheKeysOffTheBotPlaysNoStratagem) {
-    EXPECT_FALSE(BotConfig{}.plays_stratagems());
+TEST(M95_Bots, TheDefaultBotPlaysCommandRerollAndNotInsaneBravery) {
+    // D-096's head-to-head: Command Re-roll +44 games in 400 (on), Insane Bravery +8 (off).
+    EXPECT_EQ(BotConfig{}.move.command_reroll, 1.0);
+    EXPECT_EQ(BotConfig{}.move.insane_bravery, 0.0);
+    EXPECT_TRUE(BotConfig{}.plays_stratagems());
     EXPECT_TRUE(stratagems_on().plays_stratagems());
+    EXPECT_FALSE(wh40k::test::without_stratagems().plays_stratagems());
+}
+
+TEST(M95_Bots, WithTheKeysOffTheBotPlaysNoStratagem) {
     GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 3);
-    const GameRecord g = wh40k::ai::play_bot_session(s, BotConfig{}, BotConfig{});
+    const GameRecord g =
+        wh40k::ai::play_bot_session(s, wh40k::test::without_stratagems(), wh40k::test::without_stratagems());
     EXPECT_TRUE(g.finished);
     EXPECT_EQ(count_steps(s, is_use), 0u);
     EXPECT_GT(count_steps(s, is_decline), 0u);  // the session's
@@ -107,7 +116,7 @@ TEST(M95_Bots, TheFallbackDeclinesAWindow) {
     ASSERT_TRUE(f.action.has_value());
     EXPECT_EQ(*f.action, (GameAction{action::DeclineStratagems{}}));
     // With the keys off the bot declines a window it is shown (after a load, say) too.
-    EXPECT_EQ(answer(s.state(), BotConfig{}).action, (GameAction{action::DeclineStratagems{}}));
+    EXPECT_EQ(answer(s.state(), wh40k::test::without_stratagems()).action, (GameAction{action::DeclineStratagems{}}));
 }
 
 TEST(M95_Stratagems, CommandRerollPicksTheLowestFailedHitDieWhenItIsWorthTheCp) {
@@ -134,7 +143,8 @@ TEST(M95_Stratagems, CommandRerollPicksTheLowestFailedHitDieWhenItIsWorthTheCp) 
         EXPECT_GT(pick->gain, wh40k::ai::normal::kRerollMinGain);  // a fresh die at a Termagant: ~0.6 of a model
         EXPECT_EQ(answer(s.state(), stratagems_on()).action,
                   (GameAction{action::UseStratagem{Stratagem::CommandReroll, s.state().units[0].id, lowest_miss}}));
-        EXPECT_EQ(answer(s.state(), BotConfig{}).action, (GameAction{action::DeclineStratagems{}}));
+        EXPECT_EQ(answer(s.state(), wh40k::test::without_stratagems()).action, (GameAction{action::DeclineStratagems{}}));
+        EXPECT_EQ(answer(s.state(), BotConfig{}).action, answer(s.state(), stratagems_on()).action);  // on by default
         return;
     }
     FAIL() << "no seed missed";

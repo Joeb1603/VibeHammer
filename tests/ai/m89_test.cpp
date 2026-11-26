@@ -75,6 +75,7 @@ normal::MoveWeights m90_keys(normal::MoveWeights w = {}) {
     w.hold_fire = 0.0;
     w.objective_charge = 0.0;
     w.objective_fight = 0.0;
+    w.command_reroll = 0.0;  // M95 (D-096): no stratagem, as the bot played then
     return w;
 }
 BotConfig m90_bot(normal::MoveWeights w = {}) {

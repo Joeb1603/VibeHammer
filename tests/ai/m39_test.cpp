@@ -441,7 +441,10 @@ TEST(M39_Driver, AWorkerResultForAnOlderStateIsDropped) {
 
 TEST(M39_Driver, AWorkerDrivesAWholeGameWithTheSameActionsAsTheSynchronousBot) {
     // The driver on a worker thread, through a session, matches the synchronous bot step for step.
-    client::GameSession live = client::GameSession::new_game(wh40k::test::load_v1_scenario(), 6);
+    // M95 (D-096): as the client sets a bot side's session: the windows go to a bot that plays stratagems.
+    const bool declines = !bot_config().plays_stratagems();
+    client::GameSession live =
+        client::GameSession::new_game(wh40k::test::load_v1_scenario(), 6, {true, true}, {declines, declines});
     BotDriver d(bot_config(), BotSpeed::Instant, BotDriver::Threading::Worker);
     client::AutoSettings autos;
     autos.bot_controlled = {true, true};

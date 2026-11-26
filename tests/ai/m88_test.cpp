@@ -13,6 +13,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "bot_configs.hpp"
 #include "arena.hpp"
 #include "auto_actions.hpp"
 #include "bot.hpp"
@@ -260,7 +261,7 @@ TerrainReplay play_terrain_replay(std::uint64_t seed) {
     out.replay.initial.seed = seed;
     wh40k::client::GameSession session(replay_initial_state(out.replay, repo_root()));
     // M89 (D-090): the M88 bot, which doesn't value terrain (cover 0 plays exactly as before M89).
-    BotConfig m88;
+    BotConfig m88 = wh40k::test::without_stratagems();  // M95 (D-096): and no stratagem (the session declines anyway)
     m88.move.cover = 0.0;
     std::array<Bot, 2> bots{Bot(m88), Bot(m88)};
     wh40k::client::AutoSettings autos;

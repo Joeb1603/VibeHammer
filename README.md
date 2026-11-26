@@ -84,7 +84,8 @@ event log cites the rule number behind each step.
   (re-roll one die just after one of your rolls, or a whole charge roll) and Insane Bravery (pass a battle-shock
   test, once per battle). The other core stratagems are not in yet.
 - **The bot** (`src/ai`) plays only through the same validated actions a human uses, and it never sees the
-  game's future dice. It plans its shooting, charges, fights and moves from the odds. (Until M85 there were three
+  game's future dice. It plans its shooting, charges, fights and moves from the odds, and it uses Command Re-roll
+  where the odds say a re-roll is worth the CP (Insane Bravery is a tuning switch, off). (Until M85 there were three
   levels, Easy, Normal and Hard; the one bot is Normal. The others are in git under the tag `bots-three-levels`.)
 - **Custom battles:** an army builder for Chaos Space Marines against Tyranids at Incursion size (1000
   points) on the 44" x 60" battlefield. Points by unit size and wargear, unit sizes, wargear options and
