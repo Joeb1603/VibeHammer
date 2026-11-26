@@ -63,6 +63,8 @@ public:
         sync(session);
         return stratagems_.active() ? &stratagems_ : nullptr;
     }
+    // M96 (D-097): the unit of the window's stratagem button under the mouse (last frame), for the board's outline.
+    [[nodiscard]] std::optional<core::UnitId> hovered_reaction_unit() const noexcept { return hovered_reaction_unit_; }
 
     // M76 (D-082 part 2): the action bar while a human sets a unit up by hand (D-081): the decision, the unit being placed
     // (`plan`) with core's verdict on it (`problems`, empty when it can be set up there), and the buttons. Returns what
@@ -94,6 +96,7 @@ private:
     RerollPicks rerolls_;                     // M61: the [TWIN-LINKED] re-roll picks (D-072)
     RetargetPicks retargets_;                 // M93: the new targets per weapon (04.03.03, D-093)
     StratagemPicks stratagems_;               // M95: the reaction window's picks (D-096)
+    std::optional<core::UnitId> hovered_reaction_unit_;  // M96 (D-097)
     bool undo_step_available_ = false;  // D-039
     bool undo_step_requested_ = false;
     bool cancel_requested_ = false;  // D-041

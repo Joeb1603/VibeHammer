@@ -2034,6 +2034,16 @@ private:
             }
         };
         if (board_.actor() && !moving_unit()) outline(*board_.actor(), YELLOW);
+        // M96 (D-097): a human's window that follows no roll: the units its buttons offer, outlined in gold (the hovered
+        // button's brighter), so "Termagants 2" can be found on the board.
+        if (human_window_waiting()) {
+            if (StratagemPicks* picks = panel_.stratagem_picks(*session_); picks != nullptr && picks->reaction_window()) {
+                const std::optional<core::UnitId> hovered = panel_.hovered_reaction_unit();
+                for (const ReactionChoice& c : picks->reactions(gs)) {
+                    outline(c.unit, hovered == c.unit ? Color{255, 215, 0, 255} : Color{255, 215, 0, 120});
+                }
+            }
+        }
         // D-029: while picking a target, a line from the acting unit to the cursor.
         if (board_.picking_target() && board_.actor()) {
             if (const core::Unit* u = gs.find_unit(*board_.actor()); u != nullptr && !u->models.empty()) {

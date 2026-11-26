@@ -219,7 +219,8 @@ shows each stratagem; the bots' identity set at `command_reroll=0` is the M95 bi
 **Open items.**
 - Manual checks by mouse on Windows: each new stratagem in hotseat and against the bot (Fire Overwatch and the snap
   shot's editor, Heroic Intervention in both modes with its charge move, Counteroffensive), and Undo after each.
-- The window's units are picked from the decision panel's buttons; no board mode with range rings.
+- The window's units are picked from the decision panel's buttons (the board outlines them in gold); no board mode
+  with range rings (24", 12", 6") or highlighted chargers.
 - The bot: the thresholds were not tuned (one setting measured); Counteroffensive is judged from the sequence's state,
   not a scratch simulation; Heroic Intervention's values use M42's horizon from the enemy's turn.
 - 15.09's "not eligible to start an action" waits for actions (16).
