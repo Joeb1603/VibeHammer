@@ -144,8 +144,11 @@ off too).
 
 M97 (D-099) adds a step for each Crushing Impact window (just after a MONSTER or VEHICLE ends a charge move in its own
 Charge phase, with CP to spend) declined by the session for a bot whose `crushing_impact` key is 0, and hides Explosives'
-answers from it, so `steps` and `actions` change and nothing else may. IDENTITY_ARENA_TBD The M89 and M91 pins re-pinned
-`actions` (the M89 terrain game and the M91 objective game have such windows).
+answers from it, so `steps` and `actions` change and nothing else may. The proof: all thirteen runs, 200 games each
+(2,600 games), at the defaults are identical to the M96 binary in every field but `steps` and `actions` (every `state`
+and `trace` the same; 1,170 steps added, no game with fewer; `actions` changed in exactly the 696 games that gained a
+step, none in V1, the two bot scenarios or Strike). The M89 and M91 pins re-pinned `actions` (the M89 terrain game and the
+M91 objective game have such windows).
 
 M97's head-to-head (D-092's procedure on the terrain scenario, 400 games per variant against the bot at M97's other
 defaults) gave Explosives +6 (203-197), Crushing Impact -10 (195-205) and both -4 (198-202), every run clean. So both

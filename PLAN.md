@@ -248,7 +248,8 @@ strategic reserves (20), and Smokescreen (15.10) for a SMOKE unit. In the data:
 **Results** (D-099 part 11 has them in full): the M96 and M97 event dumps of the 31 older replays are byte-identical with
 no filter; the 31 replays regenerated as format 5 are each their format-4 file converted (11 declines added, in the 8
 replays named); `m97_stratagems.json` shows both stratagems (Explosives: 3 mortal wounds on the Hive Tyrant, then the
-Legionaries shoot; Crushing Impact: 2 on the Legionaries, then 1 on the Tyrant). IDENTITY_PLAN_TBD Head-to-heads (400
+Legionaries shoot; Crushing Impact: 2 on the Legionaries, then 1 on the Tyrant). The bots' identity set at the defaults
+is the M96 binary's in every field but `steps` and `actions` (2,600 games; 1,170 declined windows added). Head-to-heads (400
 games each, all clean): Explosives +6, Crushing Impact -10, both -4, so both keys stay off by default. P95_PLAN_TBD The full
 `ctest` is green.
 
