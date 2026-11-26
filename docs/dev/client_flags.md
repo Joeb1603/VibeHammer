@@ -32,4 +32,14 @@ None of these submits an action. While dragging an oval model, Q / E turn it 15Â
 - waiting for Side B's save rolls: `--steps 1 --dice 2` shows the defender's window;
 - at Insane Bravery's window: the battle-shock roll's face-down card with the stratagem.
 
+M96 (D-097): the windows that follow no roll wait in the decision panel, one button per stratagem, mode and unit, the
+decline first (so `--steps` declines them). `M96_Screens.DISABLED_WriteSavesWaitingForTheNewWindows` writes five saves,
+each shown by `--load <save> --screenshot <png>`:
+- at Side B's Fire Overwatch window (V1, the Intercessors stationary);
+- at its snap shot: the shot editor with every Termagant at the Intercessors ("using snap shooting (15.09)");
+- waiting for the snap shot's hit rolls: `--steps 1 --dice 2` shows the card, "Need 6 to hit (snap shooting, 15.09)",
+  its 6s green, not gold;
+- at Heroic Intervention's window, Leap to Defend and Into the Fray with their costs;
+- at Counteroffensive's window, after the Intercessors have fought.
+
 A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows.

@@ -23,12 +23,12 @@ pinned data version. Legends, Crusade and the like are out for now (the user, 20
 | Area | Today | Gap to the goal |
 |---|---|---|
 | Core rules 01–14 | 67 of the 156 numbered rules have tests: the turn sequence, the attack sequence, moves, charges, fights, 2D terrain, objectives | 10.07 Indirect Shooting; the z axis (13.06, 13.11, 22.05); 14.03 securing |
-| Core rules 15–23 | 15.01, 15.02, 15.04 (M95), 17.01 and 17.03 | The other nine core stratagems, actions, FRAME, transports, attached units, reserves, flying, surging, auras, psychic, aircraft |
+| Core rules 15–23 | 15.01, 15.02, 15.04 (M95), 15.08, 15.09, 15.11, 15.12 (M96), 17.01 and 17.03 | The other five core stratagems (15.03, 15.05–15.07, 15.10), actions, FRAME, transports, attached units, reserves, flying, surging, auras, psychic, aircraft |
 | Core abilities (24) | 11 weapon abilities and random A/D | 26 of the 37 entries: see Phase 1 |
 | Missions | One house mission (D-084), scored from the scenario file | The real mission pack: 25 primaries, 18 secondaries, force dispositions, layouts |
 | Armies | 11 datasheets, 2 factions in custom battles, Incursion only | About 28 faction lists, 256 detachments, well over a thousand datasheets |
 | Unit, faction and detachment rules | Loaded and shown as text; none implemented | The largest part of the whole roadmap: Phase 4 |
-| Bot | Plays the house mission, uses cover, works as an army; Command Re-roll and Insane Bravery behind keys (M95) | Mission-generic scoring, stratagems, actions, reserves, transports, abilities |
+| Bot | Plays the house mission, uses cover, works as an army; Command Re-roll and Insane Bravery behind keys (M95); Fire Overwatch, Heroic Intervention and Counteroffensive behind keys (M96) | Mission-generic scoring, the other stratagems, actions, reserves, transports, abilities |
 | Client | Hotseat, bot, army builder, hand deployment | A screen for every new decision, a mission and layout picker, the full army builder |
 
 Sources of rules text, and their limits:
@@ -93,7 +93,7 @@ Abilities (24.02) applies throughout.
 
 | Section | What it adds | Depends on |
 |---|---|---|
-| 15 Stratagems | CP spending, 15.01, the eleven core stratagems (M95: 15.01, Command Re-roll, Insane Bravery) | Phase 0 items 2 and 3 |
+| 15 Stratagems | CP spending, 15.01, the eleven core stratagems (M95: 15.01, Command Re-roll, Insane Bravery; M96: Fire Overwatch with Snap Shooting, Heroic Intervention, Counteroffensive) | Phase 0 items 2 and 3 |
 | 16 Actions | Starting, completing and interrupting actions | none; Phase 2 needs it |
 | 17.02 FRAME | Models measured to a frame, not a base | the fetch tool's "Hull" bases |
 | 19 Attached Units | Leaders and Support joined to bodyguards; 19.02 allocation, Precision | Leader, Support |

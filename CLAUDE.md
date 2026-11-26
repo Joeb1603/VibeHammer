@@ -17,7 +17,11 @@ makes the rest, and saves and replays record each roll as a step (format 2). M95
 stratagems (D-096): a side that can use a stratagem there is asked just after one of its rolls (Command Re-roll, 15.02)
 or just before a battle-shock roll (Insane Bravery, 15.04), spending CP (15.01); a random D is rolled per attack, and
 saves and replays record each answer (format 3). The bot plays Command Re-roll by default (it measured better) and
-Insane Bravery behind a key, off.
+Insane Bravery behind a key, off. M96 added the opponent-turn stratagems (D-097), in windows that follow no roll: Fire
+Overwatch with snap shooting at the end of the opponent's Movement phase (15.08, 15.09), Heroic Intervention at the end
+of their Charge phase (15.11), Counteroffensive just after one of their units has fought (15.12); objective control is
+determined on entering a phase's end (14.02.01), and saves and replays record the new answers (format 4). The bot plays
+each behind a key (D-097's results give the defaults).
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
@@ -131,7 +135,8 @@ bool                    roll_pending(const GameState&);                         
 std::optional<RollDiceInfo> roll_dice_info(const GameState&);                       // what it rolls, for display
 // D-096 (M95): a reaction window is a UseStratagems decision for the side that can use a stratagem there, answered by
 // DeclineStratagems (listed first) or UseStratagem. apply_action/start_game decline every window inline (so inline play
-// is M94's); the paced overloads stop at it.
+// is M94's); the paced overloads stop at it. D-097 (M96): windows that follow no roll (EndOfPhase, AfterAttacks) too;
+// Fire Overwatch's unit then answers a SnapShoot decision with a Shoot of type Snap.
 bool                    window_pending(const GameState&);                           // a window is pending
 std::optional<WindowInfo> window_info(const GameState&);                            // what it offers, for display and the bot
 ```
@@ -171,8 +176,9 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - No globals or singletons in core.
 - Keep functions small and rule-shaped: one function per rule step where practical (`make_hit_rolls`, `make_wound_rolls`, `create_allocation_groups` ...).
 - Unit-specific abilities (Bolter Discipline, Synapse, etc.) are **out of scope for V1**. Load them, display their text, and don't implement them.
-- Stratagems (15): Command Re-roll and Insane Bravery are implemented (D-096, M95), through reaction windows. Any other
-  stratagem is not in the game yet.
+- Stratagems (15): Command Re-roll and Insane Bravery (D-096, M95), Fire Overwatch with Snap Shooting, Heroic
+  Intervention and Counteroffensive (D-097, M96) are implemented, through reaction windows. Any other stratagem is not
+  in the game yet.
 - A weapon ability the engine doesn't implement is never ignored. A profile with one is refused when selected, with a
   rule-cited reason (D-026, D-071). Implemented: Assault, Heavy, Pistol, Rapid Fire, Blast, Torrent, Hazardous,
   Sustained Hits, Extra Attacks, Twin-linked, Ignores Cover (D-091), and random A/D (except random A on melee weapons).
