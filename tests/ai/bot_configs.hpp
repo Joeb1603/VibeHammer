@@ -11,6 +11,9 @@ namespace wh40k::test {
 inline wh40k::ai::BotConfig without_stratagems(wh40k::ai::BotConfig c = {}) {
     c.move.command_reroll = 0.0;
     c.move.insane_bravery = 0.0;
+    c.move.fire_overwatch = 0.0;  // M96 (D-097): the opponent-turn stratagems too
+    c.move.heroic_intervention = 0.0;
+    c.move.counteroffensive = 0.0;
     return c;
 }
 
