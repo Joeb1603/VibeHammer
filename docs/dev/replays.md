@@ -29,6 +29,11 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D095_Replay.DISABLED_RegenerateM94Replay
 # and m95_stratagems.json (each stratagem used, and each window declined, a step of its own, seed 266) likewise (M95):
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D096_Replay.DISABLED_RegenerateM95Replay
+# and m96_reactions.json (Fire Overwatch, Heroic Intervention and Counteroffensive, seed 1) likewise (M96):
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replay.DISABLED_RegenerateM96Replay
+# M96's check that a format change adds only declines: the old files (git show HEAD:) in a directory, each new file
+# must be its old file converted by with_roll_steps:
+WH40K_FORMAT3_DIR=<dir> ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replays.DISABLED_CompareWithFormat3Files
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -113,3 +118,29 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   bot-game generators (m46, m68, m73, m77, m87, m88, m89, m91) play the bot without stratagems
   (`tests/ai/bot_configs.hpp`), so their files and `TheSavedFileMatchesTheGame` checks stayed as they were. The M94 and M95 `DISABLED_DumpReplayEvents` dumps, with
   `WH40K_EVENT_DUMP_WITHOUT=DamageRolled`, are byte-identical for all 29 older replays.
+- M96 (D-097): **format 4.** The windows that follow no roll (15.08 Fire Overwatch and 15.11 Heroic Intervention at the
+  end of the opponent's Movement and Charge phases, 15.12 Counteroffensive just after an enemy unit has fought) are
+  `UseStratagems` decisions too, and a format-4 replay records each answer, with what it leads to (a snap shot's
+  `Shoot`, a heroic charge's roll and move). All 30 replays were regenerated on purpose as format 4.
+  `D097_Replays.DISABLED_CompareWithFormat3Files` checked each against its format-3 file (`git show HEAD:`): every new
+  file is exactly the old one converted by `with_roll_steps` (the same description, initial state and `expect`, and
+  only the new windows' declines added: 129 of them). Formats 1 to 3 still load:
+  - `run_replay`, `with_roll_steps`, `Timeline` and `GameSession::from_save_json` convert them;
+  - format 3 is converted by declining every new window before each recorded step and at the end
+    (`with_roll_steps_from_format3`); formats 1 and 2 as before (every window declined).
+  - `tests/data/legacy/` adds format-3 copies of `m8_shooting` and `m62_random_characteristics` (`D095_Replays` turns
+    each into the current file) and three M95 saves (`M96_Saves`: the same game played now, a save still waiting at its
+    Command Re-roll window, and a save after a Movement phase that gains Side B's declined Fire Overwatch window).
+
+  `m96_reactions.json` (`D097_Replay`, seed 1, picked by `D097_Replay.DISABLED_SearchM96Seed`): the V1 scenario with
+  the Termagants 4.9" north of the Intercessors and a one-Termagant unit beside them; Side B starts with 4 CP.
+  - At the end of Side A's Movement phase Side B uses Fire Overwatch: the Termagants snap shoot, and a 6 hits.
+  - The Intercessors charge; at the end of the Charge phase Side B uses Heroic Intervention, Into the Fray: the lone
+    Termagant's roll above 6 becomes 6, and it charges.
+  - In the Fight step Side B uses Counteroffensive on the Termagants after the Intercessors fight: they fight next,
+    before the lone Termagant (Fights First from its charge).
+
+  `D095_Closure.EverySavedReplayPlaysTheSamePacedAndInline` checks the two stratagem replays paced only. The M95 and M96
+  `DISABLED_DumpReplayEvents` dumps of the 30 older replays are byte-identical with no filter: a game without the new
+  stratagems gains no event, and 14.02.01's move (objective control on entering the End of Phase step) changes no
+  event's order.
