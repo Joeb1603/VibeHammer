@@ -1,5 +1,5 @@
 {
-  "description": "M94 (D-095): engine-paced dice rolls, every roll a RollDice step answered by its roller. The V1 scenario with 4 of the 10 Termagants (below half-strength), 1\" from the Intercessors (engaged), their fleshborers a stand-in A D3, D D3 and [HAZARDOUS]. Round 1, Side A: the Intercessors make a Desperate Escape (09.07): Side A makes its hazard rolls before the move and its battle-shock roll after it, then passes. Side B: the Termagants' battle-shock roll in the Battle-shock step (08.03); they remain stationary and fire every fleshborer at the Intercessors: Side B rolls the random A (D-069), the hit and wound rolls, Side A the save rolls (05.03) and orders its casualties (D-013), Side B the damage rolls (05.04, once per batch) and then its hazard rolls (24.15). The Termagants declare a charge and make the charge roll (11.02), then no charge move. Round 2, Side A: any battle-shock roll, then the Intercessors Advance (09.06). Stops at Side A's move of the advancing models. Casualties in unit order.",
+  "description": "M94 (D-095): engine-paced dice rolls, every roll a RollDice step answered by its roller. The V1 scenario with 4 of the 10 Termagants (below half-strength), 1\" from the Intercessors (engaged), their fleshborers a stand-in A D3, D D3 and [HAZARDOUS]. Round 1, Side A: the Intercessors make a Desperate Escape (09.07): Side A makes its hazard rolls before the move and its battle-shock roll after it, then passes. Side B: the Termagants' battle-shock roll in the Battle-shock step (08.03); they remain stationary and fire every fleshborer at the Intercessors: Side B rolls the random A (D-069), the hit and wound rolls, Side A the save rolls (05.03) and orders its casualties (D-013), Side B the damage rolls (05.04, one per attack since M95, D-096) and then its hazard rolls (24.15). The Termagants declare a charge and make the charge roll (11.02), then no charge move. Round 2, Side A: any battle-shock roll, then the Intercessors Advance (09.06). Stops at Side A's move of the advancing models. Casualties in unit order.",
   "expect": {
     "battle_round": 2,
     "models": [
@@ -63,7 +63,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -1056,6 +1056,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           1,
@@ -1152,6 +1158,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "BattleShock",
         "unit": 2
@@ -1234,6 +1246,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           2,
@@ -1308,6 +1326,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     }

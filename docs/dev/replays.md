@@ -27,6 +27,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/ai/wh40k_ai_tests --gtest_also_run_disabled_tests --gtest_filter=M91_Replay.DISABLED_RegenerateM91BotGameReplay
 # m94_paced_rolls.json (every kind of roll a step of its own, seed 1) comes from wh40k_tests (M94):
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D095_Replay.DISABLED_RegenerateM94Replay
+# and m95_stratagems.json (each stratagem used, and each window declined, a step of its own, seed 266) likewise (M95):
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D096_Replay.DISABLED_RegenerateM95Replay
 ```
 (The M73 and M77 tests also rewrite their fixture scenario under `tests/data/scenarios/`. M75's builder-battle scenario
 is rewritten by `M75_Builder.DISABLED_RegenerateBuilderBattleScenario`.)
@@ -85,3 +87,27 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   save: `D095_Replays` and `M94_Saves` load them. `M94_Legacy` checks the save byte for byte against the same game's
   save now with its roll steps taken out (its generator writes that, so re-running it rewrites the same file). `D095_Closure.DISABLED_DumpReplayEvents` (with
   `WH40K_EVENT_DUMP_DIR`) writes every replay's events and final state: the M93 and M94 dumps were byte-identical.
+- M95 (D-096): **format 3.** A reaction window is a `UseStratagems` decision, and a format-3 replay records each answer as
+  a step (`DeclineStratagems` or `UseStratagem`). A random D is rolled per attack that inflicts damage (D-069), each roll
+  a `RollDice{Damage}` step of its own. All 29 replays were regenerated on purpose as format 3. A script checked each
+  file against `git show HEAD:`: the same initial state and `expect` block, and the same steps once the `RollDice` and
+  `DeclineStratagems` steps are taken out. The files gained 958 decline steps and 8 damage rolls, and no other roll.
+  Only `m94_paced_rolls.json`'s description changed: its damage rolls are "one per attack since M95", and it has one.
+  Formats 1 and 2 still load:
+  - `run_replay`, `with_roll_steps`, `Timeline` and `GameSession::from_save_json` convert them.
+  - Format 1 has every roll made and every window declined, each as a step.
+  - Format 2 is converted step by step:
+    - a window before a recorded step is declined;
+    - after a recorded damage roll, the batch's further damage rolls are made;
+    - windows at the end are declined, but a pending roll is left waiting.
+  - `tests/data/legacy/` adds format-2 copies of `m8_shooting` and `m62_random_characteristics` and two M94 saves
+    (`*_format2.json`). `D095_Replays` and `M94_Saves` check that they turn into the current files.
+
+  `m95_stratagems.json` (`D096_Replay`, seed 266) uses each stratagem once:
+  - Side A re-rolls a missed hit and, as the defender, a failed save.
+  - Side B's Insane Bravery passes a battle-shock roll.
+  - Side B re-rolls a damage roll of 1 and a charge roll that had no target, which then reaches its target.
+
+  `D095_Closure.EverySavedReplayPlaysTheSamePacedAndInline` checks it paced only: inline play declines every window,
+  so a game that uses a stratagem has no inline twin. The M94 and M95 `DISABLED_DumpReplayEvents` dumps, with
+  `WH40K_EVENT_DUMP_WITHOUT=DamageRolled`, are byte-identical for all 29 older replays.

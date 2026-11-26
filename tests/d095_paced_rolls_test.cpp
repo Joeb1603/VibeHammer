@@ -642,6 +642,7 @@ TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
     // Each saved replay as format 2 (each roll a step: the file itself, or with_roll_steps of a format-1 file), run
     // paced, and its steps without the rolls run inline: the same events and the same final state, and its expect block.
     int files = 0;
+    int with_stratagems = 0;
     std::size_t rolls = 0;
     for (const auto& file : replay_files()) {
         SCOPED_TRACE(file.filename().string());
@@ -649,6 +650,18 @@ TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
         const Replay saved = load_replay(file);
         const Replay paced = with_roll_steps(saved, repo_root());
         EXPECT_EQ(paced.format, kReplayFormatWindowsRecorded);  // D-096 (M95): format 3
+        // D-096: inline play declines every window, so a game that uses a stratagem has no inline twin; it is checked
+        // paced only (m95_stratagems.json, D096_Replay).
+        const bool uses_stratagems = std::any_of(paced.steps.begin(), paced.steps.end(), [](const ReplayStep& s) {
+            return std::holds_alternative<action::UseStratagem>(s.action);
+        });
+        if (uses_stratagems) {
+            ++with_stratagems;
+            const ReplayResult p = run_replay(paced, repo_root());
+            ASSERT_TRUE(p.ok()) << "step " << *p.failed_step << ": " << p.reasons.front();
+            EXPECT_EQ(replay_expectation(p.final_state), saved.expect);
+            continue;
+        }
         Replay at_once = paced;
         at_once.format = kReplayFormatRollsInline;
         at_once.steps = without_rolls(paced.steps);
@@ -662,7 +675,8 @@ TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
         EXPECT_EQ(replay_expectation(p.final_state), saved.expect);
         rolls += paced.steps.size() - at_once.steps.size();
     }
-    EXPECT_GE(files, 28);
+    EXPECT_GE(files, 30);
+    EXPECT_EQ(with_stratagems, 1);
     EXPECT_GT(rolls, 500u);  // the bot games alone roll hundreds of times
 }
 

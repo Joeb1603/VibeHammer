@@ -4,7 +4,10 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -650,4 +653,202 @@ TEST(D096_RandomPlay, GamesThatUseStratagemsStayValidAndReplay) {
     }
     EXPECT_GT(windows, 50);
     EXPECT_GT(used, 10);
+}
+
+// ==== The M95 replay: tests/replays/m95_stratagems.json (format 3: each stratagem used, and each window declined, a step)
+
+namespace {
+
+const std::filesystem::path kReplayDir{WH40K_REPLAY_DIR};
+const std::filesystem::path kM95Replay = kReplayDir / "m95_stratagems.json";
+constexpr std::uint64_t kM95Seed = 266;  // picked by D096_Replay.DISABLED_SearchM95Seed
+
+bool offers(const WindowInfo& info, Stratagem s) {
+    return std::any_of(info.options.begin(), info.options.end(), [s](const StratagemOption& o) { return o.stratagem == s; });
+}
+
+// The builder's answer to a window: Insane Bravery whenever it is offered; Command Re-roll on Side A's hit and save
+// rolls and on Side B's damage and charge rolls, the lowest pickable die (a charge roll in full); every other window
+// declined.
+GameAction m95_window_answer(const GameState& gs) {
+    const WindowInfo info = window_info(gs).value();
+    if (offers(info, Stratagem::InsaneBravery)) return action::UseStratagem{Stratagem::InsaneBravery, info.unit, std::nullopt};
+    const bool wanted = info.side == Side::A ? (info.roll == RollKind::Hit || info.roll == RollKind::Save)
+                                             : (info.roll == RollKind::Damage || info.roll == RollKind::Charge);
+    if (!wanted || !offers(info, Stratagem::CommandReroll)) return action::DeclineStratagems{};
+    if (info.whole_roll) return action::UseStratagem{Stratagem::CommandReroll, info.unit, std::nullopt};
+    std::optional<std::size_t> lowest;
+    for (std::size_t k = 0; k < info.faces.size(); ++k) {
+        if (info.pickable[k] && (!lowest || info.faces[k] < info.faces[*lowest])) lowest = k;
+    }
+    return action::UseStratagem{Stratagem::CommandReroll, info.unit, lowest};
+}
+
+// The milestone's replay, played through a paced match. `ok` says whether the seed shows what the replay is about: each
+// re-roll replaces a die that failed (a missed hit, a failed save, a damage roll of 1, a charge roll with no target),
+// the re-rolled hit die hits, the re-rolled damage is higher and the re-rolled charge reaches its target, where the
+// replay stops; `problem`, the first refused step.
+Replay m95_replay(std::uint64_t seed, bool& ok, std::string& problem) {
+    ok = false;
+    Replay r;
+    r.format = kReplayFormatWindowsRecorded;
+    r.description =
+        "M95 (D-096): reaction windows and the first stratagems; each stratagem used, and each window declined, is a "
+        "step of its own. The V1 scenario with 4 of the 10 Termagants (below half-strength) 8\" from the Intercessors, "
+        "their fleshborers a stand-in A D3 and D D3; Side B starts with 1 CP (both players gain 1 CP in each Command "
+        "phase, 08.02). Round 1, Side A: the Intercessors remain stationary and one of them fires its bolt rifle "
+        "(Saturation) at the Termagants: Side A uses Command Re-roll (15.02) on its lowest hit die, Side B declines its "
+        "window after its save rolls. Side B: Insane Bravery (15.04) passes the Termagants' battle-shock roll "
+        "automatically (08.03); they remain stationary and fire every fleshborer at the Intercessors: Side B declines "
+        "its windows after the random A, hit and wound rolls, Side A uses Command Re-roll on its lowest save die (05.03: "
+        "the defender's roll), Side B on the first damage roll (05.04, D-069: one per attack). The Termagants declare a "
+        "charge and Side B re-rolls the charge roll in full (11.02). Stops at the Termagants' charge targets. "
+        "Casualties in unit order.";
+    GameState init = wh40k::test::load_v1_scenario();
+    init.units[1].models.resize(4);
+    const float gap = mm_to_inches(*unit_distance(init.units[0], init.units[1]));
+    for (Model& m : init.units[1].models) {
+        m.position.y -= in(gap - 8.0f);
+        WeaponProfile& p = m.weapons[0].profiles[0];
+        p.attacks = kD3;
+        p.damage = kD3;
+    }
+    init.command_points = {0, 1};
+    init.dice = DiceState{seed, 0};
+    r.initial.state = init;
+    Match match(init, RollMode::Paced);
+    bool failed = false;
+    auto act = [&](const GameAction& a) {
+        if (failed) return;
+        const ValidationResult v = match.submit(decider(match.state()), a);
+        if (!v.ok()) {
+            failed = true;
+            problem = v.reasons.front();
+        }
+    };
+    // The builder's answers (rolls made, windows answered by m95_window_answer, casualties in unit order, steps ended)
+    // until `done`.
+    auto play_until = [&](auto done) {
+        for (int i = 0; i < 300 && !failed && match.state().pending && !done(match.state()); ++i) {
+            const GameState& gs = match.state();
+            act(window_pending(gs) ? m95_window_answer(gs) : wh40k::test::neutral_action(gs));
+        }
+    };
+    const auto waiting = [](const GameState& gs) { return roll_pending(gs) || window_pending(gs); };
+    const UnitId marines = init.units[0].id;
+    const UnitId gants = init.units[1].id;
+    // Round 1, Side A: one Intercessor's bolt rifle (Saturation, profile 1) at the Termagants.
+    play_until([&](const GameState& gs) { return gs.flow.stage == Stage::Shoot && turn_side(gs) == Side::A && !waiting(gs); });
+    if (failed || match.state().flow.stage != Stage::Shoot) return r;
+    act(action::Shoot{marines, ShootingType::Normal, {ShotDeclaration{match.state().units[0].models[0].id, 0, 1, gants}}});
+    // Side B's turn: its Battle-shock step, then the volley.
+    play_until([&](const GameState& gs) { return gs.flow.stage == Stage::Shoot && turn_side(gs) == Side::B && !waiting(gs); });
+    if (failed || match.state().flow.stage != Stage::Shoot || match.state().units.size() < 2) return r;
+    action::Shoot volley{gants, ShootingType::Normal, {}};
+    for (const Model& m : match.state().units[1].models) volley.shots.push_back(ShotDeclaration{m.id, 0, 0, marines});
+    act(volley);
+    play_until([&](const GameState& gs) { return gs.flow.stage == Stage::Charge && !waiting(gs); });
+    if (failed || match.state().flow.stage != Stage::Charge || turn_side(match.state()) != Side::B) return r;
+    const auto legal = legal_actions(match.state(), Side::B);
+    if (std::find(legal.begin(), legal.end(), GameAction{action::DeclareCharge{gants}}) == legal.end()) return r;
+    act(action::DeclareCharge{gants});
+    play_until([&](const GameState& gs) { return !waiting(gs); });
+    r.steps = match.steps();
+    r.expect = replay_expectation(match.state());
+    if (failed) return r;
+    // What the seed shows.
+    std::map<RollKind, event::DiceRerolled> rerolls;
+    bool insane_bravery = false;
+    bool charge_failed_first = false;
+    for (const GameEvent& e : match.events()) {
+        if (const auto* d = std::get_if<event::DiceRerolled>(&e)) rerolls.emplace(d->roll, *d);
+        if (std::holds_alternative<event::BattleShockPassedAutomatically>(e)) insane_bravery = true;
+        if (const auto* c = std::get_if<event::ChargeRolled>(&e); c != nullptr && c->unit == gants) {
+            charge_failed_first = c->eligible_targets.empty();
+        }
+    }
+    const auto replaced_below = [&](RollKind k, int below) {
+        const auto it = rerolls.find(k);
+        return it != rerolls.end() && it->second.die.has_value() && it->second.before.at(*it->second.die) < below;
+    };
+    const auto charge = rerolls.find(RollKind::Charge);
+    const auto* recharged = charge == rerolls.end() ? nullptr : std::get_if<event::ChargeRolled>(&charge->second.result);
+    // The hit re-roll hits (BS3+); the damage re-roll's D3 is higher (a D3 is half a D6, rounded up).
+    const auto improved = [&](RollKind k, auto better) {
+        const auto it = rerolls.find(k);
+        return it != rerolls.end() && it->second.die.has_value() &&
+               better(it->second.before.at(*it->second.die), it->second.after.at(*it->second.die));
+    };
+    ok = rerolls.size() == 4 && insane_bravery && replaced_below(RollKind::Hit, 3) && replaced_below(RollKind::Save, 3) &&
+         replaced_below(RollKind::Damage, 3) && improved(RollKind::Hit, [](int, int after) { return after >= 3; }) &&
+         improved(RollKind::Damage, [](int before, int after) { return (after + 1) / 2 > (before + 1) / 2; }) &&
+         charge_failed_first && recharged != nullptr &&
+         !recharged->eligible_targets.empty() && match.state().pending &&
+         *match.state().pending == (PendingDecision{Side::B, decision::SelectChargeTargets{gants}});
+    return r;
+}
+
+}  // namespace
+
+TEST(D096_Replay, TheStratagemsReplayUsesEachStratagemAsAStep) {
+    const Replay saved = load_replay(kM95Replay);
+    EXPECT_EQ(saved.format, kReplayFormatWindowsRecorded);
+    const ReplayResult run = run_replay(saved, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    EXPECT_EQ(replay_expectation(run.final_state), saved.expect);
+    // Each stratagem used by the player whose window it is: Side A's hit and save re-rolls, Side B's Insane Bravery and
+    // damage and charge re-rolls; the CP spent, never below 0.
+    std::vector<std::pair<Side, Stratagem>> used;
+    std::vector<RollKind> rerolled;
+    for (const GameEvent& e : run.events) {
+        if (const auto* s = std::get_if<event::StratagemUsed>(&e)) {
+            used.emplace_back(s->side, s->stratagem);
+            EXPECT_GE(s->cp_left, 0);
+        }
+        if (const auto* d = std::get_if<event::DiceRerolled>(&e)) rerolled.push_back(d->roll);
+    }
+    EXPECT_EQ(used, (std::vector<std::pair<Side, Stratagem>>{{Side::A, Stratagem::CommandReroll},
+                                                              {Side::B, Stratagem::InsaneBravery},
+                                                              {Side::A, Stratagem::CommandReroll},
+                                                              {Side::B, Stratagem::CommandReroll},
+                                                              {Side::B, Stratagem::CommandReroll}}));
+    EXPECT_EQ(rerolled, (std::vector<RollKind>{RollKind::Hit, RollKind::Save, RollKind::Damage, RollKind::Charge}));
+    EXPECT_EQ(run.final_state.command_points, (std::array<int, 2>{0, 0}));
+    std::size_t declines = 0;
+    for (const ReplayStep& s : saved.steps) declines += std::holds_alternative<action::DeclineStratagems>(s.action);
+    EXPECT_GT(declines, 3u);
+    // The file is what the builder plays now.
+    bool ok = false;
+    std::string problem;
+    const Replay again = m95_replay(kM95Seed, ok, problem);
+    EXPECT_TRUE(problem.empty()) << problem;
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(Json(again).dump(2), Json(saved).dump(2));
+}
+
+TEST(D096_Replay, DISABLED_SearchM95Seed) {
+    for (std::uint64_t seed = 1; seed <= 1000; ++seed) {
+        bool ok = false;
+        std::string problem;
+        (void)m95_replay(seed, ok, problem);
+        if (!problem.empty()) std::printf("seed %llu: %s\n", static_cast<unsigned long long>(seed), problem.c_str());
+        if (ok) {
+            std::printf("M95 seed %llu\n", static_cast<unsigned long long>(seed));
+            return;
+        }
+    }
+    ADD_FAILURE() << "no seed in 1..1000";
+}
+
+// Writes tests/replays/m95_stratagems.json. Run on purpose only:
+//   wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D096_Replay.DISABLED_RegenerateM95Replay
+TEST(D096_Replay, DISABLED_RegenerateM95Replay) {
+    bool ok = false;
+    std::string problem;
+    const Replay r = m95_replay(kM95Seed, ok, problem);
+    ASSERT_TRUE(problem.empty()) << problem;
+    ASSERT_TRUE(ok);
+    const ReplayResult run = run_replay(r, repo_root());
+    ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+    save_replay(r, kM95Replay);
 }

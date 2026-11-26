@@ -112,7 +112,7 @@
     "result": null,
     "stage": "Shoot"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "scenario": "data/scenarios/v1_skirmish.json",
     "seed": 14
