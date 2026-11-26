@@ -28,7 +28,7 @@ pinned data version. Legends, Crusade and the like are out for now (the user, 20
 | Missions | One house mission (D-084), scored from the scenario file | The real mission pack: 25 primaries, 18 secondaries, force dispositions, layouts |
 | Armies | 11 datasheets, 2 factions in custom battles, Incursion only | About 28 faction lists, 256 detachments, well over a thousand datasheets |
 | Unit, faction and detachment rules | Loaded and shown as text; none implemented | The largest part of the whole roadmap: Phase 4 |
-| Bot | Plays the house mission, uses cover, works as an army; Command Re-roll and Insane Bravery behind keys (M95); Fire Overwatch, Heroic Intervention and Counteroffensive behind keys (M96); Explosives and Crushing Impact behind keys (M97) | Mission-generic scoring, the other stratagems, actions, reserves, transports, abilities |
+| Bot | Plays the house mission, uses cover, works as an army; Command Re-roll and Insane Bravery behind keys (M95); Fire Overwatch, Heroic Intervention and Counteroffensive behind keys (M96); Explosives and Crushing Impact behind keys (M97), Crushing Impact priced in its charge planning (M98) | Mission-generic scoring, the other stratagems, actions, reserves, transports, abilities |
 | Client | Hotseat, bot, army builder, hand deployment | A screen for every new decision, a mission and layout picker, the full army builder |
 
 Sources of rules text, and their limits:

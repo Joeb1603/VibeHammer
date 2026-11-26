@@ -1,7 +1,7 @@
 # VibeHammer: finished milestones (archive)
 
 The finished milestones M0–M83, moved here verbatim from `PLAN.md` in M84 (only M16, M21 and M22 gained their
-✅), M84–M89, moved the same way while planning M90–M91, M90–M91, moved the same way after M91, M92–M94, moved the same way after M95, M95, moved the same way after M96, and M96, moved the same way after M97. `PLAN.md` keeps the current and upcoming work and the
+✅), M84–M89, moved the same way while planning M90–M91, M90–M91, moved the same way after M91, M92–M94, moved the same way after M95, M95, moved the same way after M96, M96, moved the same way after M97, and M97, moved the same way after M98. `PLAN.md` keeps the current and upcoming work and the
 "Later" list. Read a section here only when a
 milestone or decision points at it.
 
@@ -6363,3 +6363,129 @@ shows each stratagem; the bots' identity set at `command_reroll=0` is the M95 bi
 - The bot: the thresholds were not tuned (one setting measured); Counteroffensive is judged from the sequence's state,
   not a scratch simulation; Heroic Intervention's values use M42's horizon from the enemy's turn.
 - 15.09's "not eligible to start an action" waits for actions (16).
+
+---
+
+## M97: Explosives and Crushing Impact (D-099) ✅ (done; the manual mouse checks open)
+
+**Effort:** xhigh (two rule areas on M95's and M96's windows). **Plan mode:** done. The design was agreed on 2026-11-26
+in M96's session, where the user chose to design it. Implement it in a fresh session.
+**Scope:** the last two core stratagems the engine can take without a new rule system. Both are used in their player's
+own turn and end in mortal wounds (06.02): Explosives (15.05) and Crushing Impact (15.06). The other core stratagems
+wait for what they need: Epic Challenge (15.03) for [PRECISION] and attached units (19), Rapid Ingress (15.07) for
+strategic reserves (20), and Smokescreen (15.10) for a SMOKE unit. In the data:
+- EXPLOSIVES: the Intercessors;
+- GRENADES: the Chaos Lord and the Legionaries;
+- MONSTER: the Hive Tyrant (T10), the Screamer-killer (T9) and the Tyrannofex (T12);
+- VEHICLE: none.
+
+**The user's rulings** (2026-11-26, plan mode):
+- Explosives is offered at the Shoot step, as an answer beside the Shoot templates (no window).
+- The EFFECT's model and enemy unit are picked in a step after the stratagem (`SelectModelAndEnemy`), once its CP are
+  paid.
+- Crushing Impact's "maximum of 6 mortal wounds per unit" caps each unit: the enemy unit and the charging unit.
+- Crushing Impact inflicts the enemy's mortal wounds first. If that leaves the enemy with no models, the game ends at
+  once (D-007) and the 1s are never inflicted.
+
+**Rules:**
+- PDF: 15.01, 15.05, 15.06, 06.01, 06.02, 09.07, 10.02, 11.04, 12 (its example of Fights First units), 01.07.
+- App: 01.03.02 Rules Sequencing, and 02.05.01 Using Keywords (slashed keywords; singular and plural alike).
+  - The app's headings swap the two numbers. The PDF's are used (D-098).
+  - No FAQ entry covers either stratagem.
+- Decisions: D-007, D-013, D-051, D-071, D-076, D-095, D-096, D-097, D-098, D-099.
+
+**Design** (D-099 has the full text)
+- *Explosives:*
+  - Offered as `UseStratagem{Explosives, unit}` among the Shoot step's answers. The unit must be unengaged,
+    EXPLOSIVES/GRENADES, eligible to shoot (10.02, 09.07) and must not have advanced this turn.
+  - One of its models must have an unengaged enemy unit within 8" and visible.
+  - Then `SelectModelAndEnemy`, then six D6 (`RollDice{Explosives}`): a mortal wound per 4+.
+  - The unit can still shoot afterwards.
+- *Crushing Impact:*
+  - A `WindowTiming::AfterChargeMove` window opens just after a charge move. It is usable only in its player's own
+    Charge phase, by a MONSTER/VEHICLE unit; never after a heroic charge.
+  - Then `SelectModelAndEnemy`: an engaged enemy unit, and a model engaged with it.
+  - Then T D6 (`RollDice{CrushingImpact}`): each 5+ a mortal wound on the enemy unit, then each 1 one on the unit, each
+    at most 6.
+- *The effect:*
+  - `FlowState::effect` (`StratagemEffect`) runs the selection, the roll and the mortal wounds. Casualties use 06.02,
+    with the controlling player's `OrderCasualties` (D-013, D-051).
+  - No Command Re-roll follows either roll (15.02 lists neither).
+- *Format 5:* it records the AfterChargeMove windows. Format 4 converts by declining them (8 replays have one). Every
+  replay is regenerated, and a new `m97_stratagems.json` is added.
+- *Client:* the Explosives buttons at the Shoot step, a selection bar, the window, the cards and the log.
+  `GameSession::legal_offered()` hides the answers a side declines.
+- *Bot:* keys `explosives` and `crushing_impact` (0 or 1), valued with a mortal-wound expectation; the defaults are set
+  by D-092's keep rule.
+
+**Steps** (D-099 sections 3–10 give the detail)
+1. Done in plan mode: this section and D-099.
+2. Baselines:
+   - copy pre-M97 format-4 files with a MONSTER charge (a replay such as m60, and a session save) to
+     `tests/data/legacy/`;
+   - record the M96 event dumps of the 31 replays;
+   - keep the M96 Release arena for the identity runs.
+3. Plumbing:
+   - the enums, the decision, the action, the events and `StratagemEffect`;
+   - JSON (omitted when absent) and the hash;
+   - every visitor and switch (D-099 section 10).
+4. Explosives in the engine, with the `R15_05_*` tests.
+5. Crushing Impact in the engine and the wipe-out order, with the `R15_06_*` tests.
+6. Format 5 and its conversions. Regenerate the replays, check them against their format-4 files, and record the m97
+   replay.
+7. Client, with `M97_*` client tests and xvfb screenshots.
+8. Bot:
+   - the keys, the heuristics and the `M97_*` bot tests;
+   - the identity set against the M96 binary;
+   - the head-to-heads; the defaults by the keep rule.
+9. Docs:
+   - D-099's results, and the amendments it lists;
+   - CLAUDE.md, README, the roadmap, `docs/dev/replays.md` and `docs/dev/bot_arena.md`;
+   - this section marked done with its results, and M96 archived.
+   Then the full `ctest`, then commit, push, the PR and the rebase merge.
+
+**Acceptance**
+- [x] **Offers:**
+  - each stratagem only at its WHEN and for a TARGET with a legal pair;
+  - 15.01's cost and records, and 01.07, enforced, with rule-cited refusals;
+  - declining or not using one changes nothing, and the closure holds.
+- [x] **Explosives:**
+  - at the Shoot step, with one model and one unengaged, visible enemy unit within 8" of it;
+  - six D6, with a mortal wound per 4+;
+  - the unit can still shoot. `R15_05_*`.
+- [x] **Crushing Impact:**
+  - the window only after the unit's own charge move;
+  - an engaged enemy unit and a model engaged with it, then T D6;
+  - the 1s and the 5+s, each capped at 6;
+  - the enemy's mortal wounds first, with D-007 first. `R15_06_*`.
+- [x] **Format 5:**
+  - it round-trips, and formats 1–4 load and convert;
+  - the 31 replays are regenerated with only declines added, and the event dumps are byte-identical;
+  - `m97_stratagems.json` shows both stratagems.
+- [x] **Bots:**
+  - the identity set at the defaults has every `state` equal to M96's;
+  - the two keys are measured by D-092's keep rule, and the defaults are set by it;
+  - p95 is within budget.
+- [x] **Client:** the Explosives button, the selection bar, the window, the cards and the log; logic tests and xvfb
+  screenshots.
+- [x] **Full `ctest`** green, with warnings as errors.
+
+**Results** (D-099 part 11 has them in full): the M96 and M97 event dumps of the 31 older replays are byte-identical with
+no filter; the 31 replays regenerated as format 5 are each their format-4 file converted (11 declines added, in the 8
+replays named); `m97_stratagems.json` shows both stratagems (Explosives: 3 mortal wounds on the Hive Tyrant, then the
+Legionaries shoot; Crushing Impact: 2 on the Legionaries, then 1 on the Tyrant). The bots' identity set at the defaults
+is the M96 binary's in every field but `steps` and `actions` (2,600 games; 1,170 declined windows added). Head-to-heads (400
+games each, all clean): Explosives +6, Crushing Impact -10, both -4, so both keys stay off by default. p95 unchanged
+(8.9 to 9.0 ms on the rosters, 13.8 to 13.4 ms on terrain, 9.0 to 8.9 ms on the objective scenario). The full
+`ctest` passes: 1,678 of 1,678.
+
+**Open items.**
+- Manual checks by mouse on Windows: Explosives at the Shoot step and its selection, Crushing Impact's window after a
+  monster's charge, both in hotseat and against the bot (keys on), and Undo after each.
+- The bot's charge planning doesn't price Crushing Impact (it is judged only at the window), and Explosives' valuation
+  doesn't weigh the CP against a later Command Re-roll. The thresholds were not tuned (one setting measured).
+- The selection is made with buttons, not by clicking on the board.
+- Explosives isn't offered in the Start or End of Shooting phase steps, which have no decision in the engine.
+
+The alternative next step was the first line of the roadmap's Phase 1: the weapon abilities still refused when selected
+(Lethal Hits, Devastating Wounds, Anti-X, Melta, Lance, Precision), which unlock the most datasheet profiles.
