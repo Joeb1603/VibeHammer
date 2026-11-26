@@ -66,6 +66,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::RetargetAttacks>(d);
             else if constexpr (std::is_same_v<T, action::RollDice>)
                 return std::holds_alternative<decision::RollDice>(d);  // D-095
+            else if constexpr (std::is_same_v<T, action::UseStratagem> || std::is_same_v<T, action::DeclineStratagems>)
+                return std::holds_alternative<decision::UseStratagems>(d);  // D-096
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -190,6 +192,9 @@ Side active_side(const GameState& state) {
 std::optional<PendingDecision> compute_decision(const GameState& state) {
     if (state.flow.stage == Stage::NotStarted || state.flow.stage == Stage::GameOver) {
         return std::nullopt;
+    }
+    if (state.flow.window) {
+        return detail::window_decision(state);  // D-096: an open window comes first
     }
     if (state.flow.attack) {
         return detail::attack_decision(state);

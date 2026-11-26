@@ -51,15 +51,14 @@ MortalWoundsResult inflict_mortal_wounds(Unit& unit, int count, const ModelChoos
     return out;
 }
 
-HazardRolls make_hazard_rolls(DiceSource& dice, const Unit& unit, int count) {
+HazardRolls judge_hazard_rolls(const Unit& unit, std::span<const int> faces) {
     HazardRolls out;
     bool all_monster_vehicle = !unit.models.empty();
     for (const Model& m : unit.models) {
         all_monster_vehicle = all_monster_vehicle && is_monster_or_vehicle(unit, m);
     }
     const int per_failure = all_monster_vehicle ? 3 : 1;
-    for (int i = 0; i < count; ++i) {
-        const int r = dice.roll_d6();
+    for (const int r : faces) {
         out.rolls.push_back(r);
         if (r <= 2) {
             ++out.failures;
@@ -67,6 +66,11 @@ HazardRolls make_hazard_rolls(DiceSource& dice, const Unit& unit, int count) {
         }
     }
     return out;
+}
+
+HazardRolls make_hazard_rolls(DiceSource& dice, const Unit& unit, int count) {
+    const std::vector<int> faces = roll_d6s(dice, count);
+    return judge_hazard_rolls(unit, faces);
 }
 
 }  // namespace wh40k::core

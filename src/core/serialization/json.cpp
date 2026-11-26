@@ -506,6 +506,8 @@ void to_json(Json& j, const GameState& v) {
     // D-081: omitted when empty (every state but a deployment by hand), so older files are unchanged.
     if (!v.undeployed.empty()) j["undeployed"] = v.undeployed;
     if (!v.terrain.empty()) j["terrain"] = v.terrain;  // D-087: omitted without terrain, so older files are unchanged
+    // D-096: omitted while neither side has used a stratagem, so older files are unchanged.
+    if (!v.stratagems[0].empty() || !v.stratagems[1].empty()) j["stratagems"] = v.stratagems;
 }
 void from_json(const Json& j, GameState& v) {
     j.at("scenario_name").get_to(v.scenario_name);
@@ -516,6 +518,8 @@ void from_json(const Json& j, GameState& v) {
     j.at("units").get_to(v.units);
     j.at("dice").get_to(v.dice);
     j.at("command_points").get_to(v.command_points);
+    v.stratagems = {};
+    if (const auto it = j.find("stratagems"); it != j.end()) it->get_to(v.stratagems);  // D-096
     j.at("flow").get_to(v.flow);
     get_opt(j, "pending", v.pending);
     get_opt(j, "result", v.result);

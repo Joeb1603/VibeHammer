@@ -78,6 +78,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::DeployUnits{}},                // M74 (D-081)
         {Side::A, decision::RetargetAttacks{UnitId{1}}},   // M92 (D-093)
         {Side::B, decision::RollDice{RollKind::Save, UnitId{2}}},  // M94 (D-095)
+        {Side::B, decision::UseStratagems{WindowTiming::AfterRoll, UnitId{2}}},  // M95 (D-096)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
@@ -92,6 +93,14 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         EXPECT_EQ(roll_kind_from_name(roll_kind_name(r)), r);
     }
     EXPECT_EQ(roll_kind_from_name("Sixes"), std::nullopt);
+    // M95 (D-096): every window timing, by its JSON name.
+    for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll}) {
+        const PendingDecision d{Side::A, decision::UseStratagems{t, UnitId{3}}};
+        EXPECT_EQ(round_trip(d), d) << describe(d);
+        EXPECT_EQ(Json(d).at("timing").get<std::string>(), window_timing_name(t));
+        EXPECT_EQ(window_timing_from_name(window_timing_name(t)), t);
+    }
+    EXPECT_EQ(window_timing_from_name("Whenever"), std::nullopt);
 }
 
 TEST(Serialization, StateMidAttackRoundTrips) {
@@ -241,6 +250,8 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::CannotSetUp{UnitId{4}},                                                          // M74 (D-081)
         action::RetargetAttacks{{AttackRetarget{1, UnitId{4}}, AttackRetarget{3, UnitId{5}}}},     // M92 (D-093)
         action::RollDice{RollKind::Damage, UnitId{1}},                                            // M94 (D-095)
+        action::UseStratagem{Stratagem::CommandReroll, UnitId{2}, std::size_t{3}},                // M95 (D-096)
+        action::DeclineStratagems{},                                                              // M95 (D-096)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {
@@ -256,6 +267,17 @@ TEST(Serialization, EveryActionKindRoundTrips) {
               GameAction{(action::OrderCasualties{UnitId{2}, {}})});  // a template
     EXPECT_EQ(round_trip_action(action::Shoot{UnitId{1}, ShootingType::Assault, {}}),
               GameAction{(action::Shoot{UnitId{1}, ShootingType::Assault, {}})});  // a template (D-016)
+    // M95 (D-096): the die is omitted when absent (a charge roll, Insane Bravery); every stratagem by its JSON name.
+    const GameAction whole{action::UseStratagem{Stratagem::InsaneBravery, UnitId{2}, std::nullopt}};
+    EXPECT_EQ(round_trip_action(whole), whole);
+    Json j;
+    action::to_json(j, whole);
+    EXPECT_FALSE(j.contains("die"));
+    EXPECT_EQ(j.at("stratagem").get<std::string>(), "InsaneBravery");
+    for (const Stratagem s : {Stratagem::CommandReroll, Stratagem::InsaneBravery}) {
+        EXPECT_EQ(stratagem_from_key(stratagem_key(s)), s);
+    }
+    EXPECT_EQ(stratagem_from_key("Smokescreen"), std::nullopt);
 }
 
 TEST(Serialization, EveryEventKindRoundTrips) {
@@ -340,6 +362,11 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::ObjectiveControlChanged{1, "A home", Side::A, {3, 1}},  // M86 (14.02)
         event::VictoryPointsScored{Side::B, 2, "B home", 2, 7},         // M86 (D-084)
         event::AttacksRetargeted{UnitId{1}, {AttackRetarget{0, UnitId{4}}}, {selection}, 2, {batch}},  // M92 (D-093)
+        event::DamageRolled{UnitId{1}, UnitId{2}, ModelId{7}, DiceExpr{1, 6, 1}, CharacteristicRoll{{4}, 5}},  // M95
+        event::StratagemUsed{Side::B, Stratagem::CommandReroll, UnitId{2}, 1, 2},                             // M95
+        event::DiceRerolled{RollKind::Save, UnitId{2}, std::size_t{1}, {1, 2}, {1, 6},
+                            event::SaveRollsMade{UnitId{2}, {1, 6}}},                                          // M95
+        event::BattleShockPassedAutomatically{UnitId{2}},                                                     // M95
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

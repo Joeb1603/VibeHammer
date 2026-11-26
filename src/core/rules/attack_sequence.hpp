@@ -29,6 +29,10 @@ namespace wh40k::core {
 // modified result (D-011: net modifier capped to +-1, floor 1) must be >= BS/WS. Each critical hit of a
 // [SUSTAINED HITS X] profile scores X additional hits (24.36); [TORRENT]'s automatic hits are not critical.
 [[nodiscard]] HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int attack_dice);
+// D-096 (M95): make_hit_rolls in two parts, so a roll can wait between them (15.02 Command Re-roll): the dice (one D6
+// per attack dice, none for [TORRENT]), then their results. Judging draws no dice.
+[[nodiscard]] std::vector<int> roll_hit_faces(DiceSource& dice, const AttackProfile& profile, int attack_dice);
+[[nodiscard]] HitRolls judge_hit_rolls(const AttackProfile& profile, int attack_dice, std::span<const int> faces);
 
 // ---- 05.02 Wound Rolls ----
 
@@ -46,6 +50,8 @@ namespace wh40k::core {
 // modified result (D-011) must be >= required_wound_roll(S, T).
 [[nodiscard]] WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits,
                                           int toughness);
+// D-096 (M95): the results of wound-roll dice already rolled (one per hit), as make_wound_rolls judges them.
+[[nodiscard]] WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::span<const int> faces);
 
 // 05.02 for one die: the first row of the table that applies to `unmodified`, with the (already capped, D-011)
 // wound modifier, against the required result. make_wound_rolls and reroll_wound_rolls both use it.

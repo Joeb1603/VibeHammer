@@ -493,7 +493,7 @@ CoverGame play_cover_bot_game(std::uint64_t seed = kCoverSeed) {
     // M91 (D-092): the M89 game, pinned to the M91 keys at 0 (the saved file is the M90 bot's).
     g.record = play_bot_session(session, m90_bot(), m90_bot(), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
+    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     for (const ReplayStep& st : g.replay.steps) {
         if (const auto* p = std::get_if<action::ProposeModelMove>(&st.action); p != nullptr && p->path.size() == 2) {

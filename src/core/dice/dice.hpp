@@ -65,5 +65,7 @@ struct TwoD6 {
     friend bool operator==(const TwoD6&, const TwoD6&) = default;
 };
 [[nodiscard]] TwoD6 roll_2d6(DiceSource& dice);
+// D-096 (M95): `count` D6s, in order (the dice of a roll made simultaneously, judged afterwards).
+[[nodiscard]] std::vector<int> roll_d6s(DiceSource& dice, int count);
 
 }  // namespace wh40k::core

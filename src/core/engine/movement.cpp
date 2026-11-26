@@ -238,20 +238,33 @@ void begin_move(GameState& state, const action::StartMove& a, DiceSource&, Event
 
 // 09.06 Before Moving: the advance roll (D6), added to the unit's Move for this move; it stands for the phase (D-005).
 void make_advance_roll(GameState& state, DiceSource& dice, Events& events) {
-    Unit& u = *state.find_unit(move_of(state).unit);
-    u.phase_flags.advance_roll = dice.roll_d6();
-    events.push_back(event::AdvanceRolled{u.id, *u.phase_flags.advance_roll, false});
+    const Unit& u = *state.find_unit(move_of(state).unit);
+    const int roll = dice.roll_d6();
+    events.push_back(event::AdvanceRolled{u.id, roll, false});
+    after_roll(state, RollKind::Advance, u.id, 0, {roll}, {}, events);  // D-096: then 15.02's window, if any
 }
 
 // 09.07 Before Moving: Desperate Escape: a hazard roll for each model (06.03), made once per phase (D-005); the mortal
 // wounds are then allocated by the unit's player (06.02, move_decision).
 void make_desperate_escape_hazard_rolls(GameState& state, DiceSource& dice, Events& events) {
+    Unit& u = *state.find_unit(move_of(state).unit);
+    const std::vector<int> faces = roll_d6s(dice, static_cast<int>(u.models.size()));
+    u.phase_flags.desperate_escape_hazards_made = true;
+    events.push_back(event::HazardRollsMade{u.id, judge_hazard_rolls(u, faces)});
+    after_roll(state, RollKind::Hazard, u.id, 0, faces, {}, events);  // D-096: then 15.02's window, if any
+}
+
+// D-096: the advance roll, or the Desperate Escape's hazard rolls, as they stand once their window closes.
+void apply_move_roll(GameState& state, RollKind roll, const std::vector<int>& faces) {
     MoveInProgress& mv = move_of(state);
     Unit& u = *state.find_unit(mv.unit);
-    const HazardRolls rolls = make_hazard_rolls(dice, u, static_cast<int>(u.models.size()));
-    u.phase_flags.desperate_escape_hazards_made = true;
-    events.push_back(event::HazardRollsMade{u.id, rolls});
-    mv.pending_mortal_wounds = rolls.mortal_wounds;
+    if (roll == RollKind::Advance) {
+        u.phase_flags.advance_roll = faces.at(0);  // 09.06; stands for the phase (D-005)
+    } else if (roll == RollKind::Hazard) {
+        mv.pending_mortal_wounds = judge_hazard_rolls(u, faces).mortal_wounds;  // 06.03
+    } else {
+        throw std::logic_error("movement: a move makes no " + std::string(roll_kind_name(roll)) + " roll");
+    }
 }
 
 // ---- the sub-machine ----

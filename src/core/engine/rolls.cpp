@@ -61,12 +61,17 @@ void apply_details(GameState& state, Side, const action::RollDice& a, DiceSource
 
 void roll_through(GameState& state, DiceSource& dice, Events& events) {
     while (state.pending) {
-        const auto* d = std::get_if<decision::RollDice>(&state.pending->kind);
-        if (d == nullptr) return;
-        const action::RollDice a{d->roll, d->unit};
         const Side side = state.pending->side;
-        state.pending.reset();
-        apply_details(state, side, a, dice, events);  // as apply_in_place, without validating its own answer
+        if (const auto* d = std::get_if<decision::RollDice>(&state.pending->kind)) {
+            const action::RollDice a{d->roll, d->unit};
+            state.pending.reset();
+            apply_details(state, side, a, dice, events);  // as apply_in_place, without validating its own answer
+        } else if (std::holds_alternative<decision::UseStratagems>(state.pending->kind)) {
+            state.pending.reset();
+            apply_details(state, side, action::DeclineStratagems{}, dice, events);  // D-096: every window declined
+        } else {
+            return;
+        }
         advance(state, dice, events);
     }
 }

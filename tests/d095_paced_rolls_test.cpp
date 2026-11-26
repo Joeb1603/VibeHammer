@@ -95,17 +95,25 @@ std::vector<std::filesystem::path> replay_files() {
 // file per replay). M94 ran it with the M93 engine before any roll point moved, then with the M94 engine on the
 // regenerated format-2 files; the two dumps must be identical. Run on purpose only:
 //   WH40K_EVENT_DUMP_DIR=<dir> wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D095_Closure.DISABLED_DumpReplayEvents
+// M95 (D-096): WH40K_EVENT_DUMP_WITHOUT=<event kind> leaves that kind out (DamageRolled, the one event M95 adds to a game
+// without stratagems), so an M95 dump compares with an M94 one. The filter is here, not in a script, so every number
+// keeps the dump's own format.
 TEST(D095_Closure, DISABLED_DumpReplayEvents) {
     const char* dir = std::getenv("WH40K_EVENT_DUMP_DIR");
     if (dir == nullptr) GTEST_SKIP() << "set WH40K_EVENT_DUMP_DIR";
+    const char* without = std::getenv("WH40K_EVENT_DUMP_WITHOUT");
     std::filesystem::create_directories(dir);
     for (const auto& file : replay_files()) {
         SCOPED_TRACE(file.filename().string());
         const Replay replay = load_replay(file);
         const ReplayResult r = run_replay(replay, repo_root());
         ASSERT_TRUE(r.ok()) << "step " << *r.failed_step << ": " << r.reasons.front();
+        std::vector<GameEvent> events = r.events;
+        if (without != nullptr) {
+            std::erase_if(events, [without](const GameEvent& e) { return event_name(e) == std::string_view(without); });
+        }
         std::ofstream out(std::filesystem::path(dir) / file.filename(), std::ios::binary);
-        out << Json{{"events", r.events}, {"state", r.final_state}}.dump() << '\n';
+        out << Json{{"events", events}, {"state", r.final_state}}.dump() << '\n';
     }
 }
 
@@ -435,13 +443,22 @@ TEST(D095_RollPoints, AnAttacksRollsWaitForTheirRollersInTurn) {
     EXPECT_EQ(decision_rule(gs, *gs.pending), "05.04");
     info = roll_dice_info(gs).value();
     EXPECT_EQ(info.expression, "D3");
-    EXPECT_EQ(info.dice, 3);  // three attacks inflict damage (the preview: each D3 at its maximum, D-069)
+    EXPECT_EQ(info.dice, 1);  // D-096 (M95): one attack's D3 (D-069), for the model the casualty order selects
+    EXPECT_EQ(info.model, gs.units[0].models.front().id);
     EXPECT_EQ(info.target, marines);
     EXPECT_EQ(compute_decision(gs), gs.pending);
 
     ScriptedDice damage{6, 6, 6};  // D3 = 3 each: three W2 Intercessors destroyed
-    const auto resolved = roll(gs, damage);
+    std::vector<GameEvent> resolved;
+    for (int i = 0; i < 3; ++i) {
+        // D-096: a Damage roll per attack that inflicts damage, each its own step; the batch resolves after the last.
+        ASSERT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::Damage, gants}}));
+        EXPECT_EQ(compute_decision(gs), gs.pending);
+        const auto more = roll(gs, damage);
+        resolved.insert(resolved.end(), more.begin(), more.end());
+    }
     EXPECT_EQ(damage.consumed(), 3u);
+    EXPECT_EQ(events_of<event::DamageRolled>(resolved).size(), 3u);
     ASSERT_EQ(events_of<event::SavesResolved>(resolved).size(), 1u);
     EXPECT_EQ(events_of<event::ModelDestroyed>(resolved).size(), 3u);
     EXPECT_EQ(gs.units[0].models.size(), 2u);
@@ -570,9 +587,10 @@ TEST(D095_Closure, AnAttacksRollsAreMadeAsBefore) {
         ScriptedDice dice{6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 1, 1, 1};
         apply_action(gs, Side::B, v.shoot, dice);
         const UnitId marines = gs.units[0].id;
+        // D-096 (M95): one Damage roll per attack that inflicts damage (three here).
         EXPECT_EQ(expect_closure(gs, Side::A, action::OrderCasualties{marines, wh40k::test::model_ids(gs.units[0])},
                                  {4, 2, 6}),
-                  (std::vector<RollKind>{RollKind::Damage}));
+                  (std::vector<RollKind>(3, RollKind::Damage)));
     }
     {
         const Volley v = fleshborer_volley([](WeaponProfile& p) { p.attacks = kD3; });
@@ -590,10 +608,14 @@ TEST(D095_Closure, AnAttacksRollsAreMadeAsBefore) {
 
 namespace {
 
+// The steps a format-1 file records: without the rolls (D-095) and the declined windows (D-096).
 std::vector<ReplayStep> without_rolls(const std::vector<ReplayStep>& steps) {
     std::vector<ReplayStep> out;
     for (const ReplayStep& s : steps) {
-        if (!std::holds_alternative<action::RollDice>(s.action)) out.push_back(s);
+        if (!std::holds_alternative<action::RollDice>(s.action) &&
+            !std::holds_alternative<action::DeclineStratagems>(s.action)) {
+            out.push_back(s);
+        }
     }
     return out;
 }
@@ -610,7 +632,7 @@ TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
         ++files;
         const Replay saved = load_replay(file);
         const Replay paced = with_roll_steps(saved, repo_root());
-        EXPECT_EQ(paced.format, kReplayFormatRollsRecorded);
+        EXPECT_EQ(paced.format, kReplayFormatWindowsRecorded);  // D-096 (M95): format 3
         Replay at_once = paced;
         at_once.format = kReplayFormatRollsInline;
         at_once.steps = without_rolls(paced.steps);
@@ -724,7 +746,7 @@ constexpr std::uint64_t kM94Seed = 1;  // picked by D095_Replay.DISABLED_SearchM
 Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
-    r.format = kReplayFormatRollsRecorded;
+    r.format = kReplayFormatWindowsRecorded;  // M95 (D-096): format 3
     r.description =
         "M94 (D-095): engine-paced dice rolls, every roll a RollDice step answered by its roller. The V1 scenario with "
         "4 of the 10 Termagants (below half-strength), 1\" from the Intercessors (engaged), their fleshborers a "
@@ -823,7 +845,7 @@ const std::filesystem::path kM94Replay = kReplayDir / "m94_paced_rolls.json";
 
 TEST(D095_Replay, ThePacedRollsReplayAnswersEveryKindOfRollAsAStep) {
     const Replay saved = load_replay(kM94Replay);
-    EXPECT_EQ(saved.format, kReplayFormatRollsRecorded);
+    EXPECT_EQ(saved.format, kReplayFormatWindowsRecorded);  // regenerated as format 3 in M95 (D-096)
     const ReplayResult run = run_replay(saved, repo_root());
     ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
     EXPECT_EQ(replay_expectation(run.final_state), saved.expect);
@@ -891,25 +913,28 @@ TEST(D095_Replay, DISABLED_RegenerateM94Replay) {
 // ---- Format 1 (every roll inside its step) still loads; with_roll_steps makes it format 2 ----
 
 TEST(D095_Replays, AFormatOneReplayStillRunsAndConvertsToItsFormatTwoFile) {
-    // tests/data/legacy/ keeps two replays as M93 wrote them (format 1). Each runs as before (every roll inside its
-    // step), and with_roll_steps turns it into exactly the regenerated file.
+    // tests/data/legacy/ keeps two replays as M93 wrote them (format 1) and as M94 wrote them (format 2, D-096). Each runs
+    // as before, and with_roll_steps turns either into exactly the regenerated file (format 3 since M95).
     for (const std::string name : {"m8_shooting", "m62_random_characteristics"}) {
         SCOPED_TRACE(name);
-        const Replay legacy = load_replay(repo_root() / "tests/data/legacy" / (name + "_format1.json"));
-        EXPECT_EQ(legacy.format, kReplayFormatRollsInline);
-        const ReplayResult run = run_replay(legacy, repo_root());
-        ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
-        EXPECT_EQ(replay_expectation(run.final_state), legacy.expect);
         const Replay current = load_replay(kReplayDir / (name + ".json"));
-        EXPECT_EQ(current.format, kReplayFormatRollsRecorded);
-        EXPECT_EQ(Json(with_roll_steps(legacy, repo_root())).dump(2), Json(current).dump(2));
-        EXPECT_EQ(with_roll_steps(current, repo_root()), current);  // format 2: as it is
+        EXPECT_EQ(current.format, kReplayFormatWindowsRecorded);
+        EXPECT_EQ(with_roll_steps(current, repo_root()), current);  // format 3: as it is
+        for (const std::string format : {"format1", "format2"}) {
+            SCOPED_TRACE(format);
+            const Replay legacy = load_replay(repo_root() / "tests/data/legacy" / (name + "_" + format + ".json"));
+            EXPECT_EQ(legacy.format, format == "format1" ? kReplayFormatRollsInline : kReplayFormatRollsRecorded);
+            const ReplayResult run = run_replay(legacy, repo_root());
+            ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
+            EXPECT_EQ(replay_expectation(run.final_state), legacy.expect);
+            EXPECT_EQ(Json(with_roll_steps(legacy, repo_root())).dump(2), Json(current).dump(2));
+        }
     }
 }
 
 TEST(D095_Replays, AnUnknownFormatIsRefusedAndARollStepCantStandInAFormatOneReplay) {
     Json j = Json(load_replay(kReplayDir / "m8_shooting.json"));
-    j["format"] = 3;
+    j["format"] = 4;  // D-096 (M95): 3 is the current format
     EXPECT_THROW((void)j.get<Replay>(), DataError);
     // Format 1 makes every roll inside its step: a RollDice step there answers nothing (05.01: no roll is waiting).
     Replay r = load_replay(kReplayDir / "m8_shooting.json");

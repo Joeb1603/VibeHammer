@@ -62,7 +62,12 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::ObjectiveControlChanged>) return {"ObjectiveControlChanged", "14.02"};
     else if constexpr (std::is_same_v<T, event::VictoryPointsScored>) return {"VictoryPointsScored", "D-084"};
     else if constexpr (std::is_same_v<T, event::AttacksRetargeted>) return {"AttacksRetargeted", "D-093"};
-    else static_assert(sizeof(T) == 0, "unhandled event");
+    else if constexpr (std::is_same_v<T, event::DamageRolled>) return {"DamageRolled", "05.04"};  // D-096
+    else if constexpr (std::is_same_v<T, event::StratagemUsed>) return {"StratagemUsed", "15.01"};
+    else if constexpr (std::is_same_v<T, event::DiceRerolled>) return {"DiceRerolled", "15.02"};
+    else if constexpr (std::is_same_v<T, event::BattleShockPassedAutomatically>) {
+        return {"BattleShockPassedAutomatically", "15.04"};
+    } else static_assert(sizeof(T) == 0, "unhandled event");
 }
 
 }  // namespace

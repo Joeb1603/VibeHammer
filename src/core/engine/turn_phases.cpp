@@ -93,6 +93,7 @@ void on_leave_stage(GameState& state, Events& events) {
     const Side side = turn_side(state);
     if (is_phase_end(stage)) {
         update_objective_control(state, true, events);  // 14.02: at the end of each phase (D-084, M86)
+        end_phase_stratagems(state);                    // D-096: 15.01's "in the same phase" ends
         events.push_back(event::PhaseEnded{phase_of(stage), side});
     }
     switch (stage) {

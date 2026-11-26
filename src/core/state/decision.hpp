@@ -31,6 +31,15 @@ enum class RollKind : std::uint8_t {
 [[nodiscard]] std::optional<RollKind> roll_kind_from_name(std::string_view name);
 [[nodiscard]] std::string_view roll_rule(RollKind roll);  // the roll's own rule, e.g. "05.01"
 
+// D-096 (M95): when a reaction window comes (01.03.02, core/state/stratagems.hpp). Appended at the end only.
+enum class WindowTiming : std::uint8_t {
+    AfterRoll,   // just after a player makes a roll (15.02 Command Re-roll)
+    BeforeRoll,  // just before a player makes a roll (15.04 Insane Bravery)
+};
+
+[[nodiscard]] std::string_view window_timing_name(WindowTiming t);  // "AfterRoll"; also the JSON name
+[[nodiscard]] std::optional<WindowTiming> window_timing_from_name(std::string_view name);
+
 namespace decision {
 // 09.02 Move Units: select a friendly unit that has not been selected to move, and its move type.
 struct MoveUnits {
@@ -128,6 +137,14 @@ struct RollDice {
     UnitId unit;
     friend bool operator==(const RollDice&, const RollDice&) = default;
 };
+// D-096 (M95): a reaction window (01.03.02): the deciding side can use one of its stratagems that this timing allows
+// (15.01), or decline. `unit` is the unit the window's roll is for; the roll itself and its dice are in
+// FlowState::window. Its answers are action::DeclineStratagems (listed first) and action::UseStratagem.
+struct UseStratagems {
+    WindowTiming timing = WindowTiming::AfterRoll;
+    UnitId unit;
+    friend bool operator==(const UseStratagems&, const UseStratagems&) = default;
+};
 }  // namespace decision
 
 // Appended at the end only: the bots' state_hash hashes the index (D-054).
@@ -137,7 +154,7 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits,
-                                  decision::RetargetAttacks, decision::RollDice>;
+                                  decision::RetargetAttacks, decision::RollDice, decision::UseStratagems>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)

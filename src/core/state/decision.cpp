@@ -67,6 +67,21 @@ std::string_view roll_rule(RollKind roll) {
     return "?";
 }
 
+std::string_view window_timing_name(WindowTiming t) {
+    switch (t) {
+        case WindowTiming::AfterRoll: return "AfterRoll";
+        case WindowTiming::BeforeRoll: return "BeforeRoll";
+    }
+    return "?";
+}
+
+std::optional<WindowTiming> window_timing_from_name(std::string_view name) {
+    for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll}) {
+        if (window_timing_name(t) == name) return t;
+    }
+    return std::nullopt;
+}
+
 std::string_view decision_rule(const PendingDecision& d) {
     return std::visit(
         [](const auto& k) -> std::string_view {
@@ -90,6 +105,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::DeployUnits>) return "03.02";  // D-081
             else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) return "D-093";  // 04.03.03 (app-only)
             else if constexpr (std::is_same_v<T, decision::RollDice>) return roll_rule(k.roll);  // D-095
+            else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "15.01";  // D-096
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         d.kind);
@@ -118,6 +134,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::DeployUnits>) return "DeployUnits";
             else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) return "RetargetAttacks";
             else if constexpr (std::is_same_v<T, decision::RollDice>) return "RollDice";
+            else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "UseStratagems";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         kind);
@@ -169,6 +186,10 @@ std::string what_to_do(const PendingDecision& d) {
                        "'s attacks whose target is gone";  // D-093
             } else if constexpr (std::is_same_v<T, decision::RollDice>) {
                 return "make " + std::string(roll_noun(k.roll)) + " for unit " + std::to_string(k.unit.v);  // D-095
+            } else if constexpr (std::is_same_v<T, decision::UseStratagems>) {
+                // D-096: a reaction window, just after or just before a roll for the unit.
+                return std::string("use a stratagem ") + (k.timing == WindowTiming::AfterRoll ? "after" : "before") +
+                       " a roll for unit " + std::to_string(k.unit.v) + ", or decline";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled decision");
             }
@@ -193,6 +214,11 @@ std::string_view decision_rule(const GameState& state, const PendingDecision& d)
         // D-095: why the roll is made, where its own rule (roll_rule) doesn't say.
         if (r->roll == RollKind::Hazard) return state.flow.attack ? "24.15" : "09.07";
         if (r->roll == RollKind::BattleShock) return state.flow.stage == Stage::BattleShock ? "08.03" : "09.07";
+    }
+    if (const auto* w = std::get_if<decision::UseStratagems>(&d.kind)) {
+        // D-096: the stratagem the window's timing is for: just after a roll, Command Re-roll; just before the 08.03
+        // battle-shock roll, Insane Bravery.
+        return w->timing == WindowTiming::AfterRoll ? "15.02" : "15.04";
     }
     return decision_rule(d);
 }

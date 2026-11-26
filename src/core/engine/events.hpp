@@ -292,6 +292,46 @@ struct VictoryPointsScored {  // D-084 (M86): a player scores an objective they 
     int total = 0;  // the side's objective VP after scoring
     friend bool operator==(const VictoryPointsScored&, const VictoryPointsScored&) = default;
 };
+// D-096 (M95): one attack's random D, rolled once its model is selected (05.04 Resolve Damage, D-069): the attacking
+// unit's player makes it (a Damage roll per attack that inflicts damage). The damage is resolved with the batch, at
+// its end (SavesResolved).
+struct DamageRolled {
+    UnitId attacker;
+    UnitId target;
+    ModelId model;  // the model selected for the attack (05.04 Select Model)
+    DiceExpr damage;  // the weapon's D
+    CharacteristicRoll roll;
+    friend bool operator==(const DamageRolled&, const DamageRolled&) = default;
+};
+// D-096 (M95): a stratagem is used (15.01): its target is selected and its CP are paid; its effect follows.
+struct StratagemUsed {
+    Side side = Side::A;
+    Stratagem stratagem = Stratagem::CommandReroll;
+    UnitId unit;
+    int cost = 0;
+    int cp_left = 0;  // the side's CP after paying
+    friend bool operator==(const StratagemUsed&, const StratagemUsed&) = default;
+};
+// D-096 (M95): what a re-rolled roll is now: the roll's own event, rebuilt from its dice after the re-roll.
+using RerolledRoll = std::variant<AdvanceRolled, ChargeRolled, HazardRollsMade, AttackDiceRolled, HitRollsMade,
+                                  WoundRollsMade, SaveRollsMade, DamageRolled>;
+// D-096 (M95): 15.02 Command Re-roll: the roll's dice before and after (01.05.02: a die is re-rolled once, before
+// modifiers), and the roll as it now stands.
+struct DiceRerolled {
+    RollKind roll = RollKind::Hit;
+    UnitId unit;
+    std::optional<std::size_t> die;  // the die picked; absent for a roll re-rolled in full (a charge roll, 15.02)
+    std::vector<int> before;
+    std::vector<int> after;
+    RerolledRoll result;
+    friend bool operator==(const DiceRerolled&, const DiceRerolled&) = default;
+};
+// D-096 (M95): 15.04 Insane Bravery: the unit's battle-shock roll is automatically successful (01.05.01): no dice are
+// rolled, and the unit does not become battle-shocked.
+struct BattleShockPassedAutomatically {
+    UnitId unit;
+    friend bool operator==(const BattleShockPassedAutomatically&, const BattleShockPassedAutomatically&) = default;
+};
 }  // namespace event
 
 // New alternatives are appended at the end, so every existing index stays the same.
@@ -309,7 +349,8 @@ using GameEvent =
                  event::SavesResolved, event::ModelDestroyed, event::UnitDestroyed, event::AttacksLost,
                  event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled, event::DeploymentStarted,
                  event::UnitSetUp, event::UnitNotSetUp, event::ObjectiveControlChanged,
-                 event::VictoryPointsScored, event::AttacksRetargeted>;
+                 event::VictoryPointsScored, event::AttacksRetargeted, event::DamageRolled,
+                 event::StratagemUsed, event::DiceRerolled, event::BattleShockPassedAutomatically>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

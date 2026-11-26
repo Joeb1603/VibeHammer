@@ -22,6 +22,7 @@ add_library(wh40k_core STATIC
     engine/replay.cpp
     engine/rolls.cpp
     engine/shooting.cpp
+    engine/stratagems.cpp
     engine/turn_phases.cpp
     geometry/closest.cpp
     geometry/coherency.cpp
@@ -56,6 +57,7 @@ add_library(wh40k_core STATIC
     state/objectives.cpp
     state/points_destroyed.cpp
     state/queries.cpp
+    state/stratagems.cpp
     state/terrain.cpp)
 
 # Consumers include core headers as "core/....hpp".

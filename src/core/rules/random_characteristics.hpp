@@ -19,6 +19,8 @@ namespace wh40k::core {
 // 01.05: rolls `expr`: one D6 per die, in order, each halved (rounding up) for a D3, then the modifier is added. A fixed
 // expression rolls no dice and gives its value.
 [[nodiscard]] CharacteristicRoll roll_characteristic(DiceSource& dice, const DiceExpr& expr);
+// D-096 (M95): the same from dice already rolled (`faces`: exactly expr.num_dice of them).
+[[nodiscard]] CharacteristicRoll characteristic_from_faces(const DiceExpr& expr, std::span<const int> faces);
 
 // D-069 (amends D-051): what the casualty-decision check and the casualty preview use for a random D, without
 // touching the dice: the most it can roll (D6+1: 7), with no dice.
@@ -27,5 +29,10 @@ namespace wh40k::core {
 // D-069 (04.03 Gather Attack Dice): each random A of a batch is rolled for its model and weapon, in the order given
 // (the selections' order); its bonus dice are added after the roll (AttackDiceRoll::total).
 [[nodiscard]] std::vector<AttackDiceRoll> roll_random_attacks(DiceSource& dice, std::span<const RandomAttackDice> random);
+// D-096 (M95): the same from dice already rolled, in order (each roll takes its expression's number of dice).
+[[nodiscard]] std::vector<AttackDiceRoll> random_attacks_from_faces(std::span<const RandomAttackDice> random,
+                                                                    std::span<const int> faces);
+// The number of dice those rolls take.
+[[nodiscard]] int random_attack_dice_count(std::span<const RandomAttackDice> random);
 
 }  // namespace wh40k::core

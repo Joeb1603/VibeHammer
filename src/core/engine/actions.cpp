@@ -35,6 +35,8 @@ std::string_view action_name(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::CannotSetUp>) return "CannotSetUp";
             else if constexpr (std::is_same_v<T, action::RetargetAttacks>) return "RetargetAttacks";
             else if constexpr (std::is_same_v<T, action::RollDice>) return "RollDice";
+            else if constexpr (std::is_same_v<T, action::UseStratagem>) return "UseStratagem";
+            else if constexpr (std::is_same_v<T, action::DeclineStratagems>) return "DeclineStratagems";
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -71,6 +73,8 @@ std::string_view action_rule(const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::CannotSetUp>) return "D-081";
             else if constexpr (std::is_same_v<T, action::RetargetAttacks>) return "D-093";
             else if constexpr (std::is_same_v<T, action::RollDice>) return roll_rule(x.roll);  // D-095
+            else if constexpr (std::is_same_v<T, action::UseStratagem>) return stratagem_rule(x.stratagem);  // D-096
+            else if constexpr (std::is_same_v<T, action::DeclineStratagems>) return "15.01";  // D-096
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);

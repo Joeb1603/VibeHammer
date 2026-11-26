@@ -323,7 +323,7 @@ TerrainReplay play_terrain_replay(std::uint64_t seed) {
         count();
     }
     out.replay.steps = session.history();
-    out.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
+    out.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     out.replay.expect = replay_expectation(session.state());
     return out;
 }

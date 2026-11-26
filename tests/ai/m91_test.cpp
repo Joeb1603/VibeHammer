@@ -450,7 +450,7 @@ M91Game play_m91_bot_game(std::uint64_t seed = kM91Seed) {
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
     g.record = play_bot_session(session, config(m91_weights()), config(m91_weights()), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
+    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

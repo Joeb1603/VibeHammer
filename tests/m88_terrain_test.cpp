@@ -843,7 +843,9 @@ TEST(D088_Redundancy, AFeatureInsideAnObscuringAreaBlocksNothingTheAreaDoesNot) 
 // ---- The M88 replay (tests/replays/m88_terrain.json): checked with core only ----
 
 TEST(M88_Replay, TheTerrainReplayShowsCoverADetourAndAHiddenTargetWithCoreOnly) {
-    const Replay saved = load_replay(std::filesystem::path(WH40K_REPLAY_DIR) / "m88_terrain.json");
+    // M95 (D-096): an older file is walked as its format-3 form (each roll and window a step).
+    const Replay saved =
+        with_roll_steps(load_replay(std::filesystem::path(WH40K_REPLAY_DIR) / "m88_terrain.json"), repo_root());
     ASSERT_TRUE(saved.initial.scenario.has_value());
     EXPECT_EQ(*saved.initial.scenario, kTerrainScenario);
     const ReplayResult r = run_replay(saved, repo_root());
@@ -852,7 +854,7 @@ TEST(M88_Replay, TheTerrainReplayShowsCoverADetourAndAHiddenTargetWithCoreOnly) 
     // Step by step: 13.08 cover on a selection; a MONSTER's two-leg move whose straight line would cross a dense wall
     // it can't move through (13.06); a target refused for 13.09 at a Shoot.
     GameState gs = replay_initial_state(saved, repo_root());
-    const bool paced = saved.format == kReplayFormatRollsRecorded;  // M94 (D-095): each roll a step of its own
+    const bool paced = saved.format == kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each a step
     if (paced) {
         start_game_paced(gs);
     } else {

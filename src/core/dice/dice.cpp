@@ -56,6 +56,13 @@ int roll_d3(DiceSource& dice) {
     return (dice.roll_d6() + 1) / 2;
 }
 
+std::vector<int> roll_d6s(DiceSource& dice, int count) {
+    std::vector<int> out;
+    out.reserve(static_cast<std::size_t>(count > 0 ? count : 0));
+    for (int i = 0; i < count; ++i) out.push_back(dice.roll_d6());
+    return out;
+}
+
 TwoD6 roll_2d6(DiceSource& dice) {
     TwoD6 r;
     r.dice[0] = dice.roll_d6();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <span>
 #include <vector>
 
 #include "core/dice/dice.hpp"
@@ -42,5 +43,7 @@ struct HazardRolls {
 
 // 06.03: makes `count` hazard rolls simultaneously. The caller inflicts the mortal wounds (06.02).
 [[nodiscard]] HazardRolls make_hazard_rolls(DiceSource& dice, const Unit& unit, int count);
+// D-096 (M95): the results of hazard-roll dice already rolled for `unit` (06.03), as make_hazard_rolls judges them.
+[[nodiscard]] HazardRolls judge_hazard_rolls(const Unit& unit, std::span<const int> faces);
 
 }  // namespace wh40k::core

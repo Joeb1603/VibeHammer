@@ -122,6 +122,7 @@ TEST(M62_DiceCards, SeveralModelsGetOneLineEachAndTheTotal) {
 }
 
 TEST(M62_DiceCards, TheDamageCardShowsEachRollWithItsModel) {
+    // D-096 (M95): one card per Damage roll (each attack's D3, D-069), each naming the model the attack's damage goes to.
     std::vector<GameEvent> shoot;
     GameState gs = three_failed_saves_d3(&shoot);
     const std::vector<ModelId> ids = model_ids(gs.units[kMarines]);
@@ -131,17 +132,20 @@ TEST(M62_DiceCards, TheDamageCardShowsEachRollWithItsModel) {
         LogEntry{"Shoot", shoot},
         LogEntry{"Casualties", apply_action(gs, Side::A, action::OrderCasualties{gs.units[kMarines].id, priority}, damage)}};
     const auto cards = dice_cards(gs, log, 1);
-    const DiceCard* card = find_card(cards, "Damage rolls");
-    ASSERT_NE(card, nullptr);
-    EXPECT_EQ(card->rule, "05.04");
-    EXPECT_EQ(card->roller, Side::B);  // the attacker's weapon's D
-    EXPECT_NE(card->need.find("Random D (D3)"), std::string::npos) << card->need;
-    EXPECT_EQ(card->dice, (std::vector<DieFace>{DieFace{1, true, false, true}, DieFace{1, true, false, true},
-                                                DieFace{6, true, false, true}}));
+    ASSERT_EQ(cards.size(), 3u);
     const std::string a = std::to_string(ids[3].v);
     const std::string b = std::to_string(ids[1].v);
-    EXPECT_EQ(card->result, "1[1] = 1 -> model " + a + " (-1); 1[1] = 1 -> model " + a + " (destroyed); 3[6] = 3 -> model " +
-                                b + " (destroyed, 1 lost)");
+    const std::vector<std::pair<int, std::string>> expected{
+        {1, "1[1] = 1 damage to model " + a}, {1, "1[1] = 1 damage to model " + a}, {6, "3[6] = 3 damage to model " + b}};
+    for (std::size_t i = 0; i < cards.size(); ++i) {
+        const DiceCard& card = cards[i];
+        EXPECT_EQ(card.title, "Damage roll");
+        EXPECT_EQ(card.rule, "05.04");
+        EXPECT_EQ(card.roller, Side::B);  // the attacker's weapon's D
+        EXPECT_NE(card.need.find("Random D (D3)"), std::string::npos) << card.need;
+        EXPECT_EQ(card.dice, (std::vector<DieFace>{DieFace{expected[i].first, true, false, true}}));
+        EXPECT_EQ(card.result, expected[i].second);
+    }
     // A fixed D has no damage card.
     GameState fixed = wh40k::test::shoot_step_state(Side::B);
     ScriptedDice dice{6, 6, 1, 1};
@@ -154,7 +158,7 @@ TEST(M62_DiceCards, TheDamageCardShowsEachRollWithItsModel) {
                                                                                 model_ids(fixed.units[kMarines])},
                                                         none)});
     const auto fixed_cards = dice_cards(fixed, plain, 1);
-    EXPECT_EQ(find_card(fixed_cards, "Damage rolls"), nullptr);
+    EXPECT_EQ(find_card(fixed_cards, "Damage roll"), nullptr);
 }
 
 TEST(M62_ClientText, TheNewEventsAreLoggedAsRolls) {
@@ -174,9 +178,11 @@ TEST(M62_ClientText, TheNewEventsAreLoggedAsRolls) {
     r.steps = {step};
     const event::SavesResolved saves{UnitId{2}, r};
     EXPECT_EQ(format_event(saves), "[05.04] 1 failed save(s), 0 destroyed; damage rolls: 5 (rolled 4) on model 6");
-    EXPECT_TRUE(is_roll_event(saves));
-    r.steps[0].damage_roll.reset();
-    EXPECT_FALSE(is_roll_event(event::SavesResolved{UnitId{2}, r}));
+    // D-096 (M95): the damage rolls are in the dice log as their own DamageRolled events; SavesResolved repeats them.
+    EXPECT_FALSE(is_roll_event(saves));
+    const event::DamageRolled rolled_d{UnitId{1}, UnitId{2}, ModelId{6}, DiceExpr{1, 6, 1}, CharacteristicRoll{{4}, 5}};
+    EXPECT_EQ(format_event(rolled_d), "[05.04] Damage roll for model 6 of unit 2: D6+1 -> 4+1 = 5");
+    EXPECT_TRUE(is_roll_event(rolled_d));
 
     const event::AttacksLost lost{UnitId{2}, 1, 0, {RandomAttackDice{0, ModelId{6}, DiceExpr{1, 6, 3}, 1}}};
     EXPECT_EQ(format_event(lost), "[D-093] 1 + D6+3 attacks against unit 2 are lost (not rolled)");

@@ -179,7 +179,7 @@ BotGame play_custom_bot_game(std::uint64_t seed = kReplaySeed) {
     wh40k::client::GameSession session(replay_initial_state(g.replay, repo_root()));
     g.record = play_bot_session(session, normal_bot(), normal_bot(), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
+    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }
