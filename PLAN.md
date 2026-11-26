@@ -250,7 +250,8 @@ no filter; the 31 replays regenerated as format 5 are each their format-4 file c
 replays named); `m97_stratagems.json` shows both stratagems (Explosives: 3 mortal wounds on the Hive Tyrant, then the
 Legionaries shoot; Crushing Impact: 2 on the Legionaries, then 1 on the Tyrant). The bots' identity set at the defaults
 is the M96 binary's in every field but `steps` and `actions` (2,600 games; 1,170 declined windows added). Head-to-heads (400
-games each, all clean): Explosives +6, Crushing Impact -10, both -4, so both keys stay off by default. P95_PLAN_TBD The full
+games each, all clean): Explosives +6, Crushing Impact -10, both -4, so both keys stay off by default. p95 unchanged
+(8.9 to 9.0 ms on the rosters, 13.8 to 13.4 ms on terrain, 9.0 to 8.9 ms on the objective scenario). The full
 `ctest` is green.
 
 **Open items.**
