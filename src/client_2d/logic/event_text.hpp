@@ -11,7 +11,7 @@ namespace wh40k::client {
 [[nodiscard]] std::string format_event(const core::GameEvent& event);
 
 // The dice log: events that report dice rolls (hit, wound, save, advance, charge, hazard, battle-shock; D-069: random
-// A, and a random D's damage rolls in SavesResolved).
+// A; D-096: each damage roll, each re-roll, and an automatic pass).
 [[nodiscard]] bool is_roll_event(const core::GameEvent& event);
 
 // D-069: a random characteristic's roll, e.g. "D6+3 -> 4+3 = 7" or "D3 -> 2[3] = 2" (a D3 shows its D6 in brackets).

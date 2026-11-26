@@ -226,6 +226,43 @@ void make_attack_roll(GameState& state, RollKind roll, DiceSource& dice, Events&
 // The dice of the attack in progress's pending roll (RollDiceInfo::dice, ::expression, ::target); attack_flow.cpp.
 void describe_attack_roll(const GameState& state, RollKind roll, RollDiceInfo& info);
 
+// ---- stratagems.cpp: D-096 (M95) reaction windows (01.03.02) and stratagems (15) ----
+
+// Called by each roll point once its dice are rolled and its event emitted: opens a window just after the roll if a
+// side can use a stratagem there (the roll then waits in FlowState::window, `faces` parked in it), or applies the roll
+// at once (as in M94). `batch`: the attack batch of an attack roll. `rerolled`: dice already re-rolled (Twin-linked's,
+// 01.05.02).
+void after_roll(GameState& state, RollKind roll, UnitId unit, std::size_t batch, std::vector<int> faces,
+                std::vector<std::size_t> rerolled, Events& events);
+// 08.03: opens the window just before the front battle-shock test's roll if Insane Bravery can be used there (15.04).
+void offer_battle_shock_window(GameState& state);
+// The open window's decision (the side whose turn it is in the window, 01.03.02), or nullopt.
+[[nodiscard]] std::optional<PendingDecision> window_decision(const GameState& state);
+// 15.01: the end of a phase ends both sides' per-phase records.
+void end_phase_stratagems(GameState& state);
+
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::UseStratagems& d);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::UseStratagem& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
+                                                const action::DeclineStratagems& a);
+void apply_details(GameState& state, Side side, const action::UseStratagem& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::DeclineStratagems& a, DiceSource& dice,
+                   Events& events);
+
+// Each roll module: a roll's consequence (M94's code) once its window closes, or at once; and its event rebuilt from its
+// dice after a re-roll.
+void apply_move_roll(GameState& state, RollKind roll, const std::vector<int>& faces);  // Advance, Hazard (09.07)
+void apply_charge_roll(GameState& state, const std::vector<int>& faces, Events& events);  // 11.02, charge.cpp
+[[nodiscard]] event::ChargeRolled charge_roll_result(const GameState& state, UnitId unit,
+                                                     const std::vector<int>& faces);
+// RandomAttacks, Hit, Wound, Save, Damage and [HAZARDOUS]'s Hazard rolls; attack_flow.cpp.
+void apply_attack_roll(GameState& state, RollKind roll, std::size_t batch, const std::vector<int>& faces,
+                       Events& events);
+[[nodiscard]] event::RerolledRoll attack_roll_result(const GameState& state, RollKind roll, std::size_t batch,
+                                                     const std::vector<int>& faces);
+// 15.04: the front battle-shock test (08.03) passes automatically (01.05.01): no dice; command.cpp.
+void pass_battle_shock_automatically(GameState& state, UnitId unit, Events& events);
+
 // ---- helpers ----
 // Every non-empty subset of `ids` (at most 2^10 - 1), in bit order: the target sets legal_actions lists
 // for charges (11.04), pile-ins (12.03) and consolidations (12.08). Defined in fight.cpp.

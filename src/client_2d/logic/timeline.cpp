@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "core/data/load_error.hpp"
 #include "core/engine/engine.hpp"
 
 namespace wh40k::client {
@@ -23,11 +24,23 @@ std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Si
 
 }  // namespace
 
-Timeline Timeline::from_replay(const core::Replay& replay, const std::filesystem::path& repo_root,
+Timeline Timeline::from_replay(const core::Replay& given, const std::filesystem::path& repo_root,
                                std::string source) {
     Timeline t;
     t.source_ = std::move(source);
-    const bool paced = replay.format == core::kReplayFormatRollsRecorded;
+    // D-096: a format-2 replay is shown as its format-3 form (its windows declined, its damage rolled per attack);
+    // format 1 still plays inline.
+    core::Replay replay = given;
+    if (replay.format == core::kReplayFormatRollsRecorded) {
+        try {
+            replay = core::with_roll_steps(given, repo_root);
+        } catch (const core::DataError& e) {
+            t.error_ = e.what();
+            t.frames_.push_back(first_frame(core::replay_initial_state(given, repo_root), true));
+            return t;
+        }
+    }
+    const bool paced = replay.format == core::kReplayFormatWindowsRecorded;
     t.frames_.push_back(first_frame(core::replay_initial_state(replay, repo_root), paced));
     for (std::size_t i = 0; i < replay.steps.size(); ++i) {
         const core::ReplayStep& step = replay.steps[i];

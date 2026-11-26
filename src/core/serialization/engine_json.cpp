@@ -202,6 +202,20 @@ void from_json(const Json& j, RollKind& v) {
     v = *r;
 }
 
+// ---- D-096: stratagems and reaction windows ----
+void to_json(Json& j, Stratagem v) { j = std::string(stratagem_key(v)); }
+void from_json(const Json& j, Stratagem& v) {
+    const std::optional<Stratagem> s = j.is_string() ? stratagem_from_key(j.get<std::string>()) : std::nullopt;
+    if (!s) json_detail::bad_enum("Stratagem", j);
+    v = *s;
+}
+void to_json(Json& j, WindowTiming v) { j = std::string(window_timing_name(v)); }
+void from_json(const Json& j, WindowTiming& v) {
+    const std::optional<WindowTiming> t = j.is_string() ? window_timing_from_name(j.get<std::string>()) : std::nullopt;
+    if (!t) json_detail::bad_enum("WindowTiming", j);
+    v = *t;
+}
+
 // ---- actions ----
 namespace action {
 
@@ -265,6 +279,10 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, RollDice>) {
                 j["roll"] = a.roll;  // D-095
                 j["unit"] = a.unit;
+            } else if constexpr (std::is_same_v<T, UseStratagem>) {
+                j["stratagem"] = a.stratagem;  // D-096
+                j["unit"] = a.unit;
+                if (a.die) j["die"] = *a.die;  // omitted when absent (a charge roll, Insane Bravery)
             }
         },
         v);
@@ -333,6 +351,12 @@ void from_json(const Json& j, GameAction& v) {
         v = RetargetAttacks{j.at("retargets").get<std::vector<AttackRetarget>>()};  // D-093
     } else if (kind == "RollDice") {
         v = RollDice{j.at("roll").get<RollKind>(), j.at("unit").get<UnitId>()};  // D-095
+    } else if (kind == "UseStratagem") {
+        UseStratagem a{j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(), std::nullopt};  // D-096
+        if (const auto it = j.find("die"); it != j.end() && !it->is_null()) a.die = it->get<std::size_t>();
+        v = a;
+    } else if (kind == "DeclineStratagems") {
+        v = DeclineStratagems{};  // D-096
     } else {
         bad_enum("GameAction", j);
     }
@@ -497,6 +521,27 @@ void to_json(Json& j, const GameEvent& v) {
                 j["selections"] = e.selections;
                 j["first_batch"] = e.first_batch;
                 j["batches"] = e.batches;
+            } else if constexpr (std::is_same_v<T, DamageRolled>) {
+                j["attacker"] = e.attacker;  // 05.04 (D-069, D-096)
+                j["target"] = e.target;
+                j["model"] = e.model;
+                j["damage"] = e.damage;
+                j["roll"] = e.roll;
+            } else if constexpr (std::is_same_v<T, StratagemUsed>) {
+                j["side"] = e.side;  // 15.01 (D-096)
+                j["stratagem"] = e.stratagem;
+                j["unit"] = e.unit;
+                j["cost"] = e.cost;
+                j["cp_left"] = e.cp_left;
+            } else if constexpr (std::is_same_v<T, DiceRerolled>) {
+                j["roll"] = e.roll;  // 15.02 (D-096)
+                j["unit"] = e.unit;
+                if (e.die) j["die"] = *e.die;  // omitted for a roll re-rolled in full
+                j["before"] = e.before;
+                j["after"] = e.after;
+                j["result"] = std::visit([](const auto& r) { return Json(GameEvent{r}); }, e.result);
+            } else if constexpr (std::is_same_v<T, BattleShockPassedAutomatically>) {
+                j["unit"] = e.unit;  // 15.04 (D-096)
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -633,6 +678,37 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "AttacksRetargeted") {
         v = AttacksRetargeted{j.at("attacker").get<UnitId>(), j.at("retargets").get<std::vector<AttackRetarget>>(),
                               j.at("selections").get<std::vector<WeaponSelection>>(), j.at("first_batch").get<std::size_t>(), j.at("batches").get<std::vector<AttackBatch>>()};
+    } else if (kind == "DamageRolled") {
+        v = DamageRolled{j.at("attacker").get<UnitId>(), j.at("target").get<UnitId>(), j.at("model").get<ModelId>(),
+                         j.at("damage").get<DiceExpr>(), j.at("roll").get<CharacteristicRoll>()};  // D-096
+    } else if (kind == "StratagemUsed") {
+        v = StratagemUsed{j.at("side").get<Side>(), j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(),
+                          j.at("cost").get<int>(), j.at("cp_left").get<int>()};  // D-096
+    } else if (kind == "DiceRerolled") {
+        DiceRerolled d;  // D-096
+        j.at("roll").get_to(d.roll);
+        j.at("unit").get_to(d.unit);
+        if (const auto it = j.find("die"); it != j.end() && !it->is_null()) d.die = it->get<std::size_t>();
+        j.at("before").get_to(d.before);
+        j.at("after").get_to(d.after);
+        const GameEvent result = j.at("result").get<GameEvent>();
+        d.result = std::visit(
+            [&j](const auto& r) -> RerolledRoll {
+                using R = std::decay_t<decltype(r)>;
+                if constexpr (std::is_constructible_v<RerolledRoll, R> &&
+                              (std::is_same_v<R, AdvanceRolled> || std::is_same_v<R, ChargeRolled> ||
+                               std::is_same_v<R, HazardRollsMade> || std::is_same_v<R, AttackDiceRolled> ||
+                               std::is_same_v<R, HitRollsMade> || std::is_same_v<R, WoundRollsMade> ||
+                               std::is_same_v<R, SaveRollsMade> || std::is_same_v<R, DamageRolled>)) {
+                    return r;
+                } else {
+                    bad_enum("DiceRerolled result", j);
+                }
+            },
+            result);
+        v = std::move(d);
+    } else if (kind == "BattleShockPassedAutomatically") {
+        v = BattleShockPassedAutomatically{j.at("unit").get<UnitId>()};  // D-096
     } else {
         bad_enum("GameEvent", j);
     }

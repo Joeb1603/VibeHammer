@@ -49,6 +49,7 @@ void battle_shock_step(GameState& state) {
         if (!u.battle_shocked && !at_or_below_half_strength(u)) continue;
         state.flow.battle_shock_tests.push_back(u.id);
     }
+    offer_battle_shock_window(state);  // D-096: 15.04, just before the first roll
 }
 
 void make_owed_battle_shock_roll(GameState& state, DiceSource& dice, Events& events) {
@@ -64,6 +65,16 @@ void make_owed_battle_shock_roll(GameState& state, DiceSource& dice, Events& eve
         u.battle_shocked = false;  // 08.03: it is no longer battle-shocked
         events.push_back(event::BattleShockEnded{u.id});
     }
+    offer_battle_shock_window(state);  // D-096: 15.04, just before the next unit's roll
+}
+
+// D-096: 15.04 Insane Bravery: the front test's battle-shock roll is automatically successful (01.05.01): no dice are
+// rolled. The unit isn't battle-shocked (01.07 bars the stratagem otherwise), so nothing else changes.
+void pass_battle_shock_automatically(GameState& state, UnitId unit, Events& events) {
+    std::vector<UnitId>& owed = state.flow.battle_shock_tests;
+    if (owed.empty() || owed.front() != unit) throw std::logic_error("D-096: no battle-shock roll is owed by that unit");
+    owed.erase(owed.begin());
+    events.push_back(event::BattleShockPassedAutomatically{unit});
 }
 
 std::optional<PendingDecision> battle_shock_decision(const GameState& state) {

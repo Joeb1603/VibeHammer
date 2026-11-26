@@ -51,19 +51,25 @@ int HitRolls::critical_hits() const {
     }));
 }
 
-HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int attack_dice) {
-    reject_unimplemented(profile);
+std::vector<int> roll_hit_faces(DiceSource& dice, const AttackProfile& profile, int attack_dice) {
+    if (profile.torrent) return {};  // 24.37: automatically hits; no hit roll is made
+    return roll_d6s(dice, attack_dice);
+}
+
+HitRolls judge_hit_rolls(const AttackProfile& profile, int attack_dice, std::span<const int> faces) {
     HitRolls out;
     const int modifier = cap_hit_wound_modifier(profile.hit_modifier);  // D-011
     const int sustained = sustained_hits(profile);                      // 24.36 [SUSTAINED HITS X]
-    for (int i = 0; i < attack_dice; ++i) {
-        HitRoll r;
-        if (profile.torrent) {
+    if (profile.torrent) {
+        for (int i = 0; i < attack_dice; ++i) {
+            HitRoll r;
             r.outcome = HitOutcome::AutoHit;  // 24.37: automatically hits; no hit roll
             out.rolls.push_back(r);
-            continue;
         }
-        const int u = dice.roll_d6();
+        return out;
+    }
+    for (const int u : faces) {
+        HitRoll r;
         const int m = modified_result(u, modifier);
         r.unmodified = u;
         r.modified = m;
@@ -80,6 +86,12 @@ HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int atta
         out.rolls.push_back(r);
     }
     return out;
+}
+
+HitRolls make_hit_rolls(DiceSource& dice, const AttackProfile& profile, int attack_dice) {
+    reject_unimplemented(profile);
+    const std::vector<int> faces = roll_hit_faces(dice, profile, attack_dice);
+    return judge_hit_rolls(profile, attack_dice, faces);
 }
 
 // ---- 05.02 ----
@@ -133,15 +145,18 @@ WoundRoll wound_roll_result(int unmodified, int modifier, int required) {
     return r;
 }
 
-WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits, int toughness) {
-    reject_unimplemented(profile);
+WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::span<const int> faces) {
     WoundRolls out;
     out.required = required_wound_roll(profile.strength, toughness);
     const int modifier = cap_hit_wound_modifier(profile.wound_modifier);  // D-011
-    for (int i = 0; i < hits; ++i) {
-        out.rolls.push_back(wound_roll_result(dice.roll_d6(), modifier, out.required));
-    }
+    for (const int face : faces) out.rolls.push_back(wound_roll_result(face, modifier, out.required));
     return out;
+}
+
+WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits, int toughness) {
+    reject_unimplemented(profile);
+    const std::vector<int> faces = roll_d6s(dice, hits);
+    return judge_wound_rolls(profile, toughness, faces);
 }
 
 // ---- 24.38 [TWIN-LINKED] ----

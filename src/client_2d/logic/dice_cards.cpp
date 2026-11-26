@@ -300,33 +300,14 @@ DiceCard attack_dice_card(const core::GameState& state, const AttackContext& c, 
     return card;
 }
 
-// D-069 (05.04): a random D's damage rolls, one per attack that inflicts damage, rolled once its model was selected.
-std::optional<DiceCard> damage_card(const core::GameState& state, const AttackContext& c,
-                                    const core::InflictDamageResult& result) {
-    const bool any = std::any_of(result.steps.begin(), result.steps.end(),
-                                 [](const core::SaveStep& s) { return s.damage_roll.has_value(); });
-    if (!any) return std::nullopt;
-    DiceCard card{"Damage rolls", attack_purpose(state, c), "", "", "05.04", core::Side::A, {}};
-    if (c.attacker) card.roller = side_of(state, *c.attacker, core::Side::A);  // the attacker's weapon's D
-    const core::AttackBatch* batch = current_batch(c);
-    const core::DiceExpr d = batch != nullptr ? batch->profile.damage : core::DiceExpr{};
-    card.need = damage_need(c);
-    std::string text;
-    for (const core::SaveStep& s : result.steps) {
-        if (!s.damage || !s.damage_roll) continue;
-        for (const int face : s.damage_roll->dice) card.dice.push_back(DieFace{face, true, false, true});
-        std::string line = characteristic_roll_text(d, *s.damage_roll);
-        line = line.substr(line.find("-> ") + 3);  // "4+1 = 5"
-        line += " -> model " + std::to_string(s.damage->model.v);
-        if (s.damage->destroyed) {
-            const int lost = s.damage->damage - s.damage->wounds_lost;
-            line += " (destroyed" + (lost > 0 ? ", " + std::to_string(lost) + " lost" : std::string()) + ")";
-        } else {
-            line += " (-" + std::to_string(s.damage->wounds_lost) + ")";
-        }
-        text += (text.empty() ? "" : "; ") + line;
-    }
-    card.result = text;
+// D-096 (M95): one attack's random D (D-069), rolled once its model was selected (05.04): one card per Damage roll.
+DiceCard damage_roll_card(const core::GameState& state, const AttackContext& c, const core::event::DamageRolled& e) {
+    DiceCard card{roll_label(core::RollKind::Damage), attack_purpose(state, c), damage_need(c), "", "05.04",
+                  side_of(state, e.attacker, core::Side::A), {}};
+    for (const int face : e.roll.dice) card.dice.push_back(DieFace{face, true, false, true});
+    std::string line = characteristic_roll_text(e.damage, e.roll);
+    line = line.substr(line.find("-> ") + 3);  // "4+1 = 5"
+    card.result = line + " damage to model " + std::to_string(e.model.v);
     return card;
 }
 
@@ -417,9 +398,8 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                             c.batches[e.batch].random_attacks.clear();
                         }
                         if (show) cards.push_back(attack_dice_card(state, c, e));
-                    } else if constexpr (std::is_same_v<T, ev::SavesResolved>) {
-                        if (!show) return;
-                        if (std::optional<DiceCard> card = damage_card(state, c, e.result)) cards.push_back(*card);
+                    } else if constexpr (std::is_same_v<T, ev::DamageRolled>) {
+                        if (show) cards.push_back(damage_roll_card(state, c, e));  // D-096: one card per roll
                     } else if constexpr (std::is_same_v<T, ev::AdvanceRolled>) {
                         // D-045: a kept roll (D-005) was not rolled again, so there is nothing to roll.
                         if (!show || e.reused) return;

@@ -34,6 +34,7 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.fight.reset();
     state.flow.forced_fights.clear();
     state.flow.battle_shock_tests.clear();  // D-095
+    state.flow.window.reset();              // D-096
     state.pending.reset();
     events.push_back(event::GameOver{winner, std::move(reason), std::move(points), vp});
 }
@@ -168,6 +169,11 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
     state.pending.reset();
     for (int guard = 0; guard < 100000; ++guard) {
         if (state.flow.stage == Stage::GameOver || state.flow.stage == Stage::NotStarted) {
+            return;
+        }
+        if (state.flow.window) {
+            // D-096: an open window waits for its side first; nothing else moves on until it closes.
+            state.pending = window_decision(state);
             return;
         }
         if (state.flow.stage == Stage::Deploy) {

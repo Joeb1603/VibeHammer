@@ -392,6 +392,7 @@ void to_json(Json& j, const BatchInProgress& v) {
     put_opt(j, "order", v.order);
     put_opt(j, "save_rolls", v.save_rolls);
     if (v.priority) j["priority"] = *v.priority;  // D-095: omitted when absent
+    if (!v.damage_rolls.empty()) j["damage_rolls"] = v.damage_rolls;  // D-096: omitted when empty
 }
 void from_json(const Json& j, BatchInProgress& v) {
     j.at("batch").get_to(v.batch);
@@ -403,6 +404,8 @@ void from_json(const Json& j, BatchInProgress& v) {
     if (const auto it = j.find("priority"); it != j.end() && !it->is_null()) {
         v.priority = it->get<std::vector<ModelId>>();
     }
+    v.damage_rolls.clear();
+    if (const auto it = j.find("damage_rolls"); it != j.end()) it->get_to(v.damage_rolls);
 }
 
 void to_json(Json& j, const BatchRolls& v) {
@@ -455,6 +458,35 @@ void from_json(const Json& j, AttackFlow& v) {
     if (const auto it = j.find("rolling"); it != j.end() && !it->is_null()) v.rolling = it->get<BatchRolls>();
 }
 
+// D-096 (M95): the open reaction window.
+void to_json(Json& j, const StratagemWindow& v) {
+    j = Json{{"timing", v.timing}, {"roll", v.roll}, {"unit", v.unit}, {"batch", v.batch},
+             {"sides", v.sides}, {"faces", v.faces}};
+    if (!v.rerolled.empty()) j["rerolled"] = v.rerolled;  // omitted when no die has been re-rolled
+}
+void from_json(const Json& j, StratagemWindow& v) {
+    j.at("timing").get_to(v.timing);
+    j.at("roll").get_to(v.roll);
+    j.at("unit").get_to(v.unit);
+    j.at("batch").get_to(v.batch);
+    j.at("sides").get_to(v.sides);
+    j.at("faces").get_to(v.faces);
+    v.rerolled.clear();
+    if (const auto it = j.find("rerolled"); it != j.end()) it->get_to(v.rerolled);
+}
+
+// D-096 (M95): one side's record of the stratagems it has used (15.01).
+void to_json(Json& j, const StratagemRecord& v) {
+    j = Json{{"used_this_phase", v.used_this_phase},
+             {"targeted_this_phase", v.targeted_this_phase},
+             {"used_this_battle", v.used_this_battle}};
+}
+void from_json(const Json& j, StratagemRecord& v) {
+    j.at("used_this_phase").get_to(v.used_this_phase);
+    j.at("targeted_this_phase").get_to(v.targeted_this_phase);
+    j.at("used_this_battle").get_to(v.used_this_battle);
+}
+
 void to_json(Json& j, const FlowState& v) {
     j = Json{{"stage", v.stage}, {"battle_round", v.battle_round}, {"turn_in_round", v.turn_in_round}};
     put_opt(j, "activation", v.activation);
@@ -466,6 +498,7 @@ void to_json(Json& j, const FlowState& v) {
     put_opt(j, "fight", v.fight);
     j["forced_fights"] = v.forced_fights;
     if (!v.battle_shock_tests.empty()) j["battle_shock_tests"] = v.battle_shock_tests;  // D-095; omitted when empty
+    if (v.window) j["window"] = *v.window;  // D-096; omitted when absent
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -481,6 +514,8 @@ void from_json(const Json& j, FlowState& v) {
     j.at("forced_fights").get_to(v.forced_fights);
     v.battle_shock_tests.clear();
     if (const auto it = j.find("battle_shock_tests"); it != j.end()) it->get_to(v.battle_shock_tests);
+    v.window.reset();
+    if (const auto it = j.find("window"); it != j.end() && !it->is_null()) v.window = it->get<StratagemWindow>();
 }
 
 // D-076 (M67): the exact totals (numerators over the common denominator) and their display forms.
@@ -553,6 +588,9 @@ void to_json(Json& j, const PendingDecision& v) {
             } else if constexpr (std::is_same_v<T, decision::RollDice>) {
                 j["roll"] = k.roll;  // D-095
                 j["unit"] = k.unit;
+            } else if constexpr (std::is_same_v<T, decision::UseStratagems>) {
+                j["timing"] = k.timing;  // D-096
+                j["unit"] = k.unit;
             }
         },
         v.kind);
@@ -579,7 +617,9 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "DeployUnits") v.kind = decision::DeployUnits{};  // D-081
     else if (kind == "RetargetAttacks") v.kind = decision::RetargetAttacks{j.at("attacker").get<UnitId>()};  // D-093
     else if (kind == "RollDice") v.kind = decision::RollDice{j.at("roll").get<RollKind>(), j.at("unit").get<UnitId>()};
-    else bad_enum("PendingDecision", j);
+    else if (kind == "UseStratagems") {
+        v.kind = decision::UseStratagems{j.at("timing").get<WindowTiming>(), j.at("unit").get<UnitId>()};  // D-096
+    } else bad_enum("PendingDecision", j);
 }
 
 }  // namespace wh40k::core

@@ -16,6 +16,7 @@
 #include "core/rules/fight_types.hpp"
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
+#include "core/state/stratagems.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -85,6 +86,9 @@ struct BatchInProgress {
     // D-095 (M94): the defender's casualty order (D-013), given while the batch's random D waits for the attacker's
     // Damage roll (05.04, D-069); a fixed D is resolved with the order at once. Omitted from JSON when absent.
     std::optional<std::vector<ModelId>> priority{};
+    // D-096 (M95): a random D is rolled per attack that inflicts damage (D-069), each its own Damage roll: the rolls made
+    // so far, in 05.04's order, while the batch's damage is resolved. Omitted from JSON when empty.
+    std::vector<CharacteristicRoll> damage_rolls{};
     friend bool operator==(const BatchInProgress&, const BatchInProgress&) = default;
 };
 
@@ -215,6 +219,9 @@ struct FlowState {
     // or the unit that has just made a Desperate Escape (09.07). Each waits for a RollDice answer. Omitted from JSON
     // when empty; never set at a decision other than a RollDice.
     std::vector<UnitId> battle_shock_tests{};
+    // D-096 (M95): the open reaction window (01.03.02), with the roll it waits on. Omitted from JSON when absent; never
+    // set at a decision other than its UseStratagems.
+    std::optional<StratagemWindow> window{};
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

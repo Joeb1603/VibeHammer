@@ -78,6 +78,7 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
     // D-095 (M94): make the roll (its one answer). GameSession rolls for a bot's side itself, so the bot only meets one
     // when a roll is pending after a load or an undo.
     if (const auto* d = std::get_if<decision::RollDice>(&kind)) return action::RollDice{d->roll, d->unit};
+    if (std::holds_alternative<decision::UseStratagems>(kind)) return action::DeclineStratagems{};  // M95 (D-096)
     return std::nullopt;
 }
 

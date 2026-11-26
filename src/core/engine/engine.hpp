@@ -67,9 +67,10 @@ struct RollDiceInfo {
     UnitId unit;                   // the unit the roll is for (decision::RollDice::unit)
     Side roller = Side::A;         // its controlling player, who makes the roll
     std::optional<UnitId> target;  // an attack's target: random A, hit, wound, save and damage rolls
-    // How many dice are rolled. A batch's damage rolls: the dice of its D for each attack that the casualty preview
-    // (D-051, a random D at its maximum, D-069) says inflicts damage; a lower D can leave more attacks inflicting it.
+    // How many dice are rolled. D-096: a damage roll is one attack's D (D-069).
     int dice = 0;
+    // D-096: a damage roll's model (05.04 Select Model: the one the casualty order selects for the attack).
+    std::optional<ModelId> model;
     std::string expression;  // each roll: "D6", "2D6", or a random characteristic such as "D3+1" (random A, damage)
     // The result each die (or the 2D6 of a battle-shock roll) needs, where one number says it: a hit roll's BS/WS
     // (05.01; none for [TORRENT]), a wound roll's required result (05.02), the unit's Leadership (01.06).
@@ -77,6 +78,34 @@ struct RollDiceInfo {
     friend bool operator==(const RollDiceInfo&, const RollDiceInfo&) = default;
 };
 [[nodiscard]] std::optional<RollDiceInfo> roll_dice_info(const GameState& state);
+
+// D-096 (M95): whether the pending decision is a reaction window (UseStratagems).
+[[nodiscard]] bool window_pending(const GameState& state);
+
+// D-096: a stratagem the deciding side can use in the open window.
+struct StratagemOption {
+    Stratagem stratagem = Stratagem::CommandReroll;
+    std::string name;  // "Command Re-roll"
+    std::string rule;  // "15.02"
+    int cost = 0;      // CP (15.01)
+    friend bool operator==(const StratagemOption&, const StratagemOption&) = default;
+};
+
+// D-096: what the open window offers, for the client and the bot (D-024: they work none of it out themselves). nullopt
+// unless a window is pending.
+struct WindowInfo {
+    WindowTiming timing = WindowTiming::AfterRoll;
+    RollKind roll = RollKind::Hit;  // the roll the window comes after (or before)
+    UnitId unit;                    // the unit the roll is for
+    Side side = Side::A;            // the deciding side
+    int command_points = 0;         // its CP
+    std::vector<StratagemOption> options;  // what it can use here (none: it can only decline)
+    std::vector<int> faces;                // the roll's dice (AfterRoll)
+    std::vector<bool> pickable;            // per die: Command Re-roll can pick it (01.05.02: not re-rolled before)
+    bool whole_roll = false;               // a charge roll: Command Re-roll re-rolls it in full, no die is picked
+    friend bool operator==(const WindowInfo&, const WindowInfo&) = default;
+};
+[[nodiscard]] std::optional<WindowInfo> window_info(const GameState& state);
 
 // 01.03: the active player. Between turns (and during the deployment step, D-081), the player who takes the first
 // turn; while a unit is selected to move, shoot or fight, that unit's controlling player; otherwise the player whose

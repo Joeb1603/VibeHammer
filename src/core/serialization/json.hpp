@@ -132,8 +132,12 @@ void to_json(Json& j, const BatchRolls& v);  // D-095
 void from_json(const Json& j, BatchRolls& v);
 void to_json(Json& j, const AttackFlow& v);
 void from_json(const Json& j, AttackFlow& v);
+void to_json(Json& j, const StratagemWindow& v);  // D-096
+void from_json(const Json& j, StratagemWindow& v);
 void to_json(Json& j, const FlowState& v);
 void from_json(const Json& j, FlowState& v);
+void to_json(Json& j, const StratagemRecord& v);  // D-096
+void from_json(const Json& j, StratagemRecord& v);
 void to_json(Json& j, const PointsTally& v);
 void from_json(const Json& j, PointsTally& v);
 void to_json(Json& j, const ObjectiveArea& v);

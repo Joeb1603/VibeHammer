@@ -282,6 +282,26 @@ std::string body(const core::GameEvent& e) {
             } else if constexpr (std::is_same_v<T, ev::VictoryPointsScored>) {
                 return side(x.side) + " scores " + std::to_string(x.vp) + " VP for holding " + x.name + " (" +
                        std::to_string(x.total) + " objective VP)";
+            } else if constexpr (std::is_same_v<T, ev::DamageRolled>) {
+                // D-096: "Damage roll for model 4 of unit 2: D6 -> 5 = 5".
+                return "Damage roll for " + model(x.model) + " of " + unit(x.target) + ": " +
+                       characteristic_roll_text(x.damage, x.roll);
+            } else if constexpr (std::is_same_v<T, ev::StratagemUsed>) {
+                // D-096: "Side A uses Command Re-roll on unit 1: 1 CP (2 CP left)".
+                return side(x.side) + " uses " + std::string(core::stratagem_name(x.stratagem)) + " on " + unit(x.unit) +
+                       ": " + std::to_string(x.cost) + " CP (" + std::to_string(x.cp_left) + " CP left)";
+            } else if constexpr (std::is_same_v<T, ev::DiceRerolled>) {
+                // D-096: "Re-roll: 1 -> 5; Hit rolls (batch 0): ...".
+                std::string changed;
+                for (std::size_t i = 0; i < x.before.size() && i < x.after.size(); ++i) {
+                    if (x.before[i] == x.after[i] && x.die && i != *x.die) continue;
+                    changed += (changed.empty() ? "" : ", ") + std::to_string(x.before[i]) + " -> " +
+                               std::to_string(x.after[i]);
+                }
+                return "Re-roll (" + std::string(core::roll_kind_name(x.roll)) + "): " + changed + "; " +
+                       std::visit([](const auto& r) { return body(core::GameEvent{r}); }, x.result);
+            } else if constexpr (std::is_same_v<T, ev::BattleShockPassedAutomatically>) {
+                return "Battle-shock roll for " + unit(x.unit) + ": passed automatically (no dice rolled)";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -313,17 +333,13 @@ std::string attack_count_text(int attack_dice, const std::vector<core::RandomAtt
 bool is_roll_event(const core::GameEvent& event) {
     if (const auto* r = std::get_if<ev::WoundRollsRerolled>(&event)) return !r->rerolls.empty();  // 24.38: dice re-rolled
     if (std::holds_alternative<ev::AttackDiceRolled>(event)) return true;  // D-069: a random A
-    if (const auto* s = std::get_if<ev::SavesResolved>(&event)) {
-        // D-069: a random D's damage rolls.
-        for (const auto& step : s->result.steps) {
-            if (step.damage_roll) return true;
-        }
-        return false;
-    }
+    // D-096: a random D's damage rolls are DamageRolled events, one per attack (SavesResolved repeats them).
     return std::holds_alternative<ev::HitRollsMade>(event) || std::holds_alternative<ev::WoundRollsMade>(event) ||
            std::holds_alternative<ev::SaveRollsMade>(event) || std::holds_alternative<ev::AdvanceRolled>(event) ||
            std::holds_alternative<ev::ChargeRolled>(event) || std::holds_alternative<ev::HazardRollsMade>(event) ||
-           std::holds_alternative<ev::BattleShockRolled>(event);
+           std::holds_alternative<ev::BattleShockRolled>(event) || std::holds_alternative<ev::DamageRolled>(event) ||
+           std::holds_alternative<ev::DiceRerolled>(event) ||
+           std::holds_alternative<ev::BattleShockPassedAutomatically>(event);  // D-096
 }
 
 std::string format_event(const core::GameEvent& event) {

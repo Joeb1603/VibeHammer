@@ -51,16 +51,29 @@ std::optional<PendingDecision> charge_decision(const GameState& state) {
 // D-095 (M94): 11.02 Make Charge Roll, for the charge in progress: the maximum distance of the charge move. With no
 // charge target within it (11.04 Before Moving), the charge fails at once.
 void make_charge_roll(GameState& state, DiceSource& dice, Events& events) {
-    Unit& u = *state.find_unit(charge_of(state).unit);
+    const Unit& u = *state.find_unit(charge_of(state).unit);
     const TwoD6 roll = roll_2d6(dice);
-    u.phase_flags.charge_roll = roll.total();
-    const std::vector<UnitId> targets = eligible_charge_targets(state, u, roll.total());
-    events.push_back(event::ChargeRolled{u.id, roll, targets});
-    if (targets.empty()) {
+    events.push_back(event::ChargeRolled{u.id, roll, eligible_charge_targets(state, u, roll.total())});
+    // D-096: then 15.02's window, if any; the roll stands once it closes.
+    after_roll(state, RollKind::Charge, u.id, 0, {roll.dice[0], roll.dice[1]}, {}, events);
+}
+
+event::ChargeRolled charge_roll_result(const GameState& state, UnitId unit, const std::vector<int>& faces) {
+    const TwoD6 roll{{faces.at(0), faces.at(1)}};
+    return event::ChargeRolled{unit, roll, eligible_charge_targets(state, *state.find_unit(unit), roll.total())};
+}
+
+// D-096: the charge roll as it stands once its window closes (M94's consequence): the maximum distance of the charge
+// move; with no charge target within it, the charge fails.
+void apply_charge_roll(GameState& state, const std::vector<int>& faces, Events& events) {
+    Unit& u = *state.find_unit(charge_of(state).unit);
+    const int total = faces.at(0) + faces.at(1);
+    u.phase_flags.charge_roll = total;
+    if (eligible_charge_targets(state, u, total).empty()) {
         // 11.02 Attempt Charge: no charge move is possible without a charge target (11.04 Before Moving).
         resolve_charge(state, false,
-                       "11.02: no enemy unit is within 12\" and within the charge roll (" +
-                           std::to_string(roll.total()) + "\") of " + unit_label(u.id) + "; the charge fails",
+                       "11.02: no enemy unit is within 12\" and within the charge roll (" + std::to_string(total) +
+                           "\") of " + unit_label(u.id) + "; the charge fails",
                        events);
     }
 }

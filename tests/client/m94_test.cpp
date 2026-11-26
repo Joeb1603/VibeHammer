@@ -167,8 +167,8 @@ TEST(M94_RollPrompt, EachPreRollCardIsTheCardOfItsRollFaceDown) {
                 EXPECT_EQ(cards.front().roller, prompt->roller);
                 EXPECT_EQ(cards.front().purpose, prompt->purpose);
                 EXPECT_EQ(cards.front().need, prompt->need);
-                // A batch's damage rolls: the preview's count (each D at its maximum) can be fewer than the rolls.
-                if (d.roll != RollKind::Damage) EXPECT_EQ(cards.front().dice.size(), prompt->dice.size());
+                // D-096 (M95): a damage roll is one attack's D, so every card has the dice its prompt showed.
+                EXPECT_EQ(cards.front().dice.size(), prompt->dice.size());
             }
         }
     }
@@ -232,7 +232,7 @@ TEST(M94_Saves, AnM93SaveLoadsWithItsRollsAsSteps) {
     EXPECT_EQ(loaded.state(), again.state());
     EXPECT_EQ(loaded.history(), again.history());
     EXPECT_GT(loaded.history().size(), 50u);  // its 50 steps and their rolls
-    EXPECT_EQ(loaded.to_save_json().at("format"), 2);
+    EXPECT_EQ(loaded.to_save_json().at("format"), 3);  // D-096 (M95): saved again as format 3
     EXPECT_EQ(GameSession::from_save_json(loaded.to_save_json()).state(), loaded.state());
 }
 

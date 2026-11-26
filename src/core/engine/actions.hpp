@@ -15,6 +15,7 @@
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/state/decision.hpp"
+#include "core/state/stratagems.hpp"
 #include "core/types/ids.hpp"
 
 namespace wh40k::core {
@@ -198,6 +199,19 @@ struct RollDice {
     UnitId unit;
     friend bool operator==(const RollDice&, const RollDice&) = default;
 };
+// D-096 (M95): use this stratagem in the open window (15.01), targeting `unit` (the unit the window's roll is for).
+// `die`: for Command Re-roll (15.02), the die to re-roll (an index into the window's dice); absent for a charge roll,
+// which is re-rolled in full, and for Insane Bravery. Never a template.
+struct UseStratagem {
+    Stratagem stratagem = Stratagem::CommandReroll;
+    UnitId unit;
+    std::optional<std::size_t> die;
+    friend bool operator==(const UseStratagem&, const UseStratagem&) = default;
+};
+// D-096 (M95): use no stratagem in the open window (the rules there are optional, 01.03.02). Changes nothing else.
+struct DeclineStratagems {
+    friend bool operator==(const DeclineStratagems&, const DeclineStratagems&) = default;
+};
 }  // namespace action
 
 // New alternatives are appended at the end, so every existing index stays the same.
@@ -209,7 +223,8 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::EndConsolidations, action::RemoveModelForCoherency,
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties, action::RerollWoundRolls, action::DeployUnit,
-                                action::CannotSetUp, action::RetargetAttacks, action::RollDice>;
+                                action::CannotSetUp, action::RetargetAttacks, action::RollDice,
+                                action::UseStratagem, action::DeclineStratagems>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"

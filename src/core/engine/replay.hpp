@@ -35,8 +35,11 @@ struct ReplayInitial {
 
 // D-095 (M94): format 1 records only the players' choices, every roll made inside the action that led to it
 // (apply_action); format 2 also records each roll as a RollDice step (apply_action_paced), as a GameSession plays it.
+// D-096 (M95): format 3 also records each reaction window's answer (UseStratagem, DeclineStratagems), and a random D as
+// one Damage roll per attack that inflicts damage (format 2 made a batch's in one). Formats 1 and 2 are converted.
 inline constexpr int kReplayFormatRollsInline = 1;
 inline constexpr int kReplayFormatRollsRecorded = 2;
+inline constexpr int kReplayFormatWindowsRecorded = 3;
 
 struct Replay {
     int format = kReplayFormatRollsInline;
@@ -69,16 +72,23 @@ struct ReplayResult {
 };
 
 // Builds the initial state, starts the game if needed, then validates and applies every step: format 1 with every
-// roll made inside its step (start_game, apply_action), format 2 stopping at each roll for its recorded RollDice step
-// (start_game_paced, apply_action_paced; D-095).
+// roll made and every window declined inside its step (start_game, apply_action); format 3 stopping at each roll and
+// window for its recorded step (start_game_paced, apply_action_paced; D-095, D-096); format 2 as format 3 with the
+// windows declined and a batch's further Damage rolls made where it recorded one (D-096: the same game).
 [[nodiscard]] ReplayResult run_replay(const Replay& replay, const std::filesystem::path& repo_root);
 
-// D-095 (M94): a format-1 step list from `initial` (started here if it hasn't started) as format 2: played through a
-// paced Match, with each roll that the start and every step lead to recorded as its RollDice step. The game is the same
-// (the roll closure). Throws DataError on a step that doesn't validate.
+// D-095 (M94), D-096 (M95): a format-1 step list from `initial` (started here if it hasn't started) as format 3: played
+// through a paced Match, with each roll and window that the start and every step lead to recorded as its step (each
+// roll made, each window declined). The game is the same (the closure). Throws DataError on a step that doesn't
+// validate.
 [[nodiscard]] std::vector<ReplayStep> with_roll_steps(GameState initial, const std::vector<ReplayStep>& steps);
-// The same for a replay: a format-2 replay is returned as it is; a format-1 one comes back as format 2, its other
-// fields unchanged (its expect block holds: the final state is the same).
+// D-096: the same from a format-2 step list, step by step: each window waiting before a recorded step is declined,
+// after a recorded Damage roll the batch's further Damage rolls are made (format 2 made them in one), and the windows
+// waiting at the end are declined; a roll waiting at the end stays (a save can stop at one).
+[[nodiscard]] std::vector<ReplayStep> with_roll_steps_from_format2(GameState initial,
+                                                                   const std::vector<ReplayStep>& steps);
+// The same for a replay: a format-3 replay is returned as it is; a format-1 or format-2 one comes back as format 3, its
+// other fields unchanged (its expect block holds: the final state is the same).
 [[nodiscard]] Replay with_roll_steps(const Replay& replay, const std::filesystem::path& repo_root);
 
 // What a replay file's `expect` block records: result, stage, battle round, and every model's
@@ -86,8 +96,9 @@ struct ReplayResult {
 [[nodiscard]] nlohmann::json replay_expectation(const GameState& state);
 
 // D-095 (M94): how a Match applies its steps. Inline: every roll is made inside the step that leads to it
-// (start_game, apply_action), so a RollDice is never pending and never recorded (a format-1 replay). Paced: the match
-// stops at each roll, a player answers it with a RollDice step, which is recorded like any other (format 2).
+// (start_game, apply_action), so a RollDice is never pending and never recorded (a format-1 replay); D-096: every
+// window is declined there too. Paced: the match stops at each roll and window, a player answers it with a step, which
+// is recorded like any other (format 3).
 enum class RollMode : std::uint8_t { Inline, Paced };
 
 // A game in progress with its log: the initial state, every accepted step and every event.
@@ -107,7 +118,7 @@ public:
     [[nodiscard]] const std::vector<GameEvent>& events() const noexcept { return events_; }
 
     // A replay of this match from its initial state, with the current state as its expectation: format 1 for an
-    // Inline match, format 2 for a Paced one (D-095).
+    // Inline match, format 3 for a Paced one (D-095, D-096).
     [[nodiscard]] Replay to_replay(std::string description) const;
 
 private:

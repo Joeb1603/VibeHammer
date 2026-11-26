@@ -13,6 +13,7 @@
 #include "core/state/decision.hpp"
 #include "core/state/flow.hpp"
 #include "core/state/mission.hpp"
+#include "core/state/stratagems.hpp"
 #include "core/state/terrain.hpp"
 #include "core/types/ids.hpp"
 
@@ -61,6 +62,9 @@ struct GameState {
     std::vector<Unit> undeployed;
     DiceState dice;                 // production PRNG (SeededDice) seed and position
     std::array<int, 2> command_points{};  // indexed by side_index; 08.02 (D-023: both start at 0)
+    // D-096 (M95): each side's record of the stratagems it has used (15.01), indexed by side_index. JSON "stratagems",
+    // omitted while both are empty, so every older file loads and saves unchanged.
+    std::array<StratagemRecord, 2> stratagems{};
     FlowState flow;                 // where the game is (07-12) and what is in progress
     std::optional<PendingDecision> pending;  // whose input the engine waits for; nullopt when not
                                              // started or over

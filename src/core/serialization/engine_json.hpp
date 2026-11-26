@@ -51,6 +51,10 @@ void to_json(Json& j, const ModelPlacement& v);  // D-081
 void from_json(const Json& j, ModelPlacement& v);
 void to_json(Json& j, RollKind v);  // D-095
 void from_json(const Json& j, RollKind& v);
+void to_json(Json& j, Stratagem v);  // D-096
+void from_json(const Json& j, Stratagem& v);
+void to_json(Json& j, WindowTiming v);  // D-096
+void from_json(const Json& j, WindowTiming& v);
 
 namespace action {
 // GameAction is a std::variant of action:: types, so ADL finds these here.

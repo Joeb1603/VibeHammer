@@ -115,7 +115,7 @@ BotGame play_fight_move_game() {
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
     g.record = play_bot_session(session, BotConfig{}, BotConfig{});
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatRollsRecorded;  // M94 (D-095): the session records each roll as a step
+    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

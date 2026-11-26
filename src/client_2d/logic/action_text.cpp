@@ -44,7 +44,7 @@ std::string roll_label(core::RollKind roll) {
         case core::RollKind::Hit: return "Hit rolls";
         case core::RollKind::Wound: return "Wound rolls";
         case core::RollKind::Save: return "Save rolls";
-        case core::RollKind::Damage: return "Damage rolls";
+        case core::RollKind::Damage: return "Damage roll";  // D-096: one attack's D
     }
     return "Roll";
 }
@@ -153,6 +153,23 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 return "Retarget " + n + " at " + units(state, targets);
             } else if constexpr (std::is_same_v<T, a::RollDice>) {
                 return "Roll: " + roll_label(x.roll) + " for " + unit_name(state, x.unit);  // D-095
+            } else if constexpr (std::is_same_v<T, a::UseStratagem>) {
+                // D-096: "Command Re-roll (1 CP): die 3 (a 1)", "Insane Bravery (1 CP): Termagants pass".
+                const std::string head = std::string(core::stratagem_name(x.stratagem)) + " (" +
+                                         std::to_string(core::stratagem_cost(x.stratagem)) + " CP)";
+                if (x.stratagem == core::Stratagem::InsaneBravery) {
+                    return head + ": " + unit_name(state, x.unit) + " passes its battle-shock roll";
+                }
+                if (!x.die) return head + ": re-roll the whole roll";
+                const auto& w = state.flow.window;
+                const bool known = w && *x.die < w->faces.size();
+                return head + ": re-roll die " + std::to_string(*x.die + 1) +
+                       (known ? " (a " + std::to_string(w->faces[*x.die]) + ")" : "");
+            } else if constexpr (std::is_same_v<T, a::DeclineStratagems>) {
+                // D-096: no stratagem; before a battle-shock roll, the roll is then made as usual.
+                const auto& w = state.flow.window;
+                if (w && w->timing == core::WindowTiming::BeforeRoll) return "Roll normally";
+                return "Keep the roll";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

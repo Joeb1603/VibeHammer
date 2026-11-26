@@ -135,6 +135,11 @@ void add(Fnv1a& h, const core::FlowState& f) {
                 h.u64(0x7072696full);  // "prio"
                 for (const core::ModelId id : *a.current->priority) add(h, id);
             }
+            // M95 (D-096): only while a batch's damage is being rolled per attack, so other states hash as before.
+            if (!a.current->damage_rolls.empty()) {
+                h.u64(0x646d6772ull);  // "dmgr"
+                for (const core::CharacteristicRoll& r : a.current->damage_rolls) h.i32(r.value);
+            }
         }
         // M60 (24.15): only when set, so a state without hazard rolls hashes as before.
         if (a.hazard_rolls != 0 || a.pending_mortal_wounds != 0) {
@@ -216,6 +221,17 @@ void add(Fnv1a& h, const core::FlowState& f) {
         h.u64(0x6273686bull);  // "bshk"
         for (const core::UnitId u : f.battle_shock_tests) add(h, u);
     }
+    // M95 (D-096): only while a reaction window is open, so other states hash as before.
+    if (f.window) {
+        h.u64(0x77696e64ull);  // "wind"
+        h.u64(static_cast<std::uint64_t>(f.window->timing));
+        h.u64(static_cast<std::uint64_t>(f.window->roll));
+        add(h, f.window->unit);
+        h.u64(f.window->batch);
+        for (const core::Side s : f.window->sides) h.u64(static_cast<std::uint64_t>(s));
+        for (const int face : f.window->faces) h.i32(face);
+        for (const std::size_t i : f.window->rerolled) h.u64(i);
+    }
 }
 
 // The decision's kind and the unit it is about (every kind holds at most one id).
@@ -229,6 +245,7 @@ void add(Fnv1a& h, const core::PendingDecision& d) {
             if constexpr (requires { k.target; }) add(h, k.target);
             if constexpr (requires { k.attacker; }) add(h, k.attacker);
             if constexpr (requires { k.roll; }) h.u64(static_cast<std::uint64_t>(k.roll));  // M94: RollDice
+            if constexpr (requires { k.timing; }) h.u64(static_cast<std::uint64_t>(k.timing));  // M95: UseStratagems
             (void)sizeof(K);
         },
         d.kind);
@@ -244,6 +261,18 @@ std::uint64_t state_hash(const core::GameState& state) {
     for (const core::Unit& u : state.units) add(h, u);
     h.i32(state.command_points[0]);
     h.i32(state.command_points[1]);
+    // M95 (D-096): the stratagem records only when one is set, behind a tag, so every other state hashes as before.
+    if (!state.stratagems[0].empty() || !state.stratagems[1].empty()) {
+        h.u64(0x73747274ull);  // "strt"
+        for (const core::StratagemRecord& r : state.stratagems) {
+            h.u64(r.used_this_phase.size());
+            for (const core::Stratagem x : r.used_this_phase) h.u64(static_cast<std::uint64_t>(x));
+            h.u64(r.targeted_this_phase.size());
+            for (const core::UnitId u : r.targeted_this_phase) add(h, u);
+            h.u64(r.used_this_battle.size());
+            for (const core::Stratagem x : r.used_this_battle) h.u64(static_cast<std::uint64_t>(x));
+        }
+    }
     add(h, state.flow);
     h.flag(state.pending.has_value());
     if (state.pending) add(h, *state.pending);
