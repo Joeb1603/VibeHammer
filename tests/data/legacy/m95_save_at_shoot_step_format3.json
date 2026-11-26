@@ -1,0 +1,2701 @@
+{
+  "format": 3,
+  "initial": {
+    "battle_rounds": 5,
+    "battlefield": {
+      "depth_mm": 609.5999755859375,
+      "width_mm": 609.5999755859375
+    },
+    "command_points": [
+      0,
+      0
+    ],
+    "dice": {
+      "position": 0,
+      "seed": 3
+    },
+    "first_turn": "A",
+    "flow": {
+      "activation": null,
+      "attack": null,
+      "battle_round": 0,
+      "charge": null,
+      "fight": null,
+      "fight_sequence": null,
+      "forced_fights": [],
+      "move": null,
+      "stage": "NotStarted",
+      "step_done": [
+        false,
+        false
+      ],
+      "turn_in_round": 0
+    },
+    "pending": null,
+    "result": null,
+    "scenario_name": "V1 Skirmish - Intercessors vs Termagants",
+    "sides": [
+      {
+        "deployment_zone": {
+          "depth_mm": 152.39999389648438,
+          "edge": "south"
+        },
+        "name": "Space Marines"
+      },
+      {
+        "deployment_zone": {
+          "depth_mm": 152.39999389648438,
+          "edge": "north"
+        },
+        "name": "Tyranids"
+      }
+    ],
+    "units": [
+      {
+        "abilities": [
+          {
+            "name": "Bolter Discipline",
+            "text": "In your Shooting phase, if any of the following apply, this unit's ranged attacks have +1 to hit rolls: \n▪ This unit is within range of an objective. \n▪ The target of that attack is within range of an objective."
+          },
+          {
+            "name": "Tactical Mainstay",
+            "text": "▪ Being engaged/battle-shocked does not prevent this unit from being eligible to start an action. \n▪ When this unit starts an action, that action does not prevent this unit from being eligible to shoot."
+          },
+          {
+            "name": "Combat Doctrines",
+            "text": "At the start of your Command phase, you can select one Combat Doctrine listed below. If you do, that Combat Doctrine is active for friendly ADEPTUS ASTARTES units with this ability until the start of your next Command Phase\n\n\nAssault Doctrine\nWhen this unit is selected to make an Advance move, that Advance move does not prevent this unit from being eligible to declare a charge. \n\n\nDevastator Doctrine\nThis unit's ranged attacks have [ASSAULT]\n\n\nTactical Doctrine\nWhen this unit is selected to make a Fall-back move, that Fall-back move does not prevent this unit from being eligible to shoot and eligible to declare a charge. \n\n\nUnless otherwise stated. \n- You can only select each Combat Doctrine once per battle\n- Only one Combat Doctrine can be active for each unit. If a rule make a Combat Doctrine active for a unit, any Combat Doctrine previously active for that unit is no longer active for that unit. \n\n"
+          },
+          {
+            "name": "Templar Vows",
+            "text": "If your Army Faction is **^^Adeptus Astartes^^**, at the start of the first battle round, select one of the following Vows to be active for **^^Adeptus Astartes^^** units from your army. While a Vow is active for your army, that unit has the associated ability below. \n\n**Abhor the Witch, Destroy the Witch**\n■ Each time this unit declares a charge, if one or more targets of that charge have the **^^Psyker^^** keyword, you can re-roll the Charge roll. Melee weapons equipped by models in this unit have the **[PRECISION]** ability while targeting **^^Psyker^^** units. \n\n**Accept Any Challenge, No Matter the Odds**\n■ Each time a model in this unit makes a melee attack, if the Strength characteristic of that attack is less than or equal to the Toughness characteristic of the target, add 1 to the wound roll\n\n**Suffer Not the Unclean to Live**\n■ This unit is eligible to declare a charge in a turn in which it Fell Back, and each time a model in this unit makes a Pile-in or Consolidation move, it does not need to end that move closer to the closest enemy model, provided it ends that move as close as possible to the nearest enemy unit. \n\n**Uphold the Honour of the Emperor**\nIf this unit has the **^^Infantry^^** keyword:\n■ At the end of your Command phase, if this unit is within range of an objective marker you control, that objective marker remains under your control until your opponent's level of control over that objective marker is greater than yours at the end of the phase. \n■ If the mission you are playing features Actions, this unit is eligible to start to perform an Action in a turn in which it Advanced."
+          }
+        ],
+        "battle_shocked": false,
+        "faction_keywords": [
+          "Adeptus Astartes"
+        ],
+        "id": 1,
+        "keywords": [
+          "Infantry",
+          "Battleline",
+          "Imperium",
+          "Tacticus",
+          "Explosives"
+        ],
+        "models": [
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 1,
+            "position": {
+              "x": 240.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor Sergeant",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 2,
+            "position": {
+              "x": 272.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 3,
+            "position": {
+              "x": 304.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 4,
+            "position": {
+              "x": 336.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 5,
+            "position": {
+              "x": 368.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          }
+        ],
+        "name": "Intercessor Squad",
+        "phase_flags": {
+          "advance_roll": null,
+          "charge_roll": null,
+          "consolidated": false,
+          "declared_charge": false,
+          "desperate_escape_hazards_made": false,
+          "eligible_to_fight_this_phase": false,
+          "engaged_at_fight_step_start": false,
+          "forced_to_fight": false,
+          "piled_in": false,
+          "selected_for_overrun": false,
+          "selected_to_fight": false,
+          "selected_to_move": false,
+          "selected_to_shoot": false
+        },
+        "side": "A",
+        "starting_strength": 5,
+        "turn_flags": {
+          "advanced": false,
+          "fell_back": false,
+          "fights_first": false,
+          "made_charge_move": false,
+          "moved_over_3in": false
+        }
+      },
+      {
+        "abilities": [
+          {
+            "name": "Skulking Horrors",
+            "text": "In your opponent's Movement phase, if an enemy unit ends a move within 8\" of this unit, if this unit is not within Engagement Range of one or more enemy units, this unit can make a Normal move of up to D6\"."
+          },
+          {
+            "name": "Synapse",
+            "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+          }
+        ],
+        "battle_shocked": false,
+        "faction_keywords": [
+          "Tyranids"
+        ],
+        "id": 2,
+        "keywords": [
+          "Battleline",
+          "Infantry",
+          "Great Devourer",
+          "Endless Multitude"
+        ],
+        "models": [
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 6,
+            "position": {
+              "x": 247.79998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 7,
+            "position": {
+              "x": 276.29998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 8,
+            "position": {
+              "x": 304.79998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 9,
+            "position": {
+              "x": 333.29998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 10,
+            "position": {
+              "x": 361.79998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 11,
+            "position": {
+              "x": 247.79998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 12,
+            "position": {
+              "x": 276.29998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 13,
+            "position": {
+              "x": 304.79998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 14,
+            "position": {
+              "x": 333.29998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 15,
+            "position": {
+              "x": 361.79998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          }
+        ],
+        "name": "Termagants",
+        "phase_flags": {
+          "advance_roll": null,
+          "charge_roll": null,
+          "consolidated": false,
+          "declared_charge": false,
+          "desperate_escape_hazards_made": false,
+          "eligible_to_fight_this_phase": false,
+          "engaged_at_fight_step_start": false,
+          "forced_to_fight": false,
+          "piled_in": false,
+          "selected_for_overrun": false,
+          "selected_to_fight": false,
+          "selected_to_move": false,
+          "selected_to_shoot": false
+        },
+        "side": "B",
+        "starting_strength": 10,
+        "turn_flags": {
+          "advanced": false,
+          "fell_back": false,
+          "fights_first": false,
+          "made_charge_move": false,
+          "moved_over_3in": false
+        }
+      }
+    ]
+  },
+  "kind": "vibehammer-save",
+  "state": {
+    "battle_rounds": 5,
+    "battlefield": {
+      "depth_mm": 609.5999755859375,
+      "width_mm": 609.5999755859375
+    },
+    "command_points": [
+      1,
+      1
+    ],
+    "dice": {
+      "position": 0,
+      "seed": 3
+    },
+    "first_turn": "A",
+    "flow": {
+      "activation": null,
+      "attack": null,
+      "battle_round": 1,
+      "charge": null,
+      "fight": null,
+      "fight_sequence": null,
+      "forced_fights": [],
+      "move": null,
+      "stage": "Shoot",
+      "step_done": [
+        false,
+        false
+      ],
+      "turn_in_round": 0
+    },
+    "pending": {
+      "kind": "Shoot",
+      "side": "A"
+    },
+    "result": null,
+    "scenario_name": "V1 Skirmish - Intercessors vs Termagants",
+    "sides": [
+      {
+        "deployment_zone": {
+          "depth_mm": 152.39999389648438,
+          "edge": "south"
+        },
+        "name": "Space Marines"
+      },
+      {
+        "deployment_zone": {
+          "depth_mm": 152.39999389648438,
+          "edge": "north"
+        },
+        "name": "Tyranids"
+      }
+    ],
+    "units": [
+      {
+        "abilities": [
+          {
+            "name": "Bolter Discipline",
+            "text": "In your Shooting phase, if any of the following apply, this unit's ranged attacks have +1 to hit rolls: \n▪ This unit is within range of an objective. \n▪ The target of that attack is within range of an objective."
+          },
+          {
+            "name": "Tactical Mainstay",
+            "text": "▪ Being engaged/battle-shocked does not prevent this unit from being eligible to start an action. \n▪ When this unit starts an action, that action does not prevent this unit from being eligible to shoot."
+          },
+          {
+            "name": "Combat Doctrines",
+            "text": "At the start of your Command phase, you can select one Combat Doctrine listed below. If you do, that Combat Doctrine is active for friendly ADEPTUS ASTARTES units with this ability until the start of your next Command Phase\n\n\nAssault Doctrine\nWhen this unit is selected to make an Advance move, that Advance move does not prevent this unit from being eligible to declare a charge. \n\n\nDevastator Doctrine\nThis unit's ranged attacks have [ASSAULT]\n\n\nTactical Doctrine\nWhen this unit is selected to make a Fall-back move, that Fall-back move does not prevent this unit from being eligible to shoot and eligible to declare a charge. \n\n\nUnless otherwise stated. \n- You can only select each Combat Doctrine once per battle\n- Only one Combat Doctrine can be active for each unit. If a rule make a Combat Doctrine active for a unit, any Combat Doctrine previously active for that unit is no longer active for that unit. \n\n"
+          },
+          {
+            "name": "Templar Vows",
+            "text": "If your Army Faction is **^^Adeptus Astartes^^**, at the start of the first battle round, select one of the following Vows to be active for **^^Adeptus Astartes^^** units from your army. While a Vow is active for your army, that unit has the associated ability below. \n\n**Abhor the Witch, Destroy the Witch**\n■ Each time this unit declares a charge, if one or more targets of that charge have the **^^Psyker^^** keyword, you can re-roll the Charge roll. Melee weapons equipped by models in this unit have the **[PRECISION]** ability while targeting **^^Psyker^^** units. \n\n**Accept Any Challenge, No Matter the Odds**\n■ Each time a model in this unit makes a melee attack, if the Strength characteristic of that attack is less than or equal to the Toughness characteristic of the target, add 1 to the wound roll\n\n**Suffer Not the Unclean to Live**\n■ This unit is eligible to declare a charge in a turn in which it Fell Back, and each time a model in this unit makes a Pile-in or Consolidation move, it does not need to end that move closer to the closest enemy model, provided it ends that move as close as possible to the nearest enemy unit. \n\n**Uphold the Honour of the Emperor**\nIf this unit has the **^^Infantry^^** keyword:\n■ At the end of your Command phase, if this unit is within range of an objective marker you control, that objective marker remains under your control until your opponent's level of control over that objective marker is greater than yours at the end of the phase. \n■ If the mission you are playing features Actions, this unit is eligible to start to perform an Action in a turn in which it Advanced."
+          }
+        ],
+        "battle_shocked": false,
+        "faction_keywords": [
+          "Adeptus Astartes"
+        ],
+        "id": 1,
+        "keywords": [
+          "Infantry",
+          "Battleline",
+          "Imperium",
+          "Tacticus",
+          "Explosives"
+        ],
+        "models": [
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 1,
+            "position": {
+              "x": 240.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor Sergeant",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 2,
+            "position": {
+              "x": 272.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 3,
+            "position": {
+              "x": 304.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 4,
+            "position": {
+              "x": 336.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          },
+          {
+            "base": {
+              "diameter_mm": 32.0,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 6,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 3,
+              "T": 5,
+              "W": 2
+            },
+            "id": 5,
+            "position": {
+              "x": 368.79998779296875,
+              "y": 136.39999389648438,
+              "z": 0.0
+            },
+            "type_name": "Intercessor",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Bolt Rifle",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 2,
+                    "S": 6,
+                    "abilities": [
+                      {
+                        "kind": "Heavy"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Focused Fire",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  },
+                  {
+                    "A": 2,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      },
+                      {
+                        "kind": "RapidFire",
+                        "x": 1
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt Rifle - Saturation",
+                    "range_mm": 609.5999755859375,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "ranged",
+                "name": "Bolt pistol",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": -1,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "CloseQuarters"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Bolt pistol",
+                    "range_mm": 304.79998779296875,
+                    "skill": 3
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Knives and Fists",
+                "profiles": [
+                  {
+                    "A": 3,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Knives and Fists",
+                    "range_mm": null,
+                    "skill": 3
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 2
+          }
+        ],
+        "name": "Intercessor Squad",
+        "phase_flags": {
+          "advance_roll": null,
+          "charge_roll": null,
+          "consolidated": false,
+          "declared_charge": false,
+          "desperate_escape_hazards_made": false,
+          "eligible_to_fight_this_phase": false,
+          "engaged_at_fight_step_start": false,
+          "forced_to_fight": false,
+          "piled_in": false,
+          "selected_for_overrun": false,
+          "selected_to_fight": false,
+          "selected_to_move": true,
+          "selected_to_shoot": false
+        },
+        "side": "A",
+        "starting_strength": 5,
+        "turn_flags": {
+          "advanced": false,
+          "fell_back": false,
+          "fights_first": false,
+          "made_charge_move": false,
+          "moved_over_3in": false
+        }
+      },
+      {
+        "abilities": [
+          {
+            "name": "Skulking Horrors",
+            "text": "In your opponent's Movement phase, if an enemy unit ends a move within 8\" of this unit, if this unit is not within Engagement Range of one or more enemy units, this unit can make a Normal move of up to D6\"."
+          },
+          {
+            "name": "Synapse",
+            "text": "If your Army Faction is **TYRANIDS**, while a **TYRANIDS** unit from your army is within 6\" of one or more friendly **SYNAPSE** models, that **TYRANIDS** unit is said to be within Synapse Range of that model and of your army. While a **TYRANIDS** unit from your army is within Synapse Range of your army:\n▪ Each time that unit takes a Battle‑shock test, take that test on 3D6 instead of 2D6.\n▪ Each time a model in that unit makes a melee attack, add 1 to the Strength characteristic of that attack."
+          }
+        ],
+        "battle_shocked": false,
+        "faction_keywords": [
+          "Tyranids"
+        ],
+        "id": 2,
+        "keywords": [
+          "Battleline",
+          "Infantry",
+          "Great Devourer",
+          "Endless Multitude"
+        ],
+        "models": [
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 6,
+            "position": {
+              "x": 247.79998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 7,
+            "position": {
+              "x": 276.29998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 8,
+            "position": {
+              "x": 304.79998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 9,
+            "position": {
+              "x": 333.29998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 10,
+            "position": {
+              "x": 361.79998779296875,
+              "y": 446.04998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 11,
+            "position": {
+              "x": 247.79998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 12,
+            "position": {
+              "x": 276.29998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 13,
+            "position": {
+              "x": 304.79998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 14,
+            "position": {
+              "x": 333.29998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          },
+          {
+            "base": {
+              "diameter_mm": 28.5,
+              "length_mm": 0.0,
+              "shape": "round"
+            },
+            "characteristics": {
+              "InSv": null,
+              "Ld": 8,
+              "M_mm": 152.39999389648438,
+              "OC": 2,
+              "Sv": 5,
+              "T": 3,
+              "W": 1
+            },
+            "id": 15,
+            "position": {
+              "x": 361.79998779296875,
+              "y": 474.54998779296875,
+              "z": 0.0
+            },
+            "type_name": "Termagants",
+            "weapons": [
+              {
+                "kind": "ranged",
+                "name": "Fleshborer",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 5,
+                    "abilities": [
+                      {
+                        "kind": "Assault"
+                      }
+                    ],
+                    "kind": "ranged",
+                    "name": "Fleshborer",
+                    "range_mm": 457.1999816894531,
+                    "skill": 4
+                  }
+                ]
+              },
+              {
+                "kind": "melee",
+                "name": "Chitinous claws and teeth",
+                "profiles": [
+                  {
+                    "A": 1,
+                    "AP": 0,
+                    "D": 1,
+                    "S": 3,
+                    "abilities": [],
+                    "kind": "melee",
+                    "name": "Chitinous claws and teeth",
+                    "range_mm": null,
+                    "skill": 4
+                  }
+                ]
+              }
+            ],
+            "wounds_remaining": 1
+          }
+        ],
+        "name": "Termagants",
+        "phase_flags": {
+          "advance_roll": null,
+          "charge_roll": null,
+          "consolidated": false,
+          "declared_charge": false,
+          "desperate_escape_hazards_made": false,
+          "eligible_to_fight_this_phase": false,
+          "engaged_at_fight_step_start": false,
+          "forced_to_fight": false,
+          "piled_in": false,
+          "selected_for_overrun": false,
+          "selected_to_fight": false,
+          "selected_to_move": false,
+          "selected_to_shoot": false
+        },
+        "side": "B",
+        "starting_strength": 10,
+        "turn_flags": {
+          "advanced": false,
+          "fell_back": false,
+          "fights_first": false,
+          "made_charge_move": false,
+          "moved_over_3in": false
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "action": {
+        "kind": "StartMove",
+        "move_type": "RemainStationary",
+        "unit": 1
+      },
+      "side": "A"
+    }
+  ]
+}
