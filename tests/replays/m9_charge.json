@@ -112,7 +112,7 @@
     "result": null,
     "stage": "Charge"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "scenario": "data/scenarios/v1_skirmish.json",
     "seed": 1
@@ -220,6 +220,12 @@
         "kind": "RollDice",
         "roll": "Charge",
         "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },

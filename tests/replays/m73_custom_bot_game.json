@@ -148,7 +148,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "scenario": "tests/data/scenarios/m73_custom_battle_44x60.json",
     "seed": 1
@@ -251,6 +251,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -418,6 +424,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 17,
         "path": [
@@ -510,6 +522,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "ProposeModelMove",
         "model": 1,
         "path": [
@@ -572,6 +590,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
@@ -580,9 +604,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -680,9 +716,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Hit",
         "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -696,9 +744,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -741,6 +801,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -1102,6 +1168,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
@@ -1110,9 +1182,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1136,6 +1220,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "A"
@@ -1145,6 +1235,12 @@
         "kind": "EndChargeStep"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -1167,6 +1263,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1268,6 +1370,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "OrderCasualties",
         "priority": [
           21,
@@ -1292,6 +1400,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "BattleShock",
         "unit": 4
@@ -1311,6 +1425,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -1445,6 +1565,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -1666,6 +1792,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
@@ -1674,9 +1806,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1713,6 +1857,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1790,9 +1940,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Hit",
         "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1806,9 +1968,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -1823,6 +1997,12 @@
         "kind": "EndChargeStep"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -1845,6 +2025,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2199,6 +2385,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
@@ -2207,9 +2399,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -2233,6 +2437,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Hit",
         "unit": 3
@@ -2241,9 +2451,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2310,9 +2532,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2326,9 +2560,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2343,6 +2589,12 @@
         "kind": "EndChargeStep"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -2458,6 +2710,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "B"
@@ -2479,9 +2737,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "EndChargeStep"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -2504,6 +2774,12 @@
         "kind": "RollDice",
         "roll": "Advance",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2831,9 +3107,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2912,9 +3200,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2928,6 +3228,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
@@ -2936,9 +3242,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -3044,9 +3362,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Hit",
         "unit": 5
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -3060,9 +3390,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -3098,6 +3440,12 @@
         "kind": "RollDice",
         "roll": "Charge",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -3229,6 +3577,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 6
@@ -3246,9 +3600,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -3262,6 +3628,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 6
@@ -3270,9 +3642,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -3325,6 +3709,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 4
@@ -3333,9 +3723,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },

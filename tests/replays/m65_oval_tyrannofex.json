@@ -126,7 +126,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -1942,9 +1942,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1958,9 +1970,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Hit",
         "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -1993,9 +2017,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2036,6 +2072,12 @@
         "kind": "RollDice",
         "roll": "Charge",
         "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -2128,6 +2170,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 14
@@ -2136,9 +2184,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 2
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -2241,6 +2301,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
@@ -2249,9 +2315,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 14
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },

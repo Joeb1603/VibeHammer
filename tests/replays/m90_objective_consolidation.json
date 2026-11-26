@@ -448,7 +448,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -5753,6 +5753,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 3
@@ -5761,9 +5767,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 6
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },

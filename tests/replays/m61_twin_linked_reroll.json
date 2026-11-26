@@ -28,7 +28,7 @@
     "result": null,
     "stage": "Consolidate"
   },
-  "format": 2,
+  "format": 3,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -668,6 +668,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "StartChargeMove",
         "targets": [
           1
@@ -770,6 +776,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
@@ -787,9 +799,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -817,6 +841,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 2
@@ -825,9 +855,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Save",
         "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -892,9 +934,21 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "RollDice",
         "roll": "Wound",
         "unit": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     }

@@ -16,37 +16,25 @@
 #include "dice_cards.hpp"
 #include "saved_game.hpp"
 #include "session.hpp"
+#include "session_fixtures.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
 #include "undo_groups.hpp"
 
 using namespace wh40k::core;
 using namespace wh40k::client;
+using wh40k::test::random_session_game;
+using wh40k::test::rifle_volley;
+using wh40k::test::shoot_step;
 
 namespace {
 
 const std::filesystem::path kLegacySave =
     std::filesystem::path(WH40K_REPO_ROOT) / "tests" / "data" / "legacy" / "m93_save_format1.json";
 
-// A short V1 game (the Termagants 1" closer) played by random legal actions through a session: moves, shots, charges
-// and fights, the session making every roll (auto_roll), each a step of its own. Seeds chosen so the game shoots and
-// charges.
-GameSession random_session_game(std::uint64_t seed, std::uint64_t rng_seed, int actions) {
-    GameState scenario = wh40k::test::load_v1_scenario_closer();
-    GameSession s = GameSession::new_game(std::move(scenario), seed);
-    wh40k::test::TestRng rng(rng_seed);
-    for (int i = 0; i < actions && s.pending(); ++i) {
-        const GameAction a = wh40k::test::random_action(s.state(), rng);
-        const ValidationResult r = s.submit(a);
-        EXPECT_TRUE(r.ok()) << (r.ok() ? "" : r.reasons.front());
-        if (!r.ok()) break;
-    }
-    return s;
-}
-
 // The save M93 wrote for the same game (format 1, every roll made inside the step that led to it): this session's
-// format-2 save with its roll steps taken out. D-095's roll closure makes them the same: without its rolls the history
-// is M93's, and the state is the same.
+// save (format 2 at M94, 3 since M95) with its roll steps and declined windows taken out. D-095's roll closure makes them
+// the same: without its rolls the history is M93's, and the state is the same.
 nlohmann::json format1_save(const GameSession& s) {
     nlohmann::json j = s.to_save_json();
     j["format"] = kReplayFormatRollsInline;
@@ -83,20 +71,6 @@ TEST(M94_Legacy, TheSaveFixtureIsTheM93SaveOfTheSameGame) {
     ASSERT_FALSE(fixture.empty());
     EXPECT_EQ(format1_save(random_session_game(5, 11, 50)).dump(2) + "\n", fixture);
 }
-
-namespace {
-
-// Side A's Shoot step in V1 (the Termagants 1" closer) with `seed`, and the Shoot action firing every Bolt Rifle on
-// Focused Fire at the Termagants.
-action::Shoot rifle_volley(const GameState& gs) {
-    action::Shoot a{gs.units[0].id, ShootingType::Normal, {}};
-    for (const Model& m : gs.units[0].models) a.shots.push_back(ShotDeclaration{m.id, 0, 0, gs.units[1].id});
-    return a;
-}
-
-GameState shoot_step(std::uint64_t seed) { return wh40k::test::shoot_step_state(Side::A, seed); }
-
-}  // namespace
 
 // ==== GameSession: automatic rolls per side ====
 
