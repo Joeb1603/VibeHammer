@@ -143,7 +143,7 @@ Open items still carried are listed under "Later" below.
 
 ---
 
-## M98: M97's open items: the selection on the board, Crushing Impact in the charge planning (D-100)
+## M98: M97's open items: the selection on the board, Crushing Impact in the charge planning (D-100) ✅ (done; the manual mouse checks open)
 
 **Effort:** high (client and bot work on M97's rules; one read-only core query). **Plan mode:** no. The user asked for
 M97's open items on 2026-11-26 ("Do the still open tasks").
@@ -193,18 +193,38 @@ D-100.
    done, and M97 archived. Then the full `ctest`, commit, push, the PR and the rebase merge.
 
 **Acceptance**
-- [ ] **The board:**
+- [x] **The board:**
   - a click on an enemy unit submits its pair (the chosen model's, else the first legal model's);
   - a click on a model of the stratagem's unit chooses it, and a model in no pair is dimmed and ignored;
   - the units that can't be picked are grey, with the engine's reason on hover;
   - Esc drops the model, and the bar's buttons stay;
   - `M98_*` client tests and xvfb screenshots.
-- [ ] **The forecast:** the window's refusal, or nullopt where it would offer the stratagem. `D100_*`.
-- [ ] **The charge planning:**
+- [x] **The forecast:** the window's refusal, or nullopt where it would offer the stratagem. `D100_*`.
+- [x] **The charge planning:**
   - with `crushing_impact` on, it adds Crushing Impact's expected net gain wherever the engine would offer it;
   - with the key off, every value is as before: the identity set against the M97 binary is identical in every field.
-- [ ] **The keys:** head-to-heads for `crushing_impact` and for both, with the defaults set by D-092's keep rule.
-- [ ] **Full `ctest`** green.
+- [x] **The keys:** head-to-heads for `crushing_impact` and for both, with the defaults set by D-092's keep rule.
+- [x] **Full `ctest`** green.
+
+**Results** (D-100 part 6 has them in full):
+- *The board:* the selection is picked by clicking. The tests cover each kind of click (an enemy unit, a model, the chosen
+  model again, a model in no answer, Esc), and every answer submitted is legal, with the session going on to the roll.
+  The xvfb screenshots show Explosives' selection with two enemy units in reach of different ends of the Legionaries'
+  rank, the same with model 8 chosen, and Crushing Impact's selection.
+- *The forecast* agrees with the window after the Hive Tyrant's charge, and gives each of its refusals.
+- *The bots:*
+  - at the defaults, the identity set (2,600 games) is the M97 binary's in every field;
+  - the head-to-heads: `crushing_impact` -8 (196-204; M97 -10) and both keys -2 (199-201; M97 -4), every run clean.
+    Both keys stay off.
+- *Tests:* the full `ctest` passes, 1,693 of 1,693. M97's check that the board left the selection to the bar now checks
+  the board's mode.
+
+**Open items.**
+- The manual checks by mouse on Windows for M94-M98. They need the user's computer: the cloud session had none attached.
+  - M98: the selection by clicking (a model first or not, Esc, the grey units' reasons on hover).
+  - M97: Explosives and Crushing Impact in hotseat and against the bot (keys on), and Undo after each.
+- The bot: Explosives' CP against a later Command Re-roll; the thresholds (one setting measured each).
+- Explosives in the Start and End of Shooting phase steps.
 
 ---
 

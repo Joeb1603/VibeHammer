@@ -36,7 +36,8 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   the own-turn stratagems that end in mortal wounds (15.05 at the Shoot decision, 15.06 just after a charge move). At 0
   the session hides Explosives' answers from the bot (`GameSession::legal_offered`; the bot's own list leaves them out
   too) and declines Crushing Impact's window, so the bot never sees either. Both default to 0 (Explosives measured +6
-  games in 400, Crushing Impact -10, both -4: not better).
+  games in 400, Crushing Impact -10, both -4: not better). M98 (D-100): with `crushing_impact` at 1 the charge planning
+  also prices Crushing Impact at each planned charge move's end (measured again: -8, both -2; still 0).
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -154,6 +155,11 @@ M97's head-to-head (D-092's procedure on the terrain scenario, 400 games per var
 defaults) gave Explosives +6 (203-197), Crushing Impact -10 (195-205) and both -4 (198-202), every run clean. So both
 keys stay off by default and the default bot plays as at M96: the M96 binary at the defaults stays the reference for every
 run (`steps` and `actions` aside). `without_stratagems()` turns the new keys off too.
+
+M98 (D-100) prices Crushing Impact in the charge planning only with `crushing_impact` at 1, so at the defaults nothing is
+computed: all thirteen runs (2,600 games) are identical to the M97 binary in every field, `steps` and `actions` included.
+Its head-to-head (the same procedure) gave Crushing Impact -8 (196-204) and both keys -2 (199-201), every run clean, so
+both keys stay off, and the M97 binary at the defaults is the reference for every field from here.
 
 ## Deployment and the summary
 
