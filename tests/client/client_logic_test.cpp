@@ -1327,7 +1327,9 @@ TEST(M12_NoRulesInTheClient, OnlyTheSessionAndTimelineApplyActions) {
     // attack_sequence: the dice pop-ups (D-033) call its read-only 05.04 check_save_roll to colour save dice.
     // attacks: the menus and dice pop-ups call its read-only ability_effects / batch_context (D-037).
     // terrain (M88): the board's terrain text calls its read-only queries (is_obscuring, has_dense, feature_label).
-    const std::regex allowed_logic_rules(R"(#\s*include\s*"core/rules/(shooting|fight)(_types)?\.hpp"|#\s*include\s*"core/rules/(move_types|attack_types|attack_sequence|attacks|terrain)\.hpp")");
+    // stratagem_effects (M97, D-099 part 5): the selection bar and the dice cards read its read-only queries
+    // (effect_dice, the numbers each die needs), so the client works none of them out itself.
+    const std::regex allowed_logic_rules(R"(#\s*include\s*"core/rules/(shooting|fight)(_types)?\.hpp"|#\s*include\s*"core/rules/(move_types|attack_types|attack_sequence|attacks|terrain|stratagem_effects)\.hpp")");
     int files = 0;
     for (const auto& entry : fs::recursive_directory_iterator(client)) {
         const auto ext = entry.path().extension();
