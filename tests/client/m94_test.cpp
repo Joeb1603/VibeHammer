@@ -52,7 +52,9 @@ nlohmann::json format1_save(const GameSession& s) {
     j["format"] = kReplayFormatRollsInline;
     nlohmann::json steps = nlohmann::json::array();
     for (const nlohmann::json& step : j.at("steps")) {
-        if (step.at("action").at("kind") != "RollDice") steps.push_back(step);
+        // M95 (D-096): nor the declined windows (the session declines them; format 1 records neither).
+        const auto& kind = step.at("action").at("kind");
+        if (kind != "RollDice" && kind != "DeclineStratagems") steps.push_back(step);
     }
     j["steps"] = std::move(steps);
     return j;
@@ -108,7 +110,9 @@ TEST(M94_Session, TheSessionRollsForItsAutoSidesAndWaitsForTheOthers) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         EXPECT_TRUE(std::holds_alternative<action::Shoot>(s.history()[before].action));
         for (std::size_t i = before + 1; i < s.history().size(); ++i) {
-            EXPECT_TRUE(std::holds_alternative<action::RollDice>(s.history()[i].action));  // Side A's, made at once
+            // Side A's, made at once (M95, D-096: and its windows, declined at once).
+            const GameAction& a = s.history()[i].action;
+            EXPECT_TRUE(std::holds_alternative<action::RollDice>(a) || std::holds_alternative<action::DeclineStratagems>(a));
             EXPECT_EQ(s.history()[i].side, Side::A);
         }
         EXPECT_EQ(s.pending()->side, Side::B);
@@ -126,7 +130,7 @@ TEST(M94_Session, TheSessionRollsForItsAutoSidesAndWaitsForTheOthers) {
 }
 
 TEST(M94_Session, ARollStepIsLoggedWithItsKind) {
-    GameSession s(shoot_step(1), {false, false});
+    GameSession s(shoot_step(1), {false, false}, {false, false});  // M95 (D-096): no automatic decline after the roll
     ASSERT_TRUE(s.submit(rifle_volley(s.state())).ok());
     ASSERT_TRUE(roll_pending(s.state()));
     const auto& d = std::get<decision::RollDice>(s.pending()->kind);
@@ -185,7 +189,7 @@ TEST(M94_RollPrompt, NoCardWithoutARollWaiting) {
 // ==== Undo (D-039): a roll is never taken back on its own ====
 
 TEST(M94_Undo, UndoTakesARollBackWithTheInputThatLedToIt) {
-    GameSession s(shoot_step(1), {false, false});
+    GameSession s(shoot_step(1), {false, false}, {false, false});  // M95 (D-096): the roll's window waits
     const GameState before = s.state();
     const std::size_t start = s.history().size();
     UndoGroups groups;

@@ -259,12 +259,14 @@ TEST(M61_ClientText, AHazardCasualtyDecisionIsWaitingFor0602) {
 TEST(M61_Undo, TheAnswerIsItsOwnGroupAndUndoingItReRollsTheSameDice) {
     GameSession session = session_at_the_decision();
     ASSERT_TRUE(session.pending() && std::holds_alternative<decision::RerollWoundRolls>(session.pending()->kind));
-    // The volley, then (M94, D-095) its hit and wound rolls, each a step the session made by itself.
+    // The volley, then (M94, D-095) its hit and wound rolls, each a step the session made by itself, and (M95, D-096)
+    // the hit roll's Command Re-roll window, declined by the session.
     const std::size_t volley = session.history().size();
-    ASSERT_EQ(volley, 3u);
+    ASSERT_EQ(volley, 4u);
     EXPECT_TRUE(std::holds_alternative<action::Shoot>(session.history()[0].action));
     EXPECT_EQ(session.history()[1].action, (GameAction{action::RollDice{RollKind::Hit, session.state().units[kMarines].id}}));
-    EXPECT_EQ(session.history()[2].action, (GameAction{action::RollDice{RollKind::Wound, session.state().units[kMarines].id}}));
+    EXPECT_EQ(session.history()[2].action, (GameAction{action::DeclineStratagems{}}));
+    EXPECT_EQ(session.history()[3].action, (GameAction{action::RollDice{RollKind::Wound, session.state().units[kMarines].id}}));
     // D-039: the volley was one input, the re-roll (with what the client then does by itself) is another.
     UndoGroups groups;
     groups.begin(0);

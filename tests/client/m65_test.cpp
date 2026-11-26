@@ -43,7 +43,8 @@ TEST(M65_Replay, TheOvalReplayPlaysInTheViewerWithItsRings) {
     const Replay replay = load_replay(kOvalReplay);
     const Timeline timeline = Timeline::from_replay(replay, wh40k::test::repo_root(), "m65");
     ASSERT_TRUE(timeline.error().empty()) << timeline.error();
-    ASSERT_EQ(timeline.size(), replay.steps.size() + 1);
+    // M95 (D-096): an older file is shown as its format-3 form (its windows and per-attack damage rolls as steps).
+    ASSERT_EQ(timeline.size(), with_roll_steps(replay, wh40k::test::repo_root()).steps.size() + 1);
     bool turned = false;
     bool ringed = false;
     for (std::size_t i = 0; i < timeline.size(); ++i) {

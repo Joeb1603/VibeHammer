@@ -424,8 +424,9 @@ std::string per_game_field(const std::string& line, const std::string& key) {
 // pinned under M90's rules (the M89 and M90 Release arenas at cover=0 differ only from there). M92 (D-093): 13.11.01
 // Gone to Ground changes the trace only (d402e9f71fb750df under M90): the actions and the final state are the same.
 // M94 (D-095): each roll is a step of its own, so the actions hash changed (e27db795e0c1ed1f before); the final state
-// and the trace did not.
-constexpr const char* kM88Actions = "3de2a3dc77197f59";
+// and the trace did not. M95 (D-096): each declined window is a step too, and a random D is rolled per attack, so the
+// actions hash changed again (3de2a3dc77197f59 at M94); the final state and the trace did not.
+constexpr const char* kM88Actions = "dd1d45f3a5aae08b";
 constexpr const char* kM88State = "873846eb3d40fa93";
 constexpr const char* kM88Trace = "69714275291ebb7f";
 

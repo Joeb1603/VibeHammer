@@ -248,12 +248,14 @@ TEST(M78_Arena, ContactCountsUnitsNeverWithin12AndTheFirstEngagementRound) {
 TEST(M78_Arena, StatisticsDoNotChangeThePerGameLine) {
     // bot_20_termagants Normal vs Normal, seed 1: the pre-batch baseline's line (main at c54c47c), a game with fights.
     // M94 (D-095): each roll is a step of its own, so the steps (69 before) and the actions hash (04bfbe00cd6674d0)
-    // changed; the final state and the bots' decisions did not.
+    // changed; the final state and the bots' decisions did not. M95 (D-096): each declined window is a step too, and a
+    // random D is rolled per attack, so the steps (92 at M94) and the actions hash (89961737f9584da7) changed again; the
+    // state and the trace did not.
     const GameState s = scenario("bot_20_termagants.json");
     const PerGameReport r = run_per_game(s, 1, 1, normal_bot(), normal_bot());
     EXPECT_EQ(first_line(r.text),
-              "game 1: finished 1 winner A round 2 steps 92 surviving 5/0 wounds lost 1/20 coherency 0/0 fight steps "
-              "2/3 fight moves 2/3 rejected 0 reverted 0 fallbacks 0 actions 89961737f9584da7 state d55512b94297d01b "
+              "game 1: finished 1 winner A round 2 steps 110 surviving 5/0 wounds lost 1/20 coherency 0/0 fight steps "
+              "2/3 fight moves 2/3 rejected 0 reverted 0 fallbacks 0 actions b799e9c856084482 state d55512b94297d01b "
               "trace 65802985f119abbe");
     // The same game's record has its teamwork statistics (they are only in the summary).
     const GameRecord g = play_bot_game(s, 1, normal_bot(), normal_bot());

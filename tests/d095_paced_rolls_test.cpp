@@ -39,10 +39,24 @@ decision::RollDice pending_roll(const GameState& gs) {
     return std::get<decision::RollDice>(gs.pending->kind);
 }
 
-// Answers the pending RollDice (paced: up to the next decision) from `dice`.
+// D-096 (M95): declines every reaction window waiting, adding its events to `events`. These tests follow M94's flow, in
+// which no stratagem is used (D096 tests the windows themselves); declining draws no dice.
+void decline_windows(GameState& gs, std::vector<GameEvent>* events = nullptr) {
+    ScriptedDice none{std::vector<int>{}};
+    while (window_pending(gs)) {
+        const std::vector<GameEvent> e = apply_action_paced(gs, gs.pending->side, action::DeclineStratagems{}, none);
+        if (events != nullptr) events->insert(events->end(), e.begin(), e.end());
+    }
+}
+
+// Answers the pending RollDice (paced: up to the next decision) from `dice`, with the windows before and after it
+// declined (D-096).
 std::vector<GameEvent> roll(GameState& gs, DiceSource& dice) {
+    decline_windows(gs);
     const decision::RollDice d = pending_roll(gs);
-    return apply_action_paced(gs, gs.pending->side, action::RollDice{d.roll, d.unit}, dice);
+    std::vector<GameEvent> events = apply_action_paced(gs, gs.pending->side, action::RollDice{d.roll, d.unit}, dice);
+    decline_windows(gs, &events);
+    return events;
 }
 
 // D-095, the roll closure: `a` applied inline (apply_action) equals it applied paced with every roll then answered,
@@ -55,6 +69,7 @@ std::vector<RollKind> expect_closure(const GameState& gs, Side side, const GameA
     GameState paced = gs;
     ScriptedDice d2{rolls};
     std::vector<GameEvent> e2 = apply_action_paced(paced, side, a, d2);
+    decline_windows(paced, &e2);  // D-096: every window declined
     std::vector<RollKind> kinds;
     while (roll_pending(paced)) {
         kinds.push_back(pending_roll(paced).roll);
@@ -333,6 +348,7 @@ TEST(D095_RollPoints, TheBattleShockStepAsksForEachUnitsRollInUnitOrder) {
     EXPECT_EQ(none.consumed(), 0u);
     const UnitId first = gs.units[1].id;
     EXPECT_EQ(gs.flow.battle_shock_tests, (std::vector<UnitId>{first, UnitId{50}}));
+    decline_windows(gs);  // D-096: Insane Bravery's window (15.04), declined
     EXPECT_EQ(gs.pending, (PendingDecision{Side::B, decision::RollDice{RollKind::BattleShock, first}}));
     EXPECT_EQ(decision_rule(gs, *gs.pending), "08.03");
     EXPECT_EQ(roll_dice_info(gs)->expression, "2D6");
@@ -663,11 +679,14 @@ TEST(D095_Closure, RandomGamesPlayTheSamePacedAndInline) {
             wh40k::test::TestRng rng(seed * 7);
             int rolls = 0;
             for (int i = 0; i < 400 && paced.state().pending; ++i) {
-                const GameAction a = wh40k::test::random_action(paced.state(), rng);
+                // D-096: every window declined (the roll closure; D096 plays games that use stratagems).
+                const GameAction a = window_pending(paced.state()) ? GameAction{action::DeclineStratagems{}}
+                                                                   : wh40k::test::random_action(paced.state(), rng);
                 rolls += std::holds_alternative<action::RollDice>(a) ? 1 : 0;
                 ASSERT_TRUE(paced.submit(decider(paced.state()), a).ok());
             }
-            if (roll_pending(paced.state())) continue;  // stopped at a roll: the inline game is past it
+            // Stopped at a roll or a window: the inline game is past it.
+            if (roll_pending(paced.state()) || window_pending(paced.state())) continue;
             EXPECT_GT(rolls, 0);
             Match at_once(initial);
             for (const ReplayStep& s : without_rolls(paced.steps())) ASSERT_TRUE(at_once.submit(s.side, s.action).ok());
@@ -754,7 +773,8 @@ Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
         "makes its hazard rolls before the move and its battle-shock roll after it, then passes. Side B: the "
         "Termagants' battle-shock roll in the Battle-shock step (08.03); they remain stationary and fire every "
         "fleshborer at the Intercessors: Side B rolls the random A (D-069), the hit and wound rolls, Side A the save "
-        "rolls (05.03) and orders its casualties (D-013), Side B the damage rolls (05.04, once per batch) and then its "
+        "rolls (05.03) and orders its casualties (D-013), Side B the damage rolls (05.04, one per attack since M95, "
+        "D-096) and then its "
         "hazard rolls (24.15). The Termagants declare a charge and make the charge roll (11.02), then no charge move. "
         "Round 2, Side A: any battle-shock roll, then the Intercessors Advance (09.06). Stops at Side A's move of the "
         "advancing models. Casualties in unit order.";
@@ -798,7 +818,7 @@ Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     act(action::CommitUnitMove{});
     // Side B's turn: its Battle-shock step, then the volley.
     play_until([](const GameState& gs) {
-        return gs.flow.stage == Stage::Shoot && turn_side(gs) == Side::B && !roll_pending(gs);
+        return gs.flow.stage == Stage::Shoot && turn_side(gs) == Side::B && !roll_pending(gs) && !window_pending(gs);
     });
     if (!failed) {
         action::Shoot volley{gants, ShootingType::Normal, {}};
@@ -807,12 +827,14 @@ Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
         }
         act(volley);
     }
-    play_until([](const GameState& gs) { return gs.flow.stage == Stage::Charge && !roll_pending(gs); });
+    // D-096 (M95): a reaction window waits like a roll (neutral_action declines it).
+    const auto waiting = [](const GameState& gs) { return roll_pending(gs) || window_pending(gs); };
+    play_until([&](const GameState& gs) { return gs.flow.stage == Stage::Charge && !waiting(gs); });
     if (!failed && match.state().flow.stage == Stage::Charge) {
         const auto legal = legal_actions(match.state(), Side::B);
         if (std::find(legal.begin(), legal.end(), GameAction{action::DeclareCharge{gants}}) == legal.end()) return r;
         act(action::DeclareCharge{gants});
-        play_until([](const GameState& gs) { return !roll_pending(gs); });
+        play_until([&](const GameState& gs) { return !waiting(gs); });
         if (!failed && match.state().pending &&
             std::holds_alternative<decision::SelectChargeTargets>(match.state().pending->kind)) {
             act(action::SkipChargeMove{gants});
@@ -824,7 +846,7 @@ Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     });
     if (failed || !match.state().pending || turn_side(match.state()) != Side::A) return r;
     act(action::StartMove{marines, MoveType::Advance, std::nullopt});
-    play_until([](const GameState& gs) { return !roll_pending(gs); });
+    play_until([&](const GameState& gs) { return !waiting(gs); });
     r.steps = match.steps();
     r.expect = replay_expectation(match.state());
     std::vector<RollKind> kinds;
