@@ -383,12 +383,14 @@ TEST(M91_Regression, TheNewKeysAtZeroPlayTheTerrainAndObjectiveScenariosAsM90) {
         const char* actions;
         const char* state;
         const char* trace;
-    } pins[] = {{kTerrainScenario, "bb8f3dbb43e36153", "e3f0d22c61823516", "54c0dfee123ead1b"},
+    } pins[] = {{kTerrainScenario, "7af6666cb29a26c5", "e3f0d22c61823516", "54c0dfee123ead1b"},
                 // M93 (D-094): the objective scenario's objectives are markers (14.01.01), so its game is pinned under
                 // M93's rules (M90's pins: 0f541058be8987ce, 7d146f09e35eecf6, a4954478d7e5ca05).
-                {kObjectiveScenario, "d8f001f46a0e9dd8", "a72929b923c9055d", "1991fde7d6fe9d5c"}};
+                {kObjectiveScenario, "eb8b53f897ee6117", "a72929b923c9055d", "1991fde7d6fe9d5c"}};
     // M94 (D-095): each roll is a step of its own, so the actions hashes changed (dd02111be5230c80 and
-    // ab644a7bf2f340a3 before); the states and the traces did not.
+    // ab644a7bf2f340a3 before); the states and the traces did not. M95 (D-096): each declined window is a step too, and
+    // a random D is rolled per attack, so they changed again (bb8f3dbb43e36153 and d8f001f46a0e9dd8 at M94); the states
+    // and the traces did not.
     for (const auto& pin : pins) {
         SCOPED_TRACE(pin.scenario);
         const GameState scenario = load_scenario(repo_root() / pin.scenario, repo_root());

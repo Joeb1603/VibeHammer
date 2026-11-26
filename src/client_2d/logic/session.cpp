@@ -16,8 +16,8 @@ std::string side_name(core::Side s) { return s == core::Side::A ? "Side A" : "Si
 
 }  // namespace
 
-GameSession::GameSession(core::GameState initial, std::array<bool, 2> auto_roll)
-    : match_(std::move(initial), core::RollMode::Paced), auto_roll_(auto_roll) {
+GameSession::GameSession(core::GameState initial, std::array<bool, 2> auto_roll, std::array<bool, 2> auto_decline)
+    : match_(std::move(initial), core::RollMode::Paced), auto_roll_(auto_roll), auto_decline_(auto_decline) {
     log_.push_back(LogEntry{"Start", match_.events()});  // Match starts the game if it hasn't started
     roll_automatically();                                  // D-095
 }
@@ -27,12 +27,12 @@ GameSession::GameSession(core::GameState initial, NoAutoRoll) : match_(std::move
 }
 
 GameSession GameSession::new_game(core::GameState scenario, std::optional<std::uint64_t> seed,
-                                  std::array<bool, 2> auto_roll) {
+                                  std::array<bool, 2> auto_roll, std::array<bool, 2> auto_decline) {
     if (seed) {
         scenario.dice.seed = *seed;  // M13: seed override at game start
         scenario.dice.position = 0;
     }
-    return GameSession(std::move(scenario), auto_roll);
+    return GameSession(std::move(scenario), auto_roll, auto_decline);
 }
 
 GameSession GameSession::from_steps(core::GameState initial, const std::vector<core::ReplayStep>& steps) {
@@ -115,22 +115,36 @@ bool GameSession::undo() {
 void GameSession::truncate(std::size_t n) {
     const std::vector<core::ReplayStep>& h = history();
     if (n >= h.size()) return;
-    // D-095: a roll is never taken back on its own: back to before the last step that isn't a roll.
-    while (n > 0 && std::holds_alternative<core::action::RollDice>(h[n].action)) --n;
+    // D-095: a roll is never taken back on its own: back to before the last step that isn't a roll. D-096: nor a
+    // declined window.
+    const auto automatic = [](const core::GameAction& a) {
+        return std::holds_alternative<core::action::RollDice>(a) ||
+               std::holds_alternative<core::action::DeclineStratagems>(a);
+    };
+    while (n > 0 && automatic(h[n].action)) --n;
     const std::vector<core::ReplayStep> kept(h.begin(), h.begin() + static_cast<std::ptrdiff_t>(n));
     const std::array<bool, 2> auto_roll = auto_roll_;
+    const std::array<bool, 2> auto_decline = auto_decline_;
     *this = from_steps(initial(), kept);  // deterministic: the dice state is part of GameState
     auto_roll_ = auto_roll;
+    auto_decline_ = auto_decline;
     roll_automatically();
 }
 
 std::vector<core::GameAction> GameSession::roll_automatically() {
     std::vector<core::GameAction> made;
-    while (core::roll_pending(state()) && auto_roll(state().pending->side)) {
-        const auto& d = std::get<core::decision::RollDice>(state().pending->kind);
-        const core::GameAction roll = core::action::RollDice{d.roll, d.unit};
-        if (!submit_one(roll).ok()) break;  // never refused (its one legal answer); an engine error stops here
-        made.push_back(roll);
+    while (state().pending) {
+        const core::Side side = state().pending->side;
+        core::GameAction answer;
+        if (const auto* d = std::get_if<core::decision::RollDice>(&state().pending->kind); d && auto_roll(side)) {
+            answer = core::action::RollDice{d->roll, d->unit};
+        } else if (core::window_pending(state()) && auto_decline(side)) {
+            answer = core::action::DeclineStratagems{};  // D-096
+        } else {
+            break;
+        }
+        if (!submit_one(answer).ok()) break;  // never refused; an engine error stops here
+        made.push_back(answer);
     }
     return made;
 }
@@ -152,15 +166,19 @@ core::ValidationResult GameSession::submit(const core::GameAction& action) {
     const std::size_t before = history().size();
     const core::ValidationResult v = submit_one(action);
     if (!v.ok()) return v;
-    roll_automatically();  // D-095
-    if (core::roll_pending(state()) && auto_roll(state().pending->side)) {
-        // An automatic roll failed (an engine error): take the action and its rolls back, as if it had been refused.
+    roll_automatically();  // D-095, D-096
+    const bool stuck = (core::roll_pending(state()) && auto_roll(state().pending->side)) ||
+                       (core::window_pending(state()) && auto_decline(state().pending->side));
+    if (stuck) {
+        // An automatic answer failed (an engine error): take the action and its answers back, as if it had been refused.
         const core::ValidationResult failed = core::ValidationResult::failure(
             "Engine error (the action was not applied): a roll after it could not be made");
         const std::array<bool, 2> auto_roll = auto_roll_;
+        const std::array<bool, 2> auto_decline = auto_decline_;
         *this = from_steps(initial(), std::vector<core::ReplayStep>(history().begin(),
                                                                     history().begin() + static_cast<std::ptrdiff_t>(before)));
         auto_roll_ = auto_roll;
+        auto_decline_ = auto_decline;
         return failed;
     }
     return v;

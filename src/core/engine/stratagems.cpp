@@ -24,10 +24,6 @@ namespace {
 
 constexpr std::array<Stratagem, 2> kStratagems{Stratagem::CommandReroll, Stratagem::InsaneBravery};
 
-// TEMPORARY (M95 step 3, removed in step 5): windows stay closed while the roll points are refactored, so the whole
-// suite checks the refactor alone.
-constexpr bool kOpenWindows = false;
-
 template <typename T>
 bool contains(const std::vector<T>& v, const T& x) {
     return std::find(v.begin(), v.end(), x) != v.end();
@@ -115,7 +111,7 @@ std::optional<std::string> problem(const GameState& state, Side side, Stratagem 
                        "wound roll, or a roll for the number of attacks";
             }
             if (pickable_dice(state, w).empty()) {
-                return "01.05.02: every die of this roll has already been re-rolled (a die is re-rolled only once)";
+                return "D-011: every die of this roll has already been re-rolled (a die is re-rolled only once)";
             }
             return std::nullopt;
         case Stratagem::InsaneBravery:
@@ -231,7 +227,7 @@ void command_reroll(GameState& state, std::optional<std::size_t> die, DiceSource
 void after_roll(GameState& state, RollKind roll, UnitId unit, std::size_t batch, std::vector<int> faces,
                 std::vector<std::size_t> rerolled, Events& events) {
     StratagemWindow w{WindowTiming::AfterRoll, roll, unit, batch, {}, std::move(faces), std::move(rerolled)};
-    if (kOpenWindows) w.sides = window_sides(state, w);
+    w.sides = window_sides(state, w);
     if (w.sides.empty()) {
         apply_roll(state, w, events);  // no side can use a stratagem here: as in M94
         return;
@@ -243,7 +239,7 @@ void offer_battle_shock_window(GameState& state) {
     if (state.flow.stage != Stage::BattleShock || state.flow.battle_shock_tests.empty()) return;
     StratagemWindow w{WindowTiming::BeforeRoll, RollKind::BattleShock, state.flow.battle_shock_tests.front(), 0, {},
                       {}, {}};
-    if (kOpenWindows) w.sides = window_sides(state, w);
+    w.sides = window_sides(state, w);
     if (!w.sides.empty()) state.flow.window = std::move(w);
 }
 
@@ -297,7 +293,7 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
         const auto [first, last] = reroll_group(state, w, *a.die);
         for (std::size_t k = first; k < last; ++k) {
             if (contains(w.rerolled, k)) {
-                return ValidationResult::failure("01.05.02: die " + std::to_string(k) +
+                return ValidationResult::failure("D-011: die " + std::to_string(k) +
                                                  " has already been re-rolled (a die is re-rolled only once)");
             }
         }

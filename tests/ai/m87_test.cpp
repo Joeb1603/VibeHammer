@@ -627,8 +627,9 @@ std::string per_game_field(const std::string& line, const std::string& key) {
 
 // M86's Release arena, seed 1 (`--per-game 1`): the rosters, and the objective scenario (the same actions and trace).
 // M94 (D-095): each roll is a step of its own, so the actions hash changed (96386b34f58c8447 at M86); the states and
-// the trace did not.
-constexpr const char* kM86Actions = "5f61ac23ccdd1386";
+// the trace did not. M95 (D-096): each declined window is a step too, and a random D is rolled per attack, so the
+// actions hash changed again (5f61ac23ccdd1386 at M94); the states and the trace did not.
+constexpr const char* kM86Actions = "095330f5f749cd1e";
 constexpr const char* kM86Trace = "e034d41cdcc42bd7";
 constexpr const char* kM86RostersState = "154669e688551ac1";
 constexpr const char* kM86ObjectivesState = "3301929fd89fbaf9";

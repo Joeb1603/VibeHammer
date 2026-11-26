@@ -7,6 +7,8 @@
 // D-095 (M94): the session is paced: the engine stops at every dice roll (a RollDice decision) and the roll is a step
 // of its own. A side with auto_roll on (a bot's, or a human's with the dice pop-ups off) has its rolls made at once,
 // after the action that led to them; any other side makes each one by submitting its RollDice (the Roll button).
+// D-096 (M95): the engine also stops at every reaction window (UseStratagems). A side with auto_decline on (the default:
+// a bot that plays no stratagems, or a human with "Offer stratagems" off) declines each at once, a step of its own.
 
 #include <array>
 #include <cstdint>
@@ -35,11 +37,13 @@ class GameSession {
 public:
     // Starts the game (start_game_paced) if it has not started, then makes the pending rolls of the sides with
     // `auto_roll` on (D-095).
-    explicit GameSession(core::GameState initial, std::array<bool, 2> auto_roll = {true, true});
+    explicit GameSession(core::GameState initial, std::array<bool, 2> auto_roll = {true, true},
+                         std::array<bool, 2> auto_decline = {true, true});
 
     // A new game from a scenario's state, with the dice seed overridden if given (M13).
     [[nodiscard]] static GameSession new_game(core::GameState scenario, std::optional<std::uint64_t> seed,
-                                              std::array<bool, 2> auto_roll = {true, true});
+                                              std::array<bool, 2> auto_roll = {true, true},
+                                              std::array<bool, 2> auto_decline = {true, true});
     // Rebuilds a game by submitting `steps` from `initial` (the rolls are steps of their own, D-095). No roll is made
     // automatically, so the game stops where the steps stop. Throws core::DataError if a step is invalid.
     [[nodiscard]] static GameSession from_steps(core::GameState initial, const std::vector<core::ReplayStep>& steps);
@@ -60,7 +64,8 @@ public:
     [[nodiscard]] core::Replay to_replay(std::string description) const;
 
     // Undo (hotseat): rebuild from the initial state without the last step. D-095: a roll is never taken back on its
-    // own: the last step that isn't a roll goes, with every roll after it. False if there is no step.
+    // own: the last step that isn't a roll goes, with every roll after it. D-096: nor is a declined window (a decline
+    // goes with the input that led to it; a stratagem used is an input of its own). False if there is no step.
     [[nodiscard]] bool can_undo() const noexcept { return !history().empty(); }
     bool undo();
     // The game rebuilt from its first `n` steps (one rebuild; nothing if n >= the number of steps). D-095: when the
@@ -73,9 +78,16 @@ public:
     void set_auto_roll(core::Side side, bool on) noexcept { auto_roll_[core::side_index(side)] = on; }
     [[nodiscard]] bool auto_roll(core::Side side) const noexcept { return auto_roll_[core::side_index(side)]; }
     [[nodiscard]] const std::array<bool, 2>& auto_roll() const noexcept { return auto_roll_; }
-    // Makes every pending roll of a side with auto_roll on, each its own step and log entry, until the decision is
-    // another kind or another side's roll. Returns the rolls made. submit and the constructor call it.
+    // Makes every pending roll of a side with auto_roll on, and declines every window of a side with auto_decline on
+    // (D-096), each its own step and log entry, until the decision is another kind or another side's. Returns the
+    // answers made. submit and the constructor call it.
     std::vector<core::GameAction> roll_automatically();
+
+    // ---- D-096 (M95): automatic declines ----
+    // Whether `side`'s reaction windows are declined at once (a bot that plays no stratagems, or a human with "Offer
+    // stratagems" off). Kept by undo.
+    void set_auto_decline(core::Side side, bool on) noexcept { auto_decline_[core::side_index(side)] = on; }
+    [[nodiscard]] bool auto_decline(core::Side side) const noexcept { return auto_decline_[core::side_index(side)]; }
 
     [[nodiscard]] std::uint64_t seed() const noexcept { return match_.initial_state().dice.seed; }
 
@@ -106,6 +118,7 @@ private:
     core::Match match_;
     std::vector<LogEntry> log_;
     std::array<bool, 2> auto_roll_{true, true};
+    std::array<bool, 2> auto_decline_{true, true};  // D-096
 };
 
 }  // namespace wh40k::client
