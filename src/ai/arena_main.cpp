@@ -97,6 +97,10 @@ void apply_weights(const std::string& text, wh40k::ai::normal::MoveWeights& w) {
         } else if (key == "command_reroll" || key == "insane_bravery") {  // M95 (D-096): 0 or 1
             if (d != 0.0 && d != 1.0) throw std::invalid_argument(key + " is 0 or 1");
             (key == "command_reroll" ? w.command_reroll : w.insane_bravery) = d;
+        } else if (key == "fire_overwatch" || key == "heroic_intervention" || key == "counteroffensive") {  // M96 (D-097)
+            if (d != 0.0 && d != 1.0) throw std::invalid_argument(key + " is 0 or 1");
+            (key == "fire_overwatch" ? w.fire_overwatch
+                                     : key == "heroic_intervention" ? w.heroic_intervention : w.counteroffensive) = d;
         } else if (key == "gone_to_ground") {  // M93 (D-094): 0 or 1
             if (d != 0.0 && d != 1.0) throw std::invalid_argument("gone_to_ground is 0 or 1");
             w.gone_to_ground = d;

@@ -256,6 +256,13 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
         if (const auto bravery = stratagems_.insane_bravery()) {
             if (row.button(stratagems_.insane_bravery_label())) chosen = bravery;
         }
+        // M96 (D-097): a window that follows no roll: one button per stratagem, mode and unit.
+        const std::vector<ReactionChoice> reactions = stratagems_.reactions(gs);
+        for (std::size_t i = 0; i < reactions.size(); ++i) {
+            ImGui::PushID(static_cast<int>(200 + i));
+            if (row.button(reactions[i].label)) chosen = reactions[i].action;
+            ImGui::PopID();
+        }
         ImGui::EndTable();
         return chosen;
     }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "unit_style.hpp"
 
 namespace wh40k::client {
 
@@ -59,12 +60,32 @@ std::string StratagemPicks::insane_bravery_label() const {
     return "Insane Bravery (" + std::to_string(cost(core::Stratagem::InsaneBravery)) + " CP)";
 }
 
+std::vector<ReactionChoice> StratagemPicks::reactions(const core::GameState& state) const {
+    std::vector<ReactionChoice> out;
+    if (!reaction_window()) return out;
+    for (const core::StratagemOption& o : info_->options) {
+        // "Fire Overwatch (1 CP)", or Heroic Intervention's mode: "Leap to Defend (1 CP)".
+        const std::string head = (o.mode ? std::string(core::stratagem_mode_name(*o.mode)) : o.name) + " (" +
+                                 std::to_string(o.cost) + " CP): ";
+        for (const core::UnitId u : o.targets) {
+            out.push_back(ReactionChoice{core::action::UseStratagem{o.stratagem, u, std::nullopt, o.mode},
+                                         head + unit_display_name(state, u), u});
+        }
+    }
+    return out;
+}
+
 std::string StratagemPicks::decline_label() const {
+    if (reaction_window()) return "No stratagem";  // D-097
     return info_ && info_->timing == core::WindowTiming::BeforeRoll ? "Roll normally" : "Keep the roll";
 }
 
 std::string StratagemPicks::headline() const {
     if (!info_) return "";
+    // D-097 (M96): the windows that follow no roll, by what they offer.
+    if (offers(core::Stratagem::FireOverwatch)) return "Fire Overwatch? (15.08)";
+    if (offers(core::Stratagem::HeroicIntervention)) return "Heroic Intervention? (15.11)";
+    if (offers(core::Stratagem::Counteroffensive)) return "Counteroffensive? (15.12)";
     if (info_->timing == core::WindowTiming::BeforeRoll) return "Insane Bravery? (15.04)";
     return "Command Re-roll? (15.02)";
 }
@@ -72,6 +93,19 @@ std::string StratagemPicks::headline() const {
 std::string StratagemPicks::hint() const {
     if (!info_) return "";
     const std::string cp = std::to_string(info_->command_points) + " CP";
+    if (offers(core::Stratagem::FireOverwatch)) {
+        return "You have " + cp + ". Fire Overwatch: one of your unengaged units shoots now at one visible enemy unit "
+               "within 24\" (snap shooting: only a 6 hits, and it is not critical).";
+    }
+    if (offers(core::Stratagem::HeroicIntervention)) {
+        return "You have " + cp + ". Heroic Intervention: one of your units charges now. Leap to Defend: only at an "
+               "enemy unit that made a charge move this phase. Into the Fray (+1 CP): at any enemy unit within 6\", "
+               "the roll at most 6.";
+    }
+    if (offers(core::Stratagem::Counteroffensive)) {
+        return "You have " + cp + ". Counteroffensive: one of your units eligible to fight gains Fights First until "
+               "the end of the phase and must be the next unit you select to fight.";
+    }
     if (info_->timing == core::WindowTiming::BeforeRoll) {
         return "You have " + cp + ". Insane Bravery passes this battle-shock test with no dice rolled, once per battle.";
     }

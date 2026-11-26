@@ -19,6 +19,7 @@
 
 #include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
+#include "core/state/stratagems.hpp"
 #include "fallback.hpp"
 #include "normal/move_score.hpp"
 
@@ -27,10 +28,33 @@ namespace wh40k::ai {
 struct BotConfig {
     // D-085 (M85): the move score's weights (the tuned defaults; the arena's --weights overrides them for tuning).
     normal::MoveWeights move{};
+    // D-097 (M96): whether the bot plays `s` (its key on).
+    [[nodiscard]] bool plays(core::Stratagem s) const noexcept {
+        switch (s) {
+            case core::Stratagem::CommandReroll: return move.command_reroll > 0.0;
+            case core::Stratagem::InsaneBravery: return move.insane_bravery > 0.0;
+            case core::Stratagem::FireOverwatch: return move.fire_overwatch > 0.0;
+            case core::Stratagem::HeroicIntervention: return move.heroic_intervention > 0.0;
+            case core::Stratagem::Counteroffensive: return move.counteroffensive > 0.0;
+        }
+        return false;
+    }
     // D-096 (M95): whether the bot answers reaction windows (a stratagem key on). If not, its session declines every
     // window for it (GameSession::auto_decline), and the bot never sees one.
     [[nodiscard]] bool plays_stratagems() const noexcept {
-        return move.command_reroll > 0.0 || move.insane_bravery > 0.0;
+        for (const core::Stratagem s : core::kAllStratagems) {
+            if (plays(s)) return true;
+        }
+        return false;
+    }
+    // D-097 (M96): the stratagems it doesn't play: its session declines a window that offers it only these
+    // (GameSession::set_declined_stratagems), so the bot sees only the windows it may use a stratagem in.
+    [[nodiscard]] std::vector<core::Stratagem> declined_stratagems() const {
+        std::vector<core::Stratagem> out;
+        for (const core::Stratagem s : core::kAllStratagems) {
+            if (!plays(s)) out.push_back(s);
+        }
+        return out;
     }
 };
 

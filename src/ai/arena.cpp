@@ -273,6 +273,8 @@ GameRecord play_bot_session(client::GameSession& session, BotConfig a, BotConfig
     rec.seed = session.seed();
     session.set_auto_decline(core::Side::A, !a.plays_stratagems());  // D-096: from now on (play_bot_game sets it at once)
     session.set_auto_decline(core::Side::B, !b.plays_stratagems());
+    session.set_declined_stratagems(core::Side::A, a.declined_stratagems());  // D-097: the windows it can't use
+    session.set_declined_stratagems(core::Side::B, b.declined_stratagems());
     const std::array<int, 2> wounds_at_start = wounds_left(session.state());
     std::array<Bot, 2> bots{Bot(a), Bot(b)};
     // As the client runs a bot game: skip steps with nothing to do, never auto-allocate for a bot (D-054).

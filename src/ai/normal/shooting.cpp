@@ -302,6 +302,46 @@ std::optional<ShootingChoice> plan_shooting(analysis::OddsCache& cache, const co
     return out;
 }
 
+std::optional<ShootingChoice> plan_snap_shooting(analysis::OddsCache& cache, const core::GameState& state,
+                                                 core::UnitId unit) {
+    const core::Unit* u = state.find_unit(unit);
+    if (u == nullptr) return std::nullopt;
+    constexpr core::ShootingType kSnap = core::ShootingType::Snap;
+    const std::vector<core::ShotDeclaration> options = core::shot_options(state, *u, kSnap);
+    if (options.empty()) return std::nullopt;
+    const bool hazardous = has_hazardous_ranged(*u);  // D-077
+    std::vector<core::UnitId> targets;
+    for (const core::ShotDeclaration& o : options) {
+        if (std::find(targets.begin(), targets.end(), o.target) == targets.end()) targets.push_back(o.target);
+    }
+    std::sort(targets.begin(), targets.end(), [](core::UnitId a, core::UnitId b) { return a.v < b.v; });
+    std::optional<ShootingChoice> best;
+    for (const core::UnitId t : targets) {
+        // Each model's loadouts with every shot at `t` (15.09: one target).
+        std::vector<std::vector<Loadout>> cands;
+        for (const core::Model& m : u->models) {
+            std::vector<Loadout> mine;
+            for (const Loadout& l : loadouts_for(*u, m, kSnap, options)) {
+                if (!l.empty() && std::all_of(l.begin(), l.end(), [t](const core::ShotDeclaration& d) { return d.target == t; })) {
+                    mine.push_back(l);
+                }
+            }
+            cands.push_back(std::move(mine));
+        }
+        std::vector<Loadout> current;
+        const std::optional<double> value = descend(cache, state, unit, kSnap, cands, current, hazardous, nullptr);
+        if (!value) continue;
+        ShootingChoice c;
+        c.unit = unit;
+        c.type = kSnap;
+        c.shots = flatten(current);
+        if (c.shots.empty()) continue;
+        c.value = declaration_value(cache, state, unit, kSnap, c.shots, &c.outcomes, hazardous, nullptr).value_or(0.0);
+        if (!best || c.value > best->value + kBetter) best = std::move(c);
+    }
+    return best;
+}
+
 std::optional<ShootingChoice> choose_shooting(analysis::OddsCache& cache, const core::GameState& state,
                                               const std::vector<core::GameAction>& legal, double objective_fire,
                                               const ShootTerrain* terrain, std::vector<core::UnitId>* held) {

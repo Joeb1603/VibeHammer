@@ -109,6 +109,12 @@ struct ShootingChoice {
                                                           core::UnitId unit, core::ShootingType type,
                                                           const ShootingAim* aim = nullptr);
 
+// M96 (D-097): the best snap shot for `unit` (15.09: every shot at one enemy unit): for each target in reach, each
+// model's loadouts with every shot at it (a model that can't reach it doesn't fire), improved as plan_shooting does;
+// the target with the most value. nullopt: no valid snap shot.
+[[nodiscard]] std::optional<ShootingChoice> plan_snap_shooting(analysis::OddsCache& cache, const core::GameState& state,
+                                                               core::UnitId unit);
+
 // From the Shoot decision's legal actions: the unit, type and declaration worth the most, or nullopt when no
 // offered Shoot is worth anything (end the step). D-083 part 3 (M81): with focus fire active (ShootingAim), the values
 // with its bonus, and a unit shooting at a focus target first.

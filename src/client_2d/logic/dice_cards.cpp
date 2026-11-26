@@ -118,6 +118,8 @@ std::string hit_need(const AttackContext& c) {
     const core::AttackBatch* batch = current_batch(c);
     if (batch == nullptr) return "";
     if (!batch->profile.skill) return "Hits automatically (Torrent)";
+    // M96 (D-097): 15.09 snap shooting: only an unmodified 6, whatever the BS and the modifiers, and not critical.
+    if (batch->profile.snap_shooting) return "Need 6 to hit (snap shooting, 15.09): an unmodified 6, not a critical hit";
     std::string need = "Need " + std::to_string(*batch->profile.skill) + "+ to hit";
     // D-011: the modifier applied is the capped net (D-073: 10.06 and 17.03 can make it -2).
     const int net = batch->profile.hit_modifier;
@@ -453,6 +455,10 @@ std::vector<DiceCard> scan(const core::GameState& state, const std::vector<LogEn
                                       "11.02", side_of(state, e.unit, core::Side::A),
                                       two_dice(e.roll, true, true)};
                         card.result = std::to_string(e.roll.total()) + "\" charge";
+                        if (e.capped) {  // M96 (D-097): 15.11 Into the Fray
+                            card.result = std::to_string(e.roll.total()) + ", Into the Fray: a " +
+                                          std::to_string(*e.capped) + "\" charge (15.11)";
+                        }
                         if (e.eligible_targets.empty()) card.result += ": no unit can be reached";
                         identify(card, core::RollKind::Charge, e.unit);
                         cards.push_back(card);

@@ -156,7 +156,22 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
             } else if constexpr (std::is_same_v<T, a::UseStratagem>) {
                 // D-096: "Command Re-roll (1 CP): die 3 (a 1)", "Insane Bravery (1 CP): Termagants pass".
                 const std::string head = std::string(core::stratagem_name(x.stratagem)) + " (" +
-                                         std::to_string(core::stratagem_cost(x.stratagem)) + " CP)";
+                                         std::to_string(core::stratagem_use_cost(x.stratagem, x.mode)) + " CP)";
+                // D-097 (M96): "Fire Overwatch (1 CP): Termagants snap shoot", "Heroic Intervention, Into the Fray (2 CP):
+                // Termagants charge", "Counteroffensive (2 CP): Termagants fight next".
+                switch (x.stratagem) {
+                    case core::Stratagem::FireOverwatch:
+                        return head + ": " + unit_name(state, x.unit) + " snap shoot";
+                    case core::Stratagem::HeroicIntervention:
+                        return std::string(core::stratagem_name(x.stratagem)) +
+                               (x.mode ? ", " + std::string(core::stratagem_mode_name(*x.mode)) : std::string()) + " (" +
+                               std::to_string(core::stratagem_use_cost(x.stratagem, x.mode)) + " CP): " +
+                               unit_name(state, x.unit) + " charge";
+                    case core::Stratagem::Counteroffensive:
+                        return head + ": " + unit_name(state, x.unit) + " fight next";
+                    default:
+                        break;
+                }
                 if (x.stratagem == core::Stratagem::InsaneBravery) {
                     return head + ": " + unit_name(state, x.unit) + " passes its battle-shock roll";
                 }
@@ -169,6 +184,7 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 // D-096: no stratagem; before a battle-shock roll, the roll is then made as usual.
                 const auto& w = state.flow.window;
                 if (w && w->timing == core::WindowTiming::BeforeRoll) return "Roll normally";
+                if (w && !w->roll) return "No stratagem";  // D-097: a window that follows no roll
                 return "Keep the roll";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");

@@ -143,8 +143,8 @@ HelpEntry keyword_help(std::string_view keyword, bool faction) {
         h.in_this_game = true;
     } else if (h.title == "EXPLOSIVES" || h.title == "GRENADES") {
         h.summary = "Lets the unit use the Explosives core Stratagem in your Shooting phase (six D6 at an "
-                    "enemy within 8\", each 4+ is a mortal wound). Explosives is not in this game yet (Command Re-roll "
-                    "and Insane Bravery are, D-096).";
+                    "enemy within 8\", each 4+ is a mortal wound). Explosives is not in this game yet (Command Re-roll, "
+                    "Insane Bravery, Fire Overwatch, Heroic Intervention and Counteroffensive are, D-096, D-097).";
         h.rule = "15.05";
     } else {
         h.summary = "A keyword other rules (datasheets, Stratagems, detachments) can refer to. Nothing in this "

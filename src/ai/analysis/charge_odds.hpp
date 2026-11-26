@@ -11,6 +11,7 @@
 #include <span>
 #include <vector>
 
+#include "core/engine/actions.hpp"
 #include "core/state/game_state.hpp"
 
 namespace wh40k::ai::analysis {
@@ -42,9 +43,13 @@ struct ChargeOdds {
 // Exact P(the charge succeeds) for `unit` declaring a charge against `targets` now. Precondition: `side`'s Charge
 // decision is pending; nullopt if DeclareCharge isn't valid for `unit` (e.g. more than 12" away, advanced, fell
 // back). One scratch state per 2D6 total (11 at most).
+// M96 (D-097): `declare`, the action that declares the charge (DeclareCharge{unit} when not given; 15.11 Heroic
+// Intervention's UseStratagem at its window). Into the Fray's cap is the engine's: a total above 6 gives the same
+// state after the roll as 6.
 [[nodiscard]] std::optional<ChargeOdds> charge_odds(const core::GameState& state, core::UnitId unit,
                                                     std::span<const core::UnitId> targets,
-                                                    const PlacementCheck& placement = {});
+                                                    const PlacementCheck& placement = {},
+                                                    const std::optional<core::GameAction>& declare = std::nullopt);
 
 // The quick bound without a state at the charge decision (strategic knowledge for hypothetical turns; it matches
 // charge_odds in tests): P(a charge roll makes a target at edge-to-edge `gap_mm` eligible: within the roll and
