@@ -13,6 +13,7 @@
 #include "normal/fight.hpp"
 #include "normal/movement.hpp"
 #include "normal/shooting.hpp"
+#include "normal/stratagems.hpp"
 #include "unit_style.hpp"
 
 namespace wh40k::ai {
@@ -35,6 +36,8 @@ std::optional<PolicyResult> normal_answer(const GameState& gs, core::Side side, 
     using namespace core;
     analysis::OddsCache cache;  // per decision: the bot keeps no state between decisions but its plan memo
     const DecisionKind& kind = gs.pending->kind;
+    // M95 (D-096): a reaction window, only with a stratagem key on (otherwise the session declines it).
+    if (std::holds_alternative<decision::UseStratagems>(kind)) return normal::decide_stratagems(cache, gs, side, weights);
     if (std::holds_alternative<decision::Shoot>(kind)) {
         // M87 (D-086): the objective part of the aim, under a mission.
         const double fire = normal::objectives_on(gs, weights) ? weights.objective_fire : 0.0;

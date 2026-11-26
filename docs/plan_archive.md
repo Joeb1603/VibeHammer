@@ -1,7 +1,7 @@
 # VibeHammer: finished milestones (archive)
 
 The finished milestones M0–M83, moved here verbatim from `PLAN.md` in M84 (only M16, M21 and M22 gained their
-✅), M84–M89, moved the same way while planning M90–M91, and M90–M91, moved the same way after M91. `PLAN.md` keeps the current and upcoming work and the
+✅), M84–M89, moved the same way while planning M90–M91, M90–M91, moved the same way after M91, and M92–M94, moved the same way after M95. `PLAN.md` keeps the current and upcoming work and the
 "Later" list. Read a section here only when a
 milestone or decision points at it.
 
@@ -5944,5 +5944,180 @@ gaps and the bot, with M89's 55% bar for the bot.
     arose.
   - Older replays are byte-identical: the m87 and m89 generators are pinned to the keys at 0.
 - **Clean:** every run had no rejected action, reverted move, fallback or unfinished game.
+
+---
+
+## M92: The app-only rules audit (D-093) ✅ (done; its open items done in M93)
+
+**Effort:** high. **Scope:** Phase 0, item 1 of `docs/roadmap.md`. Agreed with the user on 2026-11-23: compare the 101
+app-only entries in `docs/gdmissions/core_rules/` with D-001, D-009, D-010, D-011, D-012, D-015, D-069 and every other
+decision that leans on an app-only rule; **the scraped app text overrides the wording the user supplied** (the user's
+ruling), and the differences are built now.
+
+**Rules** (app-only, cited through D-093): 04.03.03 Target No Longer Eligible or Viable; 13.11.01 Gone to Ground;
+14.02.01 Controlling an Objective at the End of a Phase; 24.11.01 Only [EXTRA ATTACKS] weapons; 02.02.01 Modifiers (BS
+no worse than 6+). PDF rules read: 04.03, 05.04, 13.09, 13.11, 14.01–14.03, 03.03, 24.11, 25 (Rules Appendix).
+
+**Acceptance**
+- [x] D-093 records every app-only entry the engine touches: what changed, what matched, what waits for later rules.
+- [x] 04.03.03: a weapon whose target is gone can select an eligible new target (`RetargetAttacks`, the attacking
+  side's decision); unselected ones are lost; with no eligible new target nothing is asked (D-012's behaviour). Shooting
+  checks the new target with the unit's shooting type; fighting, an enemy unit the model is engaged with. Select Targets
+  facts are recorded again; new batches are appended. Validation reasons are rule-cited. JSON round trips.
+- [x] 13.11.01: a hidden model not fully visible due to intervening Dense features has a 12" detection range (engine
+  and the bot's sight estimate).
+- [x] 14.02.01: end-of-turn control is determined before Regaining Coherency.
+- [x] 24.11.01: [EXTRA ATTACKS] weapons may be selected without another melee weapon.
+- [x] 02.02.01: a BS worsened by cover stops at 6+.
+- [x] The bot, the defaults and the fallback answer `RetargetAttacks`; the client shows its answers, logs the event and
+  keeps the dice cards' batches.
+- [x] Every existing replay stays byte-identical; a new replay, `m92_retarget.json`, shows a re-target.
+- [x] Full `ctest` green.
+
+**Results.** Every existing replay is byte-identical: no saved game had a weapon left with an eligible new target. The
+bot's pinned M88 game on the terrain battlefield (M89's regression) keeps its actions and final state; its trace hash
+changed with Gone to Ground (re-pinned). Random play on the Strike, monster and Tyrannofex fixtures reaches the new
+decision and stays valid.
+
+**Open items.** All three done in M93 (below).
+
+---
+
+## M93: M92's open items (D-094) ✅ (done)
+
+**Effort:** high. **Scope:** the three open items of M92, asked for by the user on 2026-11-23.
+
+**Rules:** 04.03.03 (D-093), 14.01.01 Objectives Not Within a Terrain Area (app-only; also the Rules Appendix), 14.01,
+14.02, 12.08, 13.11.01 (D-093).
+
+**Acceptance**
+- [x] Client: one row per weapon waiting on a gone target, each picking an eligible unit or "lost"
+  (`RetargetPicks`, core's read-only `retarget_choices`); the engine's buttons stay.
+- [x] Objective markers: `ObjectiveArea::marker` (40 mm, within range at 3", held as its range circle); the scenario
+  format (`"marker": true`, no diameter), JSON, a terrain area can't link to one; 12.08's "within 3"" measured to the
+  marker; the board draws the marker. The objective scenario's objectives are markers; custom battles and the arena over
+  terrain read the terrain scenario's mission.
+- [x] Bot: 13.11.01 in `moved_visible` behind `gone_to_ground`, measured by M91's head-to-head; on by default only if
+  better (D-092's keep rule).
+- [x] Replays regenerated on purpose only where the rules moved them; every other one byte-identical. Full `ctest` green.
+
+**Results.**
+- *Bot:* `gone_to_ground` on won 208 of 400 against it off on the terrain scenario (+8, under one standard deviation),
+  so it defaults to 0 and the bot plays as at M92 (the terrain bot games and pins are unchanged).
+- *Objective scenario with markers* (200 games, default weights): Chaos Space Marines win 67 (33.5%; 32.5% at M87), 9 of
+  them on points destroyed at equal VP. Mean objective VP A 15.6 / B 17.9; the Centre is still the Tyranids' (B 1.95 VP a
+  game, A 0.08). The balance item of M87 stays open.
+- *Replays:* `m87_objectives_bot_game.json` and `m90_objective_consolidation.json` regenerated (the markers); the M91
+  objective-scenario pin re-pinned. `ctest`: 1485 of 1485.
+
+**Open items.** None new. The objective scenario's balance (Chaos about a third) is M87's, unchanged.
+
+---
+
+## M94: Engine-paced dice rolls (D-095) ✅ (done; the manual mouse checks open)
+
+**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-25; the design below is the agreed plan, revised
+the same day after a design review: decisions derived from flow state, `apply_action` keeps rolling inline, auto-rolls
+in `GameSession`, random damage once per batch).
+**Scope:** roadmap Phase 0 item 2 (Option 2 of M20). The engine stops at every roll point with a `RollDice` decision for
+the roller, and the roll is made when the roller submits it. Groundwork for Command Re-roll (15.02 "just after you
+make" the roll), re-roll abilities and Feel No Pain. The user's choices (2026-11-25): one milestone (engine, bot,
+replays, saves and client together); a human's rolls follow "Show dice pop-ups" (on: press Roll; off: automatic), and
+bot rolls are always automatic; every roll is recorded as a step (format-2 saves and replays; format 1 migrates on
+load; all 28 test replays regenerated); a random D is rolled once per batch (the per-attack split waits for Feel No
+Pain / Command Re-roll).
+
+**Rules:** 01.05, 01.05.02 (app), 04.03, 05.01–05.04, 06.03, 08.03, 09.06, 09.07, 11.02, 24.15; D-033, D-069, D-072.
+
+**Design**
+- *The roll closure (the invariant):* the old `apply_action(X)` equals the paced `apply_action_paced(X)` followed by
+  `RollDice` answers until no roll is pending: the same dice in the same order, the same events, the same state. If a
+  roll point can't keep it, stop and ask.
+- *One machine, two ways to apply:* the engine always stops at a `RollDice`. `apply_action` / `start_game` (every
+  existing overload) answer each pending `RollDice` for its roller with the same dice, inside the same rollback scope:
+  the M93 behaviour, so the bot's `Simulator`, the M39 guard, the existing tests and format-1 replays are unchanged.
+  `apply_action_paced` / `start_game_paced` stop at the next decision, a `RollDice` included (used by `Match` in
+  `RollMode::Paced`, so by `GameSession`, by format-2 replays and by the D095 tests). Also `roll_pending(state)` and a
+  read-only `roll_dice_info(state)` (who rolls what, how many dice) for the client's pre-roll card (D-024).
+- *Types* (appended to their variants): `enum class RollKind { Advance, Charge, BattleShock, Hazard, RandomAttacks,
+  Hit, Wound, Save, Damage }`; `decision::RollDice{roll, unit}` and `action::RollDice{roll, unit}` (one legal action;
+  validated against the pending decision). The roller is the unit's owner: for a Save the unit is the target (05.03),
+  for a Damage roll the attacker (D-069). New state, each omitted from JSON when empty and hashed behind a tag when set:
+  `AttackFlow::rolling` (a selected batch until its wound roll, with its hit rolls), `BatchInProgress::priority` (the
+  casualty order while a random D waits), `FlowState::battle_shock_tests` (the battle-shock rolls owed). None is ever
+  set at a non-Roll decision, so states at the bots' decisions are as at M93.
+- *Roll points* (each decision derived from the flow state; one Roll each, 05: "make all of those rolls
+  simultaneously"):
+
+| Point | Today | After M94 |
+|---|---|---|
+| 09.06 Advance | `begin_move` (`movement.cpp`) | `StartMove{Advance}`, then a Roll, then `MoveModels`. A reused roll (D-005) asks nothing. |
+| 09.07 Desperate Escape hazards | `begin_move` | a Hazard roll before `OrderCasualties` |
+| 09.07 Desperate Escape battle-shock | at `CommitUnitMove` | the commit owes a BattleShock roll (the battle-shock queue) |
+| 08.03 Battle-shock step | a loop in `battle_shock_step` (`command.cpp`) | the queue, filled on entering the step: one roll per unit, in unit order |
+| 11.02 Charge | `DeclareCharge` apply | a Charge roll, then `SelectChargeTargets` or failure |
+| D-069 random A | `start_batch` (`attack_flow.cpp`) | a RandomAttacks roll if the batch has random A |
+| 05.01 Hit | `start_batch` | a Hit roll (none for [TORRENT]); results stored |
+| 05.02 Wound | `start_batch` | a Wound roll (none with no hits); Twin-linked's `RerollWoundRolls` follows as now |
+| 05.03 Save | `attack_progress` | a Save roll by the defender after the allocation order |
+| 05.04 random D | inside `resolve_casualties` | one Damage roll per batch, by the attacker, after the casualty order |
+| 24.15 Hazardous | `make_attack_hazard_rolls` | a Hazard roll by the attacker after the last batch |
+
+- *Replays and saves:* format 2 records the Roll steps; format 1 is played inline (replays) or converted with
+  `with_roll_steps` (saves, the generators). All 28 `tests/replays/` files are regenerated with byte-identical `expect`
+  blocks; old copies (m8, m62) and an M93 save are kept in `tests/data/legacy/` as migration fixtures.
+- *Bot:* in live games `GameSession` rolls for bot sides, so `Bot::decide` never gets a `RollDice` (its fallback answers
+  one anyway). Arena `steps`/`actions` change by construction; `state` and `trace` must not.
+- *Client:* `GameSession` has a per-side `auto_roll` (bot sides; human sides when `show_dice` is off): a pending
+  `RollDice` for such a side is submitted at once, each Roll a step. Undo never takes a Roll back on its own. With
+  pop-ups on, a human's pending `RollDice` shows a face-down pre-roll card (`logic/roll_prompt`); its Roll submits
+  `RollDice` (joining the previous input's Undo group), and the event cards then open already rolling. Bot cards keep
+  the cosmetic Roll (`DicePace`). `--steps` counts Roll clicks; `--bot-steps` still counts bot decisions.
+- *Docs:* D-095; amend D-033, D-069, D-072, D-014, D-025, D-039; CLAUDE.md's engine API; the roadmap's Phase 0 item 2.
+
+**Acceptance**
+- [x] Each roll point is a `RollDice` decision for the roller, and the Roll answer makes the same dice in the same
+  order. `D095_RollPoints` tests cover each point, the roller's side, the skipped cases (Torrent, no hits, fixed D,
+  reused Advance, no Hazardous roll with no enemy left) and a refused Roll (wrong side, kind or unit).
+- [x] The closure holds: the existing tests pass unchanged through the inline `apply_action`; every regenerated
+  replay's `expect` is byte-identical; its steps without the Roll steps are the old ones; the paced and inline runs of
+  every replay give the same events and state; the M93 and M94 event dumps of all 28 replays are identical.
+- [x] Format-1 saves and replays load (fixtures in `tests/data/legacy/`); format 2 round-trips. Every new state field
+  has a JSON round-trip test.
+- [x] Bots: arena `--per-game` `state` and `trace` hashes identical to M93 on the identity set; decision p95 within
+  budget.
+- [x] Client: with pop-ups on, a human's roll waits for Roll and the faces match the events (logic test); with them off,
+  or for a bot, rolls are automatic; Undo goes back past Rolls; no deadlock against the bot (logic test); xvfb
+  screenshots of a pre-roll card for a hit roll and a save.
+- [x] Full `ctest` green, warnings as errors.
+
+**Results.**
+- *The closure:* the core suite passed unchanged through the inline `apply_action` after each roll point moved. The
+  M93 and M94 dumps of all 28 replays (every event and the final state) are byte-identical, the M94 one both inline
+  (format 1) and paced (format 2). `D095_Closure` checks paced against inline for every replay, for random games on V1,
+  the rosters and Strike, and for each roll point with scripted dice.
+- *Replays:* all 28 regenerated as format 2: the same description, initial state and `expect`, and the same steps once
+  the 1009 roll steps are taken out (scripted against `git show HEAD:`). New `m94_paced_rolls.json`: a Desperate Escape
+  (its hazard and battle-shock rolls), the 08.03 step, and a volley and a charge with every other kind of roll, 11 of
+  its 28 steps rolls.
+- *Bots:* the identity set (13 runs, 2,600 games) is identical to the M93 binary in every per-game field but `steps` and
+  `actions`. Run one after the other on an idle machine, the decision p95 is 1.6-2.9% higher (terrain 12.7 -> 13.1 ms,
+  objectives 9.0 -> 9.2 ms, random armies 6.6 -> 6.7 ms; wall time +2-4%): the inline roll loop's extra passes in the
+  bot's simulations. Far inside the 500 ms budget.
+- *Tests changed, each checked:* the client's history counts now include the rolls (`M13_Undo`, `M61_Undo`,
+  `M16_BoardInteraction`); the per-game pins re-pinned `actions` only (M87, M89, M91; `M78_Arena`'s line its steps too:
+  every `state` and `trace` pin unchanged); the "file is what the builder plays now" checks and every
+  `TheSavedFileMatchesTheGame` compare as format 2; `M88_Replay` applies the file's format; the serialization lists gain
+  `RollDice`. `ctest`: 1520 of 1520 (35 new: 24 `D095_*`, 8 `M94_*` client, 3 `M94_Bots`).
+- *Client:* the pre-roll card (`roll_prompt`, the same title, purpose and need as the rolled card) and its Roll button;
+  xvfb screenshots of a human's hit card before and after Roll and of the defender's save card; the package's
+  `--bot-steps 5` smoke test still takes 5 of 5.
+
+**Open items.**
+- A random D is rolled once per batch; the per-attack split, and a decision between each roll and its result (15.02
+  Command Re-roll, Feel No Pain), are for their milestone (D-095 part 4 lists what resolves inside its Roll today).
+- The pre-roll card's damage dice are the casualty preview's count (each D at its maximum), so a lower D can roll more.
+- Manual checks by mouse on Windows: pressing Roll in hotseat and against the bot, Undo just after a roll, saving while a
+  roll waits, and turning the dice pop-ups off while a roll waits.
 
 ---

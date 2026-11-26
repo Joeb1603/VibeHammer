@@ -60,8 +60,10 @@ page, unzip the whole folder and run `VibeHammer.exe`. If SmartScreen warns you,
 Follow the decision panel at the top of the screen. Click the board to pick units, targets and casualties,
 and drag models to move them. While you drag a model on an oval base (the Tyrannofex), Q and E turn it 15°
 and Shift+mouse wheel turns it 5°. Every roll shows in a dice pop-up, and you make your own rolls: each waits for
-you to press Roll (with "Show dice pop-ups" off, they are made for you). The event log cites the rule number
-behind each step.
+you to press Roll (with "Show dice pop-ups" off, they are made for you). When you could use a stratagem the game
+asks you: Command Re-roll on the card of a roll you just made (click a die, then "Command Re-roll"; "Keep the roll"
+goes on), and Insane Bravery on a battle-shock roll's card. With "Offer stratagems" off you are never asked. The
+event log cites the rule number behind each step.
 
 ## What's implemented
 
@@ -78,6 +80,9 @@ behind each step.
   selected.
 - **Monsters and vehicles:** they can move through enemy infantry. They can also shoot, and be shot at,
   while in Engagement Range.
+- **Stratagems:** both sides gain 1 Command Point (CP) in each Command phase and spend it on Command Re-roll
+  (re-roll one die just after one of your rolls, or a whole charge roll) and Insane Bravery (pass a battle-shock
+  test, once per battle). The other core stratagems are not in yet.
 - **The bot** (`src/ai`) plays only through the same validated actions a human uses, and it never sees the
   game's future dice. It plans its shooting, charges, fights and moves from the odds. (Until M85 there were three
   levels, Easy, Normal and Hard; the one bot is Normal. The others are in git under the tag `bots-three-levels`.)
@@ -114,7 +119,7 @@ behind each step.
     (`docs/dev/bot_arena.md`).
 
 **Not yet:** terrain heights (floors, climbing, Plunging Fire) and Stealth, missions
-beyond the one objective mission, stratagems, unit abilities (including
+beyond the one objective mission, the other core stratagems, unit abilities (including
 Leader, Feel No Pain and Deadly Demise), the weapon abilities listed above as refused, and other unit types.
 `PLAN.md` lists what comes next.
 

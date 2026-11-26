@@ -1,6 +1,7 @@
 # Roadmap: from today's engine to a full game with any army
 
-Written 2026-11-20, after M89; brought up to date after M91 (M90 added 24.18 [IGNORES COVER], D-091). This is the long-range map, not a milestone list: `PLAN.md` stays the order of work,
+Written 2026-11-20, after M89; brought up to date after M91 (M90 added 24.18 [IGNORES COVER], D-091), and for
+M92–M95 in Phase 0. This is the long-range map, not a milestone list: `PLAN.md` stays the order of work,
 and each item here still becomes a `PLAN.md` milestone with rules and acceptance criteria, agreed before it starts
 (`CLAUDE.md`, "Working style"). Sizes are rough guesses in milestones, to show proportion, not promises.
 
@@ -22,12 +23,12 @@ pinned data version. Legends, Crusade and the like are out for now (the user, 20
 | Area | Today | Gap to the goal |
 |---|---|---|
 | Core rules 01–14 | 67 of the 156 numbered rules have tests: the turn sequence, the attack sequence, moves, charges, fights, 2D terrain, objectives | 10.07 Indirect Shooting; the z axis (13.06, 13.11, 22.05); 14.03 securing |
-| Core rules 15–23 | 17.01 and 17.03 only | All of stratagems, actions, FRAME, transports, attached units, reserves, flying, surging, auras, psychic, aircraft |
+| Core rules 15–23 | 15.01, 15.02, 15.04 (M95), 17.01 and 17.03 | The other nine core stratagems, actions, FRAME, transports, attached units, reserves, flying, surging, auras, psychic, aircraft |
 | Core abilities (24) | 11 weapon abilities and random A/D | 26 of the 37 entries: see Phase 1 |
 | Missions | One house mission (D-084), scored from the scenario file | The real mission pack: 25 primaries, 18 secondaries, force dispositions, layouts |
 | Armies | 11 datasheets, 2 factions in custom battles, Incursion only | About 28 faction lists, 256 detachments, well over a thousand datasheets |
 | Unit, faction and detachment rules | Loaded and shown as text; none implemented | The largest part of the whole roadmap: Phase 4 |
-| Bot | Plays the house mission, uses cover, works as an army | Mission-generic scoring, stratagems, actions, reserves, transports, abilities |
+| Bot | Plays the house mission, uses cover, works as an army; Command Re-roll and Insane Bravery behind keys (M95) | Mission-generic scoring, stratagems, actions, reserves, transports, abilities |
 | Client | Hotseat, bot, army builder, hand deployment | A screen for every new decision, a mission and layout picker, the full army builder |
 
 Sources of rules text, and their limits:
@@ -66,9 +67,13 @@ feature: an engine milestone, then its client and bot milestones, as M86 / M87 a
    per-attack damage split and the windows are for Command Re-roll and Feel No Pain.* Every roll becomes a point the engine
    can stop at. Command Re-roll, re-roll abilities, Feel No Pain, Fire Overwatch and most reactive stratagems need a
    decision between a roll and its result, so this comes before Phase 1's stratagems. Every replay is regenerated.
-3. **Reaction windows.** A general way for the opposing side to be offered a decision at a trigger ("just after an
-   enemy unit ends a move", "just after a unit is selected to fight"). Built once, used by stratagems, abilities and
-   mission rules. Rules Sequencing (app-only) decides the order when both sides have one.
+3. **Reaction windows.** *Done in M95 (D-096): a window is a UseStratagems decision for the side that can use a
+   stratagem there, ordered by Rules Sequencing; its first timings are "just after a roll" (Command Re-roll) and "just
+   before a battle-shock roll" (Insane Bravery), with CP spent (15.01) and a random D rolled per attack. Later timings
+   (the end of a phase, after a unit's attacks) add to the same mechanism.* A general way for the opposing side to be
+   offered a decision at a trigger ("just after an enemy unit ends a move", "just after a unit is selected to fight").
+   Built once, used by stratagems, abilities and mission rules. Rules Sequencing (app-only) decides the order when both
+   sides have one.
 4. **Settle the open questions** at the end of this file; question 4 changes the size of Phase 4.
 
 ## Phase 1: finish the core rules (about 25–35 milestones)
@@ -88,7 +93,7 @@ Abilities (24.02) applies throughout.
 
 | Section | What it adds | Depends on |
 |---|---|---|
-| 15 Stratagems | CP spending, 15.01, the eleven core stratagems | Phase 0 items 2 and 3 |
+| 15 Stratagems | CP spending, 15.01, the eleven core stratagems (M95: 15.01, Command Re-roll, Insane Bravery) | Phase 0 items 2 and 3 |
 | 16 Actions | Starting, completing and interrupting actions | none; Phase 2 needs it |
 | 17.02 FRAME | Models measured to a frame, not a base | the fetch tool's "Hull" bases |
 | 19 Attached Units | Leaders and Support joined to bodyguards; 19.02 allocation, Precision | Leader, Support |

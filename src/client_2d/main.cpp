@@ -457,10 +457,12 @@ public:
         return {bot_sides_[0] || !settings_.show_dice, bot_sides_[1] || !settings_.show_dice};
     }
 
-    // D-096 (M95): the sides whose reaction windows the session declines by itself: a bot's (the bot plays no
-    // stratagems), and a human's while "Offer stratagems" is off. Otherwise a human's window waits for its answer.
+    // D-096 (M95): the sides whose reaction windows the session declines by itself: a bot's when its config plays no
+    // stratagem, and a human's while "Offer stratagems" is off. Otherwise the window waits for the side's answer.
     std::array<bool, 2> auto_decline_sides() const {
-        return {bot_sides_[0] || !settings_.offer_stratagems, bot_sides_[1] || !settings_.offer_stratagems};
+        const bool bot_declines = !driver_.config().plays_stratagems();
+        return {bot_sides_[0] ? bot_declines : !settings_.offer_stratagems,
+                bot_sides_[1] ? bot_declines : !settings_.offer_stratagems};
     }
 
     // D-095, D-096: tells the session, and makes a roll or declines a window that is now automatic at once (in the last

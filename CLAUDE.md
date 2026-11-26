@@ -13,7 +13,10 @@ M92 the app-only rules audit (D-093): the scraped app text in `docs/gdmissions/`
 M93 its open items (D-094): per-weapon new targets in the client, 40 mm objective markers (14.01.01) on the objective
 scenario, and Gone to Ground in the bot's move score behind a key, off by default. M94 made every dice roll a decision
 of its roller's (D-095): the engine stops at each, a human presses Roll on its card (dice pop-ups on), the game session
-makes the rest, and saves and replays record each roll as a step (format 2).
+makes the rest, and saves and replays record each roll as a step (format 2). M95 added reaction windows and the first
+stratagems (D-096): a side that can use a stratagem there is asked just after one of its rolls (Command Re-roll, 15.02)
+or just before a battle-shock roll (Insane Bravery, 15.04), spending CP (15.01); a random D is rolled per attack, and
+saves and replays record each answer (format 3). The bot plays them behind two keys.
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
@@ -26,7 +29,7 @@ inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its 
 CLAUDE.md                 this file
 README.md                 overview for people visiting the repo (play, build, layout)
 PLAN.md                   current and upcoming milestones, with acceptance criteria
-docs/plan_archive.md      the finished milestones M0–M91, verbatim
+docs/plan_archive.md      the finished milestones M0–M94, verbatim
 docs/roadmap.md           long-range map: what a full game with any army on any mission still needs, by phase
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
@@ -125,6 +128,11 @@ Side                    active_side(const GameState&);                          
 // GameSession and format-2 replays play. Answering every RollDice after a paced action gives exactly the inline result.
 bool                    roll_pending(const GameState&);                             // a RollDice is pending
 std::optional<RollDiceInfo> roll_dice_info(const GameState&);                       // what it rolls, for display
+// D-096 (M95): a reaction window is a UseStratagems decision for the side that can use a stratagem there, answered by
+// DeclineStratagems (listed first) or UseStratagem. apply_action/start_game decline every window inline (so inline play
+// is M94's); the paced overloads stop at it.
+bool                    window_pending(const GameState&);                           // a window is pending
+std::optional<WindowInfo> window_info(const GameState&);                            // what it offers, for display and the bot
 ```
 - `GameState` holds a **`PendingDecision`** describing whose input the engine is waiting for, and of what kind (choose unit to move, choose move type, place model, select targets, order allocation groups, pick model to remove, pile-in, pass, make a dice roll, ...). Every action answers the current pending decision. Reactive decisions belong to the opposing side (allocation order, model removal, save rolls, etc.) and flow through this same mechanism.
 - `GameAction` and `GameEvent` are `std::variant`s of small serializable structs. Events drive UI animation and the dice/combat log, and they carry rule numbers.
@@ -162,6 +170,8 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - No globals or singletons in core.
 - Keep functions small and rule-shaped: one function per rule step where practical (`make_hit_rolls`, `make_wound_rolls`, `create_allocation_groups` ...).
 - Unit-specific abilities (Bolter Discipline, Synapse, etc.) are **out of scope for V1**. Load them, display their text, and don't implement them.
+- Stratagems (15): Command Re-roll and Insane Bravery are implemented (D-096, M95), through reaction windows. Any other
+  stratagem is not in the game yet.
 - A weapon ability the engine doesn't implement is never ignored. A profile with one is refused when selected, with a
   rule-cited reason (D-026, D-071). Implemented: Assault, Heavy, Pistol, Rapid Fire, Blast, Torrent, Hazardous,
   Sustained Hits, Extra Attacks, Twin-linked, Ignores Cover (D-091), and random A/D (except random A on melee weapons).

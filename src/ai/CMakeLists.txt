@@ -14,6 +14,7 @@ add_library(wh40k_ai STATIC
     normal/army_plan.cpp
     normal/charge.cpp
     normal/defaults.cpp
+    normal/stratagems.cpp
     normal/defense.cpp
     normal/fight.cpp
     normal/move_score.cpp

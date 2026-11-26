@@ -27,6 +27,11 @@ namespace wh40k::ai {
 struct BotConfig {
     // D-085 (M85): the move score's weights (the tuned defaults; the arena's --weights overrides them for tuning).
     normal::MoveWeights move{};
+    // D-096 (M95): whether the bot answers reaction windows (a stratagem key on). If not, its session declines every
+    // window for it (GameSession::auto_decline), and the bot never sees one.
+    [[nodiscard]] bool plays_stratagems() const noexcept {
+        return move.command_reroll > 0.0 || move.insane_bravery > 0.0;
+    }
 };
 
 struct BotChoice {
