@@ -34,7 +34,7 @@ inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its 
 CLAUDE.md                 this file
 README.md                 overview for people visiting the repo (play, build, layout)
 PLAN.md                   current and upcoming milestones, with acceptance criteria
-docs/plan_archive.md      the finished milestones M0–M94, verbatim
+docs/plan_archive.md      the finished milestones M0–M96, verbatim
 docs/roadmap.md           long-range map: what a full game with any army on any mission still needs, by phase
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
@@ -136,7 +136,9 @@ std::optional<RollDiceInfo> roll_dice_info(const GameState&);                   
 // D-096 (M95): a reaction window is a UseStratagems decision for the side that can use a stratagem there, answered by
 // DeclineStratagems (listed first) or UseStratagem. apply_action/start_game decline every window inline (so inline play
 // is M94's); the paced overloads stop at it. D-097 (M96): windows that follow no roll (EndOfPhase, AfterAttacks) too;
-// Fire Overwatch's unit then answers a SnapShoot decision with a Shoot of type Snap.
+// Fire Overwatch's unit then answers a SnapShoot decision with a Shoot of type Snap. D-099 (M97): UseStratagem also
+// answers the Shoot decision (15.05 Explosives, after the Shoot templates), and an AfterChargeMove window offers 15.06
+// Crushing Impact; each starts FlowState::effect: SelectModelAndEnemy, its RollDice, then OrderCasualties (06.02).
 bool                    window_pending(const GameState&);                           // a window is pending
 std::optional<WindowInfo> window_info(const GameState&);                            // what it offers, for display and the bot
 ```
@@ -177,8 +179,9 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - Keep functions small and rule-shaped: one function per rule step where practical (`make_hit_rolls`, `make_wound_rolls`, `create_allocation_groups` ...).
 - Unit-specific abilities (Bolter Discipline, Synapse, etc.) are **out of scope for V1**. Load them, display their text, and don't implement them.
 - Stratagems (15): Command Re-roll and Insane Bravery (D-096, M95), Fire Overwatch with Snap Shooting, Heroic
-  Intervention and Counteroffensive (D-097, M96) are implemented, through reaction windows. Any other stratagem is not
-  in the game yet.
+  Intervention and Counteroffensive (D-097, M96) are implemented, through reaction windows; Explosives (at the Shoot
+  step) and Crushing Impact (in a window just after a charge move) too (D-099, M97). Epic Challenge, Rapid Ingress and
+  Smokescreen are not in the game yet.
 - A weapon ability the engine doesn't implement is never ignored. A profile with one is refused when selected, with a
   rule-cited reason (D-026, D-071). Implemented: Assault, Heavy, Pistol, Rapid Fire, Blast, Torrent, Hazardous,
   Sustained Hits, Extra Attacks, Twin-linked, Ignores Cover (D-091), and random A/D (except random A on melee weapons).

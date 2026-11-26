@@ -34,8 +34,8 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M96 are done (M96 is below); M97, below it, is agreed (D-099) and
-next. Their full text (prompts, acceptance checks, results
+V1 (M0–M13) and the post-V1 milestones M14–M97 are done (M97 is below). Their full text (prompts, acceptance checks,
+results
 and open items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it.
 Open items still carried are listed under "Later" below.
 
@@ -137,95 +137,7 @@ Open items still carried are listed under "Later" below.
 | M93 | M92's open items |
 | M94 | Engine-paced dice rolls (open items) |
 | M95 | Reaction windows, Command Points and the first stratagems (open items) |
-
----
-
-## M96: Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive (D-097) ✅ (done; the manual mouse checks open)
-
-**Effort:** max (core architecture). **Plan mode:** yes (agreed 2026-11-26, after a design pass on M95's code).
-**Scope:** the opponent-turn core stratagems, on M95's reaction windows: Fire Overwatch with Snap Shooting (15.08,
-15.09), Heroic Intervention (15.11) and Counteroffensive (15.12). The user chose them on 2026-11-25, with M96 in the same
-session as M95. The user's rulings:
-- [TORRENT] still hits automatically when snap shooting;
-- a snap shot's 6 is not a critical hit (the app's 15.09, data v963);
-- Fire Overwatch and Heroic Intervention are offered only when they can do something;
-- a snap shot never re-targets;
-- Counteroffensive: play returns to Fights First at once, a pass stays allowed (the requirement lapses), and the window
-  follows any enemy fight.
-
-**Rules:**
-- PDF: 15.01, 15.08–15.12, 04.01–04.03, 10.02, 11.02, 11.04, 12.04, 17.03, 24.13, 24.16, 24.37, 01.03, 01.07.
-- App: 01.03.02, 07.02.01 Out of Phase Rules, 14.02.01, 15.09 (v963); FAQ Q2, Q45, Q50, Q55, Q56, Q62, Q71.
-- Decisions: D-018, D-020, D-084, D-091, D-093, D-095, D-096.
-
-**Design** (D-097 has the full text)
-- *Windows:*
-  - `WindowTiming::EndOfPhase`, opened on entering the End of Movement and End of Charge phase steps for the player
-    whose turn it isn't;
-  - `WindowTiming::AfterAttacks`, just after a unit has fought in the Fight step, for the other player;
-  - the window's roll and unit become optional;
-  - `UseStratagem` gains Heroic Intervention's mode;
-  - each opens only when a stratagem there can do something.
-- *Fire Overwatch:* a `SnapShoot{unit}` decision, answered by `Shoot{unit, Snap, shots}`.
-  - Snap shooting allows one target within 24" that is visible and eligible.
-  - Only an unmodified 6 hits, and it is not critical; [TORRENT] still hits automatically.
-  - There is no hit re-roll and no re-target, and [HEAVY] and 17.03 are off (07.02.01).
-- *Heroic Intervention:*
-  - the mode is chosen with the stratagem, then its player makes the charge roll;
-  - Into the Fray caps the roll at 6 and costs 2CP;
-  - the targets are filtered by the mode, and the charge move gives Fights First until the end of the turn.
-- *Counteroffensive:*
-  - the unit gets Fights First for the phase and is its player's next selection;
-  - from Resolve Remaining Combats, play goes back to Fights First;
-  - a pass stays allowed.
-- *14.02.01:* objective control is determined on entering each End of Phase step, before any window.
-- *Format 4:* the new windows are recorded; format 3 converts by declining them, and every replay is regenerated.
-- *Client:*
-  - the window asks for the unit and the mode;
-  - snap shooting uses the shot editor;
-  - the cards and the log say what each stratagem did.
-- *Bot:*
-  - three keys (0 or 1), with heuristics from the existing odds;
-  - the session declines a window that offers only stratagems a side doesn't play;
-  - the defaults come from D-092's keep rule.
-
-**Acceptance**
-- [x] Each stratagem is offered only at its WHEN, to the right player, for a TARGET it can act on. 15.01's cost and
-  restrictions and 01.07 are enforced with rule-cited refusals, and declining changes nothing.
-- [x] Snap shooting: one target within 24", visible and eligible; only an unmodified 6 hits (not critical); [TORRENT]
-  automatic; no hit re-roll or re-target; [HEAVY] and 17.03 off. `R15_09_*` tests each.
-- [x] Heroic Intervention: Leap to Defend and Into the Fray (the cap, 2CP, the 6" targets). The charge is the unit's
-  player's, and the move gives Fights First. `R15_11_*`.
-- [x] Counteroffensive: Fights First for the phase; the unit is its player's next selection; the return to Fights
-  First, the pass and the lapse; it fights between two enemy Fights First units. `R15_12_*`.
-- [x] 14.02.01: control is determined before the window; every event dump is unchanged.
-- [x] The closure holds (inline declines every window). Format 4 round-trips. Formats 1 to 3 load, and the legacy
-  fixtures convert. Every new field has a JSON round-trip test and is omitted when absent.
-- [x] Every replay is regenerated as format 4 with only declines added, and the M95/M96 event dumps are byte-identical.
-  `m96_reactions.json` shows each stratagem.
-- [x] Bots:
-  - the identity set at `command_reroll=0` matches M95 in every field but `steps` and `actions`;
-  - at the defaults, every `state` is the same;
-  - the keys are measured, with their defaults set by the keep rule;
-  - p95 is within budget.
-- [x] Client: each window asks for its unit and mode; snap shooting in the shot editor; the texts; logic tests and xvfb
-  screenshots.
-- [x] Full `ctest` green, warnings as errors.
-
-**Results** (D-097 part 10 has them in full): the M95 and M96 event dumps of the 30 older replays are byte-identical; the
-30 replays regenerated as format 4 are each their format-3 file converted (129 declines added); `m96_reactions.json`
-shows each stratagem; the bots' identity set at `command_reroll=0` is the M95 binary's in every field but `steps` and
-`actions` (2,600 games), and at the defaults every `state` is the same. Head-to-heads (400 games each): Fire Overwatch
-+26 (on by default), Heroic Intervention +2 and Counteroffensive +0 (off), all three +24; p95 unchanged.
-
-**Open items.**
-- Manual checks by mouse on Windows: each new stratagem in hotseat and against the bot (Fire Overwatch and the snap
-  shot's editor, Heroic Intervention in both modes with its charge move, Counteroffensive), and Undo after each.
-- The window's units are picked from the decision panel's buttons (the board outlines them in gold); no board mode
-  with range rings (24", 12", 6") or highlighted chargers.
-- The bot: the thresholds were not tuned (one setting measured); Counteroffensive is judged from the sequence's state,
-  not a scratch simulation; Heroic Intervention's values use M42's horizon from the enemy's turn.
-- 15.09's "not eligible to start an action" waits for actions (16).
+| M96 | Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive (open items) |
 
 ---
 
@@ -367,9 +279,9 @@ The long-range map from here to a full game with any army on any mission (phases
      objectives, holds home, trades carefully), as weight presets on the one bot.
 3. **Unit-specific abilities** for the two V1 units (Bolter Discipline, Tactical Mainstay, Skulking Horrors, Synapse).
 4. **Core stratagems** (15): M95 (D-096) built reaction windows, CP spending (15.01), Command Re-roll and Insane Bravery;
-   M96 (D-097) Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive. Still to do: Explosives and
-   Crushing Impact (M97, agreed: D-099), then Epic Challenge ([PRECISION], attached units), Rapid Ingress
-   (reserves) and Smokescreen (a SMOKE unit).
+   M96 (D-097) Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive; M97 (D-099) Explosives and
+   Crushing Impact. Still to do: Epic Challenge ([PRECISION], attached units), Rapid Ingress (reserves) and Smokescreen
+   (a SMOKE unit).
 5. **More unit types** (M59–M70 added the fetch-tool fixes, Hazardous, Sustained Hits, Extra Attacks, Twin-linked,
    Random Characteristics, 17.01/17.03 and oval bases). Still to do:
    - **Weapon abilities:** Lethal Hits (24.23), Devastating Wounds (24.10), Anti-X (24.03), Melta (24.25), Lance

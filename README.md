@@ -64,8 +64,9 @@ you to press Roll (with "Show dice pop-ups" off, they are made for you). When yo
 asks you: Command Re-roll on the card of a roll you just made (click a die, then "Command Re-roll"; "Keep the roll"
 goes on), and Insane Bravery on a battle-shock roll's card. In your opponent's turn the decision panel offers Fire
 Overwatch at the end of their Movement phase, Heroic Intervention (in either mode) at the end of their Charge phase and
-Counteroffensive just after one of their units has fought, one button per unit. With "Offer stratagems" off you are
-never asked. The event log cites the rule number behind each step.
+Counteroffensive just after one of their units has fought, one button per unit. In your own Shooting phase the action
+bar offers Explosives for a unit with grenades, and just after your monster ends a charge move the panel offers Crushing
+Impact; each then asks for the enemy unit (one button each). With "Offer stratagems" off you are never asked. The event log cites the rule number behind each step.
 
 ## What's implemented
 
@@ -86,8 +87,11 @@ never asked. The event log cites the rule number behind each step.
   (re-roll one die just after one of your rolls, or a whole charge roll), Insane Bravery (pass a battle-shock
   test, once per battle), and in the opponent's turn Fire Overwatch (a unit snap shoots: one target within 24", only
   6s hit), Heroic Intervention (a unit charges: Leap to Defend at a unit that charged, or Into the Fray for 2 CP at
-  any unit within 6", the roll at most 6) and Counteroffensive (2 CP: a unit fights next, with Fights First). The other
-  core stratagems are not in yet.
+  any unit within 6", the roll at most 6) and Counteroffensive (2 CP: a unit fights next, with Fights First). In your
+  own turn, Explosives (a model of a unit with grenades throws at an unengaged enemy unit within 8" that it can see: six
+  D6, each 4+ a mortal wound; the unit can still shoot) and Crushing Impact (just after a monster or vehicle ends a charge
+  move: a D6 per point of its T, each 5+ a mortal wound on an enemy unit engaged with it, each 1 one on itself, at most 6
+  each). The other core stratagems (Epic Challenge, Rapid Ingress, Smokescreen) are not in yet.
 - **The bot** (`src/ai`) plays only through the same validated actions a human uses, and it never sees the
   game's future dice. It plans its shooting, charges, fights and moves from the odds, and it uses Command Re-roll
   where the odds say a re-roll is worth the CP and Fire Overwatch where a snap shot is (Insane Bravery, Heroic

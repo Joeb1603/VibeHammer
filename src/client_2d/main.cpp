@@ -646,7 +646,7 @@ public:
     // (D-054: the human's buttons don't answer it).
     void auto_steps(int n) {
         for (int i = 0; i < n && mode_ == Mode::Play && session_ && session_->pending() && !bot_deciding(); ++i) {
-            const DecisionView view = make_decision_view(session_->legal());
+            const DecisionView view = make_decision_view(session_->legal_offered());  // D-099: as the panel shows them
             if (view.buttons.empty()) break;
             if (std::holds_alternative<core::action::RollDice>(view.buttons.front())) {
                 submit_roll(view.buttons.front());  // D-095: as the Roll button on the pre-roll card
@@ -955,7 +955,8 @@ private:
         menu_.clear();
         menu_unit_.reset();
         // The session's own state, so the board always matches its legal actions (even while dice show).
-        board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(session_->state(), session_->legal())
+        // D-099 (M97): the answers the deciding side is offered (no Explosives button when it declines the stratagem).
+        board_ = mode_ == Mode::Play && session_->pending() ? BoardInteraction(session_->state(), session_->legal_offered())
                                                              : BoardInteraction();
         if (!first) tidy_selection();  // D-043: a new decision (Reset move, Commit, any submit, undo)
         sync_deploy_plan();            // M76 (D-082 part 2): the unit a human places by hand
@@ -2041,6 +2042,21 @@ private:
                 const std::optional<core::UnitId> hovered = panel_.hovered_reaction_unit();
                 for (const ReactionChoice& c : picks->reactions(gs)) {
                     outline(c.unit, hovered == c.unit ? Color{255, 215, 0, 255} : Color{255, 215, 0, 120});
+                }
+            }
+        } else if (session_ && session_->pending() && !bot_deciding()) {
+            const core::DecisionKind& kind = session_->pending()->kind;
+            // M97 (D-099): an Explosives button hovered at the Shoot step: its unit in gold.
+            if (const auto hovered = panel_.hovered_reaction_unit();
+                hovered && std::holds_alternative<core::decision::Shoot>(kind)) {
+                outline(*hovered, Color{255, 215, 0, 255});
+            }
+            // M97 (D-099): the selection's button hovered: the enemy unit in gold, and the model with a gold ring.
+            if (const auto& e = panel_.hovered_effect(); e && std::holds_alternative<core::decision::SelectModelAndEnemy>(kind)) {
+                outline(e->enemy, Color{255, 215, 0, 255});
+                if (const core::Model* m = core::find_model(gs, e->model)) {
+                    draw_base_outline(camera_, core::pose_of(*m), 3.75f * ui_scale(), 3.5f * ui_scale(),
+                                      Color{255, 215, 0, 255});
                 }
             }
         }

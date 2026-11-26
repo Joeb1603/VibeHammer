@@ -68,8 +68,13 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::RetargetAttacks>(d);
             else if constexpr (std::is_same_v<T, action::RollDice>)
                 return std::holds_alternative<decision::RollDice>(d);  // D-095
-            else if constexpr (std::is_same_v<T, action::UseStratagem> || std::is_same_v<T, action::DeclineStratagems>)
+            else if constexpr (std::is_same_v<T, action::UseStratagem>)
+                // D-096; D-099 (M97): 15.05 Explosives also answers the Shoot decision (10.02).
+                return std::holds_alternative<decision::UseStratagems>(d) || std::holds_alternative<decision::Shoot>(d);
+            else if constexpr (std::is_same_v<T, action::DeclineStratagems>)
                 return std::holds_alternative<decision::UseStratagems>(d);  // D-096
+            else if constexpr (std::is_same_v<T, action::SelectModelAndEnemy>)
+                return std::holds_alternative<decision::SelectModelAndEnemy>(d);  // D-099
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);
@@ -200,6 +205,9 @@ std::optional<PendingDecision> compute_decision(const GameState& state) {
     }
     if (state.flow.snap_shooter) {
         return detail::snap_shoot_decision(state);  // D-097: Fire Overwatch's unit shoots next
+    }
+    if (state.flow.effect) {
+        return detail::effect_decision(state);  // D-099: 15.05 / 15.06's effect runs to its end
     }
     if (state.flow.attack) {
         return detail::attack_decision(state);

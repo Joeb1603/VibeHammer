@@ -306,7 +306,7 @@ TEST(M95_Saves, AnM94SaveLoadsWithItsWindowsDeclined) {
     EXPECT_EQ(loaded.history(), again.history());
     EXPECT_GT(declines_in(loaded.history()), 0u);
     EXPECT_EQ(loaded.to_save_json(), again.to_save_json());
-    EXPECT_EQ(loaded.to_save_json().at("format"), kReplayFormatReactionsRecorded);  // M96 (D-097): format 4
+    EXPECT_EQ(loaded.to_save_json().at("format"), kReplayFormatOwnTurnStratagems);  // M96: format 4; M97: 5
 }
 
 TEST(M95_Saves, AnM94SaveWaitingForARollLoadsStillWaitingForIt) {

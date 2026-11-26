@@ -43,6 +43,14 @@ bool is_monster_or_vehicle(const Unit& unit, const Model& /*model*/) {
     return has_keyword(unit, "Monster") || has_keyword(unit, "Vehicle");
 }
 
+bool is_explosives_or_grenades(const Unit& unit, const Model& /*model*/) {
+    // App 02.05.01: keywords separated by slashes mean any one of them; a keyword's singular and plural are alike.
+    for (const std::string_view k : {"Explosives", "Explosive", "Grenades", "Grenade"}) {
+        if (has_keyword(unit, k)) return true;
+    }
+    return false;
+}
+
 bool is_wounded(const Model& model) {
     return model.wounds_remaining < model.characteristics.wounds;
 }

@@ -497,7 +497,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "scenario": "data/scenarios/incursion_terrain_44x60.json",
     "seed": 80

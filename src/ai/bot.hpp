@@ -36,6 +36,8 @@ struct BotConfig {
             case core::Stratagem::FireOverwatch: return move.fire_overwatch > 0.0;
             case core::Stratagem::HeroicIntervention: return move.heroic_intervention > 0.0;
             case core::Stratagem::Counteroffensive: return move.counteroffensive > 0.0;
+            case core::Stratagem::Explosives: return move.explosives > 0.0;           // M97 (D-099)
+            case core::Stratagem::CrushingImpact: return move.crushing_impact > 0.0;  // M97 (D-099)
         }
         return false;
     }

@@ -28,10 +28,12 @@ Timeline Timeline::from_replay(const core::Replay& given, const std::filesystem:
                                std::string source) {
     Timeline t;
     t.source_ = std::move(source);
-    // D-096: a format-2 replay is shown as its format-4 form (its windows declined, its damage rolled per attack), and
-    // D-097: a format-3 one too (the windows that follow no roll declined); format 1 still plays inline.
+    // D-096: a format-2 replay is shown as its format-5 form (its windows declined, its damage rolled per attack), and
+    // D-097: a format-3 one too (the windows that follow no roll declined), and D-099: a format-4 one (the windows just
+    // after a charge move declined); format 1 still plays inline.
     core::Replay replay = given;
-    if (replay.format == core::kReplayFormatRollsRecorded || replay.format == core::kReplayFormatWindowsRecorded) {
+    if (replay.format == core::kReplayFormatRollsRecorded || replay.format == core::kReplayFormatWindowsRecorded ||
+        replay.format == core::kReplayFormatReactionsRecorded) {
         try {
             replay = core::with_roll_steps(given, repo_root);
         } catch (const core::DataError& e) {
@@ -40,7 +42,7 @@ Timeline Timeline::from_replay(const core::Replay& given, const std::filesystem:
             return t;
         }
     }
-    const bool paced = replay.format == core::kReplayFormatReactionsRecorded;
+    const bool paced = replay.format == core::kReplayFormatOwnTurnStratagems;
     t.frames_.push_back(first_frame(core::replay_initial_state(replay, repo_root), paced));
     for (std::size_t i = 0; i < replay.steps.size(); ++i) {
         const core::ReplayStep& step = replay.steps[i];

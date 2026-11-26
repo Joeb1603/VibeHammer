@@ -45,6 +45,8 @@ std::string roll_label(core::RollKind roll) {
         case core::RollKind::Wound: return "Wound rolls";
         case core::RollKind::Save: return "Save rolls";
         case core::RollKind::Damage: return "Damage roll";  // D-096: one attack's D
+        case core::RollKind::Explosives: return "Explosives dice";           // D-099 (15.05)
+        case core::RollKind::CrushingImpact: return "Crushing Impact dice";  // D-099 (15.06)
     }
     return "Roll";
 }
@@ -169,6 +171,9 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                                unit_name(state, x.unit) + " charge";
                     case core::Stratagem::Counteroffensive:
                         return head + ": " + unit_name(state, x.unit) + " fight next";
+                    case core::Stratagem::Explosives:      // D-099 (M97): "Explosives (1 CP): Intercessor Squad (1)"
+                    case core::Stratagem::CrushingImpact:  // "Crushing Impact (1 CP): Hive Tyrant (4)"
+                        return head + ": " + unit_name(state, x.unit);
                     default:
                         break;
                 }
@@ -186,6 +191,18 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                 if (w && w->timing == core::WindowTiming::BeforeRoll) return "Roll normally";
                 if (w && !w->roll) return "No stratagem";  // D-097: a window that follows no roll
                 return "Keep the roll";
+            } else if constexpr (std::is_same_v<T, a::SelectModelAndEnemy>) {
+                // D-099 (M97): "Model 3 at Termagants (2)"; Crushing Impact's model with its T, its dice.
+                std::string s = "Model " + std::to_string(x.model.v);
+                const auto& e = state.flow.effect;
+                if (e && e->stratagem == core::Stratagem::CrushingImpact) {
+                    if (const core::Unit* u = state.find_unit(e->unit)) {
+                        for (const core::Model& m : u->models) {
+                            if (m.id == x.model) s += " (T" + std::to_string(m.characteristics.toughness) + ")";
+                        }
+                    }
+                }
+                return s + " at " + unit_name(state, x.enemy);
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

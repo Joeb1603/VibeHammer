@@ -3,6 +3,7 @@
 #include <type_traits>
 
 #include "core/state/game_state.hpp"
+#include "core/state/stratagems.hpp"
 
 namespace wh40k::core {
 
@@ -22,6 +23,8 @@ std::string_view roll_noun(RollKind roll) {
         case RollKind::Wound: return "the wound rolls";
         case RollKind::Save: return "the save rolls";
         case RollKind::Damage: return "the damage rolls";
+        case RollKind::Explosives: return "the Explosives roll";             // D-099 (15.05)
+        case RollKind::CrushingImpact: return "the Crushing Impact roll";    // D-099 (15.06)
     }
     return "the roll";
 }
@@ -39,6 +42,8 @@ std::string_view roll_kind_name(RollKind roll) {
         case RollKind::Wound: return "Wound";
         case RollKind::Save: return "Save";
         case RollKind::Damage: return "Damage";
+        case RollKind::Explosives: return "Explosives";          // D-099
+        case RollKind::CrushingImpact: return "CrushingImpact";  // D-099
     }
     return "?";
 }
@@ -46,7 +51,7 @@ std::string_view roll_kind_name(RollKind roll) {
 std::optional<RollKind> roll_kind_from_name(std::string_view name) {
     for (const RollKind r : {RollKind::Advance, RollKind::Charge, RollKind::BattleShock, RollKind::Hazard,
                              RollKind::RandomAttacks, RollKind::Hit, RollKind::Wound, RollKind::Save,
-                             RollKind::Damage}) {
+                             RollKind::Damage, RollKind::Explosives, RollKind::CrushingImpact}) {
         if (roll_kind_name(r) == name) return r;
     }
     return std::nullopt;
@@ -63,6 +68,8 @@ std::string_view roll_rule(RollKind roll) {
         case RollKind::Wound: return "05.02";
         case RollKind::Save: return "05.03";
         case RollKind::Damage: return "05.04";  // D-069
+        case RollKind::Explosives: return "15.05";      // D-099
+        case RollKind::CrushingImpact: return "15.06";  // D-099
     }
     return "?";
 }
@@ -73,13 +80,14 @@ std::string_view window_timing_name(WindowTiming t) {
         case WindowTiming::BeforeRoll: return "BeforeRoll";
         case WindowTiming::EndOfPhase: return "EndOfPhase";
         case WindowTiming::AfterAttacks: return "AfterAttacks";
+        case WindowTiming::AfterChargeMove: return "AfterChargeMove";  // D-099
     }
     return "?";
 }
 
 std::optional<WindowTiming> window_timing_from_name(std::string_view name) {
     for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll, WindowTiming::EndOfPhase,
-                                 WindowTiming::AfterAttacks}) {
+                                 WindowTiming::AfterAttacks, WindowTiming::AfterChargeMove}) {
         if (window_timing_name(t) == name) return t;
     }
     return std::nullopt;
@@ -110,6 +118,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::RollDice>) return roll_rule(k.roll);  // D-095
             else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "15.01";  // D-096
             else if constexpr (std::is_same_v<T, decision::SnapShoot>) return "15.09";      // D-097
+            else if constexpr (std::is_same_v<T, decision::SelectModelAndEnemy>) return stratagem_rule(k.stratagem);
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         d.kind);
@@ -140,6 +149,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::RollDice>) return "RollDice";
             else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "UseStratagems";
             else if constexpr (std::is_same_v<T, decision::SnapShoot>) return "SnapShoot";
+            else if constexpr (std::is_same_v<T, decision::SelectModelAndEnemy>) return "SelectModelAndEnemy";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         kind);
@@ -204,10 +214,16 @@ std::string what_to_do(const PendingDecision& d) {
                         return std::string("use a stratagem at the end of the phase, or decline");
                     case WindowTiming::AfterAttacks:
                         return "use a stratagem now that unit " + unit + " has fought, or decline";
+                    case WindowTiming::AfterChargeMove:  // D-099
+                        return "use a stratagem now that unit " + unit + " has ended its charge move, or decline";
                 }
                 return std::string("use a stratagem, or decline");
             } else if constexpr (std::is_same_v<T, decision::SnapShoot>) {
                 return "shoot with unit " + std::to_string(k.unit.v) + " using snap shooting";  // D-097
+            } else if constexpr (std::is_same_v<T, decision::SelectModelAndEnemy>) {
+                // D-099: 15.05 / 15.06 EFFECT steps 1-2.
+                return "select a model of unit " + std::to_string(k.unit.v) + " and an enemy unit for " +
+                       std::string(stratagem_name(k.stratagem));
             } else {
                 static_assert(sizeof(T) == 0, "unhandled decision");
             }
@@ -224,7 +240,7 @@ std::string describe(const PendingDecision& d) {
 std::string_view decision_rule(const GameState& state, const PendingDecision& d) {
     if (std::holds_alternative<decision::OrderCasualties>(d.kind)) {
         // 06.02 Select Model for mortal wounds: [HAZARDOUS] after a unit's attacks (24.15), or Desperate Escape (09.07)
-        // outside an attack; otherwise 05.04 for an attack's save rolls.
+        // or a stratagem's effect (D-099: 15.05, 15.06) outside an attack; otherwise 05.04 for an attack's save rolls.
         if (!state.flow.attack || state.flow.attack->pending_mortal_wounds > 0) return "06.02";
         return "05.04";
     }
@@ -242,6 +258,7 @@ std::string_view decision_rule(const GameState& state, const PendingDecision& d)
             case WindowTiming::BeforeRoll: return "15.04";
             case WindowTiming::EndOfPhase: return state.flow.stage == Stage::EndOfChargePhase ? "15.11" : "15.08";
             case WindowTiming::AfterAttacks: return "15.12";
+            case WindowTiming::AfterChargeMove: return "15.06";  // D-099: Crushing Impact
         }
     }
     return decision_rule(d);

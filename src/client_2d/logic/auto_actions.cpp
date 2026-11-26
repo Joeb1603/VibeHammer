@@ -55,7 +55,8 @@ std::vector<core::GameAction> run_auto_actions(GameSession& session, AutoSetting
                                                std::size_t limit) {
     std::vector<core::GameAction> done;
     while (done.size() < limit && session.pending()) {
-        const std::optional<core::GameAction> next = next_auto_action(session.state(), session.legal(), settings);
+        // D-099 (M97): the answers the side is offered (a declined stratagem's are not: the empty-step skip holds).
+        const std::optional<core::GameAction> next = next_auto_action(session.state(), session.legal_offered(), settings);
         if (!next) break;
         const bool ok = submit ? submit(*next) : session.submit(*next).ok();
         if (!ok) break;

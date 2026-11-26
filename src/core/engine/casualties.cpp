@@ -125,6 +125,15 @@ std::optional<CasualtyPreview> preview_casualties(const GameState& state, std::s
         return std::nullopt;
     }
     // As OrderCasualties' apply (attack_flow.cpp) tells them apart.
+    if (state.flow.effect) {
+        // D-099 (M97): 15.05 / 15.06's mortal wounds on the enemy unit, then Crushing Impact's on its own unit.
+        const StratagemEffect& e = *state.flow.effect;
+        const UnitId target = std::get<decision::OrderCasualties>(state.pending->kind).target;
+        const int count = e.enemy && target == *e.enemy ? e.enemy_mortal_wounds
+                        : target == e.unit              ? e.unit_mortal_wounds
+                                                        : 0;
+        return preview_mortal_wounds(state, target, count, picks);
+    }
     if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
         return preview_mortal_wounds(state, state.flow.attack->attacker, state.flow.attack->pending_mortal_wounds,
                                      picks);

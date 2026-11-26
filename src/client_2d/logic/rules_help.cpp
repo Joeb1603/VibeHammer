@@ -138,14 +138,20 @@ HelpEntry keyword_help(std::string_view keyword, bool faction) {
         h.summary = "Moves through enemy models that aren't MONSTER or VEHICLE models in a Normal or Advance move "
                     "(not ending on them, 17.01). Can be shot at while engaged, at -1 to hit (17.03). Can fire "
                     "all its ranged weapons while engaged (close-quarters shooting, at -1 to hit, 10.06), and "
-                    "suffers 3 mortal wounds instead of 1 from a failed hazard roll (06.03).";
+                    "suffers 3 mortal wounds instead of 1 from a failed hazard roll (06.03). Just after it ends a "
+                    "charge move in your Charge phase, it can use the Crushing Impact Stratagem (15.06, 1CP): a D6 per "
+                    "point of a model's T, each 5+ a mortal wound on an enemy unit engaged with it, each 1 one on it "
+                    "(at most 6 each).";
         h.rule = "17.01";
         h.in_this_game = true;
     } else if (h.title == "EXPLOSIVES" || h.title == "GRENADES") {
-        h.summary = "Lets the unit use the Explosives core Stratagem in your Shooting phase (six D6 at an "
-                    "enemy within 8\", each 4+ is a mortal wound). Explosives is not in this game yet (Command Re-roll, "
-                    "Insane Bravery, Fire Overwatch, Heroic Intervention and Counteroffensive are, D-096, D-097).";
+        // D-099 (M97): in the game.
+        h.summary = "Lets the unit use the Explosives core Stratagem (1CP) in your Shooting phase, when it is "
+                    "unengaged, eligible to shoot and didn't Advance: one of its models throws at an unengaged enemy "
+                    "unit within 8\" that it can see, six D6, each 4+ a mortal wound. The unit can still shoot "
+                    "afterwards.";
         h.rule = "15.05";
+        h.in_this_game = true;
     } else {
         h.summary = "A keyword other rules (datasheets, Stratagems, detachments) can refer to. Nothing in this "
                     "game uses it.";

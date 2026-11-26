@@ -25,6 +25,25 @@ struct ReactionChoice {
     friend bool operator==(const ReactionChoice&, const ReactionChoice&) = default;
 };
 
+// D-099 (M97): one answer to 15.05 Explosives' or 15.06 Crushing Impact's selection (EFFECT steps 1-2): an enemy unit,
+// with the first model of the stratagem's unit that can be selected with it, and its button label ("Termagants (model
+// 3)", or with the model's T for Crushing Impact: "Legionaries (model 37, T10: 10 dice)").
+struct EffectChoice {
+    core::GameAction action;  // a SelectModelAndEnemy of the engine's legal answers
+    std::string label;
+    core::UnitId enemy;
+    core::ModelId model;
+    friend bool operator==(const EffectChoice&, const EffectChoice&) = default;
+};
+
+// The pending selection's answers, one per enemy unit (in unit order), each with its first legal model (model order);
+// empty unless a SelectModelAndEnemy decision is pending. Built from the engine's legal answers (D-024).
+[[nodiscard]] std::vector<EffectChoice> effect_choices(const core::GameState& state);
+// What the selection is about, for the action bar: "Explosives: pick the enemy unit (15.05)".
+[[nodiscard]] std::string effect_headline(const core::GameState& state);
+// One line on what follows: the dice and what each needs.
+[[nodiscard]] std::string effect_hint(const core::GameState& state);
+
 class StratagemPicks {
 public:
     StratagemPicks() = default;

@@ -42,7 +42,7 @@
     "result": null,
     "stage": "Consolidate"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -798,6 +798,12 @@
     {
       "action": {
         "kind": "CommitUnitMove"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },

@@ -335,6 +335,29 @@ struct BattleShockPassedAutomatically {
     UnitId unit;
     friend bool operator==(const BattleShockPassedAutomatically&, const BattleShockPassedAutomatically&) = default;
 };
+// D-099 (M97): 15.05 Explosives / 15.06 Crushing Impact EFFECT steps 1-2: the model of the stratagem's unit and the enemy
+// unit are selected. Its rule is the stratagem's.
+struct ModelAndEnemySelected {
+    Stratagem stratagem = Stratagem::Explosives;
+    UnitId unit;
+    ModelId model;
+    UnitId enemy;
+    friend bool operator==(const ModelAndEnemySelected&, const ModelAndEnemySelected&) = default;
+};
+// D-099: EFFECT step 3: the stratagem's dice (Explosives: six D6; Crushing Impact: as many as the model's T), and the
+// mortal wounds they inflict once capped (06.02 follows): each 4+ (Explosives) or 5+ (Crushing Impact) on the enemy
+// unit, and each 1 on the unit (Crushing Impact), each at most 6 (Crushing Impact; the user's ruling). Its rule is the
+// stratagem's.
+struct StratagemDiceRolled {
+    Stratagem stratagem = Stratagem::Explosives;
+    UnitId unit;
+    ModelId model;
+    UnitId enemy;
+    std::vector<int> dice;
+    int enemy_mortal_wounds = 0;
+    int unit_mortal_wounds = 0;
+    friend bool operator==(const StratagemDiceRolled&, const StratagemDiceRolled&) = default;
+};
 }  // namespace event
 
 // New alternatives are appended at the end, so every existing index stays the same.
@@ -353,7 +376,8 @@ using GameEvent =
                  event::GameOver, event::WoundRollsRerolled, event::AttackDiceRolled, event::DeploymentStarted,
                  event::UnitSetUp, event::UnitNotSetUp, event::ObjectiveControlChanged,
                  event::VictoryPointsScored, event::AttacksRetargeted, event::DamageRolled,
-                 event::StratagemUsed, event::DiceRerolled, event::BattleShockPassedAutomatically>;
+                 event::StratagemUsed, event::DiceRerolled, event::BattleShockPassedAutomatically,
+                 event::ModelAndEnemySelected, event::StratagemDiceRolled>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

@@ -630,6 +630,46 @@ double hazard_model_equivalents(const core::Unit& firer, int rolls) {
     return expected;
 }
 
+std::vector<double> capped_binomial(int n, double p, int cap) {
+    const int top = std::max(0, std::min(n, cap));
+    std::vector<double> out(static_cast<std::size_t>(top) + 1, 0.0);
+    for (int k = 0; k <= n; ++k) out[static_cast<std::size_t>(std::min(k, top))] += binomial(n, k, p);
+    return out;
+}
+
+double mortal_wound_model_equivalents(const core::Unit& unit, std::span<const double> pmf) {
+    if (unit.models.empty()) return 0.0;
+    // 06.02 reads CHARACTER and the models' wounds; the rest is dropped so the copies are cheap (as for hazards).
+    core::Unit stripped;
+    stripped.id = unit.id;
+    stripped.side = unit.side;
+    if (core::has_keyword(unit, "Character")) stripped.keywords = {"Character"};
+    stripped.models = unit.models;
+    for (core::Model& m : stripped.models) {
+        m.weapons.clear();
+        m.type_name.clear();
+    }
+    const auto left = [](const core::Unit& u) {  // model equivalents left: a W-wound model at w wounds counts w / W
+        double total = 0.0;
+        for (const core::Model& m : u.models) {
+            total += static_cast<double>(m.wounds_remaining) / static_cast<double>(std::max(1, m.characteristics.wounds));
+        }
+        return total;
+    };
+    const core::ModelChooser first = [](const core::Unit&, std::span<const core::ModelId> options) {
+        return options.front();
+    };
+    const double before = left(stripped);
+    double expected = 0.0;
+    for (std::size_t k = 1; k < pmf.size(); ++k) {
+        if (!(pmf[k] > 0.0)) continue;
+        core::Unit u = stripped;
+        (void)core::inflict_mortal_wounds(u, static_cast<int>(k), first);
+        expected += pmf[k] * (before - left(u));
+    }
+    return expected;
+}
+
 bool within_half_range(const core::WeaponProfile& profile, float gap_mm) {
     return profile.range_mm.has_value() && core::within(gap_mm, *profile.range_mm * 0.5f);  // 24.30, as core
 }

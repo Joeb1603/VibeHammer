@@ -211,7 +211,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "scenario": "tests/data/scenarios/m77_custom_hand_deploy_44x60.json",
     "seed": 1

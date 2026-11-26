@@ -2,6 +2,8 @@
 // CP (15.01), Command Re-roll (15.02, just after a roll) and Insane Bravery (15.04, just before a battle-shock roll).
 // D-097 (M96): windows that follow no roll: at the end of the opponent's Movement phase (15.08 Fire Overwatch) and
 // Charge phase (15.11 Heroic Intervention), and just after an enemy unit has fought (15.12 Counteroffensive).
+// D-099 (M97): 15.05 Explosives is used at the Shoot decision (no window) and 15.06 Crushing Impact in a window just
+// after a friendly unit ends a charge move; both start an effect (effects.cpp) once their CP are paid.
 //
 // Every roll point rolls its dice, emits its event (as in M94), then calls after_roll: a window opens there if a side
 // can use a stratagem (the roll waits in FlowState::window), otherwise the roll is applied at once. Closing the window
@@ -23,6 +25,7 @@
 #include "core/rules/charge.hpp"
 #include "core/rules/fight.hpp"
 #include "core/rules/shooting.hpp"
+#include "core/rules/stratagem_effects.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -31,9 +34,10 @@ namespace detail {
 
 namespace {
 
-constexpr std::array<Stratagem, 5> kStratagems{Stratagem::CommandReroll, Stratagem::InsaneBravery,
-                                               Stratagem::FireOverwatch, Stratagem::HeroicIntervention,
-                                               Stratagem::Counteroffensive};
+constexpr std::array<Stratagem, 7> kStratagems{Stratagem::CommandReroll,      Stratagem::InsaneBravery,
+                                               Stratagem::FireOverwatch,      Stratagem::HeroicIntervention,
+                                               Stratagem::Counteroffensive,   Stratagem::Explosives,
+                                               Stratagem::CrushingImpact};
 
 template <typename T>
 bool contains(const std::vector<T>& v, const T& x) {
@@ -137,6 +141,11 @@ std::string when_text(Stratagem s) {
         case Stratagem::Counteroffensive:
             return "15.12: Counteroffensive is used in the Fight step of your opponent's Fight phase, just after an "
                    "enemy unit has resolved its attacks";
+        case Stratagem::Explosives:
+            return "15.05: Explosives is used in your Shooting phase, when you select the next unit to shoot (10.02)";
+        case Stratagem::CrushingImpact:
+            return "15.06: Crushing Impact is used in your Charge phase, just after a friendly MONSTER/VEHICLE unit "
+                   "ends a charge move";
     }
     return "15.01: unknown stratagem";
 }
@@ -214,6 +223,15 @@ std::optional<std::string> reaction_when(const GameState& state, Side side, Stra
                 if (fought != nullptr && fought->side != side) return std::nullopt;  // "an enemy unit"
             }
             break;
+        case Stratagem::CrushingImpact:
+            // D-099: your Charge phase (its Charge step: a heroic charge comes in the opponent's), just after a
+            // friendly unit ends a charge move.
+            if (w.timing == WindowTiming::AfterChargeMove && state.flow.stage == Stage::Charge && !opponents_turn &&
+                w.unit) {
+                const Unit* charged = state.find_unit(*w.unit);
+                if (charged != nullptr && charged->side == side) return std::nullopt;
+            }
+            break;
         default:
             break;
     }
@@ -256,8 +274,25 @@ std::optional<std::string> heroic_intervention_problem(const GameState& state, c
     return "15.11: Into the Fray: no enemy unit is within 6\" of " + who;
 }
 
-// D-097: the stratagems used at the windows that follow no roll (15.08, 15.11, 15.12), their target `target` (the
-// player's pick) in `mode`.
+// D-099 (M97): 15.06 TARGET (that MONSTER/VEHICLE unit: the window's) and what D-097's ruling adds: an enemy unit is
+// engaged with it, and a model of it engaged with that unit (crushing_impact_pairs).
+std::optional<std::string> crushing_impact_problem(const GameState& state, const Unit& u, const StratagemWindow& w) {
+    const std::string who = unit_label(u.id);
+    if (!w.unit || u.id != *w.unit) {
+        return "15.06: Crushing Impact targets the unit that has just ended its charge move (" +
+               (w.unit ? unit_label(*w.unit) : std::string("none")) + "), not " + who;
+    }
+    const bool monster_or_vehicle =
+        std::any_of(u.models.begin(), u.models.end(), [&u](const Model& m) { return is_monster_or_vehicle(u, m); });
+    if (!monster_or_vehicle) return "15.06: Crushing Impact targets a MONSTER/VEHICLE unit (" + who + " is not)";
+    if (crushing_impact_pairs(state, u, true).empty()) {
+        return "15.06: no model of " + who + " is engaged with an enemy unit (D-099)";
+    }
+    return std::nullopt;
+}
+
+// D-097: the stratagems used at the windows that follow no roll (15.08, 15.11, 15.12; D-099: 15.06), their target
+// `target` (the player's pick) in `mode`.
 std::optional<std::string> reaction_problem(const GameState& state, Side side, Stratagem s, const StratagemWindow& w,
                                             UnitId target, std::optional<StratagemMode> mode) {
     if (auto p = reaction_when(state, side, s, w)) return p;
@@ -297,6 +332,8 @@ std::optional<std::string> reaction_problem(const GameState& state, Side side, S
                        " is not";
             }
             return std::nullopt;
+        case Stratagem::CrushingImpact:
+            return crushing_impact_problem(state, *u, w);
         default:
             return when_text(s);
     }
@@ -374,6 +411,8 @@ void apply_roll(GameState& state, const StratagemWindow& w, Events& events) {
             apply_attack_roll(state, roll, w.batch, w.faces, events);
             return;
         case RollKind::BattleShock:
+        case RollKind::Explosives:      // D-099: 15.02 lists neither stratagem's roll
+        case RollKind::CrushingImpact:
             break;
     }
     throw std::logic_error("D-096: a " + std::string(roll_kind_name(roll)) + " roll has no window after it");
@@ -396,9 +435,11 @@ event::RerolledRoll rerolled_result(const GameState& state, const StratagemWindo
         case RollKind::Damage:
             return attack_roll_result(state, roll_of(w), w.batch, w.faces);
         case RollKind::BattleShock:
+        case RollKind::Explosives:  // D-099: never re-rolled (15.02)
+        case RollKind::CrushingImpact:
             break;
     }
-    throw std::logic_error("D-096: a battle-shock roll is not re-rolled");
+    throw std::logic_error("D-096: a battle-shock, Explosives or Crushing Impact roll is not re-rolled");
 }
 
 // Closes the window: an AfterRoll window applies its roll; a BeforeRoll window offers the next battle-shock test's
@@ -418,6 +459,7 @@ void close_window(GameState& state, Events& events) {
         }
         case WindowTiming::EndOfPhase:
         case WindowTiming::AfterAttacks:
+        case WindowTiming::AfterChargeMove:  // D-099
             return;
     }
 }
@@ -456,6 +498,62 @@ void counteroffensive(GameState& state, UnitId unit) {
 }
 
 }  // namespace
+
+// D-099 (M97): 15.05 Explosives, used at the Shoot decision (10.02) of the player's own turn: its WHEN, 15.01's cost and
+// records, 01.07, its TARGET (one friendly unengaged EXPLOSIVES/GRENADES unit that is eligible to shoot and did not make
+// an advance move this turn) and D-097's ruling (a pair exists). The reasons in that order.
+std::optional<std::string> explosives_problem(const GameState& state, Side side, UnitId target) {
+    const Stratagem s = Stratagem::Explosives;
+    // WHEN: your Shooting phase, at the Shoot step's decision (no unit selected, no attack, window or effect).
+    if (state.flow.stage != Stage::Shoot || side != turn_side(state) || state.flow.window || state.flow.effect ||
+        state.flow.attack || state.flow.activation || state.flow.snap_shooter) {
+        return when_text(s);
+    }
+    const std::size_t i = side_index(side);
+    const StratagemRecord& rec = state.stratagems[i];
+    if (state.command_points[i] < stratagem_cost(s)) {
+        return "15.01: " + side_label(side) + " has " + std::to_string(state.command_points[i]) + " CP; Explosives costs " +
+               std::to_string(stratagem_cost(s)) + "CP";
+    }
+    if (contains(rec.used_this_phase, s)) return "15.01: " + side_label(side) + " has already used Explosives this phase";
+    const Unit* u = state.find_unit(target);
+    if (u == nullptr || u->side != side || is_destroyed(*u)) {
+        return "15.05: Explosives targets one of " + side_label(side) + "'s units (" + unit_label(target) + " is not)";
+    }
+    const std::string who = unit_label(target);
+    if (contains(rec.targeted_this_phase, target)) {
+        return "15.01: " + who + " has already been targeted by a stratagem of " + side_label(side) + " this phase";
+    }
+    if (u->battle_shocked) return "01.07: " + who + " is battle-shocked, so its player can't target it with stratagems";
+    const bool keyword =
+        std::any_of(u->models.begin(), u->models.end(), [u](const Model& m) { return is_explosives_or_grenades(*u, m); });
+    if (!keyword) return "15.05: Explosives targets an EXPLOSIVES/GRENADES unit (" + who + " is not)";
+    if (is_engaged(state, *u)) return "15.05: Explosives targets an unengaged unit, and " + who + " is engaged";
+    if (auto p = unit_shoot_problem(state, *u)) return p;  // 10.02 eligible to shoot; 09.07 not after falling back
+    if (u->turn_flags.advanced) return "15.05: " + who + " made an advance move this turn";
+    if (explosives_pairs(state, *u, true).empty()) {
+        return "15.05: no model of " + who + " has an unengaged enemy unit within 8\" and visible to it (D-099)";
+    }
+    return std::nullopt;
+}
+
+std::vector<UnitId> explosives_targets(const GameState& state, Side side) {
+    std::vector<UnitId> out;
+    // Cheap refusals first: outside the WHEN, without the CP or once used, no unit is looked at.
+    const std::size_t i = side_index(side);
+    if (state.flow.stage != Stage::Shoot || side != turn_side(state) ||
+        state.command_points[i] < stratagem_cost(Stratagem::Explosives) ||
+        contains(state.stratagems[i].used_this_phase, Stratagem::Explosives)) {
+        return out;
+    }
+    for (const Unit& u : state.units) {
+        if (u.side != side || is_destroyed(u) || u.models.empty() || !is_explosives_or_grenades(u, u.models.front())) {
+            continue;
+        }
+        if (!explosives_problem(state, side, u.id)) out.push_back(u.id);
+    }
+    return out;
+}
 
 // D-096: the open window's roll as its event, judged from its dice now (window_info's result).
 event::RerolledRoll window_roll_result(const GameState& state) { return rerolled_result(state, *state.flow.window); }
@@ -529,10 +627,17 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::UseStr
 }
 
 ValidationResult validate_details(const GameState& state, Side side, const action::UseStratagem& a) {
-    const StratagemWindow& w = window_of(state);
     const std::string name(stratagem_name(a.stratagem));
     const std::string rule(stratagem_rule(a.stratagem));
     if (a.mode && !has_modes(a.stratagem)) return ValidationResult::failure(rule + ": " + name + " has no modes");
+    if (!state.flow.window) {
+        // D-099 (M97): the Shoot decision (10.02), where only 15.05 Explosives is used.
+        if (a.stratagem != Stratagem::Explosives) return ValidationResult::failure(when_text(a.stratagem));
+        if (a.die) return ValidationResult::failure("15.05: Explosives picks no die");
+        if (auto p = explosives_problem(state, side, a.unit)) return ValidationResult::failure(std::move(*p));
+        return ValidationResult::success();
+    }
+    const StratagemWindow& w = window_of(state);
     if (!is_roll_window(w)) {
         // D-097: a window that follows no roll: the player picks the target, and Heroic Intervention its mode.
         if (a.die) return ValidationResult::failure(rule + ": " + name + " picks no die");
@@ -605,6 +710,16 @@ void apply_details(GameState& state, Side side, const action::UseStratagem& a, D
         case Stratagem::Counteroffensive:
             counteroffensive(state, a.unit);
             break;
+        case Stratagem::Explosives:
+            // 15.05 EFFECT (D-099): the selection, the roll and the mortal wounds follow; then the Shoot decision again.
+            // It answers the Shoot decision, so there is no window to continue.
+            start_effect(state, Stratagem::Explosives, a.unit);
+            return;
+        case Stratagem::CrushingImpact:
+            // 15.06 EFFECT (D-099): the window closes, as Fire Overwatch's and Heroic Intervention's do; the effect follows.
+            close_window(state, events);
+            start_effect(state, Stratagem::CrushingImpact, a.unit);
+            return;
     }
     continue_window(state, false, events);
 }

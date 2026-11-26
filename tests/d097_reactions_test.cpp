@@ -1266,9 +1266,9 @@ TEST(D097_RandomPlay, GamesThatUseTheNewStratagemsStayValidAndReplay) {
                     if (const auto* s = std::get_if<event::StratagemUsed>(&match.events()[k])) ++used[s->stratagem];
                 }
             }
-            // The game as a format-4 replay plays the same.
+            // The game as a format-5 replay (M97, D-099) plays the same.
             const Replay replay = match.to_replay("random play with the M96 stratagems");
-            EXPECT_EQ(replay.format, kReplayFormatReactionsRecorded);
+            EXPECT_EQ(replay.format, kReplayFormatOwnTurnStratagems);
             const ReplayResult again = run_replay(Json(replay).get<Replay>(), repo_root());
             ASSERT_TRUE(again.ok()) << "step " << *again.failed_step << ": " << again.reasons.front();
             EXPECT_EQ(again.final_state, match.state());
@@ -1333,7 +1333,7 @@ constexpr std::uint64_t kM96Seed = 1;  // picked by D097_Replay.DISABLED_SearchM
 Replay m96_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
-    r.format = kReplayFormatReactionsRecorded;
+    r.format = kReplayFormatOwnTurnStratagems;  // M97 (D-099): format 5
     r.description =
         "M96 (D-097): the opponent-turn stratagems, each a step of its own. The V1 scenario with the Termagants 4.9\" "
         "north of the Intercessors and a one-Termagant unit 4\" west of where the Intercessors' charge ends; Side B "
@@ -1451,7 +1451,7 @@ Replay m96_replay(std::uint64_t seed, bool& ok, std::string& problem) {
 
 TEST(D097_Replay, TheReactionsReplayUsesEachNewStratagemAsAStep) {
     const Replay saved = load_replay(kM96Replay);
-    EXPECT_EQ(saved.format, kReplayFormatReactionsRecorded);
+    EXPECT_EQ(saved.format, kReplayFormatOwnTurnStratagems);  // regenerated as format 5 in M97 (D-099)
     const ReplayResult run = run_replay(saved, repo_root());
     ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
     EXPECT_EQ(replay_expectation(run.final_state), saved.expect);
@@ -1532,7 +1532,7 @@ TEST(D097_Replays, DISABLED_CompareWithFormat3Files) {
         const Replay old_file = load_replay(old_path);
         const Replay new_file = load_replay(entry.path());
         EXPECT_EQ(old_file.format, kReplayFormatWindowsRecorded);
-        EXPECT_EQ(new_file.format, kReplayFormatReactionsRecorded);
+        EXPECT_EQ(new_file.format, kReplayFormatOwnTurnStratagems);  // format 4 in M96; 5 since M97 (D-099)
         EXPECT_EQ(Json(with_roll_steps(old_file, repo_root())).dump(2), Json(new_file).dump(2));
         ++compared;
     }

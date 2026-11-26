@@ -117,7 +117,7 @@ BotGame play_fight_move_game() {
     // M95 (D-096): the bot as it was when the file was written (no stratagem).
     g.record = play_bot_session(session, wh40k::test::without_stratagems(), wh40k::test::without_stratagems());
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
+    g.replay.format = kReplayFormatOwnTurnStratagems;  // M94 (D-095) to M97 (D-099): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

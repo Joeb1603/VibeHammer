@@ -14,6 +14,8 @@ namespace wh40k::core {
 // post-V1; these helpers are the single place to change.
 [[nodiscard]] bool is_character(const Unit& unit, const Model& model);
 [[nodiscard]] bool is_monster_or_vehicle(const Unit& unit, const Model& model);
+// D-099 (M97): 15.05's EXPLOSIVES/GRENADES model: either keyword, singular or plural alike (app 02.05.01 Using Keywords).
+[[nodiscard]] bool is_explosives_or_grenades(const Unit& unit, const Model& model);
 
 // 02.02: a model that has lost one or more wounds.
 [[nodiscard]] bool is_wounded(const Model& model);

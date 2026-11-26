@@ -45,7 +45,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 4,
+  "format": 5,
   "initial": {
     "scenario": "data/scenarios/bot_20_termagants.json",
     "seed": 1

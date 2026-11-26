@@ -36,6 +36,7 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.battle_shock_tests.clear();  // D-095
     state.flow.window.reset();              // D-096
     state.flow.snap_shooter.reset();        // D-097
+    state.flow.effect.reset();              // D-099
     state.pending.reset();
     events.push_back(event::GameOver{winner, std::move(reason), std::move(points), vp});
 }
@@ -181,6 +182,15 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
             // D-097: 15.08 Fire Overwatch's unit now shoots using snap shooting (15.09).
             state.pending = snap_shoot_decision(state);
             return;
+        }
+        if (state.flow.effect) {
+            // D-099 (M97): 15.05 Explosives' or 15.06 Crushing Impact's effect runs to its end; then D-007 (below).
+            if (auto d = effect_decision(state)) {
+                state.pending = std::move(d);
+                return;
+            }
+            effect_progress(state, events);
+            continue;
         }
         if (state.flow.stage == Stage::Deploy) {
             // D-081 (amends D-007): no wipe-out check while the armies are set up (no side has all of its units on the

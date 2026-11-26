@@ -166,7 +166,7 @@ void move_status(const core::GameState& gs) {
 void DecisionPanel::sync(const GameSession& session) {
     if (synced_step_ == session.history().size()) return;
     synced_step_ = session.history().size();
-    view_ = make_decision_view(session.legal());
+    view_ = make_decision_view(session.legal_offered());  // D-099: without the stratagems the side declines
     shots_.clear();
     melee_.reset();
     casualties_.reset();
@@ -264,6 +264,24 @@ std::optional<core::GameAction> DecisionPanel::draw_sidebar_mode(const GameSessi
             ImGui::PushID(static_cast<int>(200 + i));
             if (row.button(reactions[i].label)) chosen = reactions[i].action;
             if (ImGui::IsItemHovered()) hovered_reaction_unit_ = reactions[i].unit;
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+        return chosen;
+    }
+    // M97 (D-099): 15.05 / 15.06's selection: one button per enemy unit, each with its first legal model; hovering a
+    // button outlines the enemy unit and the model on the board.
+    hovered_effect_.reset();
+    if (const std::vector<EffectChoice> effects = effect_choices(gs); !effects.empty()) {
+        if (!begin_bar(effects.front().label)) return std::nullopt;
+        headline(gs, session.pending()->side, effect_headline(gs));
+        ImGui::TextWrapped("%s", effect_hint(gs).c_str());
+        ImGui::TableNextColumn();
+        ButtonRow row;
+        for (std::size_t i = 0; i < effects.size(); ++i) {
+            ImGui::PushID(static_cast<int>(300 + i));
+            if (row.button(effects[i].label)) chosen = effects[i].action;
+            if (ImGui::IsItemHovered()) hovered_effect_ = effects[i];
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -419,12 +437,21 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         // D-051: take back the last casualty pick.
         if (board.can_undo_pick() && row.button("Undo pick")) undo_pick = true;
         const std::vector<core::GameAction> steps = board.step_buttons();
+        hovered_reaction_unit_.reset();
         for (std::size_t i = 0; i < steps.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
             const bool default_order = std::holds_alternative<core::action::OrderCasualties>(steps[i]);
             // D-058 (M47): "Use default order", or "Default order for the rest" after picks (it keeps them).
             if (row.button(default_order ? board.default_order_label() : action_label(gs, steps[i]))) chosen = steps[i];
             if (default_order) ImGui::SetItemTooltip("%s", kDefaultCasualtyOrderText);
+            // D-099 (M97): an Explosives button at the Shoot step: its unit is outlined in gold while hovered.
+            if (const auto* use = std::get_if<core::action::UseStratagem>(&steps[i]);
+                use != nullptr && use->stratagem == core::Stratagem::Explosives) {
+                if (ImGui::IsItemHovered()) hovered_reaction_unit_ = use->unit;
+                ImGui::SetItemTooltip("%s", "Explosives (15.05): one model of the unit throws at an unengaged enemy "
+                                            "unit within 8\" that it can see: six D6, each 4+ is a mortal wound. The "
+                                            "unit can still shoot afterwards.");
+            }
             ImGui::PopID();
         }
         // D-050: place the pile-in / consolidation automatically; D-056: the charge move too. The player

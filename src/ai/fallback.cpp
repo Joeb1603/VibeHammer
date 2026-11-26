@@ -98,6 +98,8 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
     // when a roll is pending after a load or an undo.
     if (const auto* d = std::get_if<decision::RollDice>(&kind)) return action::RollDice{d->roll, d->unit};
     if (std::holds_alternative<decision::UseStratagems>(kind)) return action::DeclineStratagems{};  // M95 (D-096)
+    // M97 (D-099): 15.05 / 15.06's selection: the first legal pair (model order, then unit order).
+    if (std::holds_alternative<decision::SelectModelAndEnemy>(kind)) return first_of<action::SelectModelAndEnemy>(legal);
     return std::nullopt;
 }
 

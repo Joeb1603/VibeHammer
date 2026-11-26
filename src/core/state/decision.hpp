@@ -25,6 +25,8 @@ enum class RollKind : std::uint8_t {
     Wound,          // 05.02 Wound Rolls
     Save,           // 05.03 Make Save Rolls (the opposing player)
     Damage,         // 05.04 Resolve Damage: an attack batch's random D, one per attack that inflicts damage (D-069)
+    Explosives,     // D-099 (M97): 15.05 Explosives' six D6 (a mortal wound on the enemy unit per 4+)
+    CrushingImpact, // D-099: 15.06 Crushing Impact's D6 per T of the model (each 5+ and each 1 a mortal wound)
 };
 
 [[nodiscard]] std::string_view roll_kind_name(RollKind roll);  // "Hit"; also the JSON name
@@ -37,10 +39,14 @@ enum class WindowTiming : std::uint8_t {
     BeforeRoll,    // just before a player makes a roll (15.04 Insane Bravery)
     EndOfPhase,    // D-097 (M96): the end of the opponent's Movement (15.08) or Charge (15.11) phase
     AfterAttacks,  // D-097: just after an enemy unit has resolved its attacks in the Fight step (15.12)
+    AfterChargeMove,  // D-099 (M97): just after a friendly unit ends a charge move in its own Charge phase (15.06)
 };
 
 [[nodiscard]] std::string_view window_timing_name(WindowTiming t);  // "AfterRoll"; also the JSON name
 [[nodiscard]] std::optional<WindowTiming> window_timing_from_name(std::string_view name);
+
+// 15: a stratagem (core/state/stratagems.hpp defines its values). Declared here for decision::SelectModelAndEnemy.
+enum class Stratagem : std::uint8_t;
 
 namespace decision {
 // 09.02 Move Units: select a friendly unit that has not been selected to move, and its move type.
@@ -154,6 +160,14 @@ struct SnapShoot {
     UnitId unit;
     friend bool operator==(const SnapShoot&, const SnapShoot&) = default;
 };
+// D-099 (M97): the EFFECT's first two steps of 15.05 Explosives and 15.06 Crushing Impact, once the stratagem is used on
+// `unit` and its CP are paid (15.01): one model of the unit and one enemy unit, selected together. Its answers are
+// action::SelectModelAndEnemy, one per legal pair (core/rules/stratagem_effects.hpp).
+struct SelectModelAndEnemy {
+    Stratagem stratagem{};  // Explosives or CrushingImpact
+    UnitId unit;
+    friend bool operator==(const SelectModelAndEnemy&, const SelectModelAndEnemy&) = default;
+};
 }  // namespace decision
 
 // Appended at the end only: the bots' state_hash hashes the index (D-054).
@@ -164,7 +178,7 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits,
                                   decision::RetargetAttacks, decision::RollDice, decision::UseStratagems,
-                                  decision::SnapShoot>;
+                                  decision::SnapShoot, decision::SelectModelAndEnemy>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)
@@ -182,7 +196,8 @@ struct PendingDecision {
 
 struct GameState;
 // M61: the rule as it applies in `state`. OrderCasualties is 06.02 when the attack in progress has mortal wounds to
-// inflict ([HAZARDOUS], 24.15) or no attack is in progress (Desperate Escape, 09.07), else 05.04 (D-071, D-072).
+// inflict ([HAZARDOUS], 24.15) or no attack is in progress (Desperate Escape, 09.07; D-099: a stratagem's effect),
+// else 05.04 (D-071, D-072).
 // D-095 (M94): a Hazard roll is 24.15 during an attack and 09.07 otherwise; a BattleShock roll is 08.03 in the
 // Battle-shock step and 09.07 otherwise; every other roll its roll_rule.
 [[nodiscard]] std::string_view decision_rule(const GameState& state, const PendingDecision& d);

@@ -22,6 +22,15 @@
 //   step where the enemy has an eligible Fights First unit and we have none), for the unit whose fight first is worth
 //   the most against the enemy's Fights First unit engaged with it: the share of its own fight it keeps plus the share
 //   of the enemy's fight on it its strike takes away, when that is worth the 2CP (kCounterMinGain a CP).
+// D-099 (M97): two more keys, 0 or 1 each, for the own-turn stratagems that end in mortal wounds (at 0 the session hides
+// Explosives' answers and declines Crushing Impact's window, so the bot never sees either). Values are in unit shares,
+// a distribution of mortal wounds valued by analysis::mortal_wound_model_equivalents:
+// - explosives (15.05): at the Shoot decision, before a shot, the unit and enemy unit with the highest expected share
+//   for six D6 at 4+ (Binomial(6, 1/2)), when that is worth the CP (kExplosivesMinShare); the selection then names that
+//   enemy unit and its first legal model;
+// - crushing_impact (15.06): in the window just after a charge move, the pair with the best expected gain: the enemy's
+//   share for Binomial(T, 1/3) less the unit's own for Binomial(T, 1/6), each capped at 6, when that is worth the CP
+//   (kCrushMinGain). The charge planning doesn't price it (it is judged only at the window).
 
 #include <cstddef>
 #include <cstdint>
@@ -41,6 +50,8 @@ inline constexpr double kBraveryRisk = 0.25;         // Insane Bravery when the 
 inline constexpr double kOverwatchMinShare = 0.05;   // D-097: unit shares a snap shot must be worth (1CP)
 inline constexpr double kHeroicMinGain = 0.05;       // D-097: unit shares a heroic charge must gain, per CP
 inline constexpr double kCounterMinGain = 0.05;      // D-097: unit shares Counteroffensive must gain, per CP
+inline constexpr double kExplosivesMinShare = 0.05;  // D-099: unit shares Explosives must be worth (1CP)
+inline constexpr double kCrushMinGain = 0.05;        // D-099: unit shares Crushing Impact must gain (1CP)
 
 // The best Command Re-roll in the pending window: the die (none for a charge roll, re-rolled whole) and its expected
 // gain (a charge: the chance a new roll reaches a target). nullopt when Command Re-roll isn't offered or no die gains.
@@ -62,6 +73,15 @@ struct ReactionPick {
 [[nodiscard]] std::optional<ReactionPick> best_heroic_intervention(analysis::OddsCache& cache,
                                                                    const core::GameState& state, std::uint64_t seed);
 [[nodiscard]] std::optional<ReactionPick> best_counteroffensive(analysis::OddsCache& cache, const core::GameState& state);
+
+// D-099 (M97): the Explosives use worth the most among the Shoot decision's answers `legal` (nullopt when none is
+// offered or no pair exists); Crushing Impact's in the pending window (nullopt when it isn't offered); and the pending
+// selection's answer (Explosives: the enemy unit worth the most, with its first legal model; Crushing Impact: the pair
+// with the best gain; nullopt when no selection is pending).
+[[nodiscard]] std::optional<ReactionPick> best_explosives(const core::GameState& state,
+                                                          const std::vector<core::GameAction>& legal);
+[[nodiscard]] std::optional<ReactionPick> best_crushing_impact(const core::GameState& state);
+[[nodiscard]] std::optional<ReactionPick> best_effect_pair(const core::GameState& state);
 
 // The answer to `side`'s pending window (UseStratagems), by the keys above. `seed`: the bot's (a heroic charge's move
 // is planned as M42's).
