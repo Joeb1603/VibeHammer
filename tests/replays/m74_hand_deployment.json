@@ -519,7 +519,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "tests/data/scenarios/hand_deployment_44x60.json",
     "seed": 1

@@ -18,8 +18,17 @@ namespace wh40k::core {
 
 // 15: the stratagems the engine implements. Appended at the end only (JSON names, the bots' state_hash).
 enum class Stratagem : std::uint8_t {
-    CommandReroll,  // 15.02 Command Re-roll (1CP)
-    InsaneBravery,  // 15.04 Insane Bravery (1CP, once per battle)
+    CommandReroll,       // 15.02 Command Re-roll (1CP)
+    InsaneBravery,       // 15.04 Insane Bravery (1CP, once per battle)
+    FireOverwatch,       // 15.08 Fire Overwatch (1CP; D-097, M96)
+    HeroicIntervention,  // 15.11 Heroic Intervention (1CP; Into the Fray +1CP)
+    Counteroffensive,    // 15.12 Counteroffensive (2CP)
+};
+
+// D-097 (M96): 15.11 Heroic Intervention's modes, selected before the charge roll (with the stratagem). Appended only.
+enum class StratagemMode : std::uint8_t {
+    LeapToDefend,  // only enemy units that made a charge move this phase can be charge targets
+    IntoTheFray,   // +1CP; the charge roll is at most 6; any enemy unit within 6" can be a charge target
 };
 
 [[nodiscard]] std::string_view stratagem_name(Stratagem s);  // "Command Re-roll", as the rules name it
@@ -28,6 +37,13 @@ enum class Stratagem : std::uint8_t {
 [[nodiscard]] std::string_view stratagem_rule(Stratagem s);  // "15.02"
 [[nodiscard]] int stratagem_cost(Stratagem s);               // its CP cost (15.01)
 [[nodiscard]] bool once_per_battle(Stratagem s);             // its RESTRICTIONS say once per battle
+[[nodiscard]] std::string_view stratagem_mode_name(StratagemMode m);  // "Leap to Defend"
+[[nodiscard]] std::string_view stratagem_mode_key(StratagemMode m);   // "LeapToDefend"; also the JSON name
+[[nodiscard]] std::optional<StratagemMode> stratagem_mode_from_key(std::string_view key);
+// 15.01 / FAQ Q45: what using `s` in `mode` costs. Into the Fray's +1CP makes Heroic Intervention's original cost 2CP.
+[[nodiscard]] int stratagem_use_cost(Stratagem s, std::optional<StratagemMode> mode);
+// D-097: whether `s` is used in a mode (Heroic Intervention), so its answer must name one.
+[[nodiscard]] bool has_modes(Stratagem s);
 
 // 15.01: one side's record of the stratagems it has used. The per-phase lists end with the phase (D-096: cleared on
 // leaving each End of Phase step); the once-per-battle list never ends.
@@ -43,11 +59,12 @@ struct StratagemRecord {
 
 // D-096: an open window. The roll it comes after (AfterRoll) or before (BeforeRoll), for `unit` (its controlling player
 // rolls; for a Save the target unit, for a Damage roll the attacker, as the RollDice was). Set only while its
-// UseStratagems decision waits, never at another decision.
+// UseStratagems decision waits, never at another decision. D-097 (M96): an EndOfPhase window has no roll and no unit;
+// an AfterAttacks window has no roll, and its unit is the enemy unit that has just fought.
 struct StratagemWindow {
     WindowTiming timing = WindowTiming::AfterRoll;
-    RollKind roll = RollKind::Hit;
-    UnitId unit;
+    std::optional<RollKind> roll = RollKind::Hit;
+    std::optional<UnitId> unit;
     std::size_t batch = 0;          // the attack batch the roll is for (attack rolls only; 0 otherwise)
     std::vector<Side> sides;        // 01.03.02: the sides still to answer, in order; the first answers now
     std::vector<int> faces;         // AfterRoll: the roll's dice, as rolled (and as re-rolled)

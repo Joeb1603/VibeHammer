@@ -79,6 +79,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::A, decision::RetargetAttacks{UnitId{1}}},   // M92 (D-093)
         {Side::B, decision::RollDice{RollKind::Save, UnitId{2}}},  // M94 (D-095)
         {Side::B, decision::UseStratagems{WindowTiming::AfterRoll, UnitId{2}}},  // M95 (D-096)
+        {Side::B, decision::SnapShoot{UnitId{2}}},                               // M96 (D-097)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
@@ -93,14 +94,19 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         EXPECT_EQ(roll_kind_from_name(roll_kind_name(r)), r);
     }
     EXPECT_EQ(roll_kind_from_name("Sixes"), std::nullopt);
-    // M95 (D-096): every window timing, by its JSON name.
-    for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll}) {
+    // M95 (D-096): every window timing, by its JSON name (M96, D-097: EndOfPhase and AfterAttacks too).
+    for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll, WindowTiming::EndOfPhase,
+                                 WindowTiming::AfterAttacks}) {
         const PendingDecision d{Side::A, decision::UseStratagems{t, UnitId{3}}};
         EXPECT_EQ(round_trip(d), d) << describe(d);
         EXPECT_EQ(Json(d).at("timing").get<std::string>(), window_timing_name(t));
         EXPECT_EQ(window_timing_from_name(window_timing_name(t)), t);
     }
     EXPECT_EQ(window_timing_from_name("Whenever"), std::nullopt);
+    // M96 (D-097): an end-of-phase window has no unit, and its decision no "unit" field.
+    const PendingDecision no_unit{Side::B, decision::UseStratagems{WindowTiming::EndOfPhase, std::nullopt}};
+    EXPECT_EQ(round_trip(no_unit), no_unit) << describe(no_unit);
+    EXPECT_FALSE(Json(no_unit).contains("unit"));
 }
 
 TEST(Serialization, StateMidAttackRoundTrips) {

@@ -26,6 +26,9 @@ struct AttackContext {
     // 24.16 [HEAVY]: in your Shooting phase, the attacking unit is unengaged, was not set up on the
     // battlefield this turn, and no model in it has moved more than 3" this turn.
     bool heavy_conditions_met = false;
+    // D-097 (M96): 15.09 snap shooting: only an unmodified 6 hits (and is not a critical hit), [TORRENT] still hits
+    // automatically, no hit roll is re-rolled, no new target (04.03.03); [HEAVY] and 17.03 are off (07.02.01).
+    bool snap_shooting = false;
     friend bool operator==(const AttackContext&, const AttackContext&) = default;
 };
 
@@ -83,6 +86,8 @@ struct AttackProfile {
     // targets or dice are selected/gathered ([ASSAULT], [CLOSE-QUARTERS], [RAPID FIRE], [BLAST]) are
     // excluded (D-006).
     std::vector<WeaponAbility> attack_time_abilities;
+    // D-097 (M96): the attack is a snap shot (15.09): judge_hit_rolls hits only on an unmodified 6, never critical.
+    bool snap_shooting = false;
     friend bool operator==(const AttackProfile&, const AttackProfile&) = default;
 };
 

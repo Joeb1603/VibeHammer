@@ -89,6 +89,7 @@ bool allowed_for_type(const core::Unit& unit, const core::Model& model, const co
         case core::ShootingType::Normal: return true;
         case core::ShootingType::Assault: return p.has<core::ability::Assault>();
         case core::ShootingType::CloseQuarters: return is_close_quarters(p) || core::is_monster_or_vehicle(unit, model);
+        case core::ShootingType::Snap: return true;  // 15.09: an unengaged unit shoots as 04 describes (D-097)
     }
     return false;
 }

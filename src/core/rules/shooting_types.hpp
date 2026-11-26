@@ -17,6 +17,7 @@ enum class ShootingType : std::uint8_t {
     Normal,         // 10.04
     Assault,        // 10.05
     CloseQuarters,  // 10.06
+    Snap,           // 15.09 Snap Shooting (D-097, M96): only as a rule allows it (15.08 Fire Overwatch), never in 10.02
 };
 
 [[nodiscard]] std::string_view shooting_type_name(ShootingType t);  // also the JSON name

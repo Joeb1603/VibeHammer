@@ -854,7 +854,7 @@ TEST(M88_Replay, TheTerrainReplayShowsCoverADetourAndAHiddenTargetWithCoreOnly) 
     // Step by step: 13.08 cover on a selection; a MONSTER's two-leg move whose straight line would cross a dense wall
     // it can't move through (13.06); a target refused for 13.09 at a Shoot.
     GameState gs = replay_initial_state(saved, repo_root());
-    const bool paced = saved.format == kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each a step
+    const bool paced = saved.format == kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each a step
     if (paced) {
         start_game_paced(gs);
     } else {

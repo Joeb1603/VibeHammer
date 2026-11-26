@@ -63,7 +63,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -1146,6 +1146,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "A"
@@ -1177,6 +1183,12 @@
         "unit": 2
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -1312,6 +1324,12 @@
         "kind": "EndChargeStep"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {

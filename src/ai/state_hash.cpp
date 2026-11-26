@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <optional>
+#include <type_traits>
 #include <variant>
 
 namespace wh40k::ai {
@@ -61,6 +62,9 @@ void add(Fnv1a& h, const core::Unit& u) {
     }
     add_opt_int(h, p.advance_roll);
     add_opt_int(h, p.charge_roll);
+    // M96 (D-097): 15.12 Counteroffensive's Fights First only when set, behind a tag, so every other state hashes as
+    // before.
+    if (p.fights_first) h.u64(0x63666673ull);  // "cffs"
     // M67 (D-076): a unit's points and starting wounds only when it has points, behind a tag, so a state without
     // them (every scenario before M67) hashes as before.
     if (u.points != 0 || u.starting_wounds != 0) {
@@ -164,6 +168,8 @@ void add(Fnv1a& h, const core::FlowState& f) {
                 h.i32(a.rolling->hits->sustained_hits);
             }
         }
+        // M96 (D-097): 15.09 snap shooting only when set, behind a tag, so every other state hashes as before.
+        if (a.context.snap_shooting) h.u64(0x736e6170ull);  // "snap"
         // M92 (D-093): AttackFlow::shooting_type is not hashed. It only narrows the new targets of 04.03.03, and the
         // batches hashed above already differ by its effects (10.05 / 10.06), so every older state hashes as before.
     }
@@ -197,7 +203,15 @@ void add(Fnv1a& h, const core::FlowState& f) {
         }
     }
     h.flag(f.charge.has_value());
-    if (f.charge) add(h, f.charge->unit);
+    if (f.charge) {
+        add(h, f.charge->unit);
+        // M96 (D-097): 15.11 Heroic Intervention's mode only when set, behind a tag, so every other state hashes as
+        // before.
+        if (f.charge->heroic) {
+            h.u64(0x6865726full);  // "hero"
+            h.u64(static_cast<std::uint64_t>(*f.charge->heroic));
+        }
+    }
     h.flag(f.step_done[0]);
     h.flag(f.step_done[1]);
     h.flag(f.fight_sequence.has_value());
@@ -205,6 +219,10 @@ void add(Fnv1a& h, const core::FlowState& f) {
         h.u64(static_cast<std::uint64_t>(f.fight_sequence->sub_step));
         h.u64(static_cast<std::uint64_t>(f.fight_sequence->selecting));
         add_opt_int(h, f.fight_sequence->last_pass);
+        if (f.fight_sequence->next_to_fight) {  // M96 (D-097, 15.12): only when set, so older states hash as before
+            h.u64(0x6e657874ull);  // "next"
+            add(h, *f.fight_sequence->next_to_fight);
+        }
     }
     h.flag(f.fight.has_value());
     if (f.fight) {
@@ -225,12 +243,28 @@ void add(Fnv1a& h, const core::FlowState& f) {
     if (f.window) {
         h.u64(0x77696e64ull);  // "wind"
         h.u64(static_cast<std::uint64_t>(f.window->timing));
-        h.u64(static_cast<std::uint64_t>(f.window->roll));
-        add(h, f.window->unit);
+        // M96 (D-097): a window after no roll has no roll, and an end-of-phase window no unit; a tag stands for each,
+        // so M95's windows (both set) hash as before.
+        if (f.window->roll) {
+            h.u64(static_cast<std::uint64_t>(*f.window->roll));
+        } else {
+            h.u64(0x6e726f6cull);  // "nrol"
+        }
+        if (f.window->unit) {
+            add(h, *f.window->unit);
+        } else {
+            h.u64(0x6e756e74ull);  // "nunt"
+        }
         h.u64(f.window->batch);
         for (const core::Side s : f.window->sides) h.u64(static_cast<std::uint64_t>(s));
         for (const int face : f.window->faces) h.i32(face);
         for (const std::size_t i : f.window->rerolled) h.u64(i);
+    }
+    // M96 (D-097): 15.08's snap shooter only while it waits to shoot, behind a tag, so every other state hashes as
+    // before.
+    if (f.snap_shooter) {
+        h.u64(0x73686f6full);  // "shoo"
+        add(h, *f.snap_shooter);
     }
 }
 
@@ -241,7 +275,18 @@ void add(Fnv1a& h, const core::PendingDecision& d) {
     std::visit(
         [&](const auto& k) {
             using K = std::decay_t<decltype(k)>;
-            if constexpr (requires { k.unit; }) add(h, k.unit);
+            if constexpr (requires { k.unit; }) {
+                if constexpr (std::is_same_v<std::decay_t<decltype(k.unit)>, std::optional<core::UnitId>>) {
+                    // M96 (D-097): UseStratagems' unit is optional; set (every M95 window) it hashes as before.
+                    if (k.unit) {
+                        add(h, *k.unit);
+                    } else {
+                        h.u64(0x6e756e74ull);  // "nunt"
+                    }
+                } else {
+                    add(h, k.unit);
+                }
+            }
             if constexpr (requires { k.target; }) add(h, k.target);
             if constexpr (requires { k.attacker; }) add(h, k.attacker);
             if constexpr (requires { k.roll; }) h.u64(static_cast<std::uint64_t>(k.roll));  // M94: RollDice

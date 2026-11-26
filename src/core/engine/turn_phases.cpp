@@ -30,6 +30,12 @@ bool is_phase_end(Stage s) {
 void on_enter_stage(GameState& state, DiceSource&, Events& events) {
     const Stage stage = state.flow.stage;
     const Side side = turn_side(state);
+    if (is_phase_end(stage)) {
+        // 14.02.01 (app, D-097): at the end of each phase, objective control is determined first, before any other
+        // rule there; then the end-of-phase window (15.08 Fire Overwatch, 15.11 Heroic Intervention).
+        update_objective_control(state, true, events);  // 14.02 (D-084, M86)
+        open_window(state, WindowTiming::EndOfPhase, std::nullopt);
+    }
     if (is_phase_start(stage)) {
         events.push_back(event::PhaseStarted{phase_of(stage), side});
     }
@@ -92,8 +98,11 @@ void on_leave_stage(GameState& state, Events& events) {
     const Stage stage = state.flow.stage;
     const Side side = turn_side(state);
     if (is_phase_end(stage)) {
-        update_objective_control(state, true, events);  // 14.02: at the end of each phase (D-084, M86)
-        end_phase_stratagems(state);                    // D-096: 15.01's "in the same phase" ends
+        // 14.02's control at the end of the phase was determined on entering the step (14.02.01, D-097).
+        end_phase_stratagems(state);  // D-096: 15.01's "in the same phase" ends
+        if (stage == Stage::EndOfFightPhase) {
+            for (Unit& u : state.units) u.phase_flags.fights_first = false;  // D-097: 15.12's "until the end of the phase"
+        }
         events.push_back(event::PhaseEnded{phase_of(stage), side});
     }
     switch (stage) {

@@ -48,7 +48,8 @@ add_executable(wh40k_tests
     m92_test.cpp
     m93_objective_markers_test.cpp
     d095_paced_rolls_test.cpp
-    d096_windows_test.cpp)
+    d096_windows_test.cpp
+    d097_reactions_test.cpp)
 
 target_link_libraries(wh40k_tests PRIVATE wh40k_core GTest::gtest_main)
 target_include_directories(wh40k_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

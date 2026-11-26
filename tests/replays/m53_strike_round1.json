@@ -350,7 +350,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "data/scenarios/strike_44x60.json",
     "seed": 53
@@ -545,6 +545,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -1027,6 +1033,12 @@
         "unit": 7
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {

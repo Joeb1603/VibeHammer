@@ -118,9 +118,12 @@ TEST(M12_GameSession, ValidActionsAreAppliedAndRecorded) {
     GameSession session(wh40k::test::load_v1_scenario());
     const auto first = session.legal().front();
     ASSERT_TRUE(session.submit(first).ok());
-    ASSERT_EQ(session.history().size(), 1u);
+    // M96 (D-097): the Intercessors remain stationary, so the Movement phase ends and the session declines Side B's
+    // Fire Overwatch window for it (a step of its own, D-096).
+    ASSERT_EQ(session.history().size(), 2u);
     EXPECT_EQ(session.history()[0].action, first);
-    EXPECT_EQ(session.log().back().label.rfind("Step 1: Side A ", 0), 0u);
+    EXPECT_EQ(session.history()[1], (ReplayStep{Side::B, action::DeclineStratagems{}}));
+    EXPECT_EQ(session.log()[1].label.rfind("Step 1: Side A ", 0), 0u);
 }
 
 // ==== the decision view ====
@@ -157,8 +160,11 @@ TEST(M12_MovePlan, TheMoveUnitHandleTranslatesEveryModelAndTheEngineAcceptsIt) {
     EXPECT_NEAR(mm_to_inches(r->moved_mm), 2.0f, 0.001f);
     EXPECT_NEAR(mm_to_inches(r->max_mm), 6.0f, 0.001f);
     EXPECT_FALSE(r->over);
+    const std::size_t before = session.log().size();
     ASSERT_TRUE(session.submit(action::CommitUnitMove{}).ok());
-    EXPECT_TRUE(events_of<event::UnitMoveCommitted>(last_events(session)).size() == 1u);
+    // The commit's step, then (M96, D-097) Side B's Fire Overwatch window declined by the session.
+    ASSERT_GT(session.log().size(), before);
+    EXPECT_TRUE(events_of<event::UnitMoveCommitted>(session.log()[before].events).size() == 1u);
 }
 
 TEST(M14_TranslateUnit, ATouchingUnitMovesInEveryDirectionWithoutARejectedProposal) {

@@ -28,10 +28,11 @@ struct ShootingTypeInfo {
     std::string_view rule;
 };
 
-constexpr std::array<ShootingTypeInfo, 3> kShootingTypes{{
+constexpr std::array<ShootingTypeInfo, 4> kShootingTypes{{
     {ShootingType::Normal, "Normal", "10.04"},
     {ShootingType::Assault, "Assault", "10.05"},
     {ShootingType::CloseQuarters, "CloseQuarters", "10.06"},
+    {ShootingType::Snap, "Snap", "15.09"},
 }};
 
 const ShootingTypeInfo& info(ShootingType t) {
@@ -168,9 +169,26 @@ private:
 };
 
 // 04.02 / 10.06: the target rules for one declaration (the target unit exists and is an enemy).
+// D-097 (M96): 15.09 snap shooting: only an enemy unit within 24" of the unit (D-009: unit to unit).
+bool within_snap_range(const Unit& unit, const Unit& target) {
+    const auto d = unit_distance(unit, target);
+    return d.has_value() && within(*d, inches_to_mm(24.0f));
+}
+
 std::optional<std::string> target_problem(const Unit& unit, const Model& model, const WeaponProfile& profile,
                                           ShootingType type, const Unit& target, TargetFacts& facts) {
     const bool close_quarters = type == ShootingType::CloseQuarters;
+    const bool snap = type == ShootingType::Snap;
+    if (snap && !within_snap_range(unit, target)) {
+        return "15.09: " + unit_label(target.id) + " is not within 24\" of " + unit_label(unit.id) +
+               " (snap shooting)";
+    }
+    if (snap && facts.target_engaged(target)) {
+        // 07.02.01 Out of Phase Rules (app, D-097): 17.03 is "in your Shooting phase", so an engaged MONSTER/VEHICLE
+        // unit is no exception when snap shooting.
+        return "04.02: " + unit_label(target.id) + " is engaged; targets must be unengaged (snap shooting: 17.03 "
+               "applies only in your Shooting phase)";
+    }
     const bool monster_vehicle = is_monster_or_vehicle(unit, model);
     const bool target_engaged_with_us = facts.engaged_with_us(target.id);
     if (close_quarters && !monster_vehicle) {
@@ -210,6 +228,9 @@ std::optional<std::string> target_problem(const Unit& unit, const Model& model, 
 bool target_ok(const Unit& unit, const Model& model, const WeaponProfile& profile, ShootingType type,
                const Unit& target, TargetFacts& facts) {
     const bool close_quarters = type == ShootingType::CloseQuarters;
+    if (type == ShootingType::Snap && (!within_snap_range(unit, target) || facts.target_engaged(target))) {
+        return false;  // 15.09, 04.02 (07.02.01: no 17.03 exception)
+    }
     const bool monster_vehicle = is_monster_or_vehicle(unit, model);
     const bool target_engaged_with_us = facts.engaged_with_us(target.id);
     if (close_quarters && !monster_vehicle) {
@@ -347,6 +368,10 @@ std::optional<std::string> shooting_type_problem(const GameState& state, const U
                 return rule + ": " + who + " has no [CLOSE-QUARTERS] weapons and is not a MONSTER/VEHICLE unit";
             }
             return std::nullopt;
+        case ShootingType::Snap:
+            // D-097: 15.08 Fire Overwatch's unit is unengaged (its ELIGIBLE IF is the rule that allows it).
+            if (engaged) return rule + ": " + who + " is engaged; Fire Overwatch's snap shooting needs an unengaged unit";
+            return std::nullopt;
     }
     throw std::logic_error("invalid ShootingType");
 }
@@ -357,7 +382,8 @@ std::vector<ShootingType> eligible_shooting_types(const GameState& state, const 
         return out;
     }
     for (const auto& i : kShootingTypes) {
-        if (!shooting_type_problem(state, unit, i.type)) {
+        // D-097: snap shooting is never one of 10.02's shooting types (15.09: only as a rule allows it).
+        if (i.type != ShootingType::Snap && !shooting_type_problem(state, unit, i.type)) {
             out.push_back(i.type);
         }
     }
@@ -405,6 +431,16 @@ std::vector<std::string> shot_problems(const GameState& state, const Unit& unit,
             }
         }
     }
+    if (out.empty() && type == ShootingType::Snap) {
+        // 15.09: only one enemy unit can be targeted.
+        for (const ShotDeclaration& s : shots) {
+            if (s.target != shots.front().target) {
+                out.push_back("15.09: snap shooting can only target one enemy unit (" + unit_label(shots.front().target) +
+                              " and " + unit_label(s.target) + " are both targeted)");
+                break;
+            }
+        }
+    }
     if (!out.empty() || type == ShootingType::CloseQuarters) {
         return out;
     }
@@ -447,12 +483,15 @@ bool has_shot_option(const GameState& state, const Unit& unit, ShootingType type
     return any;
 }
 
-AttackContext shooting_context(const GameState& state, const Unit& unit) {
+AttackContext shooting_context(const GameState& state, const Unit& unit, ShootingType type) {
     AttackContext context;
     context.type = AttackType::Shooting;
+    context.snap_shooting = type == ShootingType::Snap;  // D-097: 15.09
     // 24.16: unengaged, not set up on the battlefield this turn (V1 has no reserves or deployment
-    // during the battle, D-003), and no model has moved more than 3" this turn.
-    context.heavy_conditions_met = !is_engaged(state, unit) && !unit.turn_flags.moved_over_3in;
+    // during the battle, D-003), and no model has moved more than 3" this turn. D-097: "in your Shooting phase", so
+    // never when snap shooting (07.02.01 Out of Phase Rules).
+    context.heavy_conditions_met =
+        !context.snap_shooting && !is_engaged(state, unit) && !unit.turn_flags.moved_over_3in;
     return context;
 }
 

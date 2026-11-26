@@ -426,8 +426,10 @@ std::string per_game_field(const std::string& line, const std::string& key) {
 // Gone to Ground changes the trace only (d402e9f71fb750df under M90): the actions and the final state are the same.
 // M94 (D-095): each roll is a step of its own, so the actions hash changed (e27db795e0c1ed1f before); the final state
 // and the trace did not. M95 (D-096): each declined window is a step too, and a random D is rolled per attack, so the
-// actions hash changed again (3de2a3dc77197f59 at M94); the final state and the trace did not.
-constexpr const char* kM88Actions = "dd1d45f3a5aae08b";
+// actions hash changed again (3de2a3dc77197f59 at M94); the final state and the trace did not. M96 (D-097): the windows
+// that follow no roll are declined steps too, so it changed again (dd1d45f3a5aae08b at M95); the final state and the
+// trace did not.
+constexpr const char* kM88Actions = "950d6286341219ea";
 constexpr const char* kM88State = "873846eb3d40fa93";
 constexpr const char* kM88Trace = "69714275291ebb7f";
 
@@ -495,7 +497,7 @@ CoverGame play_cover_bot_game(std::uint64_t seed = kCoverSeed) {
     // M91 (D-092): the M89 game, pinned to the M91 keys at 0 (the saved file is the M90 bot's).
     g.record = play_bot_session(session, m90_bot(), m90_bot(), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
+    g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     for (const ReplayStep& st : g.replay.steps) {
         if (const auto* p = std::get_if<action::ProposeModelMove>(&st.action); p != nullptr && p->path.size() == 2) {

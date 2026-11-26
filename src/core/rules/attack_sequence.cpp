@@ -73,7 +73,11 @@ HitRolls judge_hit_rolls(const AttackProfile& profile, int attack_dice, std::spa
         const int m = modified_result(u, modifier);
         r.unmodified = u;
         r.modified = m;
-        if (u == 1) {
+        if (profile.snap_shooting) {
+            // 15.09 (D-097): "only hits on an unmodified hit roll of 6 (irrespective of the attacking weapon's BS
+            // characteristic or any modifiers). Those hits are not critical hits" (the app's text, the user's ruling).
+            r.outcome = u == 6 ? HitOutcome::Hit : HitOutcome::Fail;
+        } else if (u == 1) {
             r.outcome = HitOutcome::Fail;  // unmodified 1
         } else if (u == 6) {
             r.outcome = HitOutcome::CriticalHit;  // unmodified 6

@@ -87,7 +87,11 @@ struct StratagemOption {
     Stratagem stratagem = Stratagem::CommandReroll;
     std::string name;  // "Command Re-roll"
     std::string rule;  // "15.02"
-    int cost = 0;      // CP (15.01)
+    int cost = 0;      // CP (15.01); D-097: its use cost in `mode` (Into the Fray 2CP)
+    // D-097 (M96): for the windows that follow no roll, the mode (Heroic Intervention) and the friendly units it can
+    // target, in unit order; empty for a roll's window (its target is the window's unit).
+    std::optional<StratagemMode> mode{};
+    std::vector<UnitId> targets{};
     friend bool operator==(const StratagemOption&, const StratagemOption&) = default;
 };
 
@@ -95,8 +99,10 @@ struct StratagemOption {
 // unless a window is pending.
 struct WindowInfo {
     WindowTiming timing = WindowTiming::AfterRoll;
-    RollKind roll = RollKind::Hit;  // the roll the window comes after (or before)
-    UnitId unit;                    // the unit the roll is for
+    // The roll the window comes after (or before), and the unit it is for. D-097: an EndOfPhase window has neither; an
+    // AfterAttacks window's unit is the enemy unit that has just fought.
+    std::optional<RollKind> roll = RollKind::Hit;
+    std::optional<UnitId> unit;
     Side side = Side::A;            // the deciding side
     int command_points = 0;         // its CP
     std::vector<StratagemOption> options;  // what it can use here (none: it can only decline)

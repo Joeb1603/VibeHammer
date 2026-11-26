@@ -166,7 +166,7 @@ TEST(M95_Picks, ADieIsPickedForCommandRerollAndPickedAgainToDropIt) {
     EXPECT_FALSE(picks.command_reroll().has_value());
     picks.pick(1);
     EXPECT_EQ(picks.picked(), std::size_t{1});
-    EXPECT_EQ(picks.command_reroll(), (GameAction{action::UseStratagem{Stratagem::CommandReroll, info.unit, 1}}));
+    EXPECT_EQ(picks.command_reroll(), (GameAction{action::UseStratagem{Stratagem::CommandReroll, *info.unit, 1}}));
     picks.pick(1);  // dropped again
     EXPECT_FALSE(picks.picked().has_value());
     picks.pick(info.faces.size());  // out of range: ignored
@@ -306,7 +306,7 @@ TEST(M95_Saves, AnM94SaveLoadsWithItsWindowsDeclined) {
     EXPECT_EQ(loaded.history(), again.history());
     EXPECT_GT(declines_in(loaded.history()), 0u);
     EXPECT_EQ(loaded.to_save_json(), again.to_save_json());
-    EXPECT_EQ(loaded.to_save_json().at("format"), kReplayFormatWindowsRecorded);
+    EXPECT_EQ(loaded.to_save_json().at("format"), kReplayFormatReactionsRecorded);  // M96 (D-097): format 4
 }
 
 TEST(M95_Saves, AnM94SaveWaitingForARollLoadsStillWaitingForIt) {

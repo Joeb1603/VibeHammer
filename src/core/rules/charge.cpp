@@ -47,12 +47,19 @@ std::optional<std::string> declare_charge_problem(const GameState& state, const 
     return "11.02: " + who + " is not within 12\" of any enemy unit";
 }
 
-std::vector<UnitId> eligible_charge_targets(const GameState& state, const Unit& unit, int charge_roll) {
+std::vector<UnitId> eligible_charge_targets(const GameState& state, const Unit& unit, int charge_roll,
+                                            std::optional<StratagemMode> heroic) {
     std::vector<UnitId> out;
     const float limit = inches_to_mm(std::min(kChargeRangeInches, static_cast<float>(charge_roll)));
     for (const Unit& other : state.units) {
         if (other.side == unit.side || is_destroyed(other)) {
             continue;
+        }
+        // D-097: 15.11 Heroic Intervention's modes. Leap to Defend: only enemy units that made a charge move this phase
+        // (it is the end of their Charge phase, so this turn's charge moves). Into the Fray: enemy units within 6".
+        if (heroic == StratagemMode::LeapToDefend && !other.turn_flags.made_charge_move) continue;
+        if (heroic == StratagemMode::IntoTheFray) {
+            if (const auto d = unit_distance(unit, other); !d || !within(*d, inches_to_mm(6.0f))) continue;
         }
         // 11.04 Before Moving: within 12" and within the maximum distance (the charge roll).
         if (const auto d = unit_distance(unit, other); d && within(*d, limit)) {
@@ -116,6 +123,9 @@ std::vector<std::string> charge_after_moving_problems(const GameState& state, co
     return out;
 }
 
-bool is_fights_first_unit(const Unit& unit) { return !is_destroyed(unit) && unit.turn_flags.fights_first; }
+// 24.13: a charge move's Fights First lasts the turn (11.04); D-097: 15.12 Counteroffensive's lasts the phase.
+bool is_fights_first_unit(const Unit& unit) {
+    return !is_destroyed(unit) && (unit.turn_flags.fights_first || unit.phase_flags.fights_first);
+}
 
 }  // namespace wh40k::core

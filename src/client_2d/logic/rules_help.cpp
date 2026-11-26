@@ -171,6 +171,12 @@ HelpEntry shooting_type_help(core::ShootingType type) {
                     "any ranged weapon at any target (no [BLAST] at units they are engaged with), at -1 to hit "
                     "unless a [CLOSE-QUARTERS] weapon targets a unit they are engaged with.",
                     "10.06", true};
+        case core::ShootingType::Snap:
+            return {"Snap shooting",
+                    "Only as a rule allows it (Fire Overwatch, 15.08). Every attack is at one visible, eligible enemy "
+                    "unit within 24\" of the unit, and only an unmodified hit roll of 6 hits, whatever the BS and the "
+                    "modifiers (not a critical hit; [TORRENT] still hits automatically). Hit rolls can't be re-rolled.",
+                    "15.09", true};
     }
     return {};
 }

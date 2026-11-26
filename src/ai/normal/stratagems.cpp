@@ -21,6 +21,11 @@ namespace {
 
 using core::GameState;
 
+// The roll window's unit (M95's windows each have one; D-097's EndOfPhase windows have none).
+const core::Unit* window_unit(const GameState& gs, const core::WindowInfo& w) {
+    return w.unit ? gs.find_unit(*w.unit) : nullptr;
+}
+
 bool offered(const core::WindowInfo& w, core::Stratagem s) {
     return std::any_of(w.options.begin(), w.options.end(), [s](const core::StratagemOption& o) { return o.stratagem == s; });
 }
@@ -98,7 +103,7 @@ std::optional<RerollPick> hit_or_wound(analysis::OddsCache& cache, const GameSta
 
 std::optional<RerollPick> save(analysis::OddsCache& cache, const GameState& gs, const core::WindowInfo& w) {
     const core::AttackBatch* batch = window_batch(gs);
-    const core::Unit* target = gs.find_unit(w.unit);
+    const core::Unit* target = window_unit(gs, w);
     if (batch == nullptr || target == nullptr || target->models.empty() || !gs.flow.attack->current) return std::nullopt;
     const core::BatchInProgress& b = *gs.flow.attack->current;
     if (b.groups.empty()) return std::nullopt;
@@ -154,7 +159,7 @@ std::optional<RerollPick> random_attacks(analysis::OddsCache& cache, const GameS
 }
 
 std::optional<RerollPick> hazard(const GameState& gs, const core::WindowInfo& w) {
-    const core::Unit* unit = gs.find_unit(w.unit);
+    const core::Unit* unit = window_unit(gs, w);
     if (unit == nullptr || unit->models.empty()) return std::nullopt;
     const auto fails = [&](int face) {
         const std::array<int, 1> one{face};
@@ -172,7 +177,7 @@ std::optional<RerollPick> hazard(const GameState& gs, const core::WindowInfo& w)
 
 std::optional<RerollPick> charge(const GameState& gs, const core::WindowInfo& w) {
     const auto* c = w.result ? std::get_if<core::event::ChargeRolled>(&*w.result) : nullptr;
-    const core::Unit* unit = gs.find_unit(w.unit);
+    const core::Unit* unit = window_unit(gs, w);
     if (c == nullptr || unit == nullptr || !c->eligible_targets.empty()) return std::nullopt;  // it reaches a target
     std::optional<float> gap;
     for (const core::Unit& enemy : gs.units) {
@@ -187,8 +192,11 @@ std::optional<RerollPick> charge(const GameState& gs, const core::WindowInfo& w)
 
 std::optional<RerollPick> best_command_reroll(analysis::OddsCache& cache, const GameState& state) {
     const std::optional<core::WindowInfo> w = core::window_info(state);
-    if (!w || w->timing != core::WindowTiming::AfterRoll || !offered(*w, core::Stratagem::CommandReroll)) return std::nullopt;
-    switch (w->roll) {
+    if (!w || w->timing != core::WindowTiming::AfterRoll || !w->roll || !w->unit ||
+        !offered(*w, core::Stratagem::CommandReroll)) {
+        return std::nullopt;
+    }
+    switch (*w->roll) {
         case core::RollKind::Hit:
         case core::RollKind::Wound:
             return hit_or_wound(cache, state, *w);
@@ -214,12 +222,13 @@ PolicyResult decide_stratagems(analysis::OddsCache& cache, const GameState& stat
     const core::GameAction decline = core::action::DeclineStratagems{};
     const std::optional<core::WindowInfo> w = core::window_info(state);
     if (!w) return PolicyResult{decline, "No stratagem", {}};
-    const std::string unit = client::unit_display_name(state, w->unit);
+    if (!w->unit) return PolicyResult{decline, "No stratagem", {}};  // D-097's EndOfPhase windows: not played yet
+    const std::string unit = client::unit_display_name(state, *w->unit);
     if (weights.insane_bravery > 0.0 && offered(*w, core::Stratagem::InsaneBravery) && w->next_roll &&
         w->next_roll->need) {
         const double risk = 1.0 - analysis::p_2d6_at_least(*w->next_roll->need);
         if (risk >= kBraveryRisk) {
-            return PolicyResult{core::action::UseStratagem{core::Stratagem::InsaneBravery, w->unit, std::nullopt},
+            return PolicyResult{core::action::UseStratagem{core::Stratagem::InsaneBravery, *w->unit, std::nullopt},
                                 unit + ": Insane Bravery (the test would fail " +
                                     std::to_string(static_cast<int>(std::lround(risk * 100))) + "% of the time)",
                                 {}};
@@ -229,7 +238,7 @@ PolicyResult decide_stratagems(analysis::OddsCache& cache, const GameState& stat
         if (const std::optional<RerollPick> pick = best_command_reroll(cache, state)) {
             const bool whole = !pick->die.has_value();
             if ((whole && pick->gain >= kChargeRerollChance) || (!whole && pick->gain >= kRerollMinGain)) {
-                return PolicyResult{core::action::UseStratagem{core::Stratagem::CommandReroll, w->unit, pick->die},
+                return PolicyResult{core::action::UseStratagem{core::Stratagem::CommandReroll, *w->unit, pick->die},
                                     unit + ": Command Re-roll " + pick->why, {}};
             }
         }

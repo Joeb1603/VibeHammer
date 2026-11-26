@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <optional>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -174,7 +175,14 @@ void add(Fnv1a& h, const core::PendingDecision& d) {
     std::visit(
         [&](const auto& k) {
             using K = std::decay_t<decltype(k)>;
-            if constexpr (requires { k.unit; }) add(h, k.unit);
+            if constexpr (requires { k.unit; }) {
+                // M96: UseStratagems' unit is optional (no M64 decision kind has one).
+                if constexpr (std::is_same_v<std::decay_t<decltype(k.unit)>, std::optional<core::UnitId>>) {
+                    if (k.unit) add(h, *k.unit);
+                } else {
+                    add(h, k.unit);
+                }
+            }
             if constexpr (requires { k.target; }) add(h, k.target);
             if constexpr (requires { k.attacker; }) add(h, k.attacker);
             (void)sizeof(K);

@@ -33,8 +33,10 @@ enum class RollKind : std::uint8_t {
 
 // D-096 (M95): when a reaction window comes (01.03.02, core/state/stratagems.hpp). Appended at the end only.
 enum class WindowTiming : std::uint8_t {
-    AfterRoll,   // just after a player makes a roll (15.02 Command Re-roll)
-    BeforeRoll,  // just before a player makes a roll (15.04 Insane Bravery)
+    AfterRoll,     // just after a player makes a roll (15.02 Command Re-roll)
+    BeforeRoll,    // just before a player makes a roll (15.04 Insane Bravery)
+    EndOfPhase,    // D-097 (M96): the end of the opponent's Movement (15.08) or Charge (15.11) phase
+    AfterAttacks,  // D-097: just after an enemy unit has resolved its attacks in the Fight step (15.12)
 };
 
 [[nodiscard]] std::string_view window_timing_name(WindowTiming t);  // "AfterRoll"; also the JSON name
@@ -139,11 +141,18 @@ struct RollDice {
 };
 // D-096 (M95): a reaction window (01.03.02): the deciding side can use one of its stratagems that this timing allows
 // (15.01), or decline. `unit` is the unit the window's roll is for; the roll itself and its dice are in
-// FlowState::window. Its answers are action::DeclineStratagems (listed first) and action::UseStratagem.
+// FlowState::window. Its answers are action::DeclineStratagems (listed first) and action::UseStratagem. D-097 (M96): an
+// EndOfPhase window has no unit; an AfterAttacks window's unit is the enemy unit that has just fought.
 struct UseStratagems {
     WindowTiming timing = WindowTiming::AfterRoll;
-    UnitId unit;
+    std::optional<UnitId> unit;
     friend bool operator==(const UseStratagems&, const UseStratagems&) = default;
+};
+// D-097 (M96): 15.08 Fire Overwatch's unit shoots using snap shooting (15.09). Its one answer is action::Shoot of type
+// Snap for that unit (a template, D-016).
+struct SnapShoot {
+    UnitId unit;
+    friend bool operator==(const SnapShoot&, const SnapShoot&) = default;
 };
 }  // namespace decision
 
@@ -154,7 +163,8 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::Consolidate, decision::ForcedFight, decision::RestoreCoherency,
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits,
-                                  decision::RetargetAttacks, decision::RollDice, decision::UseStratagems>;
+                                  decision::RetargetAttacks, decision::RollDice, decision::UseStratagems,
+                                  decision::SnapShoot>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)

@@ -71,12 +71,15 @@ std::string_view window_timing_name(WindowTiming t) {
     switch (t) {
         case WindowTiming::AfterRoll: return "AfterRoll";
         case WindowTiming::BeforeRoll: return "BeforeRoll";
+        case WindowTiming::EndOfPhase: return "EndOfPhase";
+        case WindowTiming::AfterAttacks: return "AfterAttacks";
     }
     return "?";
 }
 
 std::optional<WindowTiming> window_timing_from_name(std::string_view name) {
-    for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll}) {
+    for (const WindowTiming t : {WindowTiming::AfterRoll, WindowTiming::BeforeRoll, WindowTiming::EndOfPhase,
+                                 WindowTiming::AfterAttacks}) {
         if (window_timing_name(t) == name) return t;
     }
     return std::nullopt;
@@ -106,6 +109,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) return "D-093";  // 04.03.03 (app-only)
             else if constexpr (std::is_same_v<T, decision::RollDice>) return roll_rule(k.roll);  // D-095
             else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "15.01";  // D-096
+            else if constexpr (std::is_same_v<T, decision::SnapShoot>) return "15.09";      // D-097
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         d.kind);
@@ -135,6 +139,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::RetargetAttacks>) return "RetargetAttacks";
             else if constexpr (std::is_same_v<T, decision::RollDice>) return "RollDice";
             else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "UseStratagems";
+            else if constexpr (std::is_same_v<T, decision::SnapShoot>) return "SnapShoot";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         kind);
@@ -187,9 +192,22 @@ std::string what_to_do(const PendingDecision& d) {
             } else if constexpr (std::is_same_v<T, decision::RollDice>) {
                 return "make " + std::string(roll_noun(k.roll)) + " for unit " + std::to_string(k.unit.v);  // D-095
             } else if constexpr (std::is_same_v<T, decision::UseStratagems>) {
-                // D-096: a reaction window, just after or just before a roll for the unit.
-                return std::string("use a stratagem ") + (k.timing == WindowTiming::AfterRoll ? "after" : "before") +
-                       " a roll for unit " + std::to_string(k.unit.v) + ", or decline";
+                // D-096: a reaction window, just after or just before a roll for the unit. D-097: at the end of a
+                // phase, or just after an enemy unit has fought.
+                const std::string unit = k.unit ? std::to_string(k.unit->v) : std::string("?");
+                switch (k.timing) {
+                    case WindowTiming::AfterRoll:
+                        return "use a stratagem after a roll for unit " + unit + ", or decline";
+                    case WindowTiming::BeforeRoll:
+                        return "use a stratagem before a roll for unit " + unit + ", or decline";
+                    case WindowTiming::EndOfPhase:
+                        return std::string("use a stratagem at the end of the phase, or decline");
+                    case WindowTiming::AfterAttacks:
+                        return "use a stratagem now that unit " + unit + " has fought, or decline";
+                }
+                return std::string("use a stratagem, or decline");
+            } else if constexpr (std::is_same_v<T, decision::SnapShoot>) {
+                return "shoot with unit " + std::to_string(k.unit.v) + " using snap shooting";  // D-097
             } else {
                 static_assert(sizeof(T) == 0, "unhandled decision");
             }
@@ -217,8 +235,14 @@ std::string_view decision_rule(const GameState& state, const PendingDecision& d)
     }
     if (const auto* w = std::get_if<decision::UseStratagems>(&d.kind)) {
         // D-096: the stratagem the window's timing is for: just after a roll, Command Re-roll; just before the 08.03
-        // battle-shock roll, Insane Bravery.
-        return w->timing == WindowTiming::AfterRoll ? "15.02" : "15.04";
+        // battle-shock roll, Insane Bravery. D-097: at the end of the Movement phase Fire Overwatch, at the end of the
+        // Charge phase Heroic Intervention, after an enemy unit's fight Counteroffensive.
+        switch (w->timing) {
+            case WindowTiming::AfterRoll: return "15.02";
+            case WindowTiming::BeforeRoll: return "15.04";
+            case WindowTiming::EndOfPhase: return state.flow.stage == Stage::EndOfChargePhase ? "15.11" : "15.08";
+            case WindowTiming::AfterAttacks: return "15.12";
+        }
     }
     return decision_rule(d);
 }

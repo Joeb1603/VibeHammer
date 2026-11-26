@@ -96,6 +96,31 @@ void finish_fight(GameState& state) {
         }
     }
     if (state.flow.stage == Stage::Fight) refresh_fight_eligibility(state);
+    // D-097: 15.12 Counteroffensive's window, just after the unit has resolved its attacks in the Fight step (its
+    // [HAZARDOUS] rolls and their mortal wounds first: the active player's mandatory rules, 01.03.02), even with no
+    // attacks made (FAQ Q2). A forced fight (12.08) is the Consolidate step's.
+    if (state.flow.stage == Stage::Fight && !f.forced) open_window(state, WindowTiming::AfterAttacks, f.unit);
+}
+
+// D-097: 15.12 Counteroffensive's unit while it must be the next unit `side` selects to fight, if it can be selected now
+// (eligible, a Fights First unit in that step, a fight type open); otherwise the requirement lapses (nullopt).
+std::optional<UnitId> must_fight_next(const GameState& state, Side side) {
+    if (!state.flow.fight_sequence || !state.flow.fight_sequence->next_to_fight) return std::nullopt;
+    const FightSequence& seq = *state.flow.fight_sequence;
+    const Unit* u = state.find_unit(*seq.next_to_fight);
+    if (u == nullptr || u->side != side || !eligible_to_fight(state, *u)) return std::nullopt;
+    if (seq.sub_step == FightSubStep::FightsFirst && !is_fights_first_unit(*u)) return std::nullopt;
+    for (const FightType t : {FightType::Normal, FightType::Overrun}) {
+        if (!fight_type_problem(state, *u, t)) return u->id;
+    }
+    return std::nullopt;
+}
+
+// D-097: the player of Counteroffensive's unit has made their next selection (or passed): the requirement is over.
+void clear_next_to_fight(GameState& state, Side side) {
+    if (!state.flow.fight_sequence || !state.flow.fight_sequence->next_to_fight) return;
+    const Unit* u = state.find_unit(*state.flow.fight_sequence->next_to_fight);
+    if (u == nullptr || u->side == side) state.flow.fight_sequence->next_to_fight.reset();
 }
 
 }  // namespace
@@ -293,9 +318,11 @@ void apply_details(GameState& state, Side side, const action::EndPileIns&, DiceS
 
 std::vector<GameAction> legal_for(const GameState& state, const decision::SelectUnitToFight&) {
     const FightSequence& seq = *state.flow.fight_sequence;
+    const std::optional<UnitId> must = must_fight_next(state, seq.selecting);  // D-097: 15.12
     std::vector<GameAction> out;
     for (const Unit& u : state.units) {
         if (u.side != seq.selecting || !eligible_to_fight(state, u)) continue;
+        if (must && u.id != *must) continue;
         if (seq.sub_step == FightSubStep::FightsFirst && !is_fights_first_unit(u)) continue;
         for (const FightType t : {FightType::Normal, FightType::Overrun}) {
             if (!fight_type_problem(state, u, t)) out.push_back(action::SelectToFight{u.id, t});
@@ -327,6 +354,9 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
             return ValidationResult::failure("12.08: " + unit_label(a.unit) +
                                              " is not one of the units that must now be selected to fight");
         }
+    } else if (const std::optional<UnitId> must = must_fight_next(state, side); must && a.unit != *must) {
+        return ValidationResult::failure("15.12: Counteroffensive: " + unit_label(*must) + " must be the next unit " +
+                                         side_label(side) + " selects to fight");
     } else if (state.flow.fight_sequence->sub_step == FightSubStep::FightsFirst && !is_fights_first_unit(*u)) {
         return ValidationResult::failure("12.04: only Fights First units can be selected in the Resolve Fights First "
                                          "Combats step");
@@ -350,6 +380,7 @@ void apply_details(GameState& state, Side, const action::SelectToFight& a, DiceS
         forced_list.erase(forced_it);
     } else {
         state.flow.fight_sequence->last_pass.reset();
+        clear_next_to_fight(state, u.side);  // D-097: 15.12's "next unit you select" is this selection
     }
     state.flow.activation = Activation{u.id, ActivationKind::Fight};  // 01.03
     state.flow.fight = FightInProgress{u.id, a.type, a.type == FightType::Overrun, false, forced};
@@ -367,6 +398,7 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
 
 void apply_details(GameState& state, Side side, const action::PassFight&, DiceSource&, Events& events) {
     events.push_back(event::FightPassed{side});
+    clear_next_to_fight(state, side);  // D-097 (the user's ruling): a pass ends 15.12's requirement
     FightSequence& seq = *state.flow.fight_sequence;
     const Side other = opponent(side);
     if (seq.last_pass == other) {

@@ -372,7 +372,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "data/scenarios/incursion_objectives_44x60.json",
     "seed": 29
@@ -1812,6 +1812,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -2486,6 +2492,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -3561,6 +3573,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -4031,6 +4049,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndPileIns"
       },
       "side": "B"
@@ -4249,6 +4273,12 @@
           16
         ],
         "target": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -4906,6 +4936,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -5393,6 +5429,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "StartPileIn",
         "targets": [
           8
@@ -5679,6 +5721,12 @@
           52
         ],
         "target": 8
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -6258,6 +6306,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -6607,6 +6661,12 @@
           21
         ],
         "target": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -7302,6 +7362,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -8040,6 +8106,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -8403,6 +8475,12 @@
         "kind": "RollDice",
         "roll": "Save",
         "unit": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },
@@ -9129,6 +9207,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "EndPileIns"
       },
       "side": "A"
@@ -9249,6 +9333,12 @@
           57
         ],
         "target": 11
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },
@@ -9822,6 +9912,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -10189,6 +10285,12 @@
           19
         ],
         "target": 3
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },

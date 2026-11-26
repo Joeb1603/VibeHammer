@@ -206,6 +206,10 @@ struct UseStratagem {
     Stratagem stratagem = Stratagem::CommandReroll;
     UnitId unit;
     std::optional<std::size_t> die;
+    // D-097 (M96): 15.11 Heroic Intervention's mode (Leap to Defend or Into the Fray), chosen with the stratagem before
+    // the charge roll; absent for every other stratagem. For the windows that follow no roll (15.08, 15.11, 15.12),
+    // `unit` is the friendly unit the player targets.
+    std::optional<StratagemMode> mode{};
     friend bool operator==(const UseStratagem&, const UseStratagem&) = default;
 };
 // D-096 (M95): use no stratagem in the open window (the rules there are optional, 01.03.02). Changes nothing else.

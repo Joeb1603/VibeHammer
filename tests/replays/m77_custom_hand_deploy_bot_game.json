@@ -211,7 +211,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "tests/data/scenarios/m77_custom_hand_deploy_44x60.json",
     "seed": 1
@@ -1877,6 +1877,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -2819,6 +2825,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -3300,6 +3312,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -3773,6 +3791,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -4212,6 +4236,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -4655,6 +4685,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -5079,6 +5115,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -5723,6 +5765,12 @@
         "kind": "RollDice",
         "roll": "Save",
         "unit": 9
+      },
+      "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "B"
     },

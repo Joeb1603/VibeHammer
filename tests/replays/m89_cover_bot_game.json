@@ -435,7 +435,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "data/scenarios/incursion_terrain_44x60.json",
     "seed": 2
@@ -1843,6 +1843,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -2512,6 +2518,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -3583,6 +3595,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -4387,6 +4405,12 @@
         "unit": 4
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {
@@ -5525,6 +5549,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -7147,6 +7177,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "B"
@@ -8580,6 +8616,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {

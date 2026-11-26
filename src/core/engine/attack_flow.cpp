@@ -81,6 +81,8 @@ std::vector<std::size_t> lost_selections(const GameState& state, const AttackFlo
 // model could select with that weapon and profile now, with the unit's shooting type (04.02, 06.01, 10.04-10.06,
 // 17.03, 24.07: shot_problems). Fighting: the enemy units the model is engaged with (04.02 While Fighting).
 std::vector<UnitId> retarget_options(const GameState& state, const AttackFlow& f, std::size_t index) {
+    // D-097 (the user's ruling): 15.09 snap shooting targets one enemy unit, so 04.03.03 gives it no new target.
+    if (f.context.snap_shooting) return {};
     std::vector<UnitId> out;
     const WeaponSelection& sel = f.selections[index];
     const Unit& unit = unit_ref(state, f.attacker);
@@ -959,8 +961,9 @@ void check_begin_preconditions(const GameState& state, UnitId attacker, const At
                                const std::vector<WeaponSelection>& selections) {
     const bool fighting = context.type == AttackType::Fighting;
     const Stage expected = fighting ? Stage::Fight : Stage::Shoot;
-    // 12.08: a unit forced to fight by an Engaging Consolidation fights in the Consolidate step.
-    if (state.flow.stage != expected && !(fighting && state.flow.stage == Stage::Consolidate)) {
+    // 12.08: a unit forced to fight by an Engaging Consolidation fights in the Consolidate step. D-097: 15.08 Fire
+    // Overwatch's unit shoots using snap shooting at the end of the opponent's Movement phase.
+    if (state.flow.stage != expected && !(fighting && state.flow.stage == Stage::Consolidate) && !context.snap_shooting) {
         throw std::logic_error("begin_attacks: attacks are made in the " + std::string(stage_name(expected)) +
                                " step");
     }
@@ -974,7 +977,7 @@ void check_begin_preconditions(const GameState& state, UnitId attacker, const At
     if (unit == nullptr || is_destroyed(*unit)) {
         throw std::logic_error("begin_attacks: the attacking unit is not on the battlefield");
     }
-    if (context.type == AttackType::Shooting && unit->side != turn_side(state)) {
+    if (context.type == AttackType::Shooting && unit->side != turn_side(state) && !context.snap_shooting) {
         throw std::logic_error("begin_attacks: 10.02 the active player shoots with their own units");
     }
     for (const WeaponSelection& s : selections) {

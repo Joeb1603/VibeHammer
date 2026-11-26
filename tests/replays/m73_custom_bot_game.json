@@ -148,7 +148,7 @@
     },
     "stage": "GameOver"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "tests/data/scenarios/m73_custom_battle_44x60.json",
     "seed": 1
@@ -1126,6 +1126,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -1319,6 +1325,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -1913,6 +1925,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -2662,6 +2680,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -3338,6 +3362,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "Shoot",
         "shots": [
           {
@@ -3668,6 +3698,12 @@
           19
         ],
         "target": 4
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },

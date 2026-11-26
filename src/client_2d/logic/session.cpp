@@ -51,7 +51,7 @@ GameSession GameSession::from_steps(core::GameState initial, const std::vector<c
 }
 
 nlohmann::json GameSession::to_save_json() const {
-    return nlohmann::json{{"format", core::kReplayFormatWindowsRecorded},  // D-096
+    return nlohmann::json{{"format", core::kReplayFormatReactionsRecorded},  // D-096, D-097
                           {"kind", "vibehammer-save"},
                           {"initial", initial()},
                           {"steps", history()},
@@ -66,15 +66,18 @@ GameSession GameSession::from_save_json(const nlohmann::json& j) {
         const nlohmann::json& format = j.at("format");
         const bool rolls_inline = format == core::kReplayFormatRollsInline;
         const bool rolls_recorded = format == core::kReplayFormatRollsRecorded;
+        const bool windows_recorded = format == core::kReplayFormatWindowsRecorded;
         if (j.at("kind") != "vibehammer-save" ||
-            (!rolls_inline && !rolls_recorded && format != core::kReplayFormatWindowsRecorded)) {
-            throw core::DataError("not a VibeHammer save (format 1, 2 or 3)");
+            (!rolls_inline && !rolls_recorded && !windows_recorded && format != core::kReplayFormatReactionsRecorded)) {
+            throw core::DataError("not a VibeHammer save (format 1, 2, 3 or 4)");
         }
         const core::GameState initial = j.at("initial").get<core::GameState>();
         std::vector<core::ReplayStep> steps = j.at("steps").get<std::vector<core::ReplayStep>>();
         if (rolls_inline) steps = core::with_roll_steps(initial, steps);  // D-095: format 1, every roll inside its step
         // D-096: format 2, without its windows and with a batch's damage in one roll.
         if (rolls_recorded) steps = core::with_roll_steps_from_format2(initial, steps);
+        // D-097: format 3, without the windows that follow no roll (15.08, 15.11, 15.12).
+        if (windows_recorded) steps = core::with_roll_steps_from_format3(initial, steps);
         GameSession s = from_steps(initial, steps);
         if (!(s.state() == j.at("state").get<core::GameState>())) {
             throw core::DataError("the save's state does not match its initial state and steps");

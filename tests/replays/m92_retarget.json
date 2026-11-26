@@ -91,7 +91,7 @@
     "result": null,
     "stage": "Charge"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -1558,6 +1558,12 @@
         "unit": 1
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {

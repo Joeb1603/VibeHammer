@@ -658,21 +658,24 @@ TEST(D096_RandomPlay, GamesThatUseStratagemsStayValidAndReplay) {
                     }
                     // A die out of range is refused with a rule-cited reason.
                     const auto bad = rejection(gs, gs.pending->side,
-                                               action::UseStratagem{Stratagem::CommandReroll, gs.flow.window->unit, 99});
+                                               action::UseStratagem{Stratagem::CommandReroll,
+                                                                    gs.flow.window->unit.value_or(UnitId{1}), 99});
                     ASSERT_FALSE(bad.empty());
                     EXPECT_TRUE(wh40k::test::is_rule_cited(bad.front())) << bad.front();
                 }
                 const std::size_t before = match.events().size();
+                // The phase the answer is given in (M96: a re-roll at the end of the Movement phase, in a snap shot,
+                // can end the phase in the same step).
+                const std::string phase = std::to_string(gs.flow.battle_round) + "/" +
+                                          std::to_string(gs.flow.turn_in_round) + "/" +
+                                          std::string(phase_name(phase_of(gs.flow.stage)));
                 const GameAction a = wh40k::test::random_action(gs, rng);
                 ASSERT_TRUE(match.submit(decider(gs), a).ok()) << action_name(a);
                 for (std::size_t k = before; k < match.events().size(); ++k) {
                     if (const auto* s = std::get_if<event::StratagemUsed>(&match.events()[k])) {
                         ++used;
                         if (s->stratagem == Stratagem::CommandReroll) {
-                            const std::string key = std::to_string(match.state().flow.battle_round) + "/" +
-                                                    std::to_string(match.state().flow.turn_in_round) + "/" +
-                                                    std::string(phase_name(phase_of(match.state().flow.stage))) + "/" +
-                                                    (s->side == Side::A ? "A" : "B");
+                            const std::string key = phase + "/" + (s->side == Side::A ? "A" : "B");
                             EXPECT_LE(++per_phase[key], 1) << key;
                         }
                     }
@@ -680,7 +683,7 @@ TEST(D096_RandomPlay, GamesThatUseStratagemsStayValidAndReplay) {
             }
             // The game as a format-3 replay plays the same.
             const Replay replay = match.to_replay("random play with stratagems");
-            EXPECT_EQ(replay.format, kReplayFormatWindowsRecorded);
+            EXPECT_EQ(replay.format, kReplayFormatReactionsRecorded);  // D-097 (M96): format 4
             const ReplayResult again = run_replay(Json(replay).get<Replay>(), repo_root());
             ASSERT_TRUE(again.ok()) << "step " << *again.failed_step << ": " << again.reasons.front();
             EXPECT_EQ(again.final_state, match.state());
@@ -708,16 +711,16 @@ bool offers(const WindowInfo& info, Stratagem s) {
 // declined.
 GameAction m95_window_answer(const GameState& gs) {
     const WindowInfo info = window_info(gs).value();
-    if (offers(info, Stratagem::InsaneBravery)) return action::UseStratagem{Stratagem::InsaneBravery, info.unit, std::nullopt};
+    if (offers(info, Stratagem::InsaneBravery)) return action::UseStratagem{Stratagem::InsaneBravery, *info.unit, std::nullopt};
     const bool wanted = info.side == Side::A ? (info.roll == RollKind::Hit || info.roll == RollKind::Save)
                                              : (info.roll == RollKind::Damage || info.roll == RollKind::Charge);
     if (!wanted || !offers(info, Stratagem::CommandReroll)) return action::DeclineStratagems{};
-    if (info.whole_roll) return action::UseStratagem{Stratagem::CommandReroll, info.unit, std::nullopt};
+    if (info.whole_roll) return action::UseStratagem{Stratagem::CommandReroll, *info.unit, std::nullopt};
     std::optional<std::size_t> lowest;
     for (std::size_t k = 0; k < info.faces.size(); ++k) {
         if (info.pickable[k] && (!lowest || info.faces[k] < info.faces[*lowest])) lowest = k;
     }
-    return action::UseStratagem{Stratagem::CommandReroll, info.unit, lowest};
+    return action::UseStratagem{Stratagem::CommandReroll, *info.unit, lowest};
 }
 
 // The milestone's replay, played through a paced match. `ok` says whether the seed shows what the replay is about: each
@@ -727,7 +730,7 @@ GameAction m95_window_answer(const GameState& gs) {
 Replay m95_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
-    r.format = kReplayFormatWindowsRecorded;
+    r.format = kReplayFormatReactionsRecorded;  // M96 (D-097): format 4
     r.description =
         "M95 (D-096): reaction windows and the first stratagems; each stratagem used, and each window declined, is a "
         "step of its own. The V1 scenario with 4 of the 10 Termagants (below half-strength) 8\" from the Intercessors, "
@@ -828,7 +831,7 @@ Replay m95_replay(std::uint64_t seed, bool& ok, std::string& problem) {
 
 TEST(D096_Replay, TheStratagemsReplayUsesEachStratagemAsAStep) {
     const Replay saved = load_replay(kM95Replay);
-    EXPECT_EQ(saved.format, kReplayFormatWindowsRecorded);
+    EXPECT_EQ(saved.format, kReplayFormatReactionsRecorded);  // regenerated as format 4 in M96 (D-097)
     const ReplayResult run = run_replay(saved, repo_root());
     ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
     EXPECT_EQ(replay_expectation(run.final_state), saved.expect);
