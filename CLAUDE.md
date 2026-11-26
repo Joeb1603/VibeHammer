@@ -25,7 +25,8 @@ Fire Overwatch by default (it measured better), Heroic Intervention and Countero
 own-turn stratagems that end in mortal wounds (D-099): Explosives at the Shoot step (15.05) and Crushing Impact just
 after a charge move (15.06), each with a step that selects a model and an enemy unit, its roll and its mortal wounds
 (06.02), the enemy's first; saves and replays record the new window (format 5). The bot plays both behind keys, off
-(neither measured better).
+(neither measured better). M98 picks that model and enemy unit on the board, and the bot's charge planning prices
+Crushing Impact behind its key, through a read-only forecast of a window's refusal (D-100).
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
@@ -145,6 +146,8 @@ std::optional<RollDiceInfo> roll_dice_info(const GameState&);                   
 // Crushing Impact; each starts FlowState::effect: SelectModelAndEnemy, its RollDice, then OrderCasualties (06.02).
 bool                    window_pending(const GameState&);                           // a window is pending
 std::optional<WindowInfo> window_info(const GameState&);                            // what it offers, for display and the bot
+std::optional<std::string> forecast_stratagem_problem(const GameState&, Side, Stratagem, WindowTiming,
+                                                      std::optional<UnitId>, UnitId, ...); // D-100: a window's refusal, were it opened now
 ```
 - `GameState` holds a **`PendingDecision`** describing whose input the engine is waiting for, and of what kind (choose unit to move, choose move type, place model, select targets, order allocation groups, pick model to remove, pile-in, pass, make a dice roll, ...). Every action answers the current pending decision. Reactive decisions belong to the opposing side (allocation order, model removal, save rolls, etc.) and flow through this same mechanism.
 - `GameAction` and `GameEvent` are `std::variant`s of small serializable structs. Events drive UI animation and the dice/combat log, and they carry rule numbers.

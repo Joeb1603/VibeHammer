@@ -2,7 +2,9 @@
 
 #include <algorithm>
 
+#include "core/model/keywords.hpp"
 #include "core/rules/stratagem_effects.hpp"
+#include "core/state/queries.hpp"
 #include "unit_style.hpp"
 
 namespace wh40k::client {
@@ -18,7 +20,7 @@ const core::StratagemEffect* pending_selection(const core::GameState& state) {
 
 }  // namespace
 
-std::vector<EffectChoice> effect_choices(const core::GameState& state) {
+std::vector<EffectChoice> effect_choices(const core::GameState& state, std::optional<core::ModelId> model) {
     std::vector<EffectChoice> out;
     const core::StratagemEffect* e = pending_selection(state);
     if (e == nullptr) return out;
@@ -28,6 +30,7 @@ std::vector<EffectChoice> effect_choices(const core::GameState& state) {
         for (const core::GameAction& a : legal) {  // model order: the first legal model for this enemy unit
             const auto* s = std::get_if<core::action::SelectModelAndEnemy>(&a);
             if (s == nullptr || s->enemy != enemy.id) continue;
+            if (model && s->model != *model) continue;  // D-100 (M98): the model chosen on the board
             std::string label = unit_display_name(state, enemy.id) + " (model " + std::to_string(s->model.v);
             if (e->stratagem == core::Stratagem::CrushingImpact && unit != nullptr) {
                 for (const core::Model& m : unit->models) {
@@ -41,6 +44,35 @@ std::vector<EffectChoice> effect_choices(const core::GameState& state) {
         }
     }
     return out;
+}
+
+std::optional<std::string> effect_refusal_text(const core::GameState& state, core::UnitId enemy,
+                                               std::optional<core::ModelId> model) {
+    const core::StratagemEffect* e = pending_selection(state);
+    if (e == nullptr) return std::nullopt;
+    const core::Unit* unit = state.find_unit(e->unit);
+    const core::Unit* target = state.find_unit(enemy);
+    if (unit == nullptr || unit->models.empty() || target == nullptr || target->side == unit->side ||
+        core::is_destroyed(*target)) {
+        return std::nullopt;
+    }
+    std::optional<core::ModelId> m = model;
+    if (!m) {
+        // The model closest to the enemy unit (01.04, edge to edge; ties keep the first in unit order).
+        std::optional<float> closest;
+        for (const core::Model& x : unit->models) {
+            const std::optional<float> d = core::model_distance_to_unit(core::pose_of(x), *target);
+            if (d && (!closest || *d < *closest)) {
+                closest = d;
+                m = x.id;
+            }
+        }
+        if (!m) m = unit->models.front().id;
+    }
+    const core::ValidationResult v =
+        core::validate_action(state, state.pending->side, core::action::SelectModelAndEnemy{*m, enemy});
+    if (v.ok() || v.reasons.empty()) return std::nullopt;
+    return v.reasons.front();
 }
 
 std::string effect_headline(const core::GameState& state) {

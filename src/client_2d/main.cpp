@@ -965,6 +965,10 @@ private:
             const core::UnitId target = picks->target();
             for (const unsigned id : cli_model_picks_) board_.click_model(session_->state(), target, core::ModelId{id});
             cli_model_picks_.clear();
+        } else if (board_.picking_effect() && board_.actor() && !cli_model_picks_.empty()) {
+            // D-100 (M98): at 15.05 / 15.06's selection, the first id chooses that model of the stratagem's unit.
+            board_.click_model(session_->state(), *board_.actor(), core::ModelId{cli_model_picks_.front()});
+            cli_model_picks_.clear();
         }
         // --click-units (M63): clicks, once, as a player's would (screenshots of a target menu, D-073). A click that
         // would submit an action ends them, so nothing is submitted. A menu opens next to the last unit clicked.
@@ -1730,6 +1734,7 @@ private:
     // M88 (D-088): while picking a shooting target, why the hovered enemy unit can't be selected (13.09 Hidden, 13.10 /
     // 13.11 terrain, range...), from the engine's own reasons.
     std::optional<std::string> refused_target_text(core::UnitId target) {
+        if (board_.picking_effect()) return board_.effect_refusal(state(), target);  // D-100 (M98): the selection's
         if (!board_.picking_target() || board_.clickable(target)) return std::nullopt;
         const ShotPlan* plan = board_.shot_plan();
         if (plan == nullptr) return std::nullopt;
@@ -1757,7 +1762,8 @@ private:
         if (h.unit->battle_shocked) ImGui::TextColored(ImVec4(1, 0.5f, 0.3f, 1), "Battle-shocked");
         if (const std::optional<std::string> refused = refused_target_text(h.unit->id)) {  // M88
             ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
-            ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.45f, 1.0f), "Can't be targeted: %s", refused->c_str());
+            ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.45f, 1.0f), "%s: %s",
+                               board_.picking_effect() ? "Can't be picked" : "Can't be targeted", refused->c_str());
             ImGui::PopTextWrapPos();
         }
         ImGui::TextDisabled("Right-click: datasheet");
@@ -2081,6 +2087,15 @@ private:
             }
         }
         for (const core::UnitId id : board_.chosen_targets()) outline(id, Color{255, 90, 90, 255});
+        // D-100 (M98): the model chosen at 15.05 / 15.06's selection: filled and ringed in gold, outside the unit's
+        // selection rings (D-042's red ring and cross mean removal).
+        if (const auto chosen = board_.effect_model()) {
+            if (const core::Model* m = core::find_model(gs, *chosen)) {
+                fill_base(camera_, core::pose_of(*m), Color{255, 215, 0, 120});
+                draw_base_outline(camera_, core::pose_of(*m), 6.5f * ui_scale(), 3.0f * ui_scale(),
+                                  Color{255, 215, 0, 255});
+            }
+        }
         // D-042: the model chosen for removal (coherency).
         if (const auto chosen = board_.chosen_model()) {
             if (const core::Model* m = core::find_model(gs, *chosen); m != nullptr && m->base.shape != core::BaseShape::Round) {

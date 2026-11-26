@@ -30,7 +30,7 @@
 //   enemy unit and its first legal model;
 // - crushing_impact (15.06): in the window just after a charge move, the pair with the best expected gain: the enemy's
 //   share for Binomial(T, 1/3) less the unit's own for Binomial(T, 1/6), each capped at 6, when that is worth the CP
-//   (kCrushMinGain). The charge planning doesn't price it (it is judged only at the window).
+//   (kCrushMinGain). D-100 (M98): with the key on, the charge planning prices it too (crushing_impact_value).
 
 #include <cstddef>
 #include <cstdint>
@@ -82,6 +82,13 @@ struct ReactionPick {
                                                           const std::vector<core::GameAction>& legal);
 [[nodiscard]] std::optional<ReactionPick> best_crushing_impact(const core::GameState& state);
 [[nodiscard]] std::optional<ReactionPick> best_effect_pair(const core::GameState& state);
+
+// D-100 (M98): what 15.06 Crushing Impact is expected to gain `unit` where it stands in `after` (just after its charge
+// move, as planned; the window declined inline): the gain of its best pair, as at the window (best_crushing_impact),
+// less kCrushMinGain (the CP's worth; at the window the bot uses it only for more), when that is positive and the engine
+// would offer the stratagem there (core::forecast_stratagem_problem); otherwise 0. In unit shares, as the charge
+// planning's values: it adds this to each planned charge move's value with the crushing_impact key on (charge.hpp).
+[[nodiscard]] double crushing_impact_value(const core::GameState& after, core::UnitId unit);
 
 // The answer to `side`'s pending window (UseStratagems), by the keys above. `seed`: the bot's (a heroic charge's move
 // is planned as M42's).

@@ -419,6 +419,18 @@ std::optional<ReactionPick> best_effect_pair(const GameState& state) {
                             client::unit_display_name(state, p->pair.enemy) + " (" + two_places(p->value) + ")"};
 }
 
+double crushing_impact_value(const GameState& after, core::UnitId unit) {
+    const core::Unit* u = after.find_unit(unit);
+    if (u == nullptr || u->models.empty()) return 0.0;
+    if (core::forecast_stratagem_problem(after, u->side, core::Stratagem::CrushingImpact,
+                                         core::WindowTiming::AfterChargeMove, unit, unit)) {
+        return 0.0;
+    }
+    const std::optional<PairValue> p = best_crush_pair(after, *u);
+    if (!p || !(p->value >= kCrushMinGain)) return 0.0;
+    return p->value - kCrushMinGain;
+}
+
 std::optional<ReactionPick> best_fire_overwatch(analysis::OddsCache& cache, const GameState& state) {
     const std::optional<core::WindowInfo> w = core::window_info(state);
     if (!w || w->timing != core::WindowTiming::EndOfPhase) return std::nullopt;

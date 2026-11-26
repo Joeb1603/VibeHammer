@@ -146,15 +146,19 @@ struct ChargeProspect {
 // D-066 (M56): `losses_from`, the enemy unit our shooting is at (the losses come off its front); nullopt: the
 // closest one. D-083 part 3 (M81): `plan`, the army plan of `unit`'s side, for the partners that may still
 // charge (nullptr: only the partners already engaged are credited).
+// D-100 (M98): `crushing_impact` (the bot's crushing_impact key on): each roll's value gains what 15.06 Crushing Impact
+// is expected to gain at its charge move's end (crushing_impact_value, normal/stratagems.hpp).
 [[nodiscard]] std::optional<ChargeProspect> charge_prospect(analysis::OddsCache& cache, const core::GameState& state,
                                                             core::UnitId unit, std::uint64_t seed,
                                                             double enemy_losses = 0.0,
                                                             std::optional<core::UnitId> losses_from = std::nullopt,
                                                             const ArmyPlan* plan = nullptr,
-                                                            const ChargeObjectives* objectives = nullptr);
+                                                            const ChargeObjectives* objectives = nullptr,
+                                                            bool crushing_impact = false);
 
 // The decisions (nullopt: no answer of the Normal level's own; the caller uses the defaults', normal/defaults.hpp).
-// M91 (D-092): `weights`, for plan_terrain (their army plan) and objective_charge.
+// M91 (D-092): `weights`, for plan_terrain (their army plan) and objective_charge. D-100 (M98): and crushing_impact
+// (each charge move's value gains Crushing Impact's expected net gain at its end).
 [[nodiscard]] std::optional<PolicyResult> decide_charge(analysis::OddsCache& cache, const core::GameState& state,
                                                         core::Side side, const std::vector<core::GameAction>& legal,
                                                         std::uint64_t seed, const MoveWeights& weights = MoveWeights{});

@@ -436,6 +436,16 @@ std::vector<core::GameAction> DecisionPanel::draw_board_mode(const GameSession& 
         }
         // D-051: take back the last casualty pick.
         if (board.can_undo_pick() && row.button("Undo pick")) undo_pick = true;
+        // D-100 (M98): 15.05 / 15.06's selection keeps its buttons beside the board's clicks (the model chosen on the
+        // board narrows them to its answers); hovering one outlines its enemy unit and model, as in the bar (M97).
+        hovered_effect_.reset();
+        const std::vector<EffectChoice> effects = board.effect_buttons(gs);
+        for (std::size_t i = 0; i < effects.size(); ++i) {
+            ImGui::PushID(static_cast<int>(300 + i));
+            if (row.button(effects[i].label)) chosen = effects[i].action;
+            if (ImGui::IsItemHovered()) hovered_effect_ = effects[i];
+            ImGui::PopID();
+        }
         const std::vector<core::GameAction> steps = board.step_buttons();
         hovered_reaction_unit_.reset();
         for (std::size_t i = 0; i < steps.size(); ++i) {

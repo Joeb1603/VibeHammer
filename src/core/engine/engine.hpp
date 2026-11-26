@@ -119,6 +119,16 @@ struct WindowInfo {
 };
 [[nodiscard]] std::optional<WindowInfo> window_info(const GameState& state);
 
+// D-100 (M98): the refusal `side` would get using `stratagem` on `target` (in `mode`) in a window of `timing` for
+// `window_unit` (the unit the window is for: D-097, D-099), were that window opened in `state` as it stands; nullopt if
+// it could use it there. The window's own checks (15.01, 01.07, the stratagem's WHEN and TARGET), for the windows that
+// follow no roll (a roll's stratagem, or a roll window, gives the stratagem's WHEN). Read-only, for the bots' forecasts
+// (D-024): would Crushing Impact be offered at the end of a charge move still being planned?
+[[nodiscard]] std::optional<std::string> forecast_stratagem_problem(const GameState& state, Side side,
+                                                                    Stratagem stratagem, WindowTiming timing,
+                                                                    std::optional<UnitId> window_unit, UnitId target,
+                                                                    std::optional<StratagemMode> mode = std::nullopt);
+
 // 01.03: the active player. Between turns (and during the deployment step, D-081), the player who takes the first
 // turn; while a unit is selected to move, shoot or fight, that unit's controlling player; otherwise the player whose
 // turn it is. Not the same as state.pending->side (e.g. 05.03/05.04 belong to the opposing player).
