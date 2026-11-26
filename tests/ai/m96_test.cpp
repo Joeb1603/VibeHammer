@@ -11,6 +11,7 @@
 #include "arena.hpp"
 #include "bot.hpp"
 #include "bot_configs.hpp"
+#include "bot_log.hpp"
 #include "core/engine/engine.hpp"
 #include "fallback.hpp"
 #include "normal/shooting.hpp"
@@ -77,18 +78,20 @@ GameState heroic_window(float gap_in) {
 
 // ==== The keys and the session's declines ====
 
-TEST(M96_Bots, TheNewKeysAreOffByDefaultAndPlaysFollowsEachKey) {
+TEST(M96_Bots, FireOverwatchIsOnByDefaultAndPlaysFollowsEachKey) {
+    // D-097's head-to-head: Fire Overwatch +26 games in 400 (on), Heroic Intervention +2 and Counteroffensive +0 (off).
     const BotConfig d;
-    EXPECT_EQ(d.move.fire_overwatch, 0.0);
+    EXPECT_EQ(d.move.fire_overwatch, 1.0);
     EXPECT_EQ(d.move.heroic_intervention, 0.0);
     EXPECT_EQ(d.move.counteroffensive, 0.0);
     EXPECT_TRUE(d.plays(Stratagem::CommandReroll));
-    for (const Stratagem s : {Stratagem::InsaneBravery, Stratagem::FireOverwatch, Stratagem::HeroicIntervention,
-                              Stratagem::Counteroffensive}) {
+    EXPECT_TRUE(d.plays(Stratagem::FireOverwatch));
+    for (const Stratagem s : {Stratagem::InsaneBravery, Stratagem::HeroicIntervention, Stratagem::Counteroffensive}) {
         EXPECT_FALSE(d.plays(s)) << stratagem_name(s);
     }
-    EXPECT_EQ(d.declined_stratagems(), (std::vector<Stratagem>{Stratagem::InsaneBravery, Stratagem::FireOverwatch,
-                                                               Stratagem::HeroicIntervention, Stratagem::Counteroffensive}));
+    EXPECT_EQ(d.declined_stratagems(), (std::vector<Stratagem>{Stratagem::InsaneBravery, Stratagem::HeroicIntervention,
+                                                               Stratagem::Counteroffensive}));
+    EXPECT_EQ(wh40k::test::without_stratagems().declined_stratagems().size(), kAllStratagems.size());
     const BotConfig on = all_three();
     EXPECT_TRUE(on.plays(Stratagem::FireOverwatch));
     EXPECT_TRUE(on.plays(Stratagem::HeroicIntervention));
@@ -100,10 +103,13 @@ TEST(M96_Bots, TheNewKeysAreOffByDefaultAndPlaysFollowsEachKey) {
 }
 
 TEST(M96_Bots, ABotWithOnlyCommandRerollNeverSeesTheNewWindows) {
-    // The default bot in a whole V1 game: every window that follows no roll is declined by its session.
+    // M95's default bot (Command Re-roll only) in a whole V1 game: every window that follows no roll is declined by its
+    // session.
+    BotConfig only_reroll = wh40k::test::without_stratagems();
+    only_reroll.move.command_reroll = 1.0;
     GameSession s = GameSession::new_game(wh40k::test::load_v1_scenario(), 3);
     std::vector<std::string> trace;
-    const wh40k::ai::GameRecord g = wh40k::ai::play_bot_session(s, BotConfig{}, BotConfig{}, 5000, nullptr, &trace);
+    const wh40k::ai::GameRecord g = wh40k::ai::play_bot_session(s, only_reroll, only_reroll, 5000, nullptr, &trace);
     EXPECT_TRUE(g.finished);
     EXPECT_EQ(g.fallbacks, 0u);
     for (const std::string& line : trace) {
@@ -132,7 +138,8 @@ TEST(M96_FireOverwatch, TheBotUsesItWhenTheSnapShotIsWorthTheCpAndDeclinesAtZero
     EXPECT_EQ(used.action, pick->value >= wh40k::ai::normal::kOverwatchMinShare ? pick->action
                                                                                 : GameAction{action::DeclineStratagems{}});
     EXPECT_TRUE(validate_action(gs, Side::B, used.action).ok());
-    EXPECT_EQ(answer(gs, BotConfig{}).action, (GameAction{action::DeclineStratagems{}}));
+    EXPECT_EQ(answer(gs, BotConfig{}).action, used.action);  // on by default (D-097)
+    EXPECT_EQ(answer(gs, wh40k::test::without_stratagems()).action, (GameAction{action::DeclineStratagems{}}));
 }
 
 TEST(M96_FireOverwatch, TheSnapShotIsAtOneTargetAndValuedWithOnlySixesHitting) {
@@ -170,6 +177,20 @@ TEST(M96_FireOverwatch, TheSnapShotIsAtOneTargetAndValuedWithOnlySixesHitting) {
     const wh40k::ai::FallbackResult fb = wh40k::ai::fallback_action(gs, Side::B);
     ASSERT_TRUE(fb.action.has_value());
     EXPECT_TRUE(validate_action(gs, Side::B, *fb.action).ok());
+}
+
+TEST(M96_FireOverwatch, TheReasonsHaveAShortForm) {
+    // M45's log: each reason of the new stratagems has a short form (scores and extra clauses dropped).
+    const GameState gs = fire_overwatch_window();
+    wh40k::ai::analysis::OddsCache cache;
+    const auto pick = wh40k::ai::normal::best_fire_overwatch(cache, gs);
+    ASSERT_TRUE(pick.has_value());
+    const PolicyResult declined = answer(gs, wh40k::test::without_stratagems());
+    for (const std::string& reason : {pick->why, declined.reason}) {
+        const auto sum = wh40k::ai::summarize_reason(reason);
+        EXPECT_FALSE(sum.text.empty()) << reason;
+        EXPECT_LE(sum.text.size(), reason.size()) << reason;
+    }
 }
 
 // ==== Heroic Intervention ====

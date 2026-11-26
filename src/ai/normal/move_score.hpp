@@ -153,8 +153,10 @@ struct MoveWeights {
     double command_reroll = 1.0;  // 15.02 Command Re-roll
     double insane_bravery = 0.0;  // 15.04 Insane Bravery
     // M96 (D-097): the opponent-turn stratagems (normal/stratagems.hpp), 0 or 1 each; the session declines a window that
-    // offers only stratagems the bot doesn't play (BotConfig::declined_stratagems), so at 0 it never sees one.
-    double fire_overwatch = 0.0;       // 15.08 Fire Overwatch (with 15.09 snap shooting)
+    // offers only stratagems the bot doesn't play (BotConfig::declined_stratagems), so at 0 it never sees one. Measured
+    // head-to-head (D-092's procedure, 400 games against the bot at M96's other defaults): Fire Overwatch +26 games, so
+    // it is on by default; Heroic Intervention +2 and Counteroffensive +0 (under one standard deviation), off.
+    double fire_overwatch = 1.0;       // 15.08 Fire Overwatch (with 15.09 snap shooting)
     double heroic_intervention = 0.0;  // 15.11 Heroic Intervention
     double counteroffensive = 0.0;     // 15.12 Counteroffensive
 };

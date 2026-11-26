@@ -140,6 +140,8 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   - In the Fight step Side B uses Counteroffensive on the Termagants after the Intercessors fight: they fight next,
     before the lone Termagant (Fights First from its charge).
 
+  The bot plays Fire Overwatch by default since M96; the bot-game generators still play the bot without stratagems
+  (`without_stratagems()` turns the new keys off too), so their files changed only by the new windows' declines.
   `D095_Closure.EverySavedReplayPlaysTheSamePacedAndInline` checks the two stratagem replays paced only. The M95 and M96
   `DISABLED_DumpReplayEvents` dumps of the 30 older replays are byte-identical with no filter: a game without the new
   stratagems gains no event, and 14.02.01's move (objective control on entering the End of Phase step) changes no

@@ -214,7 +214,8 @@ session as M95. The user's rulings:
 **Results** (D-097 part 10 has them in full): the M95 and M96 event dumps of the 30 older replays are byte-identical; the
 30 replays regenerated as format 4 are each their format-3 file converted (129 declines added); `m96_reactions.json`
 shows each stratagem; the bots' identity set at `command_reroll=0` is the M95 binary's in every field but `steps` and
-`actions` (2,600 games), and at the defaults every `state` is the same. The keys' head-to-heads are in D-097.
+`actions` (2,600 games), and at the defaults every `state` is the same. Head-to-heads (400 games each): Fire Overwatch
++26 (on by default), Heroic Intervention +2 and Counteroffensive +0 (off), all three +24; p95 unchanged.
 
 **Open items.**
 - Manual checks by mouse on Windows: each new stratagem in hotseat and against the bot (Fire Overwatch and the snap

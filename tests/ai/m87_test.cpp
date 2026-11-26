@@ -143,6 +143,7 @@ MoveWeights m90_keys(MoveWeights w = {}) {
     w.objective_charge = 0.0;
     w.objective_fight = 0.0;
     w.command_reroll = 0.0;  // M95 (D-096): no stratagem, as the bot played then
+    w.fire_overwatch = 0.0;  // M96 (D-097): on by default since M96, off for this older bot
     return w;
 }
 BotConfig m90_bot(MoveWeights w = {}) {

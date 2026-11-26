@@ -77,6 +77,7 @@ normal::MoveWeights m90_weights() {
     w.objective_fight = 0.0;
     w.gone_to_ground = 0.0;  // M93 (D-094): off by default too
     w.command_reroll = 0.0;  // M95 (D-096): no stratagem, as the M90 bot played
+    w.fire_overwatch = 0.0;  // M96 (D-097): on by default since M96, off for this older bot
     return w;
 }
 
@@ -89,6 +90,7 @@ normal::MoveWeights m91_weights() {
     w.objective_charge = 1.0;
     w.objective_fight = 1.0;
     w.command_reroll = 0.0;  // M95 (D-096): m91_bot_game.json was played without stratagems
+    w.fire_overwatch = 0.0;  // M96 (D-097): on by default since M96, off for this older bot
     return w;
 }
 

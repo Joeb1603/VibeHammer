@@ -9,6 +9,7 @@
 
 #include "arena.hpp"
 #include "bot.hpp"
+#include "bot_configs.hpp"
 #include "bot_driver.hpp"
 #include "bot_log.hpp"
 #include "core/engine/replay.hpp"
@@ -45,7 +46,10 @@ BotGame play_bot_game_replay() {
     g.replay.initial.scenario = kBotGameScenario;
     g.replay.initial.seed = kBotGameSeed;
     client::GameSession session(replay_initial_state(g.replay, wh40k::test::repo_root()));
-    g.record = play_bot_session(session, BotConfig{}, BotConfig{}, 5000, nullptr, &g.trace);
+    // M96 (D-097): the bot without stratagems (as the older bots' games, tests/ai/bot_configs.hpp): a window's answer is
+    // a decision of its own, outside the plans this test's log groups.
+    const BotConfig bot = wh40k::test::without_stratagems();
+    g.record = play_bot_session(session, bot, bot, 5000, nullptr, &g.trace);
     g.replay.steps = session.history();
     g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
