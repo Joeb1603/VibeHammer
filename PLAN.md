@@ -240,10 +240,11 @@ keyword; the Hive Tyrant, Screamer-Killer and Tyrannofex are MONSTERs.
 
 **Rules:**
 - PDF: 15.01, 15.05, 15.06, 06.02, 10.02, 11.04, 04.02 (visible, unengaged targets), 17.01, 01.07.
-- App: 01.03.02 Rules Sequencing. The scraped app text numbers them the other way round (15.05 Crushing Impact, 15.06
-  Explosives); `docs/rules/` stays the source of truth for the numbers. The core-rules changelog's errata (the Grenade
-  and Tank Shock stratagems are Explosives and Crushing Impact) only rename older references.
-- Decisions: D-095, D-096, D-097.
+- App: 01.03.02 Rules Sequencing. The app's headings swap the two numbers (15.05 Crushing Impact, 15.06 Explosives);
+  the PDF's numbers are used (D-098: "Crushing Impact stratagem (15.06)" in 12's example, in both sources). The
+  core-rules changelog's errata (the Grenade and Tank Shock stratagems are Explosives and Crushing Impact) only rename
+  older references.
+- Decisions: D-095, D-096, D-097, D-098.
 
 **Questions to settle in plan mode:**
 - Explosives' WHEN is "Your Shooting phase". Is it offered at the Shoot step as an answer beside the Shoot templates
