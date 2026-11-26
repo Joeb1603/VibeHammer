@@ -56,6 +56,7 @@ struct AppSettings {
     bool fix_moves = true;        // D-052
     bool auto_allocate = false;   // D-038
     bool warn_end_shooting = true;  // D-038
+    bool offer_stratagems = true;   // D-096 (M95): a human is asked at each reaction window; off: declined for them
     float ui_scale = 1.0f;        // the user's "UI scale" (D-028), kMinUiScale..kMaxUiScale
     CustomBattleSettings custom_battle;  // M75: the army builder's last setup
 

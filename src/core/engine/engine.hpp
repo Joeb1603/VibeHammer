@@ -103,6 +103,12 @@ struct WindowInfo {
     std::vector<int> faces;                // the roll's dice (AfterRoll)
     std::vector<bool> pickable;            // per die: Command Re-roll can pick it (01.05.02: not re-rolled before)
     bool whole_roll = false;               // a charge roll: Command Re-roll re-rolls it in full, no die is picked
+    // BeforeRoll: the roll the window comes before, as roll_dice_info gives it once it waits (Insane Bravery's
+    // battle-shock roll, for its pre-roll card).
+    std::optional<RollDiceInfo> next_roll;
+    // AfterRoll: the roll as its event, judged from its dice now (as DiceRerolled::result would give it), so the client
+    // can show the roll's card without working anything out.
+    std::optional<event::RerolledRoll> result;
     friend bool operator==(const WindowInfo&, const WindowInfo&) = default;
 };
 [[nodiscard]] std::optional<WindowInfo> window_info(const GameState& state);

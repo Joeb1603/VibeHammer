@@ -86,6 +86,7 @@ json settings_to_json(const AppSettings& s) {
         {"fix_moves", s.fix_moves},
         {"auto_allocate", s.auto_allocate},
         {"warn_end_shooting", s.warn_end_shooting},
+        {"offer_stratagems", s.offer_stratagems},
         {"ui_scale", s.ui_scale},
     };
     // M75: only when the builder's setup isn't the default, so an older file saves unchanged.
@@ -113,6 +114,7 @@ AppSettings settings_from_json(const json& j) {
     read_bool(j, "fix_moves", s.fix_moves);
     read_bool(j, "auto_allocate", s.auto_allocate);
     read_bool(j, "warn_end_shooting", s.warn_end_shooting);
+    read_bool(j, "offer_stratagems", s.offer_stratagems);  // M95: missing in an older file, so on
     if (const auto it = j.find("ui_scale"); it != j.end() && it->is_number()) {
         const double scale = it->get<double>();
         if (std::isfinite(scale)) {

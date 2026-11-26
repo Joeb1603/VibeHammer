@@ -224,6 +224,9 @@ void command_reroll(GameState& state, std::optional<std::size_t> die, DiceSource
 
 }  // namespace
 
+// D-096: the open window's roll as its event, judged from its dice now (window_info's result).
+event::RerolledRoll window_roll_result(const GameState& state) { return rerolled_result(state, *state.flow.window); }
+
 void after_roll(GameState& state, RollKind roll, UnitId unit, std::size_t batch, std::vector<int> faces,
                 std::vector<std::size_t> rerolled, Events& events) {
     StratagemWindow w{WindowTiming::AfterRoll, roll, unit, batch, {}, std::move(faces), std::move(rerolled)};
@@ -362,6 +365,12 @@ std::optional<WindowInfo> window_info(const GameState& state) {
         }
     }
     info.whole_roll = w.roll == RollKind::Charge;
+    if (w.timing == WindowTiming::AfterRoll) info.result = detail::window_roll_result(state);
+    if (w.timing == WindowTiming::BeforeRoll) {
+        // The unit's player makes the roll (08.03: the active player's units).
+        const Unit* u = state.find_unit(w.unit);
+        info.next_roll = detail::describe_roll(state, decision::RollDice{w.roll, w.unit}, u != nullptr ? u->side : info.side);
+    }
     return info;
 }
 

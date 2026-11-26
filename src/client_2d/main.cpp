@@ -270,7 +270,7 @@ public:
                 const core::GameState initial =
                     custom_battle_state(*custom_setup_, builder_->factions(), builder_->resolver(), builder_->mission(),
                                         builder_->terrain());
-                start_session(GameSession::new_game(initial, settings_.seed, auto_roll_sides()));
+                start_session(GameSession::new_game(initial, settings_.seed, auto_roll_sides(), auto_decline_sides()));
                 status_ = "New game: " + initial.scenario_name + ", seed " + std::to_string(settings_.seed) + ". " +
                           players_text();
                 auto_actions_as_group();  // D-036
@@ -278,7 +278,7 @@ public:
             }
             const fs::path scenario = scenario_path();
             start_session(GameSession::new_game(core::load_scenario(scenario, kRepoRoot), settings_.seed,
-                                                auto_roll_sides()));
+                                                auto_roll_sides(), auto_decline_sides()));
             status_ = "New game: " + scenario_info(scenario).name + ", seed " + std::to_string(settings_.seed) + ". " +
                       players_text();
             auto_actions_as_group();  // D-036
@@ -448,7 +448,7 @@ public:
         watch_.reset();  // M45
         bot_reason_.clear();
         bot_log_.clear();
-        sync_auto_roll();  // D-095: a loaded game may be waiting for a roll
+        sync_auto_answers();  // D-095, D-096: a loaded game may be waiting for a roll or a window
     }
 
     // D-095 (M94): the sides whose rolls the session makes by itself: a bot's, and a human's while the dice pop-ups are
@@ -457,16 +457,89 @@ public:
         return {bot_sides_[0] || !settings_.show_dice, bot_sides_[1] || !settings_.show_dice};
     }
 
-    // D-095: tells the session, and makes a roll that is now automatic at once (in the last Undo group, as the
-    // automatic steps are).
-    void sync_auto_roll() {
+    // D-096 (M95): the sides whose reaction windows the session declines by itself: a bot's (the bot plays no
+    // stratagems), and a human's while "Offer stratagems" is off. Otherwise a human's window waits for its answer.
+    std::array<bool, 2> auto_decline_sides() const {
+        return {bot_sides_[0] || !settings_.offer_stratagems, bot_sides_[1] || !settings_.offer_stratagems};
+    }
+
+    // D-095, D-096: tells the session, and makes a roll or declines a window that is now automatic at once (in the last
+    // Undo group, as the automatic steps are).
+    void sync_auto_answers() {
         if (!session_) return;
-        const std::array<bool, 2> sides = auto_roll_sides();
-        session_->set_auto_roll(core::Side::A, sides[0]);
-        session_->set_auto_roll(core::Side::B, sides[1]);
+        const std::array<bool, 2> rolls = auto_roll_sides();
+        const std::array<bool, 2> declines = auto_decline_sides();
+        for (const core::Side side : {core::Side::A, core::Side::B}) {
+            session_->set_auto_roll(side, rolls[core::side_index(side)]);
+            session_->set_auto_decline(side, declines[core::side_index(side)]);
+        }
         if (core::roll_pending(session_->state()) && session_->auto_roll(session_->pending()->side)) {
             const auto& d = std::get<core::decision::RollDice>(session_->pending()->kind);
             submit_one(core::action::RollDice{d.roll, d.unit});  // the session makes any that follow
+        } else if (core::window_pending(session_->state()) && session_->auto_decline(session_->pending()->side)) {
+            submit_one(core::action::DeclineStratagems{});
+        }
+    }
+
+    // D-096: a human's reaction window waits for its answer.
+    bool human_window_waiting() const {
+        return mode_ == Mode::Play && session_ && core::window_pending(session_->state()) &&
+               !session_->auto_decline(session_->pending()->side) && !bot_sides_[core::side_index(session_->pending()->side)];
+    }
+
+    // D-096: a human's roll with a window before it (Insane Bravery) waits on the roll's face-down card (the dice
+    // pop-ups on). Cheap: no card is built.
+    bool window_prompt_up() const {
+        if (!settings_.show_dice || !human_window_waiting() || dice_.active()) return false;
+        const std::optional<core::WindowInfo> w = core::window_info(session_->state());
+        return w && w->timing == core::WindowTiming::BeforeRoll;
+    }
+
+    // D-096: that roll's card.
+    std::optional<DiceCard> window_prompt_card() const {
+        if (!window_prompt_up()) return std::nullopt;
+        return window_prompt(session_->state(), session_->log());
+    }
+
+    // D-096: whether `card` (the one showing) is the roll a human's window waits after: the last card, its roll's.
+    bool card_has_window(const DiceCard& card) const {
+        return dice_.current() == &card && dice_.showing_last() && human_window_waiting() &&
+               is_window_card(session_->state(), card);
+    }
+
+    // D-096: the picks of a human's window, for the rolled card it waits after, or nullptr.
+    StratagemPicks* card_window_picks() {
+        const DiceCard* card = dice_.current();
+        if (card == nullptr || !card_has_window(*card)) return nullptr;
+        return take_cli_picks(panel_.stratagem_picks(*session_));
+    }
+
+    // D-096: a human's window after a roll whose card isn't showing: the window's pop-up card (cached per step).
+    const DiceCard* window_popup_card() {
+        if (dice_.active() || !human_window_waiting()) return nullptr;
+        const std::pair<std::size_t, std::uint64_t> key{session_->history().size(), generation_};
+        if (window_card_key_ != key) {
+            window_card_key_ = key;
+            window_card_ = window_card(session_->state(), session_->log());
+        }
+        return window_card_ ? &*window_card_ : nullptr;
+    }
+
+    // --pick-dice (M61, M95): the dice the first pop-up with dice to pick picks, as clicks would; once.
+    StratagemPicks* take_cli_picks(StratagemPicks* picks) {
+        if (picks == nullptr) return nullptr;
+        for (const std::size_t i : cli_dice_picks_) picks->pick(i);
+        cli_dice_picks_.clear();
+        return picks;
+    }
+
+    // D-096: a window's answer. Declining is like making a roll: no Undo group of its own (Undo takes it back with the
+    // input that led to its roll, D-039); a stratagem is an input of its own.
+    void submit_window_answer(const core::GameAction& answer) {
+        if (std::holds_alternative<core::action::DeclineStratagems>(answer)) {
+            if (submit_one(answer)) run_auto_actions_now();
+        } else {
+            submit(answer);
         }
     }
 
@@ -571,6 +644,8 @@ public:
             if (view.buttons.empty()) break;
             if (std::holds_alternative<core::action::RollDice>(view.buttons.front())) {
                 submit_roll(view.buttons.front());  // D-095: as the Roll button on the pre-roll card
+            } else if (std::holds_alternative<core::action::DeclineStratagems>(view.buttons.front())) {
+                submit_window_answer(view.buttons.front());  // D-096: as "Keep the roll" on the rolled card
             } else {
                 submit(view.buttons.front());
             }
@@ -734,7 +809,9 @@ private:
     // D-033: dice pop-ups are open. Nothing from the next decision is drawn or accepted meanwhile: the board
     // is inactive (no target line, grey, outline, menu or clicks), there is no move handle, and the action
     // bar shows who is rolling. Everything is rebuilt for the real decision when the last card closes.
-    bool waiting_for_dice() const { return mode_ == Mode::Play && (dice_.active() || human_roll_waiting()); }
+    bool waiting_for_dice() const {
+        return mode_ == Mode::Play && (dice_.active() || human_roll_waiting() || window_prompt_up());
+    }
 
     // D-054 (M39): a bot owns the pending decision. Human input (board clicks, drags, the decision panel) is
     // ignored meanwhile; the action bar shows the bot thinking, with Pause and Step.
@@ -2280,9 +2357,14 @@ private:
             if (mode_ == Mode::Play) {
                 if (watching()) draw_watch_bar();  // M45: always there in bot vs bot
                 if (const DiceCard* card = dice_.current()) {
-                    draw_rolling(*card);  // D-033: the next decision waits for the dice pop-ups
+                    // D-033: the next decision waits for the dice pop-ups. D-096: the last card may carry a window.
+                    draw_rolling(*card, card_has_window(*card)
+                                            ? "Keep the roll, or pick a die and use Command Re-roll, in the pop-up."
+                                            : nullptr);
                 } else if (const std::optional<DiceCard> prompt = roll_prompt_card()) {
                     draw_rolling(*prompt);  // D-095: the roll waits for the Roll button on its card
+                } else if (const std::optional<DiceCard> before = window_prompt_card()) {
+                    draw_rolling(*before, "Roll, or use Insane Bravery, in the pop-up.");  // D-096
                 } else if (bot_deciding()) {
                     draw_bot_thinking();  // D-054
                 } else {
@@ -2302,13 +2384,43 @@ private:
         ImGui::End();
         if (has_view()) draw_datasheets();  // D-034
         // D-033: the dice pop-up, over everything else.
-        if (has_view() && mode_ == Mode::Play) dice_.draw(board_area(), ui_scale(), bot_dice_pace());
+        if (has_view() && mode_ == Mode::Play) {
+            // D-096 (M95): the rolled card of a roll a human's window waits after carries the window's buttons.
+            StratagemPicks* picks = card_window_picks();
+            if (const auto answer = dice_.draw(board_area(), ui_scale(), bot_dice_pace(), picks)) submit_window_answer(*answer);
+        }
         // D-095 (M94): a human's roll before it is made: its card face down, with the Roll button.
         if (has_view() && !end_warning_) {
             if (const std::optional<DiceCard> prompt = roll_prompt_card()) {
                 if (dice_.draw_prompt(board_area(), ui_scale(), *prompt)) {
                     const auto& d = std::get<core::decision::RollDice>(session_->pending()->kind);
                     submit_roll(core::action::RollDice{d.roll, d.unit});
+                }
+            }
+        }
+        // D-096 (M95): a human's window. Before a roll (Insane Bravery), on the roll's face-down card; after a roll whose
+        // card isn't showing, in the window's pop-up.
+        if (has_view() && mode_ == Mode::Play && session_ && !end_warning_ && !bot_deciding()) {
+            if (const std::optional<DiceCard> before = window_prompt_card()) {
+                if (StratagemPicks* picks = panel_.stratagem_picks(*session_)) {
+                    const WindowPromptChoice choice = dice_.draw_window_prompt(board_area(), ui_scale(), *before, *picks);
+                    if (choice == WindowPromptChoice::Stratagem) {
+                        if (const auto bravery = picks->insane_bravery()) submit(*bravery);
+                    } else if (choice == WindowPromptChoice::Roll && submit_one(core::action::DeclineStratagems{})) {
+                        // Roll: the window declined, then the roll made, as the pre-roll card's Roll makes it.
+                        if (core::roll_pending(session_->state()) && !session_->auto_roll(session_->pending()->side)) {
+                            const auto& d = std::get<core::decision::RollDice>(session_->pending()->kind);
+                            submit_roll(core::action::RollDice{d.roll, d.unit});
+                        } else {
+                            run_auto_actions_now();
+                        }
+                    }
+                }
+            } else if (const DiceCard* card = window_popup_card()) {
+                if (StratagemPicks* picks = take_cli_picks(panel_.stratagem_picks(*session_))) {
+                    if (const auto answer = dice_.draw_window(board_area(), ui_scale(), *card, *picks)) {
+                        submit_window_answer(*answer);
+                    }
                 }
             }
         }
@@ -2518,10 +2630,14 @@ private:
         ImGui::Spacing();
         if (ImGui::Checkbox("Show dice pop-ups", &settings_.show_dice)) {
             if (!settings_.show_dice) dice_.clear();  // D-033
-            sync_auto_roll();                         // D-095: with them off, your rolls are made for you
+            sync_auto_answers();                      // D-095: with them off, your rolls are made for you
         }
         ImGui::SetItemTooltip("Show each dice roll in a pop-up. On: you make your own rolls with its Roll button. "
                               "Off: your rolls are made for you, as the bot's always are.");
+        if (ImGui::Checkbox("Offer stratagems", &settings_.offer_stratagems)) sync_auto_answers();  // D-096
+        ImGui::SetItemTooltip("Ask you whenever you can use a stratagem: Command Re-roll just after one of your rolls, "
+                              "Insane Bravery just before a battle-shock roll (15.02, 15.04). Off: you are never asked, "
+                              "and keep your CP.");
         if (ImGui::Checkbox("Skip steps with nothing to do", &settings_.skip_empty_steps) && settings_.skip_empty_steps) auto_actions_as_group();
         ImGui::SetItemTooltip("When ending the step or passing is the only thing a side can do, do it for them.");
         ImGui::Checkbox("Fix illegal moves", &settings_.fix_moves);  // D-052
@@ -2713,7 +2829,7 @@ private:
     }
 
     // D-033: the action bar while a dice pop-up is open: who is rolling and what for, matching the pop-up.
-    void draw_rolling(const DiceCard& card) {
+    void draw_rolling(const DiceCard& card, const char* window_hint = nullptr) {
         ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.25f);
         const std::string tag = side_name(card.roller) + " rolls: " + state().side(card.roller).name;
         chip(tag.c_str(), to_imvec(side_color(card.roller)));
@@ -2725,7 +2841,9 @@ private:
         // draw_bot_thinking), so it doesn't vanish and come back. In bot vs bot it is on the watch bar.
         if (!watching() && shown_card() == ShownCard::Bots) draw_watch_buttons();
         // M49 (D-060): a bot's card that rolls by itself has no Roll button to point at.
-        const char* how = bot_dice_pace() ? "The bot rolls its own dice." : "Roll the dice in the pop-up.";
+        const char* how = window_hint != nullptr ? window_hint
+                          : bot_dice_pace()      ? "The bot rolls its own dice."
+                                                 : "Roll the dice in the pop-up.";
         const std::string hint = (card.purpose.empty() ? std::string() : card.purpose + ". ") + how;
         ImGui::TextWrapped("%s", hint.c_str());
     }
@@ -3107,6 +3225,8 @@ private:
     bool menu_requested_ = false;  // "Main menu" was clicked; the start screen opens next frame
     bool quit_ = false;            // the start screen's Quit
     std::vector<std::size_t> cli_dice_picks_;  // --pick-dice (M61), applied once
+    std::optional<std::pair<std::size_t, std::uint64_t>> window_card_key_;  // D-096: the step window_card_ is for
+    std::optional<DiceCard> window_card_;  // D-096: the window's pop-up card
     std::vector<unsigned> cli_model_picks_;    // --pick-models (M62), applied once
     std::vector<unsigned> cli_unit_clicks_;    // --click-units (M63), applied once
     bool cli_menu_at_anchor_ = false;          // --click-units opened the menu: draw it at its anchor
@@ -3195,6 +3315,7 @@ int main(int argc, char** argv) {
         settings.seed = *options.seed;
     }
     if (options.bot_speed) settings.bot_speed = *options.bot_speed;
+    if (options.dice_popups) settings.show_dice = *options.dice_popups;  // M95: the pop-up-free paths
     App app(settings, !scripted, options.scenario, !scripted || options.menu, options.bots, std::move(loaded),
             std::move(custom));
     app.set_auto_scale(std::max({1.0f, dpi, by_height}));

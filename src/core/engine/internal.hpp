@@ -225,6 +225,10 @@ void make_owed_battle_shock_roll(GameState& state, DiceSource& dice, Events& eve
 void make_attack_roll(GameState& state, RollKind roll, DiceSource& dice, Events& events);
 // The dice of the attack in progress's pending roll (RollDiceInfo::dice, ::expression, ::target); attack_flow.cpp.
 void describe_attack_roll(const GameState& state, RollKind roll, RollDiceInfo& info);
+// rolls.cpp: what roll `d` by `roller` rolls (roll_dice_info for a pending RollDice; D-096: window_info's next roll).
+[[nodiscard]] RollDiceInfo describe_roll(const GameState& state, const decision::RollDice& d, Side roller);
+// stratagems.cpp (D-096): the open AfterRoll window's roll as its event, judged from its dice now.
+[[nodiscard]] event::RerolledRoll window_roll_result(const GameState& state);
 
 // ---- stratagems.cpp: D-096 (M95) reaction windows (01.03.02) and stratagems (15) ----
 

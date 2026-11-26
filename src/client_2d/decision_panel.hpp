@@ -18,6 +18,7 @@
 #include "melee_plan.hpp"
 #include "reroll_picks.hpp"
 #include "retarget_picks.hpp"
+#include "stratagem_picks.hpp"
 #include "session.hpp"
 #include "shot_plan.hpp"
 
@@ -54,6 +55,14 @@ public:
         if (synced_step_ != session.history().size() || !rerolls_.active()) return nullptr;
         return &rerolls_;
     }
+    // D-096 (M95): the picks for the session's pending reaction window (the rolled card, the window's pop-up and the
+    // action bar share them), or nullptr when no window is pending. Synced here, as the card shows before the bar is
+    // drawn.
+    [[nodiscard]] StratagemPicks* stratagem_picks(const GameSession& session) {
+        if (!session.pending()) return nullptr;
+        sync(session);
+        return stratagems_.active() ? &stratagems_ : nullptr;
+    }
 
     // M76 (D-082 part 2): the action bar while a human sets a unit up by hand (D-081): the decision, the unit being placed
     // (`plan`) with core's verdict on it (`problems`, empty when it can be set up there), and the buttons. Returns what
@@ -84,6 +93,7 @@ private:
     std::optional<CasualtyPlan> casualties_;  // the default order, without the board (D-051)
     RerollPicks rerolls_;                     // M61: the [TWIN-LINKED] re-roll picks (D-072)
     RetargetPicks retargets_;                 // M93: the new targets per weapon (04.03.03, D-093)
+    StratagemPicks stratagems_;               // M95: the reaction window's picks (D-096)
     bool undo_step_available_ = false;  // D-039
     bool undo_step_requested_ = false;
     bool cancel_requested_ = false;  // D-041
