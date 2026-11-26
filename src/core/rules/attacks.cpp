@@ -154,6 +154,7 @@ int hazardous_weapons_selected(const GameState& state, std::span<const WeaponSel
 
 AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context) {
     AttackProfile p;
+    p.snap_shooting = context.snap_shooting;  // D-097: 15.09 (part of D-006's identical attacks)
     p.torrent = weapon.has<ability::Torrent>();
     if (!p.torrent) {
         if (!weapon.skill) {

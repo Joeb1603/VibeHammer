@@ -30,7 +30,9 @@ bool answers(const DecisionKind& d, const GameAction& a) {
             else if constexpr (std::is_same_v<T, action::ProposeModelMove> || std::is_same_v<T, action::CommitUnitMove> ||
                                std::is_same_v<T, action::ResetUnitMove>)
                 return std::holds_alternative<decision::MoveModels>(d);
-            else if constexpr (std::is_same_v<T, action::Shoot> || std::is_same_v<T, action::EndShootStep>)
+            else if constexpr (std::is_same_v<T, action::Shoot>)
+                return std::holds_alternative<decision::Shoot>(d) || std::holds_alternative<decision::SnapShoot>(d);
+            else if constexpr (std::is_same_v<T, action::EndShootStep>)
                 return std::holds_alternative<decision::Shoot>(d);
             else if constexpr (std::is_same_v<T, action::DeclareCharge> || std::is_same_v<T, action::EndChargeStep>)
                 return std::holds_alternative<decision::Charge>(d);
@@ -195,6 +197,9 @@ std::optional<PendingDecision> compute_decision(const GameState& state) {
     }
     if (state.flow.window) {
         return detail::window_decision(state);  // D-096: an open window comes first
+    }
+    if (state.flow.snap_shooter) {
+        return detail::snap_shoot_decision(state);  // D-097: Fire Overwatch's unit shoots next
     }
     if (state.flow.attack) {
         return detail::attack_decision(state);

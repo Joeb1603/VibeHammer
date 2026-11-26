@@ -54,6 +54,7 @@ void to_json(Json& j, const UnitPhaseFlags& v) {
              {"consolidated", v.consolidated}};
     put_opt(j, "advance_roll", v.advance_roll);
     put_opt(j, "charge_roll", v.charge_roll);
+    if (v.fights_first) j["fights_first"] = true;  // D-097 (15.12 Counteroffensive): omitted when false
 }
 void from_json(const Json& j, UnitPhaseFlags& v) {
     j.at("selected_to_move").get_to(v.selected_to_move);
@@ -69,6 +70,7 @@ void from_json(const Json& j, UnitPhaseFlags& v) {
     j.at("forced_to_fight").get_to(v.forced_to_fight);
     j.at("consolidated").get_to(v.consolidated);
     get_opt(j, "charge_roll", v.charge_roll);
+    v.fights_first = j.contains("fights_first") && j.at("fights_first").get<bool>();  // D-097
 }
 
 // ---- moves ----
@@ -171,11 +173,14 @@ void from_json(const Json& j, FightSubStep& v) {
 void to_json(Json& j, const FightSequence& v) {
     j = Json{{"sub_step", v.sub_step}, {"selecting", v.selecting}};
     put_opt(j, "last_pass", v.last_pass);
+    if (v.next_to_fight) j["next_to_fight"] = *v.next_to_fight;  // D-097 (15.12): omitted when absent
 }
 void from_json(const Json& j, FightSequence& v) {
     j.at("sub_step").get_to(v.sub_step);
     j.at("selecting").get_to(v.selecting);
     get_opt(j, "last_pass", v.last_pass);
+    v.next_to_fight.reset();
+    if (const auto it = j.find("next_to_fight"); it != j.end() && !it->is_null()) v.next_to_fight = it->get<UnitId>();
 }
 void to_json(Json& j, const FightInProgress& v) {
     j = Json{{"unit", v.unit},
@@ -191,8 +196,15 @@ void from_json(const Json& j, FightInProgress& v) {
     j.at("attacks_started").get_to(v.attacks_started);
     j.at("forced").get_to(v.forced);
 }
-void to_json(Json& j, const ChargeInProgress& v) { j = Json{{"unit", v.unit}}; }
-void from_json(const Json& j, ChargeInProgress& v) { j.at("unit").get_to(v.unit); }
+void to_json(Json& j, const ChargeInProgress& v) {
+    j = Json{{"unit", v.unit}};
+    if (v.heroic) j["heroic"] = *v.heroic;  // D-097 (15.11 Heroic Intervention's mode): omitted when absent
+}
+void from_json(const Json& j, ChargeInProgress& v) {
+    j.at("unit").get_to(v.unit);
+    v.heroic.reset();
+    if (const auto it = j.find("heroic"); it != j.end() && !it->is_null()) v.heroic = it->get<StratagemMode>();
+}
 
 // ---- shooting ----
 void to_json(Json& j, ShootingType v) { j = std::string(shooting_type_name(v)); }
@@ -231,10 +243,12 @@ void from_json(const Json& j, HitModifierRule& v) {
 
 void to_json(Json& j, const AttackContext& v) {
     j = Json{{"type", v.type}, {"heavy_conditions_met", v.heavy_conditions_met}};
+    if (v.snap_shooting) j["snap_shooting"] = true;  // D-097 (15.09): omitted when false
 }
 void from_json(const Json& j, AttackContext& v) {
     j.at("type").get_to(v.type);
     j.at("heavy_conditions_met").get_to(v.heavy_conditions_met);
+    v.snap_shooting = j.contains("snap_shooting") && j.at("snap_shooting").get<bool>();  // D-097
 }
 
 void to_json(Json& j, const WeaponSelection& v) {
@@ -272,6 +286,7 @@ void to_json(Json& j, const AttackProfile& v) {
              {"wound_modifier", v.wound_modifier},
              {"attack_time_abilities", abilities_to_json(v.attack_time_abilities)}};
     put_opt(j, "skill", v.skill);
+    if (v.snap_shooting) j["snap_shooting"] = true;  // D-097 (15.09): omitted when false
 }
 void from_json(const Json& j, AttackProfile& v) {
     get_opt(j, "skill", v.skill);
@@ -282,6 +297,7 @@ void from_json(const Json& j, AttackProfile& v) {
     j.at("hit_modifier").get_to(v.hit_modifier);
     j.at("wound_modifier").get_to(v.wound_modifier);
     v.attack_time_abilities = abilities_from_json(j.at("attack_time_abilities"));
+    v.snap_shooting = j.contains("snap_shooting") && j.at("snap_shooting").get<bool>();  // D-097
 }
 
 // ---- D-069 Random Characteristics ----
@@ -459,18 +475,28 @@ void from_json(const Json& j, AttackFlow& v) {
 }
 
 // D-096 (M95): the open reaction window.
+// D-097 (M96): a window that follows no roll (15.08, 15.11, 15.12) has no "roll", "batch" or "faces", and an EndOfPhase
+// window no "unit"; a roll window (M95's) is written as before.
 void to_json(Json& j, const StratagemWindow& v) {
-    j = Json{{"timing", v.timing}, {"roll", v.roll}, {"unit", v.unit}, {"batch", v.batch},
-             {"sides", v.sides}, {"faces", v.faces}};
+    j = Json{{"timing", v.timing}, {"sides", v.sides}};
+    if (v.roll) {
+        j["roll"] = *v.roll;
+        j["batch"] = v.batch;
+        j["faces"] = v.faces;
+    }
+    if (v.unit) j["unit"] = *v.unit;
     if (!v.rerolled.empty()) j["rerolled"] = v.rerolled;  // omitted when no die has been re-rolled
 }
 void from_json(const Json& j, StratagemWindow& v) {
     j.at("timing").get_to(v.timing);
-    j.at("roll").get_to(v.roll);
-    j.at("unit").get_to(v.unit);
-    j.at("batch").get_to(v.batch);
+    v.roll.reset();
+    if (const auto it = j.find("roll"); it != j.end() && !it->is_null()) v.roll = it->get<RollKind>();
+    v.unit.reset();
+    if (const auto it = j.find("unit"); it != j.end() && !it->is_null()) v.unit = it->get<UnitId>();
+    v.batch = j.value("batch", std::size_t{0});
     j.at("sides").get_to(v.sides);
-    j.at("faces").get_to(v.faces);
+    v.faces.clear();
+    if (const auto it = j.find("faces"); it != j.end()) it->get_to(v.faces);
     v.rerolled.clear();
     if (const auto it = j.find("rerolled"); it != j.end()) it->get_to(v.rerolled);
 }
@@ -499,6 +525,7 @@ void to_json(Json& j, const FlowState& v) {
     j["forced_fights"] = v.forced_fights;
     if (!v.battle_shock_tests.empty()) j["battle_shock_tests"] = v.battle_shock_tests;  // D-095; omitted when empty
     if (v.window) j["window"] = *v.window;  // D-096; omitted when absent
+    if (v.snap_shooter) j["snap_shooter"] = *v.snap_shooter;  // D-097 (15.08); omitted when absent
 }
 void from_json(const Json& j, FlowState& v) {
     j.at("stage").get_to(v.stage);
@@ -516,6 +543,8 @@ void from_json(const Json& j, FlowState& v) {
     if (const auto it = j.find("battle_shock_tests"); it != j.end()) it->get_to(v.battle_shock_tests);
     v.window.reset();
     if (const auto it = j.find("window"); it != j.end() && !it->is_null()) v.window = it->get<StratagemWindow>();
+    v.snap_shooter.reset();
+    if (const auto it = j.find("snap_shooter"); it != j.end() && !it->is_null()) v.snap_shooter = it->get<UnitId>();
 }
 
 // D-076 (M67): the exact totals (numerators over the common denominator) and their display forms.
@@ -590,7 +619,9 @@ void to_json(Json& j, const PendingDecision& v) {
                 j["unit"] = k.unit;
             } else if constexpr (std::is_same_v<T, decision::UseStratagems>) {
                 j["timing"] = k.timing;  // D-096
-                j["unit"] = k.unit;
+                if (k.unit) j["unit"] = *k.unit;  // D-097: an EndOfPhase window has none
+            } else if constexpr (std::is_same_v<T, decision::SnapShoot>) {
+                j["unit"] = k.unit;  // D-097 (15.08, 15.09)
             }
         },
         v.kind);
@@ -618,8 +649,11 @@ void from_json(const Json& j, PendingDecision& v) {
     else if (kind == "RetargetAttacks") v.kind = decision::RetargetAttacks{j.at("attacker").get<UnitId>()};  // D-093
     else if (kind == "RollDice") v.kind = decision::RollDice{j.at("roll").get<RollKind>(), j.at("unit").get<UnitId>()};
     else if (kind == "UseStratagems") {
-        v.kind = decision::UseStratagems{j.at("timing").get<WindowTiming>(), j.at("unit").get<UnitId>()};  // D-096
-    } else bad_enum("PendingDecision", j);
+        decision::UseStratagems d{j.at("timing").get<WindowTiming>(), std::nullopt};  // D-096
+        if (const auto it = j.find("unit"); it != j.end() && !it->is_null()) d.unit = it->get<UnitId>();  // D-097
+        v.kind = d;
+    } else if (kind == "SnapShoot") v.kind = decision::SnapShoot{j.at("unit").get<UnitId>()};  // D-097
+    else bad_enum("PendingDecision", j);
 }
 
 }  // namespace wh40k::core

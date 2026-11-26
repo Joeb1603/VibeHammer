@@ -185,7 +185,13 @@ inline core::GameAction fill_template(const core::GameState& gs, const core::Gam
         // one-profile-per-weapon rule always hold), and at least one model fires.
         core::action::Shoot filled = *sh;
         const core::Unit& unit = *gs.find_unit(sh->unit);
-        const auto options = core::shot_options(gs, unit, sh->type);
+        auto options = core::shot_options(gs, unit, sh->type);
+        if (sh->type == core::ShootingType::Snap && !options.empty()) {
+            // M96 (D-097, 15.09): a snap shot targets one enemy unit, picked first. Only snap fills draw the extra
+            // number, so every other game plays exactly as before.
+            const core::UnitId target = options[rng.below(options.size())].target;
+            std::erase_if(options, [target](const core::ShotDeclaration& o) { return o.target != target; });
+        }
         for (const core::Model& m : unit.models) {
             std::vector<core::ShotDeclaration> mine;
             for (const auto& o : options) {

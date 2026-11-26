@@ -649,9 +649,9 @@ TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
         ++files;
         const Replay saved = load_replay(file);
         const Replay paced = with_roll_steps(saved, repo_root());
-        EXPECT_EQ(paced.format, kReplayFormatWindowsRecorded);  // D-096 (M95): format 3
+        EXPECT_EQ(paced.format, kReplayFormatReactionsRecorded);  // D-096 (M95): format 3; D-097 (M96): format 4
         // D-096: inline play declines every window, so a game that uses a stratagem has no inline twin; it is checked
-        // paced only (m95_stratagems.json, D096_Replay).
+        // paced only (m95_stratagems.json, D096_Replay; m96_reactions.json, D097_Replay).
         const bool uses_stratagems = std::any_of(paced.steps.begin(), paced.steps.end(), [](const ReplayStep& s) {
             return std::holds_alternative<action::UseStratagem>(s.action);
         });
@@ -675,8 +675,8 @@ TEST(D095_Closure, EverySavedReplayPlaysTheSamePacedAndInline) {
         EXPECT_EQ(replay_expectation(p.final_state), saved.expect);
         rolls += paced.steps.size() - at_once.steps.size();
     }
-    EXPECT_GE(files, 30);
-    EXPECT_EQ(with_stratagems, 1);
+    EXPECT_GE(files, 31);
+    EXPECT_EQ(with_stratagems, 2);
     EXPECT_GT(rolls, 500u);  // the bot games alone roll hundreds of times
 }
 
@@ -779,7 +779,7 @@ constexpr std::uint64_t kM94Seed = 1;  // picked by D095_Replay.DISABLED_SearchM
 Replay m94_replay(std::uint64_t seed, bool& ok, std::string& problem) {
     ok = false;
     Replay r;
-    r.format = kReplayFormatWindowsRecorded;  // M95 (D-096): format 3
+    r.format = kReplayFormatReactionsRecorded;  // M95 (D-096): format 3; M96 (D-097): format 4
     r.description =
         "M94 (D-095): engine-paced dice rolls, every roll a RollDice step answered by its roller. The V1 scenario with "
         "4 of the 10 Termagants (below half-strength), 1\" from the Intercessors (engaged), their fleshborers a "
@@ -881,7 +881,7 @@ const std::filesystem::path kM94Replay = kReplayDir / "m94_paced_rolls.json";
 
 TEST(D095_Replay, ThePacedRollsReplayAnswersEveryKindOfRollAsAStep) {
     const Replay saved = load_replay(kM94Replay);
-    EXPECT_EQ(saved.format, kReplayFormatWindowsRecorded);  // regenerated as format 3 in M95 (D-096)
+    EXPECT_EQ(saved.format, kReplayFormatReactionsRecorded);  // regenerated as format 3 in M95 (D-096), 4 in M96 (D-097)
     const ReplayResult run = run_replay(saved, repo_root());
     ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
     EXPECT_EQ(replay_expectation(run.final_state), saved.expect);
@@ -949,17 +949,20 @@ TEST(D095_Replay, DISABLED_RegenerateM94Replay) {
 // ---- Format 1 (every roll inside its step) still loads; with_roll_steps makes it format 2 ----
 
 TEST(D095_Replays, AFormatOneReplayStillRunsAndConvertsToItsFormatTwoFile) {
-    // tests/data/legacy/ keeps two replays as M93 wrote them (format 1) and as M94 wrote them (format 2, D-096). Each runs
-    // as before, and with_roll_steps turns either into exactly the regenerated file (format 3 since M95).
+    // tests/data/legacy/ keeps two replays as M93 wrote them (format 1), as M94 wrote them (format 2, D-096) and as M95
+    // wrote them (format 3, D-097). Each runs as before, and with_roll_steps turns each into exactly the regenerated
+    // file (format 4 since M96).
     for (const std::string name : {"m8_shooting", "m62_random_characteristics"}) {
         SCOPED_TRACE(name);
         const Replay current = load_replay(kReplayDir / (name + ".json"));
-        EXPECT_EQ(current.format, kReplayFormatWindowsRecorded);
-        EXPECT_EQ(with_roll_steps(current, repo_root()), current);  // format 3: as it is
-        for (const std::string format : {"format1", "format2"}) {
+        EXPECT_EQ(current.format, kReplayFormatReactionsRecorded);
+        EXPECT_EQ(with_roll_steps(current, repo_root()), current);  // format 4: as it is
+        for (const std::string format : {"format1", "format2", "format3"}) {
             SCOPED_TRACE(format);
             const Replay legacy = load_replay(repo_root() / "tests/data/legacy" / (name + "_" + format + ".json"));
-            EXPECT_EQ(legacy.format, format == "format1" ? kReplayFormatRollsInline : kReplayFormatRollsRecorded);
+            EXPECT_EQ(legacy.format, format == "format1"   ? kReplayFormatRollsInline
+                                     : format == "format2" ? kReplayFormatRollsRecorded
+                                                           : kReplayFormatWindowsRecorded);
             const ReplayResult run = run_replay(legacy, repo_root());
             ASSERT_TRUE(run.ok()) << "step " << *run.failed_step << ": " << run.reasons.front();
             EXPECT_EQ(replay_expectation(run.final_state), legacy.expect);
@@ -970,12 +973,18 @@ TEST(D095_Replays, AFormatOneReplayStillRunsAndConvertsToItsFormatTwoFile) {
 
 TEST(D095_Replays, AnUnknownFormatIsRefusedAndARollStepCantStandInAFormatOneReplay) {
     Json j = Json(load_replay(kReplayDir / "m8_shooting.json"));
-    j["format"] = 4;  // D-096 (M95): 3 is the current format
+    j["format"] = 5;  // D-096 (M95): 3 was the current format; D-097 (M96): 4 is
     EXPECT_THROW((void)j.get<Replay>(), DataError);
     // Format 1 makes every roll inside its step: a RollDice step there answers nothing (05.01: no roll is waiting).
+    // D-096: it declines every window there too, so a DeclineStratagems step answers nothing either (M96: the end of
+    // the Movement phase's window comes before the first roll), and without those steps the first refused one is a roll.
     Replay r = load_replay(kReplayDir / "m8_shooting.json");
     r.format = kReplayFormatRollsInline;
     const ReplayResult run = run_replay(r, repo_root());
     ASSERT_FALSE(run.ok());
-    EXPECT_TRUE(std::holds_alternative<action::RollDice>(r.steps.at(*run.failed_step).action));
+    EXPECT_TRUE(std::holds_alternative<action::DeclineStratagems>(r.steps.at(*run.failed_step).action));
+    std::erase_if(r.steps, [](const ReplayStep& s) { return std::holds_alternative<action::DeclineStratagems>(s.action); });
+    const ReplayResult without = run_replay(r, repo_root());
+    ASSERT_FALSE(without.ok());
+    EXPECT_TRUE(std::holds_alternative<action::RollDice>(r.steps.at(*without.failed_step).action));
 }

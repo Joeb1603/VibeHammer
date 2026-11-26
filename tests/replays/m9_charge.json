@@ -112,7 +112,7 @@
     "result": null,
     "stage": "Charge"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "data/scenarios/v1_skirmish.json",
     "seed": 1
@@ -201,6 +201,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
     },
     {
       "action": {

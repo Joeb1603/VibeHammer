@@ -35,6 +35,7 @@ void end_game(GameState& state, std::optional<Side> winner, std::string reason, 
     state.flow.forced_fights.clear();
     state.flow.battle_shock_tests.clear();  // D-095
     state.flow.window.reset();              // D-096
+    state.flow.snap_shooter.reset();        // D-097
     state.pending.reset();
     events.push_back(event::GameOver{winner, std::move(reason), std::move(points), vp});
 }
@@ -174,6 +175,11 @@ void advance(GameState& state, DiceSource& dice, Events& events) {
         if (state.flow.window) {
             // D-096: an open window waits for its side first; nothing else moves on until it closes.
             state.pending = window_decision(state);
+            return;
+        }
+        if (state.flow.snap_shooter) {
+            // D-097: 15.08 Fire Overwatch's unit now shoots using snap shooting (15.09).
+            state.pending = snap_shoot_decision(state);
             return;
         }
         if (state.flow.stage == Stage::Deploy) {

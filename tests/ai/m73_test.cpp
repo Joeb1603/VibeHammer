@@ -181,7 +181,7 @@ BotGame play_custom_bot_game(std::uint64_t seed = kReplaySeed) {
     // M95 (D-096): the bot as it was when the file was written (no stratagem).
     g.record = play_bot_session(session, wh40k::test::without_stratagems(), wh40k::test::without_stratagems(), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
+    g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

@@ -518,7 +518,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "tests/data/scenarios/m86_objectives_44x60.json",
     "seed": 86
@@ -886,6 +886,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "B"
@@ -1165,6 +1171,12 @@
         "unit": 14
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {

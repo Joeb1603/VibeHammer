@@ -49,6 +49,14 @@ void apply_details(GameState& state, Side side, const action::StartMove& a, Dice
 // ---- shooting.cpp: 10.02 Shoot ----
 
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::Shoot& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SnapShoot& d);  // D-097
+// D-097 (M96): 15.08 Fire Overwatch's unit shoots using snap shooting: its player's SnapShoot decision.
+[[nodiscard]] std::optional<PendingDecision> snap_shoot_decision(const GameState& state);
+// D-097: opens a reaction window that follows no roll (the end of a phase, just after a unit has fought), if a side can
+// use a stratagem there (never once the battle is over). `unit` is the unit that has just fought (AfterAttacks).
+void open_window(GameState& state, WindowTiming timing, std::optional<UnitId> unit);
+// charge.cpp: 11.02 Declare Charge for `unit` (D-097: also by 15.11 Heroic Intervention, in its mode).
+void declare_charge(GameState& state, UnitId unit, std::optional<StratagemMode> heroic, Events& events);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::Shoot& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::EndShootStep& a);
 void apply_details(GameState& state, Side side, const action::Shoot& a, DiceSource& dice, Events& events);

@@ -215,6 +215,12 @@ void from_json(const Json& j, WindowTiming& v) {
     if (!t) json_detail::bad_enum("WindowTiming", j);
     v = *t;
 }
+void to_json(Json& j, StratagemMode v) { j = std::string(stratagem_mode_key(v)); }  // D-097 (M96)
+void from_json(const Json& j, StratagemMode& v) {
+    const std::optional<StratagemMode> m = j.is_string() ? stratagem_mode_from_key(j.get<std::string>()) : std::nullopt;
+    if (!m) json_detail::bad_enum("StratagemMode", j);
+    v = *m;
+}
 
 // ---- actions ----
 namespace action {
@@ -283,6 +289,7 @@ void to_json(Json& j, const GameAction& v) {
                 j["stratagem"] = a.stratagem;  // D-096
                 j["unit"] = a.unit;
                 if (a.die) j["die"] = *a.die;  // omitted when absent (a charge roll, Insane Bravery)
+                if (a.mode) j["mode"] = *a.mode;  // D-097: omitted when absent (every stratagem but 15.11)
             }
         },
         v);
@@ -354,6 +361,7 @@ void from_json(const Json& j, GameAction& v) {
     } else if (kind == "UseStratagem") {
         UseStratagem a{j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(), std::nullopt};  // D-096
         if (const auto it = j.find("die"); it != j.end() && !it->is_null()) a.die = it->get<std::size_t>();
+        if (const auto it = j.find("mode"); it != j.end() && !it->is_null()) a.mode = it->get<StratagemMode>();  // D-097
         v = a;
     } else if (kind == "DeclineStratagems") {
         v = DeclineStratagems{};  // D-096
@@ -421,6 +429,7 @@ void to_json(Json& j, const GameEvent& v) {
                 j["unit"] = e.unit;
                 j["roll"] = e.roll;
                 j["eligible_targets"] = e.eligible_targets;
+                if (e.capped) j["capped"] = *e.capped;  // D-097 (15.11 Into the Fray): omitted when not capped
             } else if constexpr (std::is_same_v<T, ChargeTargetsSelected>) {
                 j["unit"] = e.unit;
                 j["targets"] = e.targets;
@@ -533,6 +542,7 @@ void to_json(Json& j, const GameEvent& v) {
                 j["unit"] = e.unit;
                 j["cost"] = e.cost;
                 j["cp_left"] = e.cp_left;
+                if (e.mode) j["mode"] = *e.mode;  // D-097: omitted when absent
             } else if constexpr (std::is_same_v<T, DiceRerolled>) {
                 j["roll"] = e.roll;  // 15.02 (D-096)
                 j["unit"] = e.unit;
@@ -592,8 +602,10 @@ void from_json(const Json& j, GameEvent& v) {
     } else if (kind == "ChargeDeclared") {
         v = ChargeDeclared{j.at("unit").get<UnitId>()};
     } else if (kind == "ChargeRolled") {
-        v = ChargeRolled{j.at("unit").get<UnitId>(), j.at("roll").get<TwoD6>(),
-                         j.at("eligible_targets").get<std::vector<UnitId>>()};
+        ChargeRolled c{j.at("unit").get<UnitId>(), j.at("roll").get<TwoD6>(),
+                       j.at("eligible_targets").get<std::vector<UnitId>>()};
+        if (const auto it = j.find("capped"); it != j.end() && !it->is_null()) c.capped = it->get<int>();  // D-097
+        v = c;
     } else if (kind == "ChargeTargetsSelected") {
         v = ChargeTargetsSelected{j.at("unit").get<UnitId>(), j.at("targets").get<std::vector<UnitId>>()};
     } else if (kind == "ChargeResolved") {
@@ -682,8 +694,10 @@ void from_json(const Json& j, GameEvent& v) {
         v = DamageRolled{j.at("attacker").get<UnitId>(), j.at("target").get<UnitId>(), j.at("model").get<ModelId>(),
                          j.at("damage").get<DiceExpr>(), j.at("roll").get<CharacteristicRoll>()};  // D-096
     } else if (kind == "StratagemUsed") {
-        v = StratagemUsed{j.at("side").get<Side>(), j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(),
-                          j.at("cost").get<int>(), j.at("cp_left").get<int>()};  // D-096
+        StratagemUsed u{j.at("side").get<Side>(), j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>(),
+                        j.at("cost").get<int>(), j.at("cp_left").get<int>()};  // D-096
+        if (const auto it = j.find("mode"); it != j.end() && !it->is_null()) u.mode = it->get<StratagemMode>();  // D-097
+        v = u;
     } else if (kind == "DiceRerolled") {
         DiceRerolled d;  // D-096
         j.at("roll").get_to(d.roll);

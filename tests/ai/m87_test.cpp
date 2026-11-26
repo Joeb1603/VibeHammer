@@ -630,8 +630,9 @@ std::string per_game_field(const std::string& line, const std::string& key) {
 // M86's Release arena, seed 1 (`--per-game 1`): the rosters, and the objective scenario (the same actions and trace).
 // M94 (D-095): each roll is a step of its own, so the actions hash changed (96386b34f58c8447 at M86); the states and
 // the trace did not. M95 (D-096): each declined window is a step too, and a random D is rolled per attack, so the
-// actions hash changed again (5f61ac23ccdd1386 at M94); the states and the trace did not.
-constexpr const char* kM86Actions = "095330f5f749cd1e";
+// actions hash changed again (5f61ac23ccdd1386 at M94); the states and the trace did not. M96 (D-097): the windows that
+// follow no roll are declined steps too, so it changed again (095330f5f749cd1e at M95); the states and the trace did not.
+constexpr const char* kM86Actions = "e94cf3b0c903b067";
 constexpr const char* kM86Trace = "e034d41cdcc42bd7";
 constexpr const char* kM86RostersState = "154669e688551ac1";
 constexpr const char* kM86ObjectivesState = "3301929fd89fbaf9";
@@ -812,7 +813,7 @@ BotGame play_objectives_bot_game(std::uint64_t seed = kObjectivesSeed) {
     // M91 (D-092): the M87 game, pinned to the M91 keys at 0 (the saved file is the M90 bot's).
     g.record = play_bot_session(session, m90_bot(), m90_bot(), 5000);
     g.replay.steps = session.history();
-    g.replay.format = kReplayFormatWindowsRecorded;  // M94 (D-095), M95 (D-096): each roll and window a step
+    g.replay.format = kReplayFormatReactionsRecorded;  // M94 (D-095), M95 (D-096), M96 (D-097): each roll and window a step
     g.replay.expect = replay_expectation(session.state());
     return g;
 }

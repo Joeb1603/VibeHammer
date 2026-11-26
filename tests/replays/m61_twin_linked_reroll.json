@@ -28,7 +28,7 @@
     "result": null,
     "stage": "Consolidate"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "state": {
       "battle_rounds": 5,
@@ -647,6 +647,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "B"
@@ -882,6 +888,12 @@
           5
         ],
         "target": 1
+      },
+      "side": "A"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
       },
       "side": "A"
     },

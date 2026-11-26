@@ -42,13 +42,13 @@ bool StratagemPicks::reroll_ready() const {
 
 std::optional<core::GameAction> StratagemPicks::command_reroll() const {
     if (!reroll_ready()) return std::nullopt;
-    return core::action::UseStratagem{core::Stratagem::CommandReroll, info_->unit,
+    return core::action::UseStratagem{core::Stratagem::CommandReroll, info_->unit.value(),
                                       info_->whole_roll ? std::nullopt : picked_};
 }
 
 std::optional<core::GameAction> StratagemPicks::insane_bravery() const {
     if (!offers(core::Stratagem::InsaneBravery)) return std::nullopt;
-    return core::action::UseStratagem{core::Stratagem::InsaneBravery, info_->unit, std::nullopt};
+    return core::action::UseStratagem{core::Stratagem::InsaneBravery, info_->unit.value(), std::nullopt};
 }
 
 std::string StratagemPicks::reroll_label() const {

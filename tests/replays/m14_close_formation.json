@@ -112,7 +112,7 @@
     "result": null,
     "stage": "Shoot"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "data/scenarios/v1_skirmish.json",
     "seed": 14
@@ -204,6 +204,12 @@
     },
     {
       "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "B"
+    },
+    {
+      "action": {
         "kind": "EndShootStep"
       },
       "side": "A"
@@ -269,6 +275,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     }
   ]
 }

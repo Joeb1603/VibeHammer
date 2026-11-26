@@ -12,6 +12,7 @@
 
 #include "core/geometry/pose.hpp"
 #include "core/state/game_state.hpp"
+#include "core/state/stratagems.hpp"
 
 namespace wh40k::core {
 
@@ -25,8 +26,8 @@ inline constexpr float kChargeRangeInches = 12.0f;
 
 // 11.04 Before Moving: the enemy units within 12" of `unit` and within `charge_roll` inches (the
 // maximum distance), edge to edge (D-009), in GameState order.
-[[nodiscard]] std::vector<UnitId> eligible_charge_targets(const GameState& state, const Unit& unit,
-                                                          int charge_roll);
+[[nodiscard]] std::vector<UnitId> eligible_charge_targets(const GameState& state, const Unit& unit, int charge_roll,
+                                                     std::optional<StratagemMode> heroic = std::nullopt);
 
 // 11.04 While Moving: does a model moved from `start` to `end` (keeping its current facing) end its move closer to
 // one or more of `targets` (edge to edge, to the closest model of each target; "closer" means by more than EPS_MM)?

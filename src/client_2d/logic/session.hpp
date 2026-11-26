@@ -49,9 +49,11 @@ public:
     [[nodiscard]] static GameSession from_steps(core::GameState initial, const std::vector<core::ReplayStep>& steps);
 
     // ---- save / load (D-025) ----
-    // {"format": 2, "kind": "vibehammer-save", "initial", "steps", "state"}: the initial state and the
-    // accepted steps (so undo and replay export keep working), plus the current state as a check. D-095 (M94): format 2
-    // records every roll as a step; a format-1 save (every roll inside its action) loads with its rolls added as steps.
+    // {"format": 4, "kind": "vibehammer-save", "initial", "steps", "state"}: the initial state and the
+    // accepted steps (so undo and replay export keep working), plus the current state as a check. D-095 (M94): every
+    // roll is a step; a format-1 save (every roll inside its action) loads with its rolls added as steps. D-096 (M95),
+    // D-097 (M96): every window's answer is a step too; a format-2 or format-3 save loads with the windows it couldn't
+    // record declined.
     [[nodiscard]] nlohmann::json to_save_json() const;
     // Rebuilds the game from "initial" + "steps" and checks it matches "state" (core::DataError if not). No roll is
     // made automatically (a game saved while a player's roll waited still waits; roll_automatically makes it).

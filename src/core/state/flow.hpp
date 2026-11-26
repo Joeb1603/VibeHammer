@@ -175,6 +175,8 @@ struct MoveInProgress {
 // charge move).
 struct ChargeInProgress {
     UnitId unit;
+    // D-097 (M96): a charge resolved by 15.11 Heroic Intervention, in this mode (its roll cap and its charge targets).
+    std::optional<StratagemMode> heroic{};
     friend bool operator==(const ChargeInProgress&, const ChargeInProgress&) = default;
 };
 
@@ -188,6 +190,9 @@ struct FightSequence {
     FightSubStep sub_step = FightSubStep::FightsFirst;
     Side selecting = Side::A;      // the player who selects the next unit to fight
     std::optional<Side> last_pass;  // Appendix: the player who just passed, if the last action was a pass
+    // D-097 (M96): 15.12 Counteroffensive: this unit must be the next unit its player selects to fight (lapses on a pass,
+    // or when it can't be selected).
+    std::optional<UnitId> next_to_fight{};
     friend bool operator==(const FightSequence&, const FightSequence&) = default;
 };
 
@@ -222,6 +227,9 @@ struct FlowState {
     // D-096 (M95): the open reaction window (01.03.02), with the roll it waits on. Omitted from JSON when absent; never
     // set at a decision other than its UseStratagems.
     std::optional<StratagemWindow> window{};
+    // D-097 (M96): 15.08 Fire Overwatch's unit, until it shoots using snap shooting (the SnapShoot decision). Omitted
+    // from JSON when absent.
+    std::optional<UnitId> snap_shooter{};
     friend bool operator==(const FlowState&, const FlowState&) = default;
 };
 

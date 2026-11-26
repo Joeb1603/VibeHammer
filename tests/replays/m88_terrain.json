@@ -497,7 +497,7 @@
     "result": null,
     "stage": "MoveUnits"
   },
-  "format": 3,
+  "format": 4,
   "initial": {
     "scenario": "data/scenarios/incursion_terrain_44x60.json",
     "seed": 80
@@ -1922,6 +1922,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -3513,6 +3519,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {
@@ -5183,6 +5195,12 @@
         "kind": "CommitUnitMove"
       },
       "side": "B"
+    },
+    {
+      "action": {
+        "kind": "DeclineStratagems"
+      },
+      "side": "A"
     },
     {
       "action": {

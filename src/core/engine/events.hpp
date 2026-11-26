@@ -118,6 +118,8 @@ struct ChargeRolled {  // 11.02 Make Charge Roll; the enemy units that can be ch
     UnitId unit;
     TwoD6 roll;
     std::vector<UnitId> eligible_targets;
+    // D-097 (M96): 15.11 Into the Fray changed a result above 6 to this (6), the charge move's maximum distance.
+    std::optional<int> capped{};
     friend bool operator==(const ChargeRolled&, const ChargeRolled&) = default;
 };
 struct ChargeTargetsSelected {  // 11.04 Before Moving
@@ -310,6 +312,7 @@ struct StratagemUsed {
     UnitId unit;
     int cost = 0;
     int cp_left = 0;  // the side's CP after paying
+    std::optional<StratagemMode> mode{};  // D-097: Heroic Intervention's mode
     friend bool operator==(const StratagemUsed&, const StratagemUsed&) = default;
 };
 // D-096 (M95): what a re-rolled roll is now: the roll's own event, rebuilt from its dice after the re-roll.

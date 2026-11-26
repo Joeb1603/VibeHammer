@@ -60,6 +60,9 @@ struct UnitPhaseFlags {
     bool eligible_to_fight_this_phase = false;  // 12.08 Eligible If
     bool selected_for_overrun = false;          // 12.03 Eligible If
     bool forced_to_fight = false;               // 12.08 Engaging Consolidation: became eligible to fight
+    // D-097 (M96): 15.12 Counteroffensive: Fights First (24.13) until the end of the phase (cleared on leaving the End
+    // of Fight phase step). A charge move's Fights First lasts the turn (UnitTurnFlags::fights_first).
+    bool fights_first = false;
     bool consolidated = false;                  // 12.07: one consolidation move per unit
     friend bool operator==(const UnitPhaseFlags&, const UnitPhaseFlags&) = default;
 };

@@ -29,6 +29,17 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::Shoot&
     return out;
 }
 
+std::optional<PendingDecision> snap_shoot_decision(const GameState& state) {
+    const Unit& u = *state.find_unit(state.flow.snap_shooter.value());
+    return PendingDecision{u.side, decision::SnapShoot{u.id}};
+}
+
+// D-097 (M96): 15.08 Fire Overwatch's unit shoots using snap shooting (15.09): its one answer is that unit's snap Shoot
+// (a template, D-016).
+std::vector<GameAction> legal_for(const GameState&, const decision::SnapShoot& d) {
+    return {action::Shoot{d.unit, ShootingType::Snap, {}}};
+}
+
 ValidationResult validate_details(const GameState& state, Side side, const action::Shoot& a) {
     const Unit* u = state.find_unit(a.unit);
     if (u == nullptr) {
@@ -36,6 +47,19 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
     }
     if (u->side != side) {
         return ValidationResult::failure("10.02: " + unit_label(a.unit) + " is not a friendly unit");
+    }
+    if (state.pending && std::holds_alternative<decision::SnapShoot>(state.pending->kind)) {
+        // D-097: 15.08 Fire Overwatch's unit, and only snap shooting (15.09).
+        const UnitId shooter = std::get<decision::SnapShoot>(state.pending->kind).unit;
+        if (a.unit != shooter) {
+            return ValidationResult::failure("15.08: Fire Overwatch's unit is " + unit_label(shooter) + ", not " +
+                                             unit_label(a.unit));
+        }
+        if (a.type != ShootingType::Snap) {
+            return ValidationResult::failure("15.08: Fire Overwatch's unit shoots using snap shooting (15.09)");
+        }
+    } else if (a.type == ShootingType::Snap) {
+        return ValidationResult::failure("15.09: snap shooting is made only as a rule allows it (15.08 Fire Overwatch)");
     }
     if (auto problem = unit_shoot_problem(state, *u)) {
         return ValidationResult::failure(std::move(*problem));
@@ -52,7 +76,8 @@ void apply_details(GameState& state, Side, const action::Shoot& a, DiceSource&, 
     Unit& u = *state.find_unit(a.unit);
     // 04.02: the Select Targets facts are recorded before anything is rolled.
     std::vector<WeaponSelection> selections = make_weapon_selections(state, u, a.type, a.shots);
-    const AttackContext context = shooting_context(state, u);
+    const AttackContext context = shooting_context(state, u, a.type);
+    if (a.type == ShootingType::Snap) state.flow.snap_shooter.reset();  // D-097: Fire Overwatch's unit shoots now
     u.phase_flags.selected_to_shoot = true;  // 10.02 Select Unit
     // D-088 (M88): the unit makes ranged attacks this turn (13.09 Hidden reads it; kept only with terrain).
     if (!state.terrain.empty()) u.ranged_attacks.this_turn = true;

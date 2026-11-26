@@ -53,7 +53,8 @@ namespace wh40k::core {
 [[nodiscard]] bool has_shot_option(const GameState& state, const Unit& unit, ShootingType type);
 
 // 24.16 [HEAVY] and the other attack facts for `unit` shooting now.
-[[nodiscard]] AttackContext shooting_context(const GameState& state, const Unit& unit);
+[[nodiscard]] AttackContext shooting_context(const GameState& state, const Unit& unit,
+                                             ShootingType type = ShootingType::Normal);
 
 // 04.02 Select Targets: turns valid declarations into WeaponSelections, recording the Select Targets
 // facts (24.05, 24.30) and the 10.06 MONSTER/VEHICLE hit roll penalty. Precondition: shot_problems

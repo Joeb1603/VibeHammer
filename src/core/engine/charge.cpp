@@ -48,34 +48,60 @@ std::optional<PendingDecision> charge_decision(const GameState& state) {
     return PendingDecision{u.side, decision::SelectChargeTargets{c.unit}};
 }
 
+// D-097 (M96): the Heroic Intervention mode of the charge in progress, if any.
+std::optional<StratagemMode> heroic_of(const GameState& state) {
+    return state.flow.charge ? state.flow.charge->heroic : std::nullopt;
+}
+
+// D-097: 15.11 Into the Fray: "if the result is greater than 6 (after modifiers), change it to 6". The maximum distance.
+int charge_distance(const GameState& state, int total) {
+    return heroic_of(state) == StratagemMode::IntoTheFray ? std::min(total, 6) : total;
+}
+
+// The roll's event: the eligible targets at its distance, and Into the Fray's change.
+event::ChargeRolled charge_rolled(const GameState& state, const Unit& u, const TwoD6& roll) {
+    const int distance = charge_distance(state, roll.total());
+    return event::ChargeRolled{u.id, roll, eligible_charge_targets(state, u, distance, heroic_of(state)),
+                               distance != roll.total() ? std::optional<int>(distance) : std::nullopt};
+}
+
 // D-095 (M94): 11.02 Make Charge Roll, for the charge in progress: the maximum distance of the charge move. With no
 // charge target within it (11.04 Before Moving), the charge fails at once.
 void make_charge_roll(GameState& state, DiceSource& dice, Events& events) {
     const Unit& u = *state.find_unit(charge_of(state).unit);
     const TwoD6 roll = roll_2d6(dice);
-    events.push_back(event::ChargeRolled{u.id, roll, eligible_charge_targets(state, u, roll.total())});
+    events.push_back(charge_rolled(state, u, roll));
     // D-096: then 15.02's window, if any; the roll stands once it closes.
     after_roll(state, RollKind::Charge, u.id, 0, {roll.dice[0], roll.dice[1]}, {}, events);
 }
 
 event::ChargeRolled charge_roll_result(const GameState& state, UnitId unit, const std::vector<int>& faces) {
-    const TwoD6 roll{{faces.at(0), faces.at(1)}};
-    return event::ChargeRolled{unit, roll, eligible_charge_targets(state, *state.find_unit(unit), roll.total())};
+    return charge_rolled(state, *state.find_unit(unit), TwoD6{{faces.at(0), faces.at(1)}});
 }
 
 // D-096: the charge roll as it stands once its window closes (M94's consequence): the maximum distance of the charge
 // move; with no charge target within it, the charge fails.
 void apply_charge_roll(GameState& state, const std::vector<int>& faces, Events& events) {
     Unit& u = *state.find_unit(charge_of(state).unit);
-    const int total = faces.at(0) + faces.at(1);
+    const int total = charge_distance(state, faces.at(0) + faces.at(1));
     u.phase_flags.charge_roll = total;
-    if (eligible_charge_targets(state, u, total).empty()) {
-        // 11.02 Attempt Charge: no charge move is possible without a charge target (11.04 Before Moving).
-        resolve_charge(state, false,
-                       "11.02: no enemy unit is within 12\" and within the charge roll (" + std::to_string(total) +
-                           "\") of " + unit_label(u.id) + "; the charge fails",
-                       events);
+    const std::optional<StratagemMode> heroic = heroic_of(state);
+    if (!eligible_charge_targets(state, u, total, heroic).empty()) return;
+    // 11.02 Attempt Charge: no charge move is possible without a charge target (11.04 Before Moving). D-097: a heroic
+    // charge's mode narrows the targets (15.11).
+    const std::string roll = "the charge roll (" + std::to_string(total) + "\")";
+    std::string reason;
+    if (heroic == StratagemMode::LeapToDefend) {
+        reason = "15.11: Leap to Defend: no enemy unit that made a charge move this phase is within 12\" and within " +
+                 roll + " of " + unit_label(u.id) + "; the charge fails";
+    } else if (heroic == StratagemMode::IntoTheFray) {
+        reason = "15.11: Into the Fray: no enemy unit is within 6\" and within " + roll + " of " + unit_label(u.id) +
+                 "; the charge fails";
+    } else {
+        reason = "11.02: no enemy unit is within 12\" and within " + roll + " of " + unit_label(u.id) +
+                 "; the charge fails";
     }
+    resolve_charge(state, false, std::move(reason), events);
 }
 
 // ---- 11.02 Charge: declare a charge, or end the step ----
@@ -105,13 +131,17 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
     return ValidationResult::success();
 }
 
-void apply_details(GameState& state, Side, const action::DeclareCharge& a, DiceSource&, Events& events) {
-    Unit& u = *state.find_unit(a.unit);
+void declare_charge(GameState& state, UnitId unit, std::optional<StratagemMode> heroic, Events& events) {
+    Unit& u = *state.find_unit(unit);
     u.phase_flags.declared_charge = true;  // 11.02 Declare Charge
     events.push_back(event::ChargeDeclared{u.id});
     state.flow.activation = Activation{u.id, ActivationKind::Move};  // 01.03: selected to move
-    state.flow.charge = ChargeInProgress{u.id};
+    state.flow.charge = ChargeInProgress{u.id, heroic};
     // D-095 (M94): 11.02 Make Charge Roll waits for the charging unit's player (charge_decision, make_charge_roll).
+}
+
+void apply_details(GameState& state, Side, const action::DeclareCharge& a, DiceSource&, Events& events) {
+    declare_charge(state, a.unit, std::nullopt, events);
 }
 
 ValidationResult validate_details(const GameState&, Side, const action::EndChargeStep&) {
@@ -126,7 +156,7 @@ void apply_details(GameState& state, Side, const action::EndChargeStep&, DiceSou
 
 std::vector<GameAction> legal_for(const GameState& state, const decision::SelectChargeTargets& d) {
     const Unit& u = *state.find_unit(d.unit);
-    const std::vector<UnitId> eligible = eligible_charge_targets(state, u, charge_roll_of(u));
+    const std::vector<UnitId> eligible = eligible_charge_targets(state, u, charge_roll_of(u), heroic_of(state));
     std::vector<GameAction> out;
     for (auto& targets : nonempty_subsets(eligible)) out.push_back(action::StartChargeMove{d.unit, std::move(targets)});
     out.push_back(action::SkipChargeMove{d.unit});
@@ -144,7 +174,8 @@ ValidationResult validate_details(const GameState& state, Side, const action::St
     }
     const Unit& u = *state.find_unit(d.unit);
     const int roll = charge_roll_of(u);
-    const std::vector<UnitId> eligible = eligible_charge_targets(state, u, roll);
+    const std::optional<StratagemMode> heroic = heroic_of(state);
+    const std::vector<UnitId> eligible = eligible_charge_targets(state, u, roll, heroic);
     ValidationResult r;
     for (std::size_t i = 0; i < a.targets.size(); ++i) {
         const UnitId t = a.targets[i];
@@ -152,8 +183,17 @@ ValidationResult validate_details(const GameState& state, Side, const action::St
             a.targets.begin() + static_cast<std::ptrdiff_t>(i)) {
             r.reasons.push_back("11.04: " + unit_label(t) + " is selected as a charge target more than once");
         } else if (std::find(eligible.begin(), eligible.end(), t) == eligible.end()) {
-            r.reasons.push_back("11.04: " + unit_label(t) + " is not an enemy unit within 12\" and within the charge "
-                                "roll (" + std::to_string(roll) + "\") of " + unit_label(d.unit));
+            if (heroic == StratagemMode::LeapToDefend) {
+                r.reasons.push_back("15.11: Leap to Defend: " + unit_label(t) + " is not an enemy unit that made a "
+                                    "charge move this phase, within the charge roll (" + std::to_string(roll) +
+                                    "\") of " + unit_label(d.unit));
+            } else if (heroic == StratagemMode::IntoTheFray) {
+                r.reasons.push_back("15.11: Into the Fray: " + unit_label(t) + " is not an enemy unit within 6\" and "
+                                    "within the charge roll (" + std::to_string(roll) + "\") of " + unit_label(d.unit));
+            } else {
+                r.reasons.push_back("11.04: " + unit_label(t) + " is not an enemy unit within 12\" and within the "
+                                    "charge roll (" + std::to_string(roll) + "\") of " + unit_label(d.unit));
+            }
         }
     }
     return r;

@@ -1,12 +1,16 @@
 // D-096 (M95): reaction windows (01.03.02 Rules Sequencing, app-only) and the stratagems used in them (15): spending
 // CP (15.01), Command Re-roll (15.02, just after a roll) and Insane Bravery (15.04, just before a battle-shock roll).
+// D-097 (M96): windows that follow no roll: at the end of the opponent's Movement phase (15.08 Fire Overwatch) and
+// Charge phase (15.11 Heroic Intervention), and just after an enemy unit has fought (15.12 Counteroffensive).
 //
 // Every roll point rolls its dice, emits its event (as in M94), then calls after_roll: a window opens there if a side
 // can use a stratagem (the roll waits in FlowState::window), otherwise the roll is applied at once. Closing the window
 // applies the roll (apply_roll), with the dice as they stand after any re-roll. Declining changes nothing, so a game in
-// which every window is declined is exactly the M94 game (the closure, D-096 part 6).
+// which every window is declined is exactly the M94 game (the closure, D-096 part 6). The windows that follow no roll
+// open with open_window and change nothing either when declined.
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -14,7 +18,12 @@
 
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
+#include "core/geometry/distance.hpp"
 #include "core/model/keywords.hpp"
+#include "core/rules/charge.hpp"
+#include "core/rules/fight.hpp"
+#include "core/rules/shooting.hpp"
+#include "core/state/queries.hpp"
 
 namespace wh40k::core {
 
@@ -22,7 +31,9 @@ namespace detail {
 
 namespace {
 
-constexpr std::array<Stratagem, 2> kStratagems{Stratagem::CommandReroll, Stratagem::InsaneBravery};
+constexpr std::array<Stratagem, 5> kStratagems{Stratagem::CommandReroll, Stratagem::InsaneBravery,
+                                               Stratagem::FireOverwatch, Stratagem::HeroicIntervention,
+                                               Stratagem::Counteroffensive};
 
 template <typename T>
 bool contains(const std::vector<T>& v, const T& x) {
@@ -39,10 +50,44 @@ const StratagemWindow& window_of(const GameState& state) {
     return *state.flow.window;
 }
 
+// D-007's test (as advance.cpp's): a side with no models on the battlefield has lost.
+bool side_has_models(const GameState& state, Side side) {
+    return std::any_of(state.units.begin(), state.units.end(),
+                       [side](const Unit& u) { return u.side == side && !is_destroyed(u); });
+}
+
+bool is_roll_window(const StratagemWindow& w) {
+    return w.timing == WindowTiming::AfterRoll || w.timing == WindowTiming::BeforeRoll;
+}
+
+bool is_roll_stratagem(Stratagem s) { return s == Stratagem::CommandReroll || s == Stratagem::InsaneBravery; }
+
+RollKind roll_of(const StratagemWindow& w) {
+    if (!w.roll) throw std::logic_error("D-097: this window follows no roll");
+    return *w.roll;
+}
+
+UnitId unit_of(const StratagemWindow& w) {
+    if (!w.unit) throw std::logic_error("D-097: this window is for no unit");
+    return *w.unit;
+}
+
+// D-097: the modes a stratagem is used in (Heroic Intervention's two), or the one "no mode".
+std::vector<std::optional<StratagemMode>> modes_of(Stratagem s) {
+    if (has_modes(s)) return {StratagemMode::LeapToDefend, StratagemMode::IntoTheFray};
+    return {std::nullopt};
+}
+
+std::string named(Stratagem s, std::optional<StratagemMode> mode) {
+    std::string name(stratagem_name(s));
+    if (mode) name += " (" + std::string(stratagem_mode_name(*mode)) + ")";
+    return name;
+}
+
 // 15.02 / 01.05.02: the dice a pick of die `die` re-rolls, as [first, last): a charge roll in full; a characteristic
 // roll made by adding several dice together (a random A or D) whole; any other die alone.
 std::pair<std::size_t, std::size_t> reroll_group(const GameState& state, const StratagemWindow& w, std::size_t die) {
-    switch (w.roll) {
+    switch (roll_of(w)) {
         case RollKind::Charge:
         case RollKind::Damage:  // one attack's D (D-069): its dice are added together
             return {0, w.faces.size()};
@@ -76,15 +121,37 @@ std::vector<std::size_t> pickable_dice(const GameState& state, const StratagemWi
     return out;
 }
 
-// 15.01 and the stratagem's WHEN / TARGET / RESTRICTIONS: why `side` can't use `s` in the window now, or nullopt.
-std::optional<std::string> problem(const GameState& state, Side side, Stratagem s, const StratagemWindow& w) {
+// Each stratagem's WHEN, as its refusal.
+std::string when_text(Stratagem s) {
+    switch (s) {
+        case Stratagem::CommandReroll:
+            return "15.02: Command Re-roll is used just after an advance, charge, damage, hazard, hit, save or wound "
+                   "roll, or a roll for the number of attacks";
+        case Stratagem::InsaneBravery:
+            return "15.04: Insane Bravery is used in the Battle-shock step of your Command phase, just before a "
+                   "battle-shock roll";
+        case Stratagem::FireOverwatch:
+            return "15.08: Fire Overwatch is used at the end of your opponent's Movement phase";
+        case Stratagem::HeroicIntervention:
+            return "15.11: Heroic Intervention is used at the end of your opponent's Charge phase";
+        case Stratagem::Counteroffensive:
+            return "15.12: Counteroffensive is used in the Fight step of your opponent's Fight phase, just after an "
+                   "enemy unit has resolved its attacks";
+    }
+    return "15.01: unknown stratagem";
+}
+
+// M95: a roll window's stratagems (15.02, 15.04), their target the window's unit. The reasons and their order are
+// M95's (tests pin the first reason).
+std::optional<std::string> roll_problem(const GameState& state, Side side, Stratagem s, const StratagemWindow& w) {
     const std::string name(stratagem_name(s));
     const std::string rule(stratagem_rule(s));
     const std::size_t i = side_index(side);
     const StratagemRecord& rec = state.stratagems[i];
-    const Unit* u = state.find_unit(w.unit);
+    const UnitId target = unit_of(w);
+    const Unit* u = state.find_unit(target);
     if (u == nullptr || u->side != side || is_destroyed(*u)) {
-        return rule + ": " + name + " targets " + side_label(side) + "'s own unit (" + unit_label(w.unit) + " is not)";
+        return rule + ": " + name + " targets " + side_label(side) + "'s own unit (" + unit_label(target) + " is not)";
     }
     if (state.command_points[i] < stratagem_cost(s)) {
         return "15.01: " + side_label(side) + " has " + std::to_string(state.command_points[i]) + " CP; " + name +
@@ -96,19 +163,20 @@ std::optional<std::string> problem(const GameState& state, Side side, Stratagem 
     if (once_per_battle(s) && contains(rec.used_this_battle, s)) {
         return rule + ": " + name + " can be used only once per battle, and " + side_label(side) + " has used it";
     }
-    if (contains(rec.targeted_this_phase, w.unit)) {
-        return "15.01: " + unit_label(w.unit) + " has already been targeted by a stratagem of " + side_label(side) +
+    if (contains(rec.targeted_this_phase, target)) {
+        return "15.01: " + unit_label(target) + " has already been targeted by a stratagem of " + side_label(side) +
                " this phase";
     }
     if (u->battle_shocked) {
-        return "01.07: " + unit_label(w.unit) + " is battle-shocked, so its player can't target it with stratagems";
+        return "01.07: " + unit_label(target) + " is battle-shocked, so its player can't target it with stratagems";
     }
     switch (s) {
         case Stratagem::CommandReroll:
             // 15.02 WHEN: just after one of its rolls (never a battle-shock roll).
-            if (w.timing != WindowTiming::AfterRoll || w.roll == RollKind::BattleShock) {
-                return "15.02: Command Re-roll is used just after an advance, charge, damage, hazard, hit, save or "
-                       "wound roll, or a roll for the number of attacks";
+            if (w.timing != WindowTiming::AfterRoll || roll_of(w) == RollKind::BattleShock) return when_text(s);
+            // 15.09 (D-097): snap shooting's hit rolls are never re-rolled.
+            if (roll_of(w) == RollKind::Hit && state.flow.attack && state.flow.attack->context.snap_shooting) {
+                return "15.09: you cannot re-roll hit rolls when snap shooting";
             }
             if (pickable_dice(state, w).empty()) {
                 return "D-011: every die of this roll has already been re-rolled (a die is re-rolled only once)";
@@ -116,19 +184,164 @@ std::optional<std::string> problem(const GameState& state, Side side, Stratagem 
             return std::nullopt;
         case Stratagem::InsaneBravery:
             // 15.04 WHEN: the Battle-shock step of your Command phase, just before a battle-shock roll.
-            if (w.timing != WindowTiming::BeforeRoll || w.roll != RollKind::BattleShock ||
+            if (w.timing != WindowTiming::BeforeRoll || roll_of(w) != RollKind::BattleShock ||
                 state.flow.stage != Stage::BattleShock || side != turn_side(state)) {
-                return "15.04: Insane Bravery is used in the Battle-shock step of your Command phase, just before a "
-                       "battle-shock roll";
+                return when_text(s);
             }
             return std::nullopt;
+        default:
+            return when_text(s);
     }
-    return "15.01: unknown stratagem";
+}
+
+// D-097: the WHEN of the stratagems used at the windows that follow no roll (no unit needed).
+std::optional<std::string> reaction_when(const GameState& state, Side side, Stratagem s, const StratagemWindow& w) {
+    const bool opponents_turn = side != turn_side(state);
+    switch (s) {
+        case Stratagem::FireOverwatch:
+            if (w.timing == WindowTiming::EndOfPhase && state.flow.stage == Stage::EndOfMovementPhase && opponents_turn) {
+                return std::nullopt;
+            }
+            break;
+        case Stratagem::HeroicIntervention:
+            if (w.timing == WindowTiming::EndOfPhase && state.flow.stage == Stage::EndOfChargePhase && opponents_turn) {
+                return std::nullopt;
+            }
+            break;
+        case Stratagem::Counteroffensive:
+            if (w.timing == WindowTiming::AfterAttacks && state.flow.stage == Stage::Fight && opponents_turn && w.unit) {
+                const Unit* fought = state.find_unit(*w.unit);
+                if (fought != nullptr && fought->side != side) return std::nullopt;  // "an enemy unit"
+            }
+            break;
+        default:
+            break;
+    }
+    return when_text(s);
+}
+
+// D-097: 15.08 TARGET (one friendly unengaged unit, excluding TITANIC units) and what the user's ruling adds: it must be
+// able to shoot using snap shooting at something (15.09: one visible eligible enemy unit within 24").
+std::optional<std::string> fire_overwatch_problem(const GameState& state, const Unit& u) {
+    const std::string who = unit_label(u.id);
+    if (is_engaged(state, u)) return "15.08: Fire Overwatch targets an unengaged unit, and " + who + " is engaged";
+    if (has_keyword(u, "TITANIC")) return "15.08: Fire Overwatch can't target a TITANIC unit (" + who + ")";
+    if (auto p = unit_shoot_problem(state, u)) return p;
+    if (!has_shot_option(state, u, ShootingType::Snap)) {
+        return "15.09: " + who + " has no visible, eligible enemy unit within 24\" to snap shoot at (D-097)";
+    }
+    return std::nullopt;
+}
+
+// D-097: 15.11 TARGET (one friendly unengaged unit within 12" of one or more enemy units; a VEHICLE only if it is a
+// CHARACTER/WALKER), 11.02's eligibility to declare a charge (FAQ Q71), and the user's ruling: the mode can select a
+// charge target (Leap to Defend: an enemy unit that made a charge move this phase within 12"; Into the Fray: an enemy
+// unit within 6").
+std::optional<std::string> heroic_intervention_problem(const GameState& state, const Unit& u, StratagemMode mode) {
+    const std::string who = unit_label(u.id);
+    if (has_keyword(u, "VEHICLE") && !has_keyword(u, "CHARACTER") && !has_keyword(u, "WALKER")) {
+        return "15.11: Heroic Intervention can select a VEHICLE unit only if it is a CHARACTER or WALKER unit (" + who +
+               " is not)";
+    }
+    if (auto p = declare_charge_problem(state, u)) return p;  // 11.02: unengaged, within 12", ...
+    const float reach = inches_to_mm(mode == StratagemMode::IntoTheFray ? 6.0f : 12.0f);
+    for (const Unit& enemy : state.units) {
+        if (enemy.side == u.side || is_destroyed(enemy)) continue;
+        if (mode == StratagemMode::LeapToDefend && !enemy.turn_flags.made_charge_move) continue;
+        if (const auto d = unit_distance(u, enemy); d && within(*d, reach)) return std::nullopt;
+    }
+    if (mode == StratagemMode::LeapToDefend) {
+        return "15.11: Leap to Defend: no enemy unit that made a charge move this phase is within 12\" of " + who;
+    }
+    return "15.11: Into the Fray: no enemy unit is within 6\" of " + who;
+}
+
+// D-097: the stratagems used at the windows that follow no roll (15.08, 15.11, 15.12), their target `target` (the
+// player's pick) in `mode`.
+std::optional<std::string> reaction_problem(const GameState& state, Side side, Stratagem s, const StratagemWindow& w,
+                                            UnitId target, std::optional<StratagemMode> mode) {
+    if (auto p = reaction_when(state, side, s, w)) return p;
+    const std::string name = named(s, mode);
+    const std::string rule(stratagem_rule(s));
+    const std::size_t i = side_index(side);
+    const StratagemRecord& rec = state.stratagems[i];
+    const int cost = stratagem_use_cost(s, mode);
+    if (state.command_points[i] < cost) {
+        return "15.01: " + side_label(side) + " has " + std::to_string(state.command_points[i]) + " CP; " + name +
+               " costs " + std::to_string(cost) + "CP";
+    }
+    if (contains(rec.used_this_phase, s)) {
+        return "15.01: " + side_label(side) + " has already used " + std::string(stratagem_name(s)) + " this phase";
+    }
+    const Unit* u = state.find_unit(target);
+    if (u == nullptr || u->side != side || is_destroyed(*u)) {
+        return rule + ": " + std::string(stratagem_name(s)) + " targets one of " + side_label(side) + "'s units (" +
+               unit_label(target) + " is not)";
+    }
+    if (contains(rec.targeted_this_phase, target)) {
+        return "15.01: " + unit_label(target) + " has already been targeted by a stratagem of " + side_label(side) +
+               " this phase";
+    }
+    if (u->battle_shocked) {
+        return "01.07: " + unit_label(target) + " is battle-shocked, so its player can't target it with stratagems";
+    }
+    switch (s) {
+        case Stratagem::FireOverwatch:
+            return fire_overwatch_problem(state, *u);
+        case Stratagem::HeroicIntervention:
+            if (!mode) return std::string("15.11: Heroic Intervention needs its mode: Leap to Defend or Into the Fray");
+            return heroic_intervention_problem(state, *u, *mode);
+        case Stratagem::Counteroffensive:
+            if (!eligible_to_fight(state, *u)) {
+                return "15.12: Counteroffensive targets a unit that is eligible to fight (12.04); " + unit_label(target) +
+                       " is not";
+            }
+            return std::nullopt;
+        default:
+            return when_text(s);
+    }
+}
+
+// 15.01 and the stratagem's WHEN / TARGET / RESTRICTIONS: why `side` can't use `s` in the window now (on `target`, in
+// `mode`), or nullopt. A roll window's target is its unit; the other windows' is the player's pick.
+std::optional<std::string> problem(const GameState& state, Side side, Stratagem s, const StratagemWindow& w,
+                                   std::optional<UnitId> target = std::nullopt,
+                                   std::optional<StratagemMode> mode = std::nullopt) {
+    if (is_roll_stratagem(s) != is_roll_window(w)) return when_text(s);
+    if (is_roll_stratagem(s)) return roll_problem(state, side, s, w);
+    if (!target) return std::string(stratagem_rule(s)) + ": select the friendly unit " + std::string(stratagem_name(s)) +
+                        " targets";
+    return reaction_problem(state, side, s, w, *target, mode);
+}
+
+// D-097: the friendly units `side` can target with `s` in `mode` in the window, in unit order.
+std::vector<UnitId> targets_of(const GameState& state, Side side, Stratagem s, const StratagemWindow& w,
+                               std::optional<StratagemMode> mode) {
+    std::vector<UnitId> out;
+    if (reaction_when(state, side, s, w)) return out;  // cheap: no unit is looked at outside the WHEN
+    if (state.command_points[side_index(side)] < stratagem_use_cost(s, mode)) return out;
+    for (const Unit& u : state.units) {
+        if (u.side == side && !reaction_problem(state, side, s, w, u.id, mode)) out.push_back(u.id);
+    }
+    return out;
 }
 
 bool can_use_any(const GameState& state, Side side, const StratagemWindow& w) {
-    return std::any_of(kStratagems.begin(), kStratagems.end(),
-                       [&](Stratagem s) { return !problem(state, side, s, w); });
+    for (const Stratagem s : kStratagems) {
+        if (is_roll_stratagem(s) != is_roll_window(w)) continue;
+        if (is_roll_stratagem(s)) {
+            if (!roll_problem(state, side, s, w)) return true;
+            continue;
+        }
+        if (reaction_when(state, side, s, w)) continue;
+        for (const std::optional<StratagemMode> mode : modes_of(s)) {
+            if (state.command_points[side_index(side)] < stratagem_use_cost(s, mode)) continue;
+            for (const Unit& u : state.units) {
+                if (u.side == side && !reaction_problem(state, side, s, w, u.id, mode)) return true;
+            }
+        }
+    }
+    return false;
 }
 
 // 01.03.02: the sides with a stratagem to use in `w`, the active player first.
@@ -138,18 +351,19 @@ std::vector<Side> window_sides(const GameState& state, const StratagemWindow& w)
 
 // The roll's consequence, with its dice as they now stand (each roll module's own; M94's code).
 void apply_roll(GameState& state, const StratagemWindow& w, Events& events) {
-    switch (w.roll) {
+    const RollKind roll = roll_of(w);
+    switch (roll) {
         case RollKind::Advance:
-            apply_move_roll(state, w.roll, w.faces);
+            apply_move_roll(state, roll, w.faces);
             return;
         case RollKind::Charge:
             apply_charge_roll(state, w.faces, events);
             return;
         case RollKind::Hazard:
             if (state.flow.attack) {
-                apply_attack_roll(state, w.roll, w.batch, w.faces, events);  // [HAZARDOUS] (24.15)
+                apply_attack_roll(state, roll, w.batch, w.faces, events);  // [HAZARDOUS] (24.15)
             } else {
-                apply_move_roll(state, w.roll, w.faces);  // Desperate Escape (09.07)
+                apply_move_roll(state, roll, w.faces);  // Desperate Escape (09.07)
             }
             return;
         case RollKind::RandomAttacks:
@@ -157,29 +371,30 @@ void apply_roll(GameState& state, const StratagemWindow& w, Events& events) {
         case RollKind::Wound:
         case RollKind::Save:
         case RollKind::Damage:
-            apply_attack_roll(state, w.roll, w.batch, w.faces, events);
+            apply_attack_roll(state, roll, w.batch, w.faces, events);
             return;
         case RollKind::BattleShock:
             break;
     }
-    throw std::logic_error("D-096: a " + std::string(roll_kind_name(w.roll)) + " roll has no window after it");
+    throw std::logic_error("D-096: a " + std::string(roll_kind_name(roll)) + " roll has no window after it");
 }
 
 // The roll's event, rebuilt from its dice (after a re-roll).
 event::RerolledRoll rerolled_result(const GameState& state, const StratagemWindow& w) {
-    switch (w.roll) {
+    const UnitId unit = unit_of(w);
+    switch (roll_of(w)) {
         case RollKind::Advance:
-            return event::AdvanceRolled{w.unit, w.faces.at(0), false};
+            return event::AdvanceRolled{unit, w.faces.at(0), false};
         case RollKind::Charge:
-            return charge_roll_result(state, w.unit, w.faces);
+            return charge_roll_result(state, unit, w.faces);
         case RollKind::Hazard:
-            return event::HazardRollsMade{w.unit, judge_hazard_rolls(*state.find_unit(w.unit), w.faces)};
+            return event::HazardRollsMade{unit, judge_hazard_rolls(*state.find_unit(unit), w.faces)};
         case RollKind::RandomAttacks:
         case RollKind::Hit:
         case RollKind::Wound:
         case RollKind::Save:
         case RollKind::Damage:
-            return attack_roll_result(state, w.roll, w.batch, w.faces);
+            return attack_roll_result(state, roll_of(w), w.batch, w.faces);
         case RollKind::BattleShock:
             break;
     }
@@ -187,16 +402,24 @@ event::RerolledRoll rerolled_result(const GameState& state, const StratagemWindo
 }
 
 // Closes the window: an AfterRoll window applies its roll; a BeforeRoll window offers the next battle-shock test's
-// window when Insane Bravery has taken the test (otherwise the test's RollDice follows).
+// window when Insane Bravery has taken the test (otherwise the test's RollDice follows). D-097: a window that follows
+// no roll has nothing to apply.
 void close_window(GameState& state, Events& events) {
     const StratagemWindow w = std::move(window_of(state));  // moved out: the window is gone from the state now
     state.flow.window.reset();
-    if (w.timing == WindowTiming::AfterRoll) {
-        apply_roll(state, w, events);
-        return;
+    switch (w.timing) {
+        case WindowTiming::AfterRoll:
+            apply_roll(state, w, events);
+            return;
+        case WindowTiming::BeforeRoll: {
+            const std::vector<UnitId>& owed = state.flow.battle_shock_tests;
+            if (!owed.empty() && owed.front() != unit_of(w)) offer_battle_shock_window(state);
+            return;
+        }
+        case WindowTiming::EndOfPhase:
+        case WindowTiming::AfterAttacks:
+            return;
     }
-    const std::vector<UnitId>& owed = state.flow.battle_shock_tests;
-    if (!owed.empty() && owed.front() != w.unit) offer_battle_shock_window(state);
 }
 
 // After an answer: the side keeps the window while it still has a stratagem to use there; then the next side with one
@@ -218,8 +441,18 @@ void command_reroll(GameState& state, std::optional<std::size_t> die, DiceSource
         w.faces[k] = dice.roll_d6();
         w.rerolled.insert(std::upper_bound(w.rerolled.begin(), w.rerolled.end(), k), k);
     }
-    event::DiceRerolled e{w.roll, w.unit, die, before, w.faces, rerolled_result(state, w)};
+    event::DiceRerolled e{roll_of(w), unit_of(w), die, before, w.faces, rerolled_result(state, w)};
     events.push_back(std::move(e));
+}
+
+// 15.12 EFFECT: Fights First until the end of the phase, and the next unit its player selects to fight. Used in the
+// Resolve Remaining Combats step, play returns to Resolve Fights First Combats at once (D-097, the user's ruling).
+void counteroffensive(GameState& state, UnitId unit) {
+    state.find_unit(unit)->phase_flags.fights_first = true;
+    if (!state.flow.fight_sequence) return;
+    FightSequence& seq = *state.flow.fight_sequence;
+    seq.next_to_fight = unit;
+    if (seq.sub_step == FightSubStep::Remaining) seq.sub_step = FightSubStep::FightsFirst;
 }
 
 }  // namespace
@@ -246,6 +479,14 @@ void offer_battle_shock_window(GameState& state) {
     if (!w.sides.empty()) state.flow.window = std::move(w);
 }
 
+void open_window(GameState& state, WindowTiming timing, std::optional<UnitId> unit) {
+    // D-007 comes first: no window once the battle is over, or when a side has no models left (the game then ends).
+    if (state.result || !side_has_models(state, Side::A) || !side_has_models(state, Side::B)) return;
+    StratagemWindow w{timing, std::nullopt, unit, 0, {}, {}, {}};
+    w.sides = window_sides(state, w);
+    if (!w.sides.empty()) state.flow.window = std::move(w);
+}
+
 std::optional<PendingDecision> window_decision(const GameState& state) {
     if (!state.flow.window) return std::nullopt;
     const StratagemWindow& w = *state.flow.window;
@@ -265,11 +506,23 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::UseStr
     std::vector<GameAction> out{action::DeclineStratagems{}};  // D-096: the decline first (the rules are optional)
     const Side side = w.sides.front();
     for (const Stratagem s : kStratagems) {
-        if (problem(state, side, s, w)) continue;
-        if (s == Stratagem::CommandReroll && w.roll != RollKind::Charge) {
-            for (const std::size_t die : pickable_dice(state, w)) out.push_back(action::UseStratagem{s, w.unit, die});
-        } else {
-            out.push_back(action::UseStratagem{s, w.unit, std::nullopt});
+        if (is_roll_stratagem(s) != is_roll_window(w)) continue;
+        if (is_roll_stratagem(s)) {
+            if (roll_problem(state, side, s, w)) continue;
+            if (s == Stratagem::CommandReroll && roll_of(w) != RollKind::Charge) {
+                for (const std::size_t die : pickable_dice(state, w)) {
+                    out.push_back(action::UseStratagem{s, unit_of(w), die});
+                }
+            } else {
+                out.push_back(action::UseStratagem{s, unit_of(w), std::nullopt});
+            }
+            continue;
+        }
+        // D-097: by stratagem, by mode, by friendly unit.
+        for (const std::optional<StratagemMode> mode : modes_of(s)) {
+            for (const UnitId u : targets_of(state, side, s, w, mode)) {
+                out.push_back(action::UseStratagem{s, u, std::nullopt, mode});
+            }
         }
     }
     return out;
@@ -278,13 +531,25 @@ std::vector<GameAction> legal_for(const GameState& state, const decision::UseStr
 ValidationResult validate_details(const GameState& state, Side side, const action::UseStratagem& a) {
     const StratagemWindow& w = window_of(state);
     const std::string name(stratagem_name(a.stratagem));
-    if (a.unit != w.unit) {
-        return ValidationResult::failure("15.01: this window is for " + unit_label(w.unit) + "'s roll, not " +
+    const std::string rule(stratagem_rule(a.stratagem));
+    if (a.mode && !has_modes(a.stratagem)) return ValidationResult::failure(rule + ": " + name + " has no modes");
+    if (!is_roll_window(w)) {
+        // D-097: a window that follows no roll: the player picks the target, and Heroic Intervention its mode.
+        if (a.die) return ValidationResult::failure(rule + ": " + name + " picks no die");
+        if (has_modes(a.stratagem) && !a.mode) {
+            return ValidationResult::failure("15.11: select Heroic Intervention's mode (Leap to Defend or Into the "
+                                             "Fray) before the charge roll");
+        }
+        if (auto p = problem(state, side, a.stratagem, w, a.unit, a.mode)) return ValidationResult::failure(std::move(*p));
+        return ValidationResult::success();
+    }
+    if (a.unit != unit_of(w)) {
+        return ValidationResult::failure("15.01: this window is for " + unit_label(unit_of(w)) + "'s roll, not " +
                                          unit_label(a.unit) + "'s");
     }
     if (auto p = problem(state, side, a.stratagem, w)) return ValidationResult::failure(std::move(*p));
     if (a.stratagem == Stratagem::CommandReroll) {
-        if (w.roll == RollKind::Charge) {
+        if (roll_of(w) == RollKind::Charge) {
             if (a.die) return ValidationResult::failure("15.02: a charge roll is re-rolled in full; no die is picked");
             return ValidationResult::success();
         }
@@ -302,7 +567,7 @@ ValidationResult validate_details(const GameState& state, Side side, const actio
         }
         return ValidationResult::success();
     }
-    if (a.die) return ValidationResult::failure(std::string(stratagem_rule(a.stratagem)) + ": " + name + " picks no die");
+    if (a.die) return ValidationResult::failure(rule + ": " + name + " picks no die");
     return ValidationResult::success();
 }
 
@@ -311,21 +576,34 @@ ValidationResult validate_details(const GameState&, Side, const action::DeclineS
 }
 
 void apply_details(GameState& state, Side side, const action::UseStratagem& a, DiceSource& dice, Events& events) {
-    // 15.01: 1. select the target (the window's unit); 2. pay the CP; 3. resolve the effect.
+    // 15.01: 1. select the target; 2. pay the CP; 3. resolve the effect.
     const std::size_t i = side_index(side);
     StratagemRecord& rec = state.stratagems[i];
-    const int cost = stratagem_cost(a.stratagem);
+    const int cost = stratagem_use_cost(a.stratagem, a.mode);
     state.command_points[i] -= cost;
     rec.used_this_phase.push_back(a.stratagem);
     rec.targeted_this_phase.push_back(a.unit);
     if (once_per_battle(a.stratagem)) rec.used_this_battle.push_back(a.stratagem);
-    events.push_back(event::StratagemUsed{side, a.stratagem, a.unit, cost, state.command_points[i]});
+    events.push_back(event::StratagemUsed{side, a.stratagem, a.unit, cost, state.command_points[i], a.mode});
     switch (a.stratagem) {
         case Stratagem::CommandReroll:
             command_reroll(state, a.die, dice, events);
             break;
         case Stratagem::InsaneBravery:
             pass_battle_shock_automatically(state, a.unit, events);
+            break;
+        case Stratagem::FireOverwatch:
+            // 15.08 EFFECT: the unit shoots using snap shooting (the SnapShoot decision follows).
+            close_window(state, events);
+            state.flow.snap_shooter = a.unit;
+            return;
+        case Stratagem::HeroicIntervention:
+            // 15.11 EFFECT: resolve a charge (11.02) in the mode chosen before the charge roll.
+            close_window(state, events);
+            declare_charge(state, a.unit, a.mode, events);
+            return;
+        case Stratagem::Counteroffensive:
+            counteroffensive(state, a.unit);
             break;
     }
     continue_window(state, false, events);
@@ -351,25 +629,40 @@ std::optional<WindowInfo> window_info(const GameState& state) {
     info.side = state.pending->side;
     info.command_points = state.command_points[side_index(info.side)];
     info.faces = w.faces;
+    if (!detail::is_roll_window(w)) {
+        // D-097: one option per stratagem and mode with a target, its use cost, and the units it can target.
+        for (const Stratagem s : detail::kStratagems) {
+            if (detail::is_roll_stratagem(s)) continue;
+            for (const std::optional<StratagemMode> mode : detail::modes_of(s)) {
+                std::vector<UnitId> targets = detail::targets_of(state, info.side, s, w, mode);
+                if (targets.empty()) continue;
+                info.options.push_back(StratagemOption{s, detail::named(s, mode), std::string(stratagem_rule(s)),
+                                                       stratagem_use_cost(s, mode), mode, std::move(targets)});
+            }
+        }
+        return info;
+    }
     for (const Stratagem s : detail::kStratagems) {
-        if (!detail::problem(state, info.side, s, w)) {
+        if (detail::is_roll_stratagem(s) && !detail::roll_problem(state, info.side, s, w)) {
             info.options.push_back(StratagemOption{s, std::string(stratagem_name(s)), std::string(stratagem_rule(s)),
                                                    stratagem_cost(s)});
         }
     }
+    const RollKind roll = detail::roll_of(w);
     info.pickable.assign(w.faces.size(), false);
-    if (w.roll != RollKind::Charge) {
+    if (roll != RollKind::Charge) {
         for (const std::size_t die : detail::pickable_dice(state, w)) {
             const auto [first, last] = detail::reroll_group(state, w, die);
             for (std::size_t k = first; k < last; ++k) info.pickable[k] = true;
         }
     }
-    info.whole_roll = w.roll == RollKind::Charge;
+    info.whole_roll = roll == RollKind::Charge;
     if (w.timing == WindowTiming::AfterRoll) info.result = detail::window_roll_result(state);
     if (w.timing == WindowTiming::BeforeRoll) {
         // The unit's player makes the roll (08.03: the active player's units).
-        const Unit* u = state.find_unit(w.unit);
-        info.next_roll = detail::describe_roll(state, decision::RollDice{w.roll, w.unit}, u != nullptr ? u->side : info.side);
+        const Unit* u = state.find_unit(detail::unit_of(w));
+        info.next_roll =
+            detail::describe_roll(state, decision::RollDice{roll, detail::unit_of(w)}, u != nullptr ? u->side : info.side);
     }
     return info;
 }
