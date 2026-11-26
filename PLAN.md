@@ -215,7 +215,9 @@ D-100.
 - *The bots:*
   - at the defaults, the identity set (2,600 games) is the M97 binary's in every field;
   - the head-to-heads: `crushing_impact` -8 (196-204; M97 -10) and both keys -2 (199-201; M97 -4), every run clean.
-    Both keys stay off.
+    Both keys stay off;
+  - the pricing changed 130 of the 200 games where the variant plays the Tyranids, the side with MONSTERs, but won only
+    one more of them. It changed none where it plays the Chaos Space Marines. p95 is unchanged (14.4-14.6 ms).
 - *Tests:* the full `ctest` passes, 1,693 of 1,693. M97's check that the board left the selection to the bar now checks
   the board's mode.
 
