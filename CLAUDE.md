@@ -16,7 +16,8 @@ of its roller's (D-095): the engine stops at each, a human presses Roll on its c
 makes the rest, and saves and replays record each roll as a step (format 2). M95 added reaction windows and the first
 stratagems (D-096): a side that can use a stratagem there is asked just after one of its rolls (Command Re-roll, 15.02)
 or just before a battle-shock roll (Insane Bravery, 15.04), spending CP (15.01); a random D is rolled per attack, and
-saves and replays record each answer (format 3). The bot plays them behind two keys.
+saves and replays record each answer (format 3). The bot plays Command Re-roll by default (it measured better) and
+Insane Bravery behind a key, off.
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay

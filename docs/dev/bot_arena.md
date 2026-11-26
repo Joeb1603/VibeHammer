@@ -28,6 +28,7 @@ Bot strength is measured with the Release arena: `cmake --build --preset release
   (0 or 1, default 0: measured +8 games in 400, not better): 13.11.01 in the move score's guess of the enemy's reply.
   M95 (D-096) adds `command_reroll` and `insane_bravery` (0 or 1 each): the bot plays Command Re-roll (15.02) and
   Insane Bravery (15.04). With both 0 its session declines every reaction window for it, so it never sees one.
+  `command_reroll` defaults to 1 (measured +44 games in 400), `insane_bravery` to 0 (+8, not better).
 - For custom battles instead of `--scenario` (M72, M74): `--army-a <file>` / `--army-b <file>` (army lists),
   `--random-armies 1` (a random legal army per side, drawn from each game's seed), `--first A|B` and `--deploy auto|hand`
   (hand: the bots set the units up in the deployment step).
@@ -108,9 +109,15 @@ M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps to
 
 M95 (D-096) adds a step for each reaction window the session declines for a bot whose stratagem keys are off (at the
 defaults, every window), and rolls a random D per attack, so `steps` and `actions` change again and nothing else may.
-The proof: all thirteen runs, 200 games each (2,600 games), are identical to the M94 binary in every field but `steps`
-and `actions` (every `state` and `trace` the same; no game has fewer steps). The M95 binary is the reference for every
-run. The M91, M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps too).
+The proof: all thirteen runs, 200 games each (2,600 games), with both stratagem keys off are identical to the M94
+binary in every field but `steps` and `actions` (every `state` and `trace` the same; no game has fewer steps). The
+M91, M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps too).
+
+M95's head-to-head (D-092's procedure on the terrain scenario, 400 games per variant against the bot playing no
+stratagem) gave Command Re-roll +44 (222-178), Insane Bravery +8 (204-196) and both +46 (223-177). So Command Re-roll
+is on by default and the default bot's games change on purpose: the M95 binary at the defaults is the reference for
+every run, and `--weights command_reroll=0` plays the identity runs above. The older bots' pins and the bot-game
+replays play without stratagems (`tests/ai/bot_configs.hpp`).
 
 ## Deployment and the summary
 

@@ -109,5 +109,7 @@ On Windows the same two tests are `build/default/tests/Debug/wh40k_tests.exe` an
   - Side B re-rolls a damage roll of 1 and a charge roll that had no target, which then reaches its target.
 
   `D095_Closure.EverySavedReplayPlaysTheSamePacedAndInline` checks it paced only: inline play declines every window,
-  so a game that uses a stratagem has no inline twin. The M94 and M95 `DISABLED_DumpReplayEvents` dumps, with
+  so a game that uses a stratagem has no inline twin. The bot plays Command Re-roll by default since M95 (D-096). The
+  bot-game generators (m46, m68, m73, m77, m87, m88, m89, m91) play the bot without stratagems
+  (`tests/ai/bot_configs.hpp`), so their files and `TheSavedFileMatchesTheGame` checks stayed as they were. The M94 and M95 `DISABLED_DumpReplayEvents` dumps, with
   `WH40K_EVENT_DUMP_WITHOUT=DamageRolled`, are byte-identical for all 29 older replays.

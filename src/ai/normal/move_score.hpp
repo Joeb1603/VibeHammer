@@ -147,8 +147,10 @@ struct MoveWeights {
     // rule (D-092) it is off and the bot plays as at M92.
     double gone_to_ground = 0.0;
     // M95 (D-096): the stratagems the bot plays (normal/stratagems.hpp), 0 or 1 each. With both at 0 its sessions decline
-    // every window for it (BotConfig::plays_stratagems), so it plays exactly as at M94.
-    double command_reroll = 0.0;  // 15.02 Command Re-roll
+    // every window for it (BotConfig::plays_stratagems), so it plays exactly as at M94. Measured head-to-head (D-092's
+    // procedure, 400 games against the bot playing none): Command Re-roll +44 games, so it is on by default; Insane
+    // Bravery +8 (under one standard deviation), off.
+    double command_reroll = 1.0;  // 15.02 Command Re-roll
     double insane_bravery = 0.0;  // 15.04 Insane Bravery
 };
 

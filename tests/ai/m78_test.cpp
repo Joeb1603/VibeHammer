@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "bot_configs.hpp"
 #include "arena.hpp"
 #include "bot.hpp"
 #include "core/data/scenario_loader.hpp"
@@ -252,7 +253,9 @@ TEST(M78_Arena, StatisticsDoNotChangeThePerGameLine) {
     // random D is rolled per attack, so the steps (92 at M94) and the actions hash (89961737f9584da7) changed again; the
     // state and the trace did not.
     const GameState s = scenario("bot_20_termagants.json");
-    const PerGameReport r = run_per_game(s, 1, 1, normal_bot(), normal_bot());
+    // M95 (D-096): the bot as it was (Command Re-roll on by default since M95 changes the game on purpose).
+    const PerGameReport r =
+        run_per_game(s, 1, 1, wh40k::test::without_stratagems(), wh40k::test::without_stratagems());
     EXPECT_EQ(first_line(r.text),
               "game 1: finished 1 winner A round 2 steps 110 surviving 5/0 wounds lost 1/20 coherency 0/0 fight steps "
               "2/3 fight moves 2/3 rejected 0 reverted 0 fallbacks 0 actions b799e9c856084482 state d55512b94297d01b "
