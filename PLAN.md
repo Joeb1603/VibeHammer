@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M98 are done. Their full text (prompts, acceptance checks, results and open
+V1 (M0–M13) and the post-V1 milestones M14–M99 are done. Their full text (prompts, acceptance checks, results and open
 items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it. Still open from
 M97 and M98: the manual mouse checks on Windows (M94–M98), Explosives' CP against a later Command Re-roll, the
 thresholds, and Explosives in the Start and End of Shooting phase steps.
@@ -141,6 +141,7 @@ Open items still carried are listed under "Later" below.
 | M96 | Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive (open items) |
 | M97 | Explosives and Crushing Impact (open items) |
 | M98 | M97's open items: the selection on the board, Crushing Impact in the charge planning (open items) |
+| M99 | [ANTI-X Y+], [DEVASTATING WOUNDS], [MELTA X] and [LANCE] (open items, one for the user) |
 
 ---
 
@@ -160,80 +161,73 @@ unit core abilities, then the rule sections 16 to 23.
 
 ---
 
-## M99: [ANTI-X Y+], [DEVASTATING WOUNDS], [MELTA X] and [LANCE] (D-101) ✅ (done; the manual mouse checks open)
+## M100: [LETHAL HITS], [PSYCHIC], [CLEAVE X], [ONE SHOT] and the keyword-conditioned abilities (D-102) ✅ (done; the manual mouse checks open)
 
-**Effort:** high (one rule area, the attack sequence, with a new step for mortal wounds). **Plan mode:** no (the batch
-above).
-**Scope:** the weapon abilities that act on the wound roll, on critical wounds and on the weapon's D. They are on about
-390 weapon profiles of the pinned BSData catalogues, and they free every roster weapon still refused except the Balefire
-tome ([PSYCHIC]).
+**Effort:** high (one rule area; a model's weapon gains state). **Plan mode:** no (the batch above).
+**Scope:** the weapon abilities left after M99 that need no new shooting type and no CHARACTER group. In the pinned
+BSData catalogues: Psychic 59 profiles, Lethal Hits 44, the conditioned forms 10, One Shot 7, Cleave 4. It frees the
+Balefire tome, the last roster weapon still refused.
 
-Left out (they stay refused, D-071): [LETHAL HITS], [PSYCHIC], [CLEAVE], [ONE SHOT], [PRECISION], [INDIRECT FIRE], the
-keyword-conditioned forms (24.01), a random X and a random A on a melee weapon.
+Left out (they stay refused, D-071): [PRECISION] and [INDIRECT FIRE] (M101), a random X ("[SUSTAINED HITS D3]", 17
+profiles) and a random A on a melee weapon (3 of 655 melee profiles).
 
-**Rules:** 24.03, 24.10, 24.21, 24.25, with 05.02, 06.02, 24.01, 24.02 and the app's 02.05.01 (keywords), 06.02.01.
-Decisions: D-006, D-011, D-013, D-026, D-051, D-069, D-071, D-079, D-096, D-101.
+**Rules:** 24.23, 24.29, 24.06, 24.26, 24.01, with 05.01, 05.02, 04.02, 13.08 and the app's 01.05.01 (automatic wounds),
+02.02.02 (ignoring modifiers), 24.26.01. Decisions: D-006, D-011, D-021, D-026, D-071, D-073, D-089, D-101, D-102.
 
-**Design** (D-101 has the full text)
-- *[ANTI-X Y+]:* the attack profile holds the unmodified wound roll that is a critical wound (6, or Y against a target
-  unit with the keyword). It is set when the batches are gathered.
-- *[DEVASTATING WOUNDS]:* a batch's critical wounds make no save roll. After the batch's normal damage (05.04), each
-  inflicts the weapon's D as mortal wounds on one model (06.02 selects it; the rest is lost):
-  - the target's player gives a casualty order for them (`OrderCasualties`, rule 06.02);
-  - a random D is one Damage roll per critical wound, by the attacker, after the order (as D-096).
-- *[MELTA X]:* +X to the profile's D when the target was within half range at Select Targets.
-- *[LANCE]:* +1 to the wound roll when the unit made a charge move this turn (the attack context reads the flag).
-- *Bots:* the odds read the threshold from core's wound rolls and count a devastating critical wound as an attack that
-  always gets past the save; the hypothetical volleys read [MELTA] and [ANTI].
-- *Client:* labels, help and effect lines for the four; the mortal wounds are picked on the board like any casualties.
+**Design** (D-102 has the full text)
+- *[LETHAL HITS]:* a critical hit wounds automatically. No wound roll is made for it, and it is never a critical wound.
+  The engine takes the automatic wound without asking; a profile that also has [DEVASTATING WOUNDS] (where the choice
+  matters) is refused until the choice is built. No profile in the catalogues has both.
+- *[PSYCHIC]:* the modifiers that worsen the attack's BS or its hit roll are not recorded for it (cover, 10.06's and
+  17.03's -1); [HEAVY]'s +1 stays.
+- *[CLEAVE X]:* X dice per five models in the target, when the weapon's attacks are not split.
+- *[ONE SHOT]:* a model's own weapon is spent when its unit's attacks start with it selected; its [ONE SHOT] profiles
+  are then refused and offered nowhere.
+- *24.01:* [LETHAL HITS], [SUSTAINED HITS X] and [DEVASTATING WOUNDS] can carry keywords. They are applied when the
+  batches are gathered, against the target unit's keywords.
+- *Bots:* the odds mix the lethal critical hits in; the hypothetical volleys leave out a spent weapon and the penalties
+  a psychic weapon ignores.
+- *Client:* labels, help and effect lines; the wound roll's card and log line name the automatic wounds.
 
 **Acceptance**
-- [x] **[ANTI]:** a wound roll of Y+ is a critical wound against a unit with the keyword, and only there; slashes and
-  "non-X"; the lowest Y of several instances. `R24_03_Anti`.
-- [x] **[DEVASTATING WOUNDS]:**
-  - no save roll for a critical wound;
-  - the normal damage first, then the mortal wounds, each critical wound on one model with the excess lost;
-  - lost when the normal damage destroys the unit;
-  - a random D rolled per critical wound, paced and inline alike;
-  - the casualty preview, and the state's JSON round trip in the middle of it. `R24_10_DevastatingWounds`.
-- [x] **[MELTA]:** +X within half range, not beyond; separate batches. `R24_25_Melta`.
-- [x] **[LANCE]:** +1 to wound for the charging unit only. `R24_21_Lance`.
-- [x] **The roster weapons** with these abilities can be selected and picked in the builder; the refusal tests keep
-  their cases on stand-in data. `D101_Roster`, `D079_*`, `M75_*`.
-- [x] **Bots:** the exact odds within 2% of 20,000 engine batches; games with the new weapons clean; the identity set
-  identical to the M98 binary. `M99_Odds`, `M99_Games`, `M40_ExpectedDamage`.
-- [x] **Client:** `M99_*` client tests.
-- [x] **A replay:** `tests/replays/m99_critical_wounds.json`; the older replays byte for byte.
-- [x] **Full `ctest`** green (one test fixed after the full run, see Results).
+- [x] **[LETHAL HITS]:** wound rolls only for the other hits, with [SUSTAINED HITS] and [TWIN-LINKED], paced and inline;
+  refused with [DEVASTATING WOUNDS]. `R24_23_LethalHits`.
+- [x] **24.01:** the three abilities parse with keywords and apply only against a unit that has them.
+  `R24_01_ConditionedAbilities`.
+- [x] **[PSYCHIC]:** no cover and no -1, [HEAVY] kept. `R24_29_Psychic`.
+- [x] **[CLEAVE]:** the dice for one target, none for split attacks. `R24_06_Cleave`.
+- [x] **[ONE SHOT]:** once per battle, ranged and melee, each model's own weapon. `R24_26_OneShot`.
+- [x] **No roster weapon is refused any more.** `D102_Roster`, `D079_*`.
+- [x] **Bots:** the exact odds within 2% of 20,000 engine batches; the tome fired when in range; clean games; the
+  identity set identical to the M99 binary. `M100_*` bot tests.
+- [x] **Client:** `M100_*` client tests.
+- [x] **A replay:** `tests/replays/m100_weapon_abilities.json`; the older replays byte for byte.
+- [x] **Full `ctest`** green.
 
-**Results** (D-101 part 10 has them)
-- *Rules:* the four abilities play through the engine with scripted dice, paced and inline alike
-  (`tests/m99_critical_wounds_test.cpp`). The 25 older tests that asserted these weapons were refused were
-  brought to the new truth; the tests of the refusal itself run on stand-in data (D-101 part 8).
-- *The replay:* `tests/replays/m99_critical_wounds.json` (seed 7) shows a Combi-weapon critical wound on a 4, its mortal
-  wound with no save, and the Meltagun's D6+2. The 32 older replay files are byte for byte.
+**Results** (D-102 part 7 has them)
+- *Rules:* the abilities play through the engine with scripted dice, paced and inline alike
+  (`tests/m100_weapon_abilities_test.cpp`). The older tests that used [LETHAL HITS] as "an ability the engine refuses"
+  use the stand-in ability; three that asserted old text were brought to the new truth.
+- *The replay:* `tests/replays/m100_weapon_abilities.json` (seed 1). The 33 older replay files are byte for byte.
+- *The client:* labels, help and effect lines for the four abilities and the conditioned forms; the wound roll's card
+  and log line name the automatic wounds.
+- *Tests:* the full `ctest` passes, 1,761 of 1,761.
 - *The bots:*
-  - the exact odds of [DEVASTATING WOUNDS] and [ANTI] profiles are within 2% of 20,000 engine batches;
-  - **the identity set:** the nine runs with fixed loadouts (V1, both bot scenarios, Strike, the rosters, the objective
-    scenario, the terrain scenario with `--first A` and `--first B`, the M73 lists), 200 games each, are identical to the
-    M98 binary in every field (1,800 of 1,800 games): no shipped loadout has one of the freed weapons;
-  - the four `--random-armies` runs change on purpose (the armies draw the freed weapons) and are clean: 800 of 800
-    games finished with no rejected action, reverted move or fallback. The M99 binary is their reference.
-- *The client:* the mortal wounds are picked on the board like any casualties (an xvfb screenshot of the first pick);
-  the M99 replay opens in the viewer.
-- *Tests:* the full `ctest` (1,781 tests listed) passed but for `D076_Json.AnOldFileLoadsAndSavesTheSame`, whose list of the
-  replays that embed a custom battle needed the new one; with it added the test passes (run on its own).
+  - the exact odds of [LETHAL HITS] (alone, with [SUSTAINED HITS] and with [TWIN-LINKED]) are within 2% of 20,000 engine
+    batches; the bot fires the Balefire tome when it is in range;
+  - **the identity set:** the nine runs with fixed loadouts, 200 games each, are identical to the M99 binary in every
+    field (1,800 of 1,800 games);
+  - the four `--random-armies` runs change on purpose (the Legionary with the Balefire tome can be drawn) and are clean:
+    800 of 800 games finished with no rejected action, reverted move or fallback. The M100 binary is their reference.
 
 **Open items.**
-- **For the user:** the bound of `M77_BotDeploy.MeleeUnitsStandNearerTheEnemyThanTheirProposal` (30%, the user's choice
-  at M90) is still asserted on the armies it was chosen for. On today's random armies the share is 56 of 187 (29.9%).
-  Whether the bound moves to today's draws is the user's call (D-101 part 9).
-- **For the user:** D-101's own decisions (one model per critical wound, the casualty order before the damage rolls, the
-  lowest Y and the highest X of duplicated abilities, singular and plural keywords alike).
-- The manual checks by mouse on Windows: a [DEVASTATING WOUNDS] attack (both casualty picks, the damage roll's card), and
-  the open ones of M94-M98.
-- The bot does not price [LANCE] in a planned charge's fight (no datasheet in `data/units/` has it).
-- 24.28.01 (the mortal wounds of a [PRECISION] attack go to the selected CHARACTER group) waits for [PRECISION].
+- **For the user:** D-102's own decisions (the automatic wound taken without a question and the refusal of [LETHAL
+  HITS] with [DEVASTATING WOUNDS]; a psychic attack ignoring every penalty; a [ONE SHOT] weapon spent when selected; no
+  condition on abilities that act before the hit roll).
+- The choice of 24.23 as a decision, when abilities grant [LETHAL HITS] (the roadmap's Phase 4).
+- A random X, and a random A on a melee weapon (20 profiles in the catalogues).
+- The bot fires a [ONE SHOT] weapon as soon as it is worth firing.
+- The manual checks by mouse on Windows, as before.
 
 ---
 

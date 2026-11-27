@@ -25,7 +25,7 @@ pinned data version. Legends, Crusade and the like are out for now (the user, 20
 |---|---|---|
 | Core rules 01–14 | 67 of the 156 numbered rules have tests: the turn sequence, the attack sequence, moves, charges, fights, 2D terrain, objectives | 10.07 Indirect Shooting; the z axis (13.06, 13.11, 22.05); 14.03 securing |
 | Core rules 15–23 | 15.01, 15.02, 15.04 (M95), 15.08, 15.09, 15.11, 15.12 (M96), 15.05, 15.06 (M97), 17.01 and 17.03 | The other three core stratagems (15.03 Epic Challenge, 15.07 Rapid Ingress, 15.10 Smokescreen: each waits for its rule system or keyword), actions, FRAME, transports, attached units, reserves, flying, surging, auras, psychic, aircraft |
-| Core abilities (24) | 15 weapon abilities and random A/D (M99: Anti, Devastating Wounds, Melta, Lance) | 22 of the 37 entries: see Phase 1 |
+| Core abilities (24) | 19 weapon abilities and random A/D (M99: Anti, Devastating Wounds, Melta, Lance; M100: Lethal Hits, Psychic, Cleave, One Shot) | 18 of the 37 entries: see Phase 1 |
 | Missions | One house mission (D-084), scored from the scenario file | The real mission pack: 25 primaries, 18 secondaries, force dispositions, layouts |
 | Armies | 11 datasheets, 2 factions in custom battles, Incursion only | About 28 faction lists, 256 detachments, well over a thousand datasheets |
 | Unit, faction and detachment rules | Loaded and shown as text; none implemented | The largest part of the whole roadmap: Phase 4 |
@@ -85,8 +85,9 @@ what unlocks the most datasheets.
 **Weapon abilities (24)**: Lethal Hits, Devastating Wounds, Anti, Melta, Lance, Precision, Cleave,
 Close-Quarters, Indirect Fire with 10.07, One Shot, Psychic, random A on melee weapons. After this no weapon profile
 is refused. *M99 (D-101) did Anti, Devastating Wounds, Melta and Lance; Close-Quarters has been in since M8 (24.07,
-with [PISTOL]). Still to do: Lethal Hits, Psychic, Cleave, One Shot, Precision, Indirect Fire with 10.07, the
-keyword-conditioned forms (24.01), a random X, and random A on melee weapons.*
+with [PISTOL]). M100 (D-102) did Lethal Hits, Psychic, Cleave, One Shot and the keyword-conditioned forms (24.01).
+Still to do: Precision, Indirect Fire with 10.07, a random X, random A on melee weapons, and the choice of 24.23 with
+[DEVASTATING WOUNDS].*
 
 **Unit core abilities (24)**: Feel No Pain, Deadly Demise, Fights First, Stealth, Lone Operative, Scouts and the
 Scout move, Infiltrators, Deep Strike, Leader, Support, Firing Deck, Hover, Super-Heavy Walker. Duplicated
