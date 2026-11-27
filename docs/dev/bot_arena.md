@@ -135,6 +135,9 @@ M100 (D-102) implements [LETHAL HITS], [PSYCHIC], [CLEAVE X], [ONE SHOT] and the
 frees the Balefire tome. The nine fixed runs are identical to the M99 binary in every field (1,800 of 1,800 games); the
 four random-armies runs change on purpose and are clean (800 of 800). The M100 binary is their reference.
 
+M101 (D-103) implements [INDIRECT FIRE] with Indirect Shooting and [PRECISION]. No datasheet in `data/units/` has
+either, so all thirteen runs are identical to the M100 binary in every field (2,600 of 2,600 games).
+
 M95's head-to-head (D-092's procedure on the terrain scenario, 400 games per variant against the bot playing no
 stratagem) gave Command Re-roll +44 (222-178), Insane Bravery +8 (204-196) and both +46 (223-177). So Command Re-roll
 is on by default and the default bot's games change on purpose: the M95 binary at the defaults is the reference for

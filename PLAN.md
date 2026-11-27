@@ -34,7 +34,7 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M99 are done. Their full text (prompts, acceptance checks, results and open
+V1 (M0–M13) and the post-V1 milestones M14–M100 are done. Their full text (prompts, acceptance checks, results and open
 items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it. Still open from
 M97 and M98: the manual mouse checks on Windows (M94–M98), Explosives' CP against a later Command Re-roll, the
 thresholds, and Explosives in the Start and End of Shooting phase steps.
@@ -142,6 +142,7 @@ Open items still carried are listed under "Later" below.
 | M97 | Explosives and Crushing Impact (open items) |
 | M98 | M97's open items: the selection on the board, Crushing Impact in the charge planning (open items) |
 | M99 | [ANTI-X Y+], [DEVASTATING WOUNDS], [MELTA X] and [LANCE] (open items, one for the user) |
+| M100 | [LETHAL HITS], [PSYCHIC], [CLEAVE X], [ONE SHOT] and the keyword-conditioned abilities (open items) |
 
 ---
 
@@ -161,73 +162,62 @@ unit core abilities, then the rule sections 16 to 23.
 
 ---
 
-## M100: [LETHAL HITS], [PSYCHIC], [CLEAVE X], [ONE SHOT] and the keyword-conditioned abilities (D-102) ✅ (done; the manual mouse checks open)
+## M101: [INDIRECT FIRE] with Indirect Shooting, and [PRECISION] (D-103) ✅ (done; the manual mouse checks open)
 
-**Effort:** high (one rule area; a model's weapon gains state). **Plan mode:** no (the batch above).
-**Scope:** the weapon abilities left after M99 that need no new shooting type and no CHARACTER group. In the pinned
-BSData catalogues: Psychic 59 profiles, Lethal Hits 44, the conditioned forms 10, One Shot 7, Cleave 4. It frees the
-Balefire tome, the last roster weapon still refused.
+**Effort:** high (a fifth shooting type; a new decision in the attack sequence). **Plan mode:** no (the batch above).
+**Scope:** the last two weapon abilities of the roadmap's Phase 1 list. In the pinned BSData catalogues: Precision 78
+profiles, Indirect Fire 25. None is on the datasheets in `data/units/`, so shipped play does not change.
 
-Left out (they stay refused, D-071): [PRECISION] and [INDIRECT FIRE] (M101), a random X ("[SUSTAINED HITS D3]", 17
-profiles) and a random A on a melee weapon (3 of 655 melee profiles).
+Left out: a random X ("[SUSTAINED HITS D3]"), a random A on a melee weapon, the choice of 24.23 with [DEVASTATING
+WOUNDS] (D-102), and Lone Operative's limit on [INDIRECT FIRE] (24.24, with that ability).
 
-**Rules:** 24.23, 24.29, 24.06, 24.26, 24.01, with 05.01, 05.02, 04.02, 13.08 and the app's 01.05.01 (automatic wounds),
-02.02.02 (ignoring modifiers), 24.26.01. Decisions: D-006, D-011, D-021, D-026, D-071, D-073, D-089, D-101, D-102.
+**Rules:** 24.19, 10.07, 24.28, with 05.01, 05.03, 05.04.01, 06.01, 09.04, 13.08, 15.02 and the app's 24.28.01 and
+24.37.01. Decisions: D-006, D-011, D-071, D-088, D-089, D-096, D-101, D-102, D-103.
 
-**Design** (D-102 has the full text)
-- *[LETHAL HITS]:* a critical hit wounds automatically. No wound roll is made for it, and it is never a critical wound.
-  The engine takes the automatic wound without asking; a profile that also has [DEVASTATING WOUNDS] (where the choice
-  matters) is refused until the choice is built. No profile in the catalogues has both.
-- *[PSYCHIC]:* the modifiers that worsen the attack's BS or its hit roll are not recorded for it (cover, 10.06's and
-  17.03's -1); [HEAVY]'s +1 stays.
-- *[CLEAVE X]:* X dice per five models in the target, when the weapon's attacks are not split.
-- *[ONE SHOT]:* a model's own weapon is spent when its unit's attacks start with it selected; its [ONE SHOT] profiles
-  are then refused and offered nowhere.
-- *24.01:* [LETHAL HITS], [SUSTAINED HITS X] and [DEVASTATING WOUNDS] can carry keywords. They are applied when the
-  batches are gathered, against the target unit's keywords.
-- *Bots:* the odds mix the lethal critical hits in; the hypothetical volleys leave out a spent weapon and the penalties
-  a psychic weapon ignores.
-- *Client:* labels, help and effect lines; the wound roll's card and log line name the automatic wounds.
+**Design** (D-103 has the full text)
+- *Indirect Shooting:* `ShootingType::Indirect`, offered beside Normal shooting to an unengaged unit that did not advance
+  and has an [INDIRECT FIRE] weapon. For those weapons the visibility test is skipped. Each of their selections records
+  the benefit of cover (not with [IGNORES COVER] or [PSYCHIC]) and the unmodified hit rolls that fail: 1-5, or 1-3 when
+  the unit remained stationary this turn and a friendly unit sees the target. Their hit rolls can't be re-rolled
+  (Command Re-roll is refused).
+- *"Remained stationary this turn"* is a new turn flag, recorded only for a unit with an [INDIRECT FIRE] weapon, so every
+  other state serializes as before.
+- *[PRECISION]:* a `SelectPrecisionGroup` decision of the attacking unit's player at the start of the Allocation Order
+  step: one answer per CHARACTER model of the target that an attacking model can see, and none. The selected group is
+  the current allocation group until it is destroyed; with [DEVASTATING WOUNDS] the mortal wounds go to it first.
+- *Bots:* the Indirect type is one more shooting type in the bot's options, with the hit rule in its odds; it selects
+  the visible CHARACTER with the fewest wounds left.
+- *Client:* labels, help, effect lines, the shooting type's help; the Precision decision is a row of buttons.
 
 **Acceptance**
-- [x] **[LETHAL HITS]:** wound rolls only for the other hits, with [SUSTAINED HITS] and [TWIN-LINKED], paced and inline;
-  refused with [DEVASTATING WOUNDS]. `R24_23_LethalHits`.
-- [x] **24.01:** the three abilities parse with keywords and apply only against a unit that has them.
-  `R24_01_ConditionedAbilities`.
-- [x] **[PSYCHIC]:** no cover and no -1, [HEAVY] kept. `R24_29_Psychic`.
-- [x] **[CLEAVE]:** the dice for one target, none for split attacks. `R24_06_Cleave`.
-- [x] **[ONE SHOT]:** once per battle, ranged and melee, each model's own weapon. `R24_26_OneShot`.
-- [x] **No roster weapon is refused any more.** `D102_Roster`, `D079_*`.
-- [x] **Bots:** the exact odds within 2% of 20,000 engine batches; the tome fired when in range; clean games; the
-  identity set identical to the M99 binary. `M100_*` bot tests.
-- [x] **Client:** `M100_*` client tests.
-- [x] **A replay:** `tests/replays/m100_weapon_abilities.json`; the older replays byte for byte.
+- [x] **Indirect Shooting:** eligibility; a target that can't be seen; cover; 1-5 and 1-3; no re-roll of the hit rolls;
+  the other weapons as in normal shooting. `R10_07_IndirectShooting`, `R24_19_IndirectFire`.
+- [x] **[PRECISION]:** asked before the order is declared, only for visible CHARACTER models, only when there is
+  something to select; the selected group first; none; with [DEVASTATING WOUNDS]. `R24_28_Precision`.
+- [x] **Serialization:** every new field omitted when unset; the new decision, action, event and shooting type round
+  trip. `D103_Serialization`.
+- [x] **Bots:** the Precision answer; clean games with the stand-in weapons; all thirteen arena runs identical to the
+  M100 binary. `M101_*` bot tests.
+- [x] **Client:** `M101_*` client tests.
+- [x] **A replay:** `tests/replays/m101_indirect_precision.json`; the older replays byte for byte.
 - [x] **Full `ctest`** green.
 
-**Results** (D-102 part 7 has them)
-- *Rules:* the abilities play through the engine with scripted dice, paced and inline alike
-  (`tests/m100_weapon_abilities_test.cpp`). The older tests that used [LETHAL HITS] as "an ability the engine refuses"
-  use the stand-in ability; three that asserted old text were brought to the new truth.
-- *The replay:* `tests/replays/m100_weapon_abilities.json` (seed 1). The 33 older replay files are byte for byte.
-- *The client:* labels, help and effect lines for the four abilities and the conditioned forms; the wound roll's card
-  and log line name the automatic wounds.
-- *Tests:* the full `ctest` passes, 1,761 of 1,761.
-- *The bots:*
-  - the exact odds of [LETHAL HITS] (alone, with [SUSTAINED HITS] and with [TWIN-LINKED]) are within 2% of 20,000 engine
-    batches; the bot fires the Balefire tome when it is in range;
-  - **the identity set:** the nine runs with fixed loadouts, 200 games each, are identical to the M99 binary in every
-    field (1,800 of 1,800 games);
-  - the four `--random-armies` runs change on purpose (the Legionary with the Balefire tome can be drawn) and are clean:
-    800 of 800 games finished with no rejected action, reverted move or fallback. The M100 binary is their reference.
+**Results** (D-103 part 4 has them)
+- *Rules:* `tests/m101_indirect_precision_test.cpp`, paced and inline; the older every-kind lists gained the new
+  decision, action, event and abilities.
+- *The replay:* `tests/replays/m101_indirect_precision.json` (seed 1). The 34 older replay files are byte for byte.
+- *The bots:* the Precision answer and clean games with the stand-in weapons; **all thirteen arena runs** (the nine fixed
+  ones and the four random-armies ones), 200 games each, are identical to the M100 binary in every field (2,600 of
+  2,600 games): no datasheet in `data/units/` has either ability.
+- *Tests:* the full `ctest` passes, 1,786 of 1,786.
 
 **Open items.**
-- **For the user:** D-102's own decisions (the automatic wound taken without a question and the refusal of [LETHAL
-  HITS] with [DEVASTATING WOUNDS]; a psychic attack ignoring every penalty; a [ONE SHOT] weapon spent when selected; no
-  condition on abilities that act before the hit roll).
-- The choice of 24.23 as a decision, when abilities grant [LETHAL HITS] (the roadmap's Phase 4).
-- A random X, and a random A on a melee weapon (20 profiles in the catalogues).
-- The bot fires a [ONE SHOT] weapon as soon as it is worth firing.
-- The manual checks by mouse on Windows, as before.
+- **For the user:** D-103's own decisions (the flag for "remained stationary" kept only where a rule reads it; [PRECISION]
+  against a CHARACTER unit of several models until attached units exist; no selection when every wound is a devastating
+  critical wound; a [TORRENT] profile with either ability refused).
+- The bot rarely chooses indirect shooting: it moves to see its target instead. It does not weigh the two.
+- Lone Operative (24.24) limits [INDIRECT FIRE]; it comes with that ability.
+- The manual checks by mouse on Windows, as before: here the Precision buttons and the Indirect shot editor.
 
 ---
 
