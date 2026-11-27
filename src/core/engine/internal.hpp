@@ -186,6 +186,7 @@ void start_attacks(GameState& state, UnitId attacker, const AttackContext& conte
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::OrderCasualties& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RerollWoundRolls& d);
 [[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::RetargetAttacks& d);
+[[nodiscard]] std::vector<GameAction> legal_for(const GameState& state, const decision::SelectPrecisionGroup& d);
 
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::SelectAttackBatch& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
@@ -193,6 +194,8 @@ void start_attacks(GameState& state, UnitId attacker, const AttackContext& conte
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::OrderCasualties& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::RerollWoundRolls& a);
 [[nodiscard]] ValidationResult validate_details(const GameState& state, Side side, const action::RetargetAttacks& a);
+[[nodiscard]] ValidationResult validate_details(const GameState& state, Side side,
+                                                const action::SelectPrecisionGroup& a);
 
 void apply_details(GameState& state, Side side, const action::SelectAttackBatch& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::DeclareAllocationOrder& a, DiceSource& dice,
@@ -200,6 +203,8 @@ void apply_details(GameState& state, Side side, const action::DeclareAllocationO
 void apply_details(GameState& state, Side side, const action::OrderCasualties& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::RerollWoundRolls& a, DiceSource& dice, Events& events);
 void apply_details(GameState& state, Side side, const action::RetargetAttacks& a, DiceSource& dice, Events& events);
+void apply_details(GameState& state, Side side, const action::SelectPrecisionGroup& a, DiceSource& dice,
+                   Events& events);
 
 // ---- deployment.cpp: D-081 deployment by hand (03.02) ----
 

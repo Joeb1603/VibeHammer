@@ -75,6 +75,8 @@ bool answers(const DecisionKind& d, const GameAction& a) {
                 return std::holds_alternative<decision::UseStratagems>(d);  // D-096
             else if constexpr (std::is_same_v<T, action::SelectModelAndEnemy>)
                 return std::holds_alternative<decision::SelectModelAndEnemy>(d);  // D-099
+            else if constexpr (std::is_same_v<T, action::SelectPrecisionGroup>)
+                return std::holds_alternative<decision::SelectPrecisionGroup>(d);  // D-103
             else static_assert(sizeof(T) == 0, "unhandled action");
         },
         a);

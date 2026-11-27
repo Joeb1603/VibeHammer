@@ -61,6 +61,9 @@ struct WeaponSelection {
     // D-089 (M88): 13.08 the target has the benefit of cover against this model's attacks (decided here, at Select
     // Targets): the attacks' BS is worsened by 1 (attacks.cpp). Omitted from JSON when false.
     bool benefit_of_cover = false;
+    // M101 (D-103): 10.07: the highest unmodified hit roll that fails whatever the BS: 1 (05.01), or 5 or 3 for an
+    // [INDIRECT FIRE] weapon in indirect shooting (decided at Select Targets). Omitted from JSON when 1.
+    int hit_fails_to = 1;
     friend bool operator==(const WeaponSelection&, const WeaponSelection&) = default;
 };
 
@@ -94,6 +97,10 @@ struct AttackProfile {
     // M99 (D-101): 24.03 [ANTI-X Y+]: an unmodified wound roll of this or more is a critical wound (05.02: 6; lower
     // against a target unit with the weapon's keyword X). Omitted from JSON when 6.
     int critical_wound_on = 6;
+    // M101 (D-103): 10.07: an unmodified hit roll of this or less fails (05.01: 1; indirect shooting: 5 or 3). A value
+    // above 1 marks the attacks of an [INDIRECT FIRE] weapon in indirect shooting, whose hit rolls can't be re-rolled.
+    // Omitted from JSON when 1.
+    int unmodified_hit_fails_to = 1;
     friend bool operator==(const AttackProfile&, const AttackProfile&) = default;
 };
 

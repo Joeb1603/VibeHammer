@@ -229,6 +229,14 @@ struct DevastatingWoundsInflicted {
     DevastatingWoundsResult result;
     friend bool operator==(const DevastatingWoundsInflicted&, const DevastatingWoundsInflicted&) = default;
 };
+// M101 (D-103): 24.28 [PRECISION]: at the start of the Allocation Order step the attacking unit's player selected the
+// allocation group of this CHARACTER model of the target as the current one, or none.
+struct PrecisionGroupSelected {
+    UnitId attacker;
+    UnitId target;
+    std::optional<ModelId> character;
+    friend bool operator==(const PrecisionGroupSelected&, const PrecisionGroupSelected&) = default;
+};
 struct ModelDestroyed {  // Rules Appendix: Destroyed
     UnitId unit;
     ModelId model;
@@ -386,7 +394,8 @@ using GameEvent =
                  event::UnitSetUp, event::UnitNotSetUp, event::ObjectiveControlChanged,
                  event::VictoryPointsScored, event::AttacksRetargeted, event::DamageRolled,
                  event::StratagemUsed, event::DiceRerolled, event::BattleShockPassedAutomatically,
-                 event::ModelAndEnemySelected, event::StratagemDiceRolled, event::DevastatingWoundsInflicted>;
+                 event::ModelAndEnemySelected, event::StratagemDiceRolled, event::DevastatingWoundsInflicted,
+                 event::PrecisionGroupSelected>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

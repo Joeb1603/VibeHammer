@@ -95,6 +95,16 @@ struct Cleave {  // 24.06 [CLEAVE X] (M100, D-102): +X attack dice per five mode
 struct OneShot {  // 24.26 (M100, D-102): the weapon can be selected to make attacks with once per battle
     friend bool operator==(const OneShot&, const OneShot&) = default;
 };
+// 24.19 [INDIRECT FIRE] (M101, D-103): the unit can shoot using indirect shooting (10.07), where the weapon can target
+// units that are not visible to the attacking model.
+struct IndirectFire {
+    friend bool operator==(const IndirectFire&, const IndirectFire&) = default;
+};
+// 24.28 [PRECISION] (M101, D-103): at the start of the Allocation Order step the attacker can select a visible
+// CHARACTER model's allocation group as the current one.
+struct Precision {
+    friend bool operator==(const Precision&, const Precision&) = default;
+};
 // Anything not recognised. Loaded and displayed; a profile with one can't be selected (D-071).
 struct Unknown {
     std::string text;
@@ -107,7 +117,7 @@ using WeaponAbility =
                  ability::Blast, ability::TwinLinked, ability::Torrent, ability::Hazardous,
                  ability::DevastatingWounds, ability::SustainedHits, ability::ExtraAttacks, ability::IgnoresCover,
                  ability::Unknown, ability::Anti, ability::Melta, ability::Lance, ability::LethalHits,
-                 ability::Psychic, ability::Cleave, ability::OneShot>;
+                 ability::Psychic, ability::Cleave, ability::OneShot, ability::IndirectFire, ability::Precision>;
 // New alternatives are appended after Unknown: the bots' state_hash hashes the variant's index, so the older ones keep
 // theirs.
 

@@ -65,7 +65,8 @@ TEST(Serialization, EveryWeaponAbilityRoundTrips) {
         ability::Anti{{"infantry", "beasts"}, 4, true}, ability::Melta{2}, ability::Lance{},  // M99 (24.03, 24.25, 24.21)
         // M100 (24.23, 24.29, 24.06, 24.26), one with a keyword condition (24.01)
         ability::LethalHits{ability::TargetCondition{{"monster", "vehicle"}, true}}, ability::Psychic{},
-        ability::Cleave{2}, ability::OneShot{}};
+        ability::Cleave{2}, ability::OneShot{},
+        ability::IndirectFire{}, ability::Precision{}};  // M101 (24.19, 24.28)
     // Guard: the list above covers every alternative of the variant.
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const auto& a : all) {

@@ -173,6 +173,12 @@ struct RerollWoundRolls {
     std::vector<std::size_t> indices;
     friend bool operator==(const RerollWoundRolls&, const RerollWoundRolls&) = default;
 };
+// 24.28 [PRECISION] (M101, D-103): select the allocation group of this CHARACTER model of the target as the current
+// one for the batch's attacks; nullopt: select none. Never a template.
+struct SelectPrecisionGroup {
+    std::optional<ModelId> character;
+    friend bool operator==(const SelectPrecisionGroup&, const SelectPrecisionGroup&) = default;
+};
 // 03.02 / D-081 (M74): set up this unit, every one of its models placed exactly once (any order). An empty `models`
 // is the template legal_actions returns (D-004); legal_actions also gives the unit's proposal (propose_set_up) filled.
 struct DeployUnit {
@@ -236,7 +242,8 @@ using GameAction = std::variant<action::StartMove, action::ProposeModelMove, act
                                 action::SelectAttackBatch, action::DeclareAllocationOrder,
                                 action::OrderCasualties, action::RerollWoundRolls, action::DeployUnit,
                                 action::CannotSetUp, action::RetargetAttacks, action::RollDice,
-                                action::UseStratagem, action::DeclineStratagems, action::SelectModelAndEnemy>;
+                                action::UseStratagem, action::DeclineStratagems, action::SelectModelAndEnemy,
+                                action::SelectPrecisionGroup>;
 
 [[nodiscard]] std::string_view action_name(const GameAction& a);  // also the JSON "kind"
 [[nodiscard]] std::string_view action_rule(const GameAction& a);  // e.g. "09.02"

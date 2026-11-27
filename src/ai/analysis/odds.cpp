@@ -92,6 +92,7 @@ bool allowed_for_type(const core::Unit& unit, const core::Model& model, const co
         case core::ShootingType::Assault: return p.has<core::ability::Assault>();
         case core::ShootingType::CloseQuarters: return is_close_quarters(p) || core::is_monster_or_vehicle(unit, model);
         case core::ShootingType::Snap: return true;  // 15.09: an unengaged unit shoots as 04 describes (D-097)
+        case core::ShootingType::Indirect: return true;  // 10.07 (M101): every ranged weapon, as Normal shooting
     }
     return false;
 }
@@ -220,7 +221,8 @@ const HitWoundOdds& OddsCache::hit_wound(const core::AttackProfile& profile, int
     const HitWoundKey key{opt_or(profile.skill), profile.torrent,         profile.strength, profile.hit_modifier,
                           profile.wound_modifier,  toughness, core::sustained_hits(profile),
                           core::twin_linked(profile), profile.snap_shooting, profile.critical_wound_on,
-                          core::devastating_wounds(profile), core::lethal_hits(profile)};
+                          core::devastating_wounds(profile), core::lethal_hits(profile),
+                          profile.unmodified_hit_fails_to};
     auto it = hit_wound_.find(key);
     if (it == hit_wound_.end()) {
         ++computed_;

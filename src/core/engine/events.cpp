@@ -72,6 +72,7 @@ constexpr NameRule name_rule() {
     else if constexpr (std::is_same_v<T, event::ModelAndEnemySelected>) return {"ModelAndEnemySelected", "15.05"};
     else if constexpr (std::is_same_v<T, event::StratagemDiceRolled>) return {"StratagemDiceRolled", "15.05"};
     else if constexpr (std::is_same_v<T, event::DevastatingWoundsInflicted>) return {"DevastatingWoundsInflicted", "24.10"};
+    else if constexpr (std::is_same_v<T, event::PrecisionGroupSelected>) return {"PrecisionGroupSelected", "24.28"};
     else static_assert(sizeof(T) == 0, "unhandled event");
 }
 

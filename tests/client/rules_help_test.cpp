@@ -61,7 +61,8 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
                                          ability::Anti{{"infantry"}, 4, false}, ability::Melta{2}, ability::Lance{},
                                          // M100 (24.23, 24.29, 24.06, 24.26)
                                          ability::LethalHits{}, ability::Psychic{}, ability::Cleave{1},
-                                         ability::OneShot{}};
+                                         ability::OneShot{},
+                                         ability::IndirectFire{}, ability::Precision{}};  // M101 (24.19, 24.28)
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const WeaponAbility& a : all) expect_readable(weapon_ability_help(a));
     EXPECT_TRUE(weapon_ability_help(ability::Heavy{}).in_this_game);

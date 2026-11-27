@@ -295,11 +295,37 @@ std::optional<PolicyResult> reroll_failed_wound_rolls(const GameState& gs) {
                         {}};
 }
 
+std::optional<PolicyResult> select_precision_group(const GameState& gs, const std::vector<GameAction>& legal) {
+    if (!gs.pending || !std::holds_alternative<core::decision::SelectPrecisionGroup>(gs.pending->kind)) {
+        return std::nullopt;
+    }
+    std::optional<core::action::SelectPrecisionGroup> best;
+    int best_wounds = 0;
+    for (const GameAction& a : legal) {
+        const auto* pick = std::get_if<core::action::SelectPrecisionGroup>(&a);
+        if (pick == nullptr || !pick->character) continue;
+        const core::Model* m = core::find_model(gs, *pick->character);
+        if (m == nullptr) continue;
+        if (!best || m->wounds_remaining < best_wounds) {
+            best = *pick;
+            best_wounds = m->wounds_remaining;
+        }
+    }
+    if (!best) return std::nullopt;
+    return PolicyResult{*best,
+                        "Select model " + std::to_string(best->character->v) + " for the [PRECISION] attacks (" +
+                            std::to_string(best_wounds) + " wound" + (best_wounds == 1 ? "" : "s") + " left, 24.28)",
+                        {}};
+}
+
 PolicyResult default_answer(const GameState& gs, core::Side side, const std::vector<GameAction>& legal,
                             std::uint64_t seed) {
     using namespace core;
     const client::DecisionView view = client::make_decision_view(legal);
     const DecisionKind& kind = gs.pending->kind;
+    if (std::holds_alternative<decision::SelectPrecisionGroup>(kind)) {
+        if (auto r = select_precision_group(gs, legal)) return std::move(*r);  // 24.28 (M101, D-103)
+    }
     if (std::holds_alternative<decision::RerollWoundRolls>(kind)) {
         // 24.38 (M61, D-072): every failed wound roll is re-rolled and no other (no critical-wound effect is in the
         // game, so a re-rolled success can only fail).

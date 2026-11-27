@@ -675,7 +675,7 @@ TEST(D071_UnknownAbilities, AnUnknownAbilityIsNeverOfferedForShootingAndDeclarin
                                   "implement yet; weapons with it can't be selected"))
         << reasons.front();
     // With every ranged profile refused, no Shoot template is listed (D-016).
-    for (Model& m : gs.units[0].models) m.weapons[1].profiles[0].abilities.push_back(ability::Unknown{"Precision"});
+    for (Model& m : gs.units[0].models) m.weapons[1].profiles[0].abilities.push_back(ability::Unknown{"Harpooned"});
     for (const GameAction& a : legal_actions(gs, Side::A)) EXPECT_FALSE(std::holds_alternative<action::Shoot>(a));
 }
 

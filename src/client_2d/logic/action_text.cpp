@@ -11,6 +11,7 @@
 #include "core/rules/move_types.hpp"
 #include "core/rules/shooting_types.hpp"
 #include "core/state/deployment.hpp"
+#include "core/state/queries.hpp"
 #include "move_plan.hpp"
 #include "unit_style.hpp"
 
@@ -203,6 +204,15 @@ std::string action_label(const core::GameState& state, const core::GameAction& a
                     }
                 }
                 return s + " at " + unit_name(state, x.enemy);
+            } else if constexpr (std::is_same_v<T, a::SelectPrecisionGroup>) {
+                // 24.28 (M101, D-103): "Precision: model 12 (3 wounds left)" / "No Precision target".
+                if (!x.character) return "No Precision target";
+                std::string s = "Precision: model " + std::to_string(x.character->v);
+                if (const core::Model* m = core::find_model(state, *x.character)) {
+                    s += " (" + std::to_string(m->wounds_remaining) + (m->wounds_remaining == 1 ? " wound" : " wounds") +
+                         " left)";
+                }
+                return s;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled action");
             }

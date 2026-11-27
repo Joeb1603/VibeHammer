@@ -125,6 +125,13 @@ struct RerollWoundRolls {
     UnitId attacker;
     friend bool operator==(const RerollWoundRolls&, const RerollWoundRolls&) = default;
 };
+// 24.28 [PRECISION] (M101, D-103): at the start of the Allocation Order step (05.03) the attacking unit's player can
+// select the allocation group of a CHARACTER model of the target that one of the attacking models can see, or none.
+struct SelectPrecisionGroup {
+    UnitId attacker;
+    UnitId target;
+    friend bool operator==(const SelectPrecisionGroup&, const SelectPrecisionGroup&) = default;
+};
 // 03.02 / D-081 (M74): set up one of your units (a deployment by hand, the sides alternating). The deciding side is
 // the one that sets up next (side_to_deploy, core/state/deployment.hpp); it may be the opposing player (01.03).
 struct DeployUnits {
@@ -178,7 +185,8 @@ using DecisionKind = std::variant<decision::MoveUnits, decision::MoveModels, dec
                                   decision::SelectAttackBatch, decision::DeclareAllocationOrder,
                                   decision::OrderCasualties, decision::RerollWoundRolls, decision::DeployUnits,
                                   decision::RetargetAttacks, decision::RollDice, decision::UseStratagems,
-                                  decision::SnapShoot, decision::SelectModelAndEnemy>;
+                                  decision::SnapShoot, decision::SelectModelAndEnemy,
+                                  decision::SelectPrecisionGroup>;
 
 struct PendingDecision {
     Side side = Side::A;  // the player who must act (not necessarily the active player, 01.03)

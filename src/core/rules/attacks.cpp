@@ -36,7 +36,9 @@ bool is_attack_time_ability(const WeaponAbility& a) {
                      std::is_same_v<T, ability::Anti> || std::is_same_v<T, ability::Melta> ||
                      std::is_same_v<T, ability::Lance> ||
                      // M100 (D-102): [CLEAVE] is gathered dice, [ONE SHOT] is used up when the weapon is selected.
-                     std::is_same_v<T, ability::Cleave> || std::is_same_v<T, ability::OneShot>);
+                     std::is_same_v<T, ability::Cleave> || std::is_same_v<T, ability::OneShot> ||
+                     // M101 (D-103): [INDIRECT FIRE] is the shooting type and the facts of the selection.
+                     std::is_same_v<T, ability::IndirectFire>);
         },
         a);
 }
@@ -130,7 +132,13 @@ std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& we
         return "24.23: '" + weapon.name + "' has both [LETHAL HITS] and [DEVASTATING WOUNDS]; the choice between an "
                "automatic wound and a wound roll is not implemented yet (D-102), so it can't be selected";
     }
-    // D-071: an ability the engine does not recognise ([PRECISION], [INDIRECT FIRE], ...) is refused, rather than
+    // App 24.37.01 (M101, D-103): "[TORRENT] weapons cannot have [INDIRECT FIRE] or [PRECISION]": such a profile is
+    // malformed data, refused rather than resolved.
+    if (weapon.has<ability::Torrent>() && (weapon.has<ability::IndirectFire>() || weapon.has<ability::Precision>())) {
+        return "24.37: '" + weapon.name + "' is a [TORRENT] weapon with [INDIRECT FIRE] or [PRECISION], which a "
+               "[TORRENT] weapon cannot have (D-103); it can't be selected";
+    }
+    // D-071: an ability the engine does not recognise (a random X, a made-up name, ...) is refused, rather than
     // ignored.
     if (const auto* unknown = weapon.get<ability::Unknown>()) {
         return "D-071: '" + weapon.name + "' has [" + upper_ascii(unknown->text) +
@@ -199,6 +207,7 @@ AttackProfile selection_attack_profile(const WeaponProfile& weapon, const Weapon
     AttackProfile profile = make_attack_profile(weapon, context);
     // (24.29, D-102: a [PSYCHIC] weapon's selection records no -1 and no cover, make_weapon_selections.)
     profile.hit_modifier += selection.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
+    profile.unmodified_hit_fails_to = selection.hit_fails_to;  // 10.07 (M101, D-103)
     // 13.08 (D-089): worsen the BS characteristic of the attack by 1 (3+ becomes 4+). The characteristic, not the
     // hit roll, so D-011's cap doesn't apply; [TORRENT] has no BS. Part of the profile, so D-006 keeps attacks with
     // and without cover in separate batches.
@@ -388,6 +397,10 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
             if (!split) e.extra_attack_dice = cleave->x * (selection.target_models_at_selection / 5);  // 24.06
         } else if (std::holds_alternative<ability::OneShot>(a)) {
             e.active = true;  // 24.26: this is its one use
+        } else if (std::holds_alternative<ability::IndirectFire>(a)) {
+            e.active = selection.hit_fails_to > 1;  // 10.07: fired in indirect shooting (M101, D-103)
+        } else if (std::holds_alternative<ability::Precision>(a)) {
+            e.active = true;  // 24.28: a visible CHARACTER's group can be selected
         } else if (std::holds_alternative<ability::Lance>(a)) {
             if (context.charged) e.wound_modifier = 1;  // 24.21
         } else if (const auto* melta = std::get_if<ability::Melta>(&a)) {

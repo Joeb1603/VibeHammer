@@ -264,6 +264,7 @@ void to_json(Json& j, const WeaponSelection& v) {
     put_opt(j, "declared_attacks", v.declared_attacks);
     if (!v.hit_modifier_rules.empty()) j["hit_modifier_rules"] = v.hit_modifier_rules;  // D-073
     if (v.benefit_of_cover) j["benefit_of_cover"] = true;  // D-089 (M88): omitted when false
+    if (v.hit_fails_to != 1) j["hit_fails_to"] = v.hit_fails_to;  // D-103 (10.07): omitted when 1
 }
 void from_json(const Json& j, WeaponSelection& v) {
     j.at("attacker").get_to(v.attacker);
@@ -277,6 +278,7 @@ void from_json(const Json& j, WeaponSelection& v) {
     v.hit_modifier_rules.clear();
     if (j.contains("hit_modifier_rules")) j.at("hit_modifier_rules").get_to(v.hit_modifier_rules);  // D-073
     v.benefit_of_cover = j.contains("benefit_of_cover") && j.at("benefit_of_cover").get<bool>();  // D-089
+    v.hit_fails_to = j.contains("hit_fails_to") ? j.at("hit_fails_to").get<int>() : 1;            // D-103
 }
 
 void to_json(Json& j, const AttackProfile& v) {
@@ -290,6 +292,7 @@ void to_json(Json& j, const AttackProfile& v) {
     put_opt(j, "skill", v.skill);
     if (v.snap_shooting) j["snap_shooting"] = true;  // D-097 (15.09): omitted when false
     if (v.critical_wound_on != 6) j["critical_wound_on"] = v.critical_wound_on;  // D-101 (24.03): omitted when 6
+    if (v.unmodified_hit_fails_to != 1) j["unmodified_hit_fails_to"] = v.unmodified_hit_fails_to;  // D-103 (10.07)
 }
 void from_json(const Json& j, AttackProfile& v) {
     get_opt(j, "skill", v.skill);
@@ -302,6 +305,8 @@ void from_json(const Json& j, AttackProfile& v) {
     v.attack_time_abilities = abilities_from_json(j.at("attack_time_abilities"));
     v.snap_shooting = j.contains("snap_shooting") && j.at("snap_shooting").get<bool>();  // D-097
     v.critical_wound_on = j.contains("critical_wound_on") ? j.at("critical_wound_on").get<int>() : 6;  // D-101
+    v.unmodified_hit_fails_to =
+        j.contains("unmodified_hit_fails_to") ? j.at("unmodified_hit_fails_to").get<int>() : 1;  // D-103
 }
 
 // ---- D-069 Random Characteristics ----
@@ -415,6 +420,8 @@ void to_json(Json& j, const BatchInProgress& v) {
     if (!v.damage_rolls.empty()) j["damage_rolls"] = v.damage_rolls;  // D-096: omitted when empty
     if (v.devastating != 0) j["devastating"] = v.devastating;  // D-101 (24.10): omitted when 0
     if (v.mortal) j["mortal"] = true;                          // D-101: omitted when false
+    if (v.precision_decided) j["precision_decided"] = true;    // D-103 (24.28): omitted when false
+    if (v.precision) j["precision"] = *v.precision;            // D-103: omitted when absent
 }
 void from_json(const Json& j, BatchInProgress& v) {
     j.at("batch").get_to(v.batch);
@@ -430,6 +437,9 @@ void from_json(const Json& j, BatchInProgress& v) {
     if (const auto it = j.find("damage_rolls"); it != j.end()) it->get_to(v.damage_rolls);
     v.devastating = j.contains("devastating") ? j.at("devastating").get<int>() : 0;  // D-101
     v.mortal = j.contains("mortal") && j.at("mortal").get<bool>();                   // D-101
+    v.precision_decided = j.contains("precision_decided") && j.at("precision_decided").get<bool>();  // D-103
+    v.precision.reset();
+    if (const auto it = j.find("precision"); it != j.end() && !it->is_null()) v.precision = it->get<ModelId>();
 }
 
 void to_json(Json& j, const BatchRolls& v) {
@@ -652,6 +662,9 @@ void to_json(Json& j, const PendingDecision& v) {
             } else if constexpr (std::is_same_v<T, decision::DeclareAllocationOrder> ||
                                  std::is_same_v<T, decision::OrderCasualties>) {
                 j["target"] = k.target;
+            } else if constexpr (std::is_same_v<T, decision::SelectPrecisionGroup>) {
+                j["attacker"] = k.attacker;  // D-103 (24.28)
+                j["target"] = k.target;
             } else if constexpr (std::is_same_v<T, decision::RollDice>) {
                 j["roll"] = k.roll;  // D-095
                 j["unit"] = k.unit;
@@ -696,6 +709,8 @@ void from_json(const Json& j, PendingDecision& v) {
     } else if (kind == "SnapShoot") v.kind = decision::SnapShoot{j.at("unit").get<UnitId>()};  // D-097
     else if (kind == "SelectModelAndEnemy") {
         v.kind = decision::SelectModelAndEnemy{j.at("stratagem").get<Stratagem>(), j.at("unit").get<UnitId>()};  // D-099
+    } else if (kind == "SelectPrecisionGroup") {
+        v.kind = decision::SelectPrecisionGroup{j.at("attacker").get<UnitId>(), j.at("target").get<UnitId>()};  // D-103
     } else bad_enum("PendingDecision", j);
 }
 

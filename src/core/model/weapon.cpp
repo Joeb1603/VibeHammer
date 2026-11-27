@@ -170,6 +170,8 @@ WeaponAbility parse_weapon_ability(std::string_view text) {
     if (const auto x = parse_suffix_int(n, "blast", 1)) {
         return ability::Blast{*x};  // 24.05: [BLAST] adds 1 per five models
     }
+    if (n == "indirect fire") return ability::IndirectFire{};  // 24.19 (M101)
+    if (n == "precision") return ability::Precision{};         // 24.28 (M101)
     if (n == "psychic") return ability::Psychic{};    // 24.29 (M100)
     if (n == "one shot") return ability::OneShot{};   // 24.26 (M100)
     if (const auto x = parse_suffix_int(n, "cleave", std::nullopt)) {

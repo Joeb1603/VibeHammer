@@ -75,8 +75,9 @@ HitRolls judge_hit_rolls(const AttackProfile& profile, int attack_dice, std::spa
             // 15.09 (D-097): "only hits on an unmodified hit roll of 6 (irrespective of the attacking weapon's BS
             // characteristic or any modifiers). Those hits are not critical hits" (the app's text, the user's ruling).
             r.outcome = u == 6 ? HitOutcome::Hit : HitOutcome::Fail;
-        } else if (u == 1) {
-            r.outcome = HitOutcome::Fail;  // unmodified 1
+        } else if (u <= profile.unmodified_hit_fails_to) {
+            // an unmodified 1 (05.01); 10.07 (D-103): 1-5, or 1-3, for an [INDIRECT FIRE] weapon in indirect shooting
+            r.outcome = HitOutcome::Fail;
         } else if (u == 6) {
             r.outcome = HitOutcome::CriticalHit;  // unmodified 6
             out.sustained_hits += sustained;      // 24.36: X additional hits on the target
@@ -444,20 +445,37 @@ WoundSplit split_wounds(const AttackProfile& profile, const WoundRolls& rolls) {
     return out;
 }
 
+bool precision(const AttackProfile& profile) {
+    return std::any_of(profile.attack_time_abilities.begin(), profile.attack_time_abilities.end(),
+                       [](const WeaponAbility& a) { return std::holds_alternative<ability::Precision>(a); });
+}
+
+std::vector<AllocationGroup> with_precision_group_first(std::vector<AllocationGroup> ordered,
+                                                        std::optional<ModelId> character) {
+    if (!character) return ordered;
+    const auto it = std::find_if(ordered.begin(), ordered.end(), [&](const AllocationGroup& g) {
+        return contains(g.models, *character);
+    });
+    if (it != ordered.end()) std::rotate(ordered.begin(), it, std::next(it));
+    return ordered;
+}
+
 DevastatingWoundsResult inflict_devastating_wounds(Unit& target, int critical_wounds, const DiceExpr& damage,
                                                    const ModelChooser& choose, bool ask_when_forced,
-                                                   const DamageRoller& roll_damage) {
+                                                   const DamageRoller& roll_damage, std::optional<ModelId> first_to) {
     DevastatingWoundsResult out;
     const bool random_damage = !damage.is_fixed();
     if (random_damage && !roll_damage) {
         throw std::logic_error("D-069: a random D (" + to_string(damage) + ") needs a damage roller");
     }
     for (int i = 0; i < critical_wounds; ++i) {
-        const std::vector<ModelId> options = mortal_wound_candidates(target);  // 06.02 Select Model
+        std::vector<ModelId> options = mortal_wound_candidates(target);  // 06.02 Select Model
         if (options.empty()) {
             out.critical_wounds_lost = critical_wounds - i;  // the unit is destroyed
             break;
         }
+        // App 24.28.01 (D-103): first the CHARACTER group selected for the [PRECISION] attack, while it stands.
+        if (first_to && find_model(target, *first_to) != nullptr) options = {*first_to};
         ModelId chosen = options.front();
         if (options.size() > 1 || ask_when_forced) {
             chosen = choose(target, options);

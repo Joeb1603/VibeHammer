@@ -318,6 +318,8 @@ void to_json(Json& j, const GameAction& v) {
             } else if constexpr (std::is_same_v<T, SelectModelAndEnemy>) {
                 j["model"] = a.model;  // D-099 (15.05, 15.06)
                 j["enemy"] = a.enemy;
+            } else if constexpr (std::is_same_v<T, SelectPrecisionGroup>) {
+                if (a.character) j["character"] = *a.character;  // D-103 (24.28): omitted for "none"
             }
         },
         v);
@@ -395,6 +397,10 @@ void from_json(const Json& j, GameAction& v) {
         v = DeclineStratagems{};  // D-096
     } else if (kind == "SelectModelAndEnemy") {
         v = SelectModelAndEnemy{j.at("model").get<ModelId>(), j.at("enemy").get<UnitId>()};  // D-099
+    } else if (kind == "SelectPrecisionGroup") {
+        SelectPrecisionGroup a;  // D-103
+        if (const auto it = j.find("character"); it != j.end() && !it->is_null()) a.character = it->get<ModelId>();
+        v = a;
     } else {
         bad_enum("GameAction", j);
     }
@@ -595,6 +601,10 @@ void to_json(Json& j, const GameEvent& v) {
                 j["dice"] = e.dice;
                 j["enemy_mortal_wounds"] = e.enemy_mortal_wounds;
                 j["unit_mortal_wounds"] = e.unit_mortal_wounds;
+            } else if constexpr (std::is_same_v<T, PrecisionGroupSelected>) {
+                j["attacker"] = e.attacker;  // 24.28 (D-103)
+                j["target"] = e.target;
+                if (e.character) j["character"] = *e.character;
             } else if constexpr (std::is_same_v<T, DevastatingWoundsInflicted>) {
                 j["attacker"] = e.attacker;  // 24.10 (D-101)
                 j["target"] = e.target;
@@ -778,6 +788,10 @@ void from_json(const Json& j, GameEvent& v) {
                                 j.at("model").get<ModelId>(),       j.at("enemy").get<UnitId>(),
                                 j.at("dice").get<std::vector<int>>(), j.at("enemy_mortal_wounds").get<int>(),
                                 j.at("unit_mortal_wounds").get<int>()};  // D-099
+    } else if (kind == "PrecisionGroupSelected") {
+        PrecisionGroupSelected e{j.at("attacker").get<UnitId>(), j.at("target").get<UnitId>(), std::nullopt};  // D-103
+        if (const auto it = j.find("character"); it != j.end() && !it->is_null()) e.character = it->get<ModelId>();
+        v = e;
     } else if (kind == "DevastatingWoundsInflicted") {
         v = DevastatingWoundsInflicted{j.at("attacker").get<UnitId>(), j.at("target").get<UnitId>(),
                                        j.at("result").get<DevastatingWoundsResult>()};  // D-101

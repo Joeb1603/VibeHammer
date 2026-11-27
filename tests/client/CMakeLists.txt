@@ -49,6 +49,7 @@ add_executable(wh40k_client_tests
     m98_test.cpp
     m99_test.cpp
     m100_test.cpp
+    m101_test.cpp
     client_logic_test.cpp)
 
 target_link_libraries(wh40k_client_tests PRIVATE wh40k_client_logic GTest::gtest_main)

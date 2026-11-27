@@ -27,6 +27,11 @@
 
 namespace wh40k::ai::normal {
 
+// 24.28 (M101, D-103): the answer to a pending SelectPrecisionGroup: the offered CHARACTER model with the fewest wounds
+// remaining (ties: the first offered), the one the attacks are most likely to destroy (nullopt for any other decision).
+[[nodiscard]] std::optional<PolicyResult> select_precision_group(const core::GameState& gs,
+                                                                 const std::vector<core::GameAction>& legal);
+
 // 24.38 (D-072): the answer to a pending RerollWoundRolls: every failed wound roll (nullopt for any other decision).
 [[nodiscard]] std::optional<PolicyResult> reroll_failed_wound_rolls(const core::GameState& state);
 
