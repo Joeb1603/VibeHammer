@@ -70,3 +70,9 @@ Esc drops it. A model in no answer is dimmed. Hovering a grey enemy unit gives t
 - Crushing Impact's selection after the Hive Tyrant's charge; `--pick-models 37` chooses the Tyrant's model.
 
 A bad flag value exits with code 2. A full game by mouse still needs a manual run on Windows.
+
+M99 (D-101): [DEVASTATING WOUNDS]' mortal wounds are picked like any casualties (06.02 in the prompt): a click takes one
+critical wound's damage, and the excess over the model's wounds is lost. No new screen or flag.
+`M99_Screens.DISABLED_WriteSaveWaitingForTheMortalWounds` writes a save waiting for them (two critical wounds of D 3 on
+the Intercessors); `--load <save> --pick-models 2 --screenshot <png>` shows the first pick. The M99 replay
+(`tests/replays/m99_critical_wounds.json`) opens with `--replay`.

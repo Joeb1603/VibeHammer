@@ -4,6 +4,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -15,6 +18,7 @@
 #include "datasheet_view.hpp"
 #include "event_text.hpp"
 #include "rules_help.hpp"
+#include "saved_game.hpp"
 #include "session.hpp"
 #include "support/engine_helpers.hpp"
 #include "test_helpers.hpp"
@@ -180,4 +184,16 @@ TEST(M99_CasualtyPicks, TheMortalWoundsArePickedOnTheBoardOneCriticalWoundAtATim
     ASSERT_EQ(default_board.step_buttons().size(), 1u);
     EXPECT_TRUE(other.submit(default_board.step_buttons().front()).ok());
     EXPECT_EQ(other.state().find_unit(marines)->models.size(), 3u);
+}
+
+// ==== Screenshots ====
+
+// Writes a save for a screenshot (docs/dev/client_flags.md; --load, with --pick-models picking a model). Run on purpose:
+//   WH40K_SCREEN_DIR=<dir> wh40k_client_tests --gtest_also_run_disabled_tests --gtest_filter=M99_Screens.*
+TEST(M99_Screens, DISABLED_WriteSaveWaitingForTheMortalWounds) {
+    const char* dir = std::getenv("WH40K_SCREEN_DIR");
+    if (dir == nullptr) GTEST_SKIP() << "set WH40K_SCREEN_DIR";
+    const GameSession session(devastating_casualties_pending(2));
+    save_game_file(std::filesystem::path(dir) / "m99_devastating_casualties.json", session, SavePlayers{});
+    std::printf("the second Intercessor is model %u\n", session.state().units[kMarines].models[1].id.v);
 }
