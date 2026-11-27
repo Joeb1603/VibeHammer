@@ -76,3 +76,8 @@ critical wound's damage, and the excess over the model's wounds is lost. No new 
 `M99_Screens.DISABLED_WriteSaveWaitingForTheMortalWounds` writes a save waiting for them (two critical wounds of D 3 on
 the Intercessors); `--load <save> --pick-models 2 --screenshot <png>` shows the first pick. The M99 replay
 (`tests/replays/m99_critical_wounds.json`) opens with `--replay`.
+
+M101 (D-103): Indirect shooting is one more shooting type in the Shoot step (its template is listed after Normal
+shooting for a unit with an [INDIRECT FIRE] weapon), and the [PRECISION] decision is a row of buttons in the action bar
+("Precision: model N (W wounds left)" for each CHARACTER an attacking model can see, then "No Precision target"). No new
+flag.

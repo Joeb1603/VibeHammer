@@ -37,6 +37,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D101_Replay.DISABLED_RegenerateM99Replay
 # and m100_weapon_abilities.json ([LETHAL HITS: INFANTRY], [PSYCHIC] and [ONE SHOT] as stand-ins on V1, seed 1) (M100):
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D102_Replay.DISABLED_RegenerateM100Replay
+# and m101_indirect_precision.json (indirect shooting over a barricade area, then [PRECISION], seed 1) (M101):
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D103_Replay.DISABLED_RegenerateM101Replay
 # M96's check that a format change adds only declines: the old files (git show HEAD:) in a directory, each new file
 # must be its old file converted by with_roll_steps:
 WH40K_FORMAT3_DIR=<dir> ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replays.DISABLED_CompareWithFormat3Files

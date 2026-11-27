@@ -32,6 +32,8 @@ milestone's own decisions are marked in its decision file): [ANTI-X Y+], [DEVAST
 (D-101), where a critical wound's mortal wounds are inflicted on one model after the batch's normal damage (06.02).
 M100 added [LETHAL HITS], [PSYCHIC], [CLEAVE X], [ONE SHOT] (a model's own weapon is spent once selected) and the
 keyword-conditioned abilities of 24.01 (D-102); no weapon on the datasheets in `data/units/` is refused any more.
+M101 added Indirect Shooting (10.07) for [INDIRECT FIRE] weapons, a fifth shooting type, and [PRECISION], a decision of
+the attacker's at the start of the Allocation Order step (D-103); with it every weapon ability of section 24 is in.
 The finished milestones are in `docs/plan_archive.md`.
 
 The milestone plan is in `PLAN.md`. Before starting work, read the current milestone's section there and stay
@@ -44,7 +46,7 @@ inside its scope. For post-V1 work, first add a milestone to `PLAN.md` with its 
 CLAUDE.md                 this file
 README.md                 overview for people visiting the repo (play, build, layout)
 PLAN.md                   current and upcoming milestones, with acceptance criteria
-docs/plan_archive.md      the finished milestones M0–M99, verbatim
+docs/plan_archive.md      the finished milestones M0–M100, verbatim
 docs/roadmap.md           long-range map: what a full game with any army on any mission still needs, by phase
 docs/rules/               verbatim 11th ed Core Rules, one file per section (tracked: private repo only)
   00_index.md             rule number -> file lookup (all 156 rule numbers)
@@ -149,6 +151,8 @@ std::optional<RollDiceInfo> roll_dice_info(const GameState&);                   
 // Fire Overwatch's unit then answers a SnapShoot decision with a Shoot of type Snap. D-099 (M97): UseStratagem also
 // answers the Shoot decision (15.05 Explosives, after the Shoot templates), and an AfterChargeMove window offers 15.06
 // Crushing Impact; each starts FlowState::effect: SelectModelAndEnemy, its RollDice, then OrderCasualties (06.02).
+// D-103 (M101): SelectPrecisionGroup is the attacker's decision at the start of 05.03 for a [PRECISION] batch; a Shoot
+// of type Indirect is 10.07.
 bool                    window_pending(const GameState&);                           // a window is pending
 std::optional<WindowInfo> window_info(const GameState&);                            // what it offers, for display and the bot
 std::optional<std::string> forecast_stratagem_problem(const GameState&, Side, Stratagem, WindowTiming,
@@ -198,9 +202,9 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
   rule-cited reason (D-026, D-071). Implemented: Assault, Heavy, Pistol, Rapid Fire, Blast, Torrent, Hazardous,
   Sustained Hits, Extra Attacks, Twin-linked, Ignores Cover (D-091), Anti, Devastating Wounds, Melta, Lance (D-101),
   Lethal Hits, Psychic, Cleave, One Shot and the keyword-conditioned forms of Lethal Hits, Sustained Hits and
-  Devastating Wounds (D-102), and random A/D (except random A on melee weapons). Still refused: Precision, Indirect
-  Fire, a random X, and Lethal Hits together with Devastating Wounds (its choice is not built). The tests of the refusal
-  run on stand-in data (D-101 part 8).
+  Devastating Wounds (D-102), Indirect Fire and Precision (D-103), and random A/D (except random A on melee weapons).
+  Still refused: a random X ("[SUSTAINED HITS D3]"), and Lethal Hits together with Devastating Wounds (its choice is not
+  built). The tests of the refusal run on stand-in data (D-101 part 8).
 
 ## Tests
 

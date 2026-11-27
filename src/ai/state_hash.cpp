@@ -159,6 +159,12 @@ void add(Fnv1a& h, const core::FlowState& f) {
                 h.i32(a.current->devastating);
                 h.flag(a.current->mortal);
             }
+            // M101 (D-103): only once a [PRECISION] batch's selection is answered (24.28), so other states hash as before.
+            if (a.current->precision_decided) {
+                h.u64(0x70726563ull);  // "prec"
+                h.flag(a.current->precision.has_value());
+                if (a.current->precision) add(h, *a.current->precision);
+            }
         }
         // M60 (24.15): only when set, so a state without hazard rolls hashes as before.
         if (a.hazard_rolls != 0 || a.pending_mortal_wounds != 0) {
