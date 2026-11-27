@@ -204,10 +204,25 @@ Decisions: D-006, D-011, D-013, D-026, D-051, D-069, D-071, D-079, D-096, D-101.
   identical to the M98 binary. `M99_Odds`, `M99_Games`, `M40_ExpectedDamage`.
 - [x] **Client:** `M99_*` client tests.
 - [x] **A replay:** `tests/replays/m99_critical_wounds.json`; the older replays byte for byte.
-- [x] **Full `ctest`** green.
+- [x] **Full `ctest`** green (one test fixed after the full run, see Results).
 
 **Results** (D-101 part 10 has them)
-RESULTS_PLACEHOLDER
+- *Rules:* the four abilities play through the engine with scripted dice, paced and inline alike
+  (`tests/m99_critical_wounds_test.cpp`). The 25 older tests that asserted these weapons were refused were
+  brought to the new truth; the tests of the refusal itself run on stand-in data (D-101 part 8).
+- *The replay:* `tests/replays/m99_critical_wounds.json` (seed 7) shows a Combi-weapon critical wound on a 4, its mortal
+  wound with no save, and the Meltagun's D6+2. The 32 older replay files are byte for byte.
+- *The bots:*
+  - the exact odds of [DEVASTATING WOUNDS] and [ANTI] profiles are within 2% of 20,000 engine batches;
+  - **the identity set:** the nine runs with fixed loadouts (V1, both bot scenarios, Strike, the rosters, the objective
+    scenario, the terrain scenario with `--first A` and `--first B`, the M73 lists), 200 games each, are identical to the
+    M98 binary in every field (1,800 of 1,800 games): no shipped loadout has one of the freed weapons;
+  - the four `--random-armies` runs change on purpose (the armies draw the freed weapons) and are clean: 800 of 800
+    games finished with no rejected action, reverted move or fallback. The M99 binary is their reference.
+- *The client:* the mortal wounds are picked on the board like any casualties (an xvfb screenshot of the first pick);
+  the M99 replay opens in the viewer.
+- *Tests:* the full `ctest` (1,781 tests listed) passed but for `D076_Json.AnOldFileLoadsAndSavesTheSame`, whose list of the
+  replays that embed a custom battle needed the new one; with it added the test passes (run on its own).
 
 **Open items.**
 - **For the user:** the bound of `M77_BotDeploy.MeleeUnitsStandNearerTheEnemyThanTheirProposal` (30%, the user's choice

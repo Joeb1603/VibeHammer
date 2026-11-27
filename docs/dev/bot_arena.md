@@ -122,6 +122,15 @@ The proof: all thirteen runs, 200 games each (2,600 games), with both stratagem 
 binary in every field but `steps` and `actions` (every `state` and `trace` the same; no game has fewer steps). The
 M91, M89 and M87 pins re-pinned `actions` only (`M78_Arena`'s whole line its steps too).
 
+M99 (D-101) implements [ANTI-X Y+], [DEVASTATING WOUNDS], [MELTA X] and [LANCE], so the weapons with them can be picked
+and the random armies draw them. No shipped scenario and no stock or M73 list equips one, so the proof that nothing else
+changed is the nine runs with fixed loadouts (V1, both bot scenarios, Strike, the rosters, the objective scenario, the
+terrain scenario with `--first A` and `--first B`, the M73 lists): 200 games each, identical to the M98 binary in every
+field (1,800 of 1,800 games). The four `--random-armies` runs (auto and hand, with and without `--terrain`) change on
+purpose; the M99 binary is their reference (each 200 of 200 clean).
+From M99 on, each milestone that makes a weapon ability usable changes the random-armies runs again; the nine fixed runs
+stay the identity set for them.
+
 M95's head-to-head (D-092's procedure on the terrain scenario, 400 games per variant against the bot playing no
 stratagem) gave Command Re-roll +44 (222-178), Insane Bravery +8 (204-196) and both +46 (223-177). So Command Re-roll
 is on by default and the default bot's games change on purpose: the M95 binary at the defaults is the reference for
