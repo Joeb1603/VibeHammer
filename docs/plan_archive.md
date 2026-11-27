@@ -6576,3 +6576,80 @@ D-100.
   - M97: Explosives and Crushing Impact in hotseat and against the bot (keys on), and Undo after each.
 - The bot: Explosives' CP against a later Command Re-roll; the thresholds (one setting measured each).
 - Explosives in the Start and End of Shooting phase steps.
+
+---
+
+## M99: [ANTI-X Y+], [DEVASTATING WOUNDS], [MELTA X] and [LANCE] (D-101) ✅ (done; the manual mouse checks open)
+
+**Effort:** high (one rule area, the attack sequence, with a new step for mortal wounds). **Plan mode:** no (the batch
+above).
+**Scope:** the weapon abilities that act on the wound roll, on critical wounds and on the weapon's D. They are on about
+390 weapon profiles of the pinned BSData catalogues, and they free every roster weapon still refused except the Balefire
+tome ([PSYCHIC]).
+
+Left out (they stay refused, D-071): [LETHAL HITS], [PSYCHIC], [CLEAVE], [ONE SHOT], [PRECISION], [INDIRECT FIRE], the
+keyword-conditioned forms (24.01), a random X and a random A on a melee weapon.
+
+**Rules:** 24.03, 24.10, 24.21, 24.25, with 05.02, 06.02, 24.01, 24.02 and the app's 02.05.01 (keywords), 06.02.01.
+Decisions: D-006, D-011, D-013, D-026, D-051, D-069, D-071, D-079, D-096, D-101.
+
+**Design** (D-101 has the full text)
+- *[ANTI-X Y+]:* the attack profile holds the unmodified wound roll that is a critical wound (6, or Y against a target
+  unit with the keyword). It is set when the batches are gathered.
+- *[DEVASTATING WOUNDS]:* a batch's critical wounds make no save roll. After the batch's normal damage (05.04), each
+  inflicts the weapon's D as mortal wounds on one model (06.02 selects it; the rest is lost):
+  - the target's player gives a casualty order for them (`OrderCasualties`, rule 06.02);
+  - a random D is one Damage roll per critical wound, by the attacker, after the order (as D-096).
+- *[MELTA X]:* +X to the profile's D when the target was within half range at Select Targets.
+- *[LANCE]:* +1 to the wound roll when the unit made a charge move this turn (the attack context reads the flag).
+- *Bots:* the odds read the threshold from core's wound rolls and count a devastating critical wound as an attack that
+  always gets past the save; the hypothetical volleys read [MELTA] and [ANTI].
+- *Client:* labels, help and effect lines for the four; the mortal wounds are picked on the board like any casualties.
+
+**Acceptance**
+- [x] **[ANTI]:** a wound roll of Y+ is a critical wound against a unit with the keyword, and only there; slashes and
+  "non-X"; the lowest Y of several instances. `R24_03_Anti`.
+- [x] **[DEVASTATING WOUNDS]:**
+  - no save roll for a critical wound;
+  - the normal damage first, then the mortal wounds, each critical wound on one model with the excess lost;
+  - lost when the normal damage destroys the unit;
+  - a random D rolled per critical wound, paced and inline alike;
+  - the casualty preview, and the state's JSON round trip in the middle of it. `R24_10_DevastatingWounds`.
+- [x] **[MELTA]:** +X within half range, not beyond; separate batches. `R24_25_Melta`.
+- [x] **[LANCE]:** +1 to wound for the charging unit only. `R24_21_Lance`.
+- [x] **The roster weapons** with these abilities can be selected and picked in the builder; the refusal tests keep
+  their cases on stand-in data. `D101_Roster`, `D079_*`, `M75_*`.
+- [x] **Bots:** the exact odds within 2% of 20,000 engine batches; games with the new weapons clean; the identity set
+  identical to the M98 binary. `M99_Odds`, `M99_Games`, `M40_ExpectedDamage`.
+- [x] **Client:** `M99_*` client tests.
+- [x] **A replay:** `tests/replays/m99_critical_wounds.json`; the older replays byte for byte.
+- [x] **Full `ctest`** green (one test fixed after the full run, see Results).
+
+**Results** (D-101 part 10 has them)
+- *Rules:* the four abilities play through the engine with scripted dice, paced and inline alike
+  (`tests/m99_critical_wounds_test.cpp`). The 25 older tests that asserted these weapons were refused were
+  brought to the new truth; the tests of the refusal itself run on stand-in data (D-101 part 8).
+- *The replay:* `tests/replays/m99_critical_wounds.json` (seed 7) shows a Combi-weapon critical wound on a 4, its mortal
+  wound with no save, and the Meltagun's D6+2. The 32 older replay files are byte for byte.
+- *The bots:*
+  - the exact odds of [DEVASTATING WOUNDS] and [ANTI] profiles are within 2% of 20,000 engine batches;
+  - **the identity set:** the nine runs with fixed loadouts (V1, both bot scenarios, Strike, the rosters, the objective
+    scenario, the terrain scenario with `--first A` and `--first B`, the M73 lists), 200 games each, are identical to the
+    M98 binary in every field (1,800 of 1,800 games): no shipped loadout has one of the freed weapons;
+  - the four `--random-armies` runs change on purpose (the armies draw the freed weapons) and are clean: 800 of 800
+    games finished with no rejected action, reverted move or fallback. The M99 binary is their reference.
+- *The client:* the mortal wounds are picked on the board like any casualties (an xvfb screenshot of the first pick);
+  the M99 replay opens in the viewer.
+- *Tests:* the full `ctest` (1,781 tests listed) passed but for `D076_Json.AnOldFileLoadsAndSavesTheSame`, whose list of the
+  replays that embed a custom battle needed the new one; with it added the test passes (run on its own).
+
+**Open items.**
+- **For the user:** the bound of `M77_BotDeploy.MeleeUnitsStandNearerTheEnemyThanTheirProposal` (30%, the user's choice
+  at M90) is still asserted on the armies it was chosen for. On today's random armies the share is 56 of 187 (29.9%).
+  Whether the bound moves to today's draws is the user's call (D-101 part 9).
+- **For the user:** D-101's own decisions (one model per critical wound, the casualty order before the damage rolls, the
+  lowest Y and the highest X of duplicated abilities, singular and plural keywords alike).
+- The manual checks by mouse on Windows: a [DEVASTATING WOUNDS] attack (both casualty picks, the damage roll's card), and
+  the open ones of M94-M98.
+- The bot does not price [LANCE] in a planned charge's fight (no datasheet in `data/units/` has it).
+- 24.28.01 (the mortal wounds of a [PRECISION] attack go to the selected CHARACTER group) waits for [PRECISION].
