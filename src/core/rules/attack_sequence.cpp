@@ -120,7 +120,7 @@ int target_toughness(const Unit& target) {
 }
 
 int WoundRolls::wounds() const {
-    return static_cast<int>(std::count_if(rolls.begin(), rolls.end(), [](const WoundRoll& r) {
+    return automatic + static_cast<int>(std::count_if(rolls.begin(), rolls.end(), [](const WoundRoll& r) {
         return r.outcome != WoundOutcome::Fail;
     }));
 }
@@ -147,8 +147,13 @@ WoundRoll wound_roll_result(int unmodified, int modifier, int required, int crit
     return r;
 }
 
-WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::span<const int> faces) {
+int automatic_wounds(const AttackProfile& profile, const HitRolls& hits) {
+    return lethal_hits(profile) ? hits.critical_hits() : 0;  // 24.23
+}
+
+WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::span<const int> faces, int automatic) {
     WoundRolls out;
+    out.automatic = automatic;  // 24.23 (D-102)
     out.required = required_wound_roll(profile.strength, toughness);
     const int modifier = cap_hit_wound_modifier(profile.wound_modifier);  // D-011
     for (const int face : faces) {
@@ -157,10 +162,10 @@ WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::s
     return out;
 }
 
-WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits, int toughness) {
+WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits, int toughness, int automatic) {
     reject_unimplemented(profile);
-    const std::vector<int> faces = roll_d6s(dice, hits);
-    return judge_wound_rolls(profile, toughness, faces);
+    const std::vector<int> faces = roll_d6s(dice, hits - automatic);  // 24.23: no wound roll for an automatic wound
+    return judge_wound_rolls(profile, toughness, faces, automatic);
 }
 
 // ---- 24.38 [TWIN-LINKED] ----
@@ -486,7 +491,8 @@ BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBat
     r.attack_dice = batch.attack_dice;
     for (const AttackDiceRoll& a : r.attack_rolls) r.attack_dice += a.total();
     r.hits = make_hit_rolls(dice, batch.profile, r.attack_dice);                               // 05.01
-    r.wounds = make_wound_rolls(dice, batch.profile, r.hits.hits(), target_toughness(target));  // 05.02
+    r.wounds = make_wound_rolls(dice, batch.profile, r.hits.hits(), target_toughness(target),
+                                automatic_wounds(batch.profile, r.hits));  // 05.02, 24.23
     if (twin_linked(batch.profile) && !failed_wound_rolls(r.wounds).empty()) {
         // 24.38 (D-072): the attacker picks the wound rolls to re-roll, as the engine asks.
         if (!choose_rerolls) {

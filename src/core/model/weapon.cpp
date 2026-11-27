@@ -3,6 +3,7 @@
 #include <cctype>
 #include <algorithm>
 #include <charconv>
+#include <type_traits>
 #include <utility>
 
 namespace wh40k::core {
@@ -66,24 +67,10 @@ std::optional<int> parse_suffix_int(const std::string& norm, std::string_view pr
     return value;
 }
 
-// 24.03 [ANTI-X Y+] from normalised text: "anti infantry 4+", "anti monster/vehicle 2+", "anti non vehicle 3+" (the
-// FAQ's non-X form). The keyword keeps its inner spaces ("anti adeptus astartes 4+"). A threshold without the "+"
-// ("anti fly 2", one BSData entry) reads the same. nullopt if the text is not of that form.
-std::optional<ability::Anti> parse_anti(const std::string& norm) {
-    constexpr std::string_view prefix = "anti ";
-    if (norm.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
-    const std::size_t last_space = norm.rfind(' ');
-    if (last_space == std::string::npos || last_space < prefix.size()) return std::nullopt;
-    std::string_view number(norm.data() + last_space + 1, norm.size() - last_space - 1);
-    if (!number.empty() && number.back() == '+') number.remove_suffix(1);
-    int threshold = 0;
-    const auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), threshold);
-    if (number.empty() || ec != std::errc{} || ptr != number.data() + number.size() || threshold < 2 || threshold > 6) {
-        return std::nullopt;  // 05.02: an unmodified 1 always fails, so "1+" is not a threshold
-    }
-    std::string keyword = norm.substr(prefix.size(), last_space - prefix.size());
-    ability::Anti out;
-    out.threshold = threshold;
+// A keyword list from normalised text: "infantry", "monster/vehicle", "non vehicle" (the "non-X" form). Each keyword
+// keeps its inner spaces ("adeptus astartes"). nullopt if a keyword is empty.
+std::optional<ability::TargetCondition> parse_keywords(std::string keyword) {
+    ability::TargetCondition out;
     constexpr std::string_view non = "non ";
     if (keyword.compare(0, non.size(), non) == 0) {
         out.non = true;
@@ -102,10 +89,67 @@ std::optional<ability::Anti> parse_anti(const std::string& norm) {
     return out;
 }
 
+// 24.03 [ANTI-X Y+] from normalised text: "anti infantry 4+", "anti monster/vehicle 2+", "anti non vehicle 3+" (the
+// FAQ's non-X form). The keyword keeps its inner spaces ("anti adeptus astartes 4+"). A threshold without the "+"
+// ("anti fly 2", one BSData entry) reads the same. nullopt if the text is not of that form.
+std::optional<ability::Anti> parse_anti(const std::string& norm) {
+    constexpr std::string_view prefix = "anti ";
+    if (norm.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    const std::size_t last_space = norm.rfind(' ');
+    if (last_space == std::string::npos || last_space < prefix.size()) return std::nullopt;
+    std::string_view number(norm.data() + last_space + 1, norm.size() - last_space - 1);
+    if (!number.empty() && number.back() == '+') number.remove_suffix(1);
+    int threshold = 0;
+    const auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), threshold);
+    if (number.empty() || ec != std::errc{} || ptr != number.data() + number.size() || threshold < 2 || threshold > 6) {
+        return std::nullopt;  // 05.02: an unmodified 1 always fails, so "1+" is not a threshold
+    }
+    auto keywords = parse_keywords(norm.substr(prefix.size(), last_space - prefix.size()));
+    if (!keywords) return std::nullopt;
+    ability::Anti out;
+    out.threshold = threshold;
+    out.keywords = std::move(keywords->keywords);
+    out.non = keywords->non;
+    return out;
+}
+
+// The abilities that can be followed by keywords (24.01; M100, D-102): those that act from the hit roll on. nullopt for
+// any other text.
+std::optional<WeaponAbility> parse_conditionable(const std::string& n) {
+    if (n == "lethal hits") return ability::LethalHits{};
+    if (n == "devastating wounds") return ability::DevastatingWounds{};
+    if (const auto x = parse_suffix_int(n, "sustained hits", std::nullopt)) {
+        return ability::SustainedHits{*x, {}};  // 24.36: always [SUSTAINED HITS X]; a random X stays Unknown
+    }
+    return std::nullopt;
+}
+
 }  // namespace
 
 WeaponAbility parse_weapon_ability(std::string_view text) {
     const std::string n = normalise(text);
+    // 24.01 (M100, D-102): "[LETHAL HITS: VEHICLE]", "Devastating Wounds: non-Monster/Vehicle". A condition on any other
+    // ability is not known, so the text stays Unknown (D-071).
+    if (const std::size_t colon = n.find(':'); colon != std::string::npos) {
+        std::string base = n.substr(0, colon);
+        while (!base.empty() && base.back() == ' ') base.pop_back();
+        std::string rest = n.substr(colon + 1);
+        while (!rest.empty() && rest.front() == ' ') rest.erase(rest.begin());
+        auto ability = parse_conditionable(base);
+        auto condition = parse_keywords(rest);
+        if (!ability || !condition) return ability::Unknown{std::string(text)};
+        std::visit(
+            [&condition](auto& a) {
+                using T = std::decay_t<decltype(a)>;
+                if constexpr (std::is_same_v<T, ability::LethalHits> || std::is_same_v<T, ability::DevastatingWounds> ||
+                              std::is_same_v<T, ability::SustainedHits>) {
+                    a.only_against = std::move(*condition);
+                }
+            },
+            *ability);
+        return std::move(*ability);
+    }
+    if (auto conditionable = parse_conditionable(n)) return std::move(*conditionable);
     if (n == "assault") return ability::Assault{};
     if (n == "heavy") return ability::Heavy{};
     if (n == "close quarters") return ability::CloseQuarters{};
@@ -113,7 +157,6 @@ WeaponAbility parse_weapon_ability(std::string_view text) {
     if (n == "twin linked") return ability::TwinLinked{};
     if (n == "torrent") return ability::Torrent{};
     if (n == "hazardous") return ability::Hazardous{};
-    if (n == "devastating wounds") return ability::DevastatingWounds{};
     if (n == "extra attacks") return ability::ExtraAttacks{};
     if (n == "ignores cover") return ability::IgnoresCover{};  // 24.18 (M90)
     if (n == "lance") return ability::Lance{};                 // 24.21 (M99)
@@ -127,8 +170,10 @@ WeaponAbility parse_weapon_ability(std::string_view text) {
     if (const auto x = parse_suffix_int(n, "blast", 1)) {
         return ability::Blast{*x};  // 24.05: [BLAST] adds 1 per five models
     }
-    if (const auto x = parse_suffix_int(n, "sustained hits", std::nullopt)) {
-        return ability::SustainedHits{*x};  // 24.36: always [SUSTAINED HITS X]; a random X stays Unknown
+    if (n == "psychic") return ability::Psychic{};    // 24.29 (M100)
+    if (n == "one shot") return ability::OneShot{};   // 24.26 (M100)
+    if (const auto x = parse_suffix_int(n, "cleave", std::nullopt)) {
+        return ability::Cleave{*x};  // 24.06: always [CLEAVE X]
     }
     return ability::Unknown{std::string(text)};
 }

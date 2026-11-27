@@ -52,7 +52,7 @@ std::vector<float> ranged_ranges(const core::Unit& u) {
     for (const core::Model& m : u.models) {
         for (const core::Weapon& w : m.weapons) {
             for (const core::WeaponProfile& p : w.profiles) {
-                if (p.kind != core::WeaponKind::Ranged || !p.range_mm || !analysis::profile_supported(p)) continue;
+                if (p.kind != core::WeaponKind::Ranged || !p.range_mm || !analysis::profile_supported(w, p)) continue;
                 out.push_back(*p.range_mm);
             }
         }
@@ -952,7 +952,7 @@ double MoveScoreContext::our_shooting(const std::vector<core::Position>& positio
         float longest = 0.0f;
         for (const core::Weapon& w : m.weapons) {
             for (const core::WeaponProfile& p : w.profiles) {
-                if (p.kind == core::WeaponKind::Ranged && p.range_mm && analysis::profile_supported(p)) {
+                if (p.kind == core::WeaponKind::Ranged && p.range_mm && analysis::profile_supported(w, p)) {
                     longest = std::max(longest, *p.range_mm);
                 }
             }

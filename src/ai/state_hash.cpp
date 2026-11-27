@@ -85,6 +85,12 @@ void add(Fnv1a& h, const core::Unit& u) {
         add(h, m.position);
         add_facing(h, m.facing_deg);
         h.i32(m.wounds_remaining);
+        // M100 (D-102): a spent [ONE SHOT] weapon (24.26) only when one is, behind a tag, so other states hash as before.
+        for (std::size_t w = 0; w < m.weapons.size(); ++w) {
+            if (!m.weapons[w].one_shot_spent) continue;
+            h.u64(0x316f7368ull);  // "1osh"
+            h.u64(w);
+        }
     }
 }
 
@@ -156,6 +162,11 @@ void add(Fnv1a& h, const core::FlowState& f) {
         if (a.hazard_rolls != 0 || a.pending_mortal_wounds != 0) {
             h.i32(a.hazard_rolls);
             h.i32(a.pending_mortal_wounds);
+        }
+        // M100 (D-102): only while a [LETHAL HITS] batch's automatic wounds wait for its wound rolls (24.23).
+        if (a.automatic_wounds != 0) {
+            h.u64(0x6c74686cull);  // "lthl"
+            h.i32(a.automatic_wounds);
         }
         // M61 (24.38): only when set, so a state without pending re-rolls hashes as before.
         if (a.wound_rerolls) {

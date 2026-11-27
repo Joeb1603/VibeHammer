@@ -76,7 +76,7 @@ ThreatRanges threat_ranges(const core::Unit& unit) {
     for (const core::Model& model : unit.models) {
         for (const core::Weapon& w : model.weapons) {
             for (const core::WeaponProfile& p : w.profiles) {
-                if (p.kind != core::WeaponKind::Ranged || !p.range_mm || !profile_supported(p)) continue;
+                if (p.kind != core::WeaponKind::Ranged || !p.range_mm || !profile_supported(w, p)) continue;
                 t.max_range_mm = std::max(t.max_range_mm, *p.range_mm);
                 if (p.has<core::ability::Assault>()) t.max_assault_range_mm = std::max(t.max_assault_range_mm, *p.range_mm);
                 if (p.has<core::ability::CloseQuarters>()) {

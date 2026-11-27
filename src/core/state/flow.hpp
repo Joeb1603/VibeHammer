@@ -138,6 +138,9 @@ struct AttackFlow {
     // D-095 (M94): the batch whose dice are being rolled, until its wound rolls are made. Omitted from JSON when
     // absent; never set at a decision other than a RollDice.
     std::optional<BatchRolls> rolling{};
+    // M100 (D-102): 24.23 [LETHAL HITS]: the hits of the batch being rolled that wound automatically, from when its hit
+    // rolls stand until its wound rolls do. Omitted from JSON when 0.
+    int automatic_wounds = 0;
     friend bool operator==(const AttackFlow&, const AttackFlow&) = default;
 };
 

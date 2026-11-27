@@ -248,9 +248,11 @@ bool target_ok(const Unit& unit, const Model& model, const WeaponProfile& profil
 
 // M54: the checks of declaration_problem that don't depend on the target, as a yes/no (04.01, D-026, D-071,
 // 10.05, 10.06). D-069: a random A or D is rolled, so it is no reason to refuse (D-002 is replaced).
-bool profile_selectable(const Unit& unit, const Model& model, const WeaponProfile& profile, ShootingType type) {
+bool profile_selectable(const Unit& unit, const Model& model, const Weapon& weapon, const WeaponProfile& profile,
+                        ShootingType type) {
     if (profile.kind != WeaponKind::Ranged || !profile.range_mm) return false;
     if (unimplemented_ability_problem(profile)) return false;
+    if (one_shot_problem(weapon, profile)) return false;  // 24.26 (M100, D-102)
     if (type == ShootingType::Assault && !profile.has<ability::Assault>()) return false;
     if (type == ShootingType::CloseQuarters && !is_monster_or_vehicle(unit, model) && !is_close_quarters(profile)) {
         return false;
@@ -267,7 +269,7 @@ void for_each_shot_option(const GameState& state, const Unit& unit, ShootingType
         for (std::size_t w = 0; w < model.weapons.size(); ++w) {
             for (std::size_t p = 0; p < model.weapons[w].profiles.size(); ++p) {
                 const WeaponProfile& profile = model.weapons[w].profiles[p];
-                if (!profile_selectable(unit, model, profile, type)) continue;
+                if (!profile_selectable(unit, model, model.weapons[w], profile, type)) continue;
                 for (const Unit& target : state.units) {
                     if (target.side == unit.side || is_destroyed(target)) {
                         continue;
@@ -301,6 +303,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
         return "04.01: '" + profile.name + "' is not a ranged weapon; models shoot with ranged weapons";
     }
     if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026, D-071 (D-069: random A / D are rolled)
+    if (auto p = one_shot_problem(weapon, profile)) return p;       // 24.26 (M100, D-102)
     if (type == ShootingType::Assault && !profile.has<ability::Assault>()) {
         return "10.05: '" + profile.name + "' is not an [ASSAULT] weapon; assault shooting can only select "
                                            "[ASSAULT] weapons";
@@ -512,14 +515,19 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
             if (!cq_at_engaged) cq_at_engaged = is_close_quarters(profile) && engaged_with(state, unit, s.target);
             return *cq_at_engaged;
         };
-        if (type == ShootingType::CloseQuarters && is_monster_or_vehicle(unit, model) && !close_quarters_at_engaged()) {
+        // 24.29 [PSYCHIC] (M100, D-102): "you can ignore any or all modifiers to that attack's BS ... and any or all
+        // modifiers to the hit roll": the ones that worsen the attack are ignored (app 02.02.02), so neither -1 below
+        // nor the benefit of cover is recorded for it.
+        const bool penalties = !ignores_hit_penalties(profile);
+        if (penalties && type == ShootingType::CloseQuarters && is_monster_or_vehicle(unit, model) &&
+            !close_quarters_at_engaged()) {
             // 10.06 MONSTER/VEHICLE Models: -1 to hit unless a [CLOSE-QUARTERS] weapon targets a unit this
             // unit is engaged with.
             sel.hit_modifier -= 1;
             sel.hit_modifier_rules.push_back(HitModifierRule::CloseQuartersMonster);
         }
         const Unit* target = state.find_unit(s.target);
-        if (target != nullptr && unit_is_monster_or_vehicle(*target) && is_engaged(state, *target) &&
+        if (penalties && target != nullptr && unit_is_monster_or_vehicle(*target) && is_engaged(state, *target) &&
             !close_quarters_at_engaged()) {
             // 17.03: -1 to hit a ranged attack at an engaged enemy MONSTER/VEHICLE unit, excluding attacks made with
             // [CLOSE-QUARTERS] weapons by models in a unit engaged with the target. Both modifiers count; D-011 caps
@@ -528,7 +536,7 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
             sel.hit_modifier_rules.push_back(HitModifierRule::EngagedMonsterTarget);
         }
         // 24.18 (M90, D-091): the target can't have the benefit of cover against an [IGNORES COVER] weapon's attacks.
-        if (!state.terrain.empty() && target != nullptr && !profile.has<ability::IgnoresCover>()) {
+        if (penalties && !state.terrain.empty() && target != nullptr && !profile.has<ability::IgnoresCover>()) {
             // 13.08 (D-089): decided when the targets are selected; models lost later don't change it.
             if (!view) view.emplace(state);
             const auto key = std::make_pair(s.model.v, s.target.v);

@@ -668,10 +668,8 @@ TEST(D101_Roster, TheWeaponsWithTheseAbilitiesCanBeSelected) {
                                           ability::RapidFire{1}}));
     EXPECT_EQ(roster_profile("chaos_terminator_squad", "Chainfist").abilities,
               (std::vector<WeaponAbility>{ability::Anti{{"vehicle"}, 3, false}}));
-    // [PSYCHIC] (24.29) is not implemented yet: still refused, with the rule-cited reason (D-071).
-    const auto problem = unimplemented_ability_problem(roster_profile("legionaries", "Balefire tome"));
-    ASSERT_TRUE(problem.has_value());
-    EXPECT_TRUE(wh40k::test::is_rule_cited(*problem)) << *problem;
+    // M100 (D-102): [PSYCHIC] (24.29) too, so the Balefire tome is no longer refused.
+    EXPECT_FALSE(unimplemented_ability_problem(roster_profile("legionaries", "Balefire tome")).has_value());
 }
 
 TEST(D101_Serialization, TheNewFieldsRoundTripAndOldFilesReadAsBefore) {

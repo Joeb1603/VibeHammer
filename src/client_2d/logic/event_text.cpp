@@ -178,8 +178,11 @@ std::string body(const core::GameEvent& e) {
                 }
                 return text;
             } else if constexpr (std::is_same_v<T, ev::WoundRollsMade>) {
+                // 24.23 (M100): "..., 2 automatic (Lethal Hits)" when critical hits wounded without a roll.
                 return "Wound rolls (" + std::to_string(x.rolls.required) + "+): " + wound_rolls(x.rolls) + " -> " +
-                       std::to_string(x.rolls.wounds()) + " wounds";
+                       std::to_string(x.rolls.wounds()) + " wounds" +
+                       (x.rolls.automatic > 0 ? ", " + std::to_string(x.rolls.automatic) + " automatic (Lethal Hits)"
+                                              : std::string());
             } else if constexpr (std::is_same_v<T, ev::AllocationOrderDeclared>) {
                 return "Allocation order declared for " + unit(x.target) + " (" + std::to_string(x.groups.size()) +
                        " group(s))";

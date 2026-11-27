@@ -14,6 +14,15 @@ namespace wh40k::core {
 // Weapon abilities (24.xx), parsed here. The rules apply them in rules/ and engine/; D-026 / D-071 refuse a
 // profile with one the engine does not implement (unimplemented_ability_problem, rules/attacks.hpp).
 namespace ability {
+// 24.01 (M100, D-102): "If a weapon ability is followed by one or more keywords ... that ability only applies if the
+// target unit has one or more of those keywords" ("[LETHAL HITS: VEHICLE]"). `keywords` empty: the ability always
+// applies. `non`: the "non-X" form (a target unit with none of them), as [ANTI] reads it (D-101).
+struct TargetCondition {
+    std::vector<std::string> keywords;
+    bool non = false;
+    [[nodiscard]] bool always() const noexcept { return keywords.empty(); }
+    friend bool operator==(const TargetCondition&, const TargetCondition&) = default;
+};
 struct Assault {  // 24.04
     friend bool operator==(const Assault&, const Assault&) = default;
 };
@@ -41,10 +50,12 @@ struct Hazardous {  // 24.15
     friend bool operator==(const Hazardous&, const Hazardous&) = default;
 };
 struct DevastatingWounds {  // 24.10
+    TargetCondition only_against{};  // 24.01 (M100): omitted from JSON when it always applies
     friend bool operator==(const DevastatingWounds&, const DevastatingWounds&) = default;
 };
 struct SustainedHits {  // 24.36 [SUSTAINED HITS X]
     int x = 1;
+    TargetCondition only_against{};  // 24.01 (M100)
     friend bool operator==(const SustainedHits&, const SustainedHits&) = default;
 };
 struct ExtraAttacks {  // 24.11
@@ -69,6 +80,21 @@ struct Melta {  // 24.25 [MELTA X] (M99, D-101): +X to D when the target was wit
 struct Lance {  // 24.21 (M99, D-101): +1 to the wound roll if the attacking model's unit made a charge move this turn
     friend bool operator==(const Lance&, const Lance&) = default;
 };
+// 24.23 [LETHAL HITS] (M100, D-102): a critical hit automatically wounds the target (no wound roll is made for it).
+struct LethalHits {
+    TargetCondition only_against{};  // 24.01
+    friend bool operator==(const LethalHits&, const LethalHits&) = default;
+};
+struct Psychic {  // 24.29 (M100, D-102): the modifiers that worsen its BS/WS or its hit roll are ignored; a psychic attack
+    friend bool operator==(const Psychic&, const Psychic&) = default;
+};
+struct Cleave {  // 24.06 [CLEAVE X] (M100, D-102): +X attack dice per five models in the weapon's one target
+    int x = 1;
+    friend bool operator==(const Cleave&, const Cleave&) = default;
+};
+struct OneShot {  // 24.26 (M100, D-102): the weapon can be selected to make attacks with once per battle
+    friend bool operator==(const OneShot&, const OneShot&) = default;
+};
 // Anything not recognised. Loaded and displayed; a profile with one can't be selected (D-071).
 struct Unknown {
     std::string text;
@@ -80,7 +106,8 @@ using WeaponAbility =
     std::variant<ability::Assault, ability::Heavy, ability::CloseQuarters, ability::RapidFire,
                  ability::Blast, ability::TwinLinked, ability::Torrent, ability::Hazardous,
                  ability::DevastatingWounds, ability::SustainedHits, ability::ExtraAttacks, ability::IgnoresCover,
-                 ability::Unknown, ability::Anti, ability::Melta, ability::Lance>;
+                 ability::Unknown, ability::Anti, ability::Melta, ability::Lance, ability::LethalHits,
+                 ability::Psychic, ability::Cleave, ability::OneShot>;
 // New alternatives are appended after Unknown: the bots' state_hash hashes the variant's index, so the older ones keep
 // theirs.
 
@@ -129,6 +156,9 @@ struct Weapon {
     std::string name;
     WeaponKind kind = WeaponKind::Ranged;
     std::vector<WeaponProfile> profiles;
+    // 24.26 [ONE SHOT] (M100, D-102): this weapon (a model's own copy) has been selected to make attacks with, so its
+    // [ONE SHOT] profiles can't be selected again this battle. JSON "spent", omitted when false.
+    bool one_shot_spent = false;
 
     friend bool operator==(const Weapon&, const Weapon&) = default;
 };

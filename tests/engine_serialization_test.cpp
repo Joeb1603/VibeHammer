@@ -316,7 +316,7 @@ TEST(Serialization, EveryEventKindRoundTrips) {
     batch.profile.skill = 3;
     batch.profile.strength = 5;
     batch.profile.damage = DiceExpr::fixed(1);
-    batch.profile.attack_time_abilities = {ability::Unknown{"Lethal Hits"}};
+    batch.profile.attack_time_abilities = {ability::Unknown{"Conversion"}};
     batch.selections = {0, 2};
     batch.attack_dice = 7;
     const AllocationGroup group{{ModelId{7}, ModelId{8}}, false, 1, 5, std::nullopt};

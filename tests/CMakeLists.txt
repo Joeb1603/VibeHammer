@@ -52,6 +52,7 @@ add_executable(wh40k_tests
     d097_reactions_test.cpp
     d099_stratagem_effects_test.cpp
     m99_critical_wounds_test.cpp
+    m100_weapon_abilities_test.cpp
     d100_forecast_test.cpp)
 
 target_link_libraries(wh40k_tests PRIVATE wh40k_core GTest::gtest_main)

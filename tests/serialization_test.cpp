@@ -62,7 +62,10 @@ TEST(Serialization, EveryWeaponAbilityRoundTrips) {
         ability::SustainedHits{2}, ability::ExtraAttacks{},  // M60 (24.36, 24.11)
         ability::IgnoresCover{},                             // M90 (24.18)
         ability::Unknown{"Conversion"},
-        ability::Anti{{"infantry", "beasts"}, 4, true}, ability::Melta{2}, ability::Lance{}};  // M99 (24.03, 24.25, 24.21)
+        ability::Anti{{"infantry", "beasts"}, 4, true}, ability::Melta{2}, ability::Lance{},  // M99 (24.03, 24.25, 24.21)
+        // M100 (24.23, 24.29, 24.06, 24.26), one with a keyword condition (24.01)
+        ability::LethalHits{ability::TargetCondition{{"monster", "vehicle"}, true}}, ability::Psychic{},
+        ability::Cleave{2}, ability::OneShot{}};
     // Guard: the list above covers every alternative of the variant.
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const auto& a : all) {
@@ -77,8 +80,8 @@ TEST(D071_UnknownAbilities, UnknownTextSavedBeforeTheEngineKnewItLoadsAsTheAbili
               WeaponAbility{ability::ExtraAttacks{}});
     EXPECT_EQ(Json({{"kind", "Unknown"}, {"text", "Sustained Hits 1"}}).get<WeaponAbility>(),
               WeaponAbility{ability::SustainedHits{1}});
-    EXPECT_EQ(Json({{"kind", "Unknown"}, {"text", "Lethal Hits"}}).get<WeaponAbility>(),
-              WeaponAbility{ability::Unknown{"Lethal Hits"}});
+    EXPECT_EQ(Json({{"kind", "Unknown"}, {"text", "Conversion"}}).get<WeaponAbility>(),
+              WeaponAbility{ability::Unknown{"Conversion"}});
     EXPECT_EQ(Json(WeaponAbility{ability::SustainedHits{1}}), Json({{"kind", "SustainedHits"}, {"x", 1}}));
     EXPECT_EQ(Json(WeaponAbility{ability::ExtraAttacks{}}), Json({{"kind", "ExtraAttacks"}}));
 }

@@ -529,7 +529,7 @@ void usable_bonesword(GameState& gs) { gs.units[kTyrant].models[0].weapons[kBone
 
 // Stand-in: a bonesword the engine still refuses (an ability it doesn't know, D-071), as the real one was until M61.
 void refused_bonesword(GameState& gs) {
-    gs.units[kTyrant].models[0].weapons[kBonesword].profiles[0].abilities.push_back(ability::Unknown{"Lethal Hits"});
+    gs.units[kTyrant].models[0].weapons[kBonesword].profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
 }
 
 }  // namespace
@@ -662,7 +662,7 @@ TEST(D071_UnknownAbilities, AProfileWithAnUnknownAbilityIsRefusedWithARuleCitedR
 TEST(D071_UnknownAbilities, AnUnknownAbilityIsNeverOfferedForShootingAndDeclaringItIsRefused) {
     GameState gs = wh40k::test::shoot_step_state();
     for (Model& m : gs.units[0].models) {
-        for (WeaponProfile& p : m.weapons[0].profiles) p.abilities.push_back(ability::Unknown{"Lethal Hits"});
+        for (WeaponProfile& p : m.weapons[0].profiles) p.abilities.push_back(ability::Unknown{"Conversion"});
     }
     const Unit& marines = gs.units[0];
     const auto options = shot_options(gs, marines, ShootingType::Normal);
@@ -671,7 +671,7 @@ TEST(D071_UnknownAbilities, AnUnknownAbilityIsNeverOfferedForShootingAndDeclarin
     const action::Shoot rifle{marines.id, ShootingType::Normal,
                               {ShotDeclaration{marines.models[0].id, 0, 0, gs.units[1].id}}};
     const auto reasons = rejection(gs, Side::A, rifle);
-    EXPECT_TRUE(contains(reasons, "D-071: 'Bolt Rifle - Focused Fire' has [LETHAL HITS], which the engine does not "
+    EXPECT_TRUE(contains(reasons, "D-071: 'Bolt Rifle - Focused Fire' has [CONVERSION], which the engine does not "
                                   "implement yet; weapons with it can't be selected"))
         << reasons.front();
     // With every ranged profile refused, no Shoot template is listed (D-016).
@@ -684,19 +684,19 @@ TEST(D071_UnknownAbilities, AModelWhoseOnlyMeleeWeaponIsRefusedCannotMakeMeleeAt
     // usable since [TWIN-LINKED] is implemented, D-072, so it is refused here with a stand-in ability as well.)
     GameState gs = tyrant_declaring(refused_bonesword);
     Unit& tyrant = gs.units[kTyrant];
-    tyrant.models[0].weapons[kTalons].profiles[0].abilities.push_back(ability::Unknown{"Lethal Hits"});
+    tyrant.models[0].weapons[kTalons].profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
     EXPECT_TRUE(melee_options(gs, tyrant).empty());
     EXPECT_FALSE(can_make_melee_attacks(gs, tyrant));
     const std::vector<MeleeDeclaration> talons{tyrant_with(gs, kTalons)};
     const auto reasons = melee_problems(gs, tyrant, talons);
     ASSERT_FALSE(reasons.empty());
-    EXPECT_TRUE(starts_with(reasons.front(), "D-071: 'Monstrous scything talons' has [LETHAL HITS]")) << reasons.front();
+    EXPECT_TRUE(starts_with(reasons.front(), "D-071: 'Monstrous scything talons' has [CONVERSION]")) << reasons.front();
 }
 
 TEST(D071_UnknownAbilities, TheAttackSequenceRefusesToResolveOne) {
     // The second safety net (D-026): never resolved wrongly, even if validation were bypassed.
     AttackProfile p = sustained_profile(0);
-    p.attack_time_abilities = {ability::Unknown{"Lethal Hits"}};
+    p.attack_time_abilities = {ability::Unknown{"Conversion"}};
     ScriptedDice dice{4};
     EXPECT_THROW((void)make_hit_rolls(dice, p, 1), std::logic_error);
 }
@@ -715,8 +715,9 @@ TEST(D071_UnknownAbilities, EveryRosterProfileWithAnUnknownAbilityIsRefused) {
             }
         }
     }
-    // Psychic on the roster datasheets (M90: no longer Ignores Cover, D-091; M99: no longer Anti-X or Melta, D-101).
-    EXPECT_GE(refused, 1);
+    // (M90: no longer Ignores Cover, D-091; M99: no longer Anti-X or Melta, D-101; M100: no longer Psychic, D-102.)
+    // No roster profile has an ability the engine doesn't know any more; the refusal is tested with stand-ins.
+    EXPECT_EQ(refused, 0);
 }
 
 TEST(D071_UnknownAbilities, NoWeaponEquippedInTheOldScenariosIsRefused) {

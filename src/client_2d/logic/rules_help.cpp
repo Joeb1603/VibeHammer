@@ -111,6 +111,27 @@ HelpEntry weapon_ability_help(const core::WeaponAbility& ability) {
                 h.summary = "+1 to wound if the unit made a charge move this turn.";
                 h.rule = "24.21";
                 h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::LethalHits>) {
+                h.summary = "Each critical hit (an unmodified 6 to hit) wounds automatically: no wound roll is made for "
+                            "it, and it is not a critical wound.";
+                h.rule = "24.23";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::Psychic>) {
+                h.summary = "A psychic attack. Modifiers that worsen its BS or WS or its hit roll are ignored (cover, "
+                            "the -1s for close-quarters shooting and engaged MONSTERS and VEHICLES); those that "
+                            "improve it still apply.";
+                h.rule = "24.29";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::Cleave>) {
+                h.summary = "+" + std::to_string(a.x) + (a.x == 1 ? " attack" : " attacks") +
+                            " for every 5 models in the target unit (rounding down), if all of the weapon's attacks "
+                            "are made against one target.";
+                h.rule = "24.06";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::OneShot>) {
+                h.summary = "The weapon can be selected to make attacks with once per battle.";
+                h.rule = "24.26";
+                h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::SustainedHits>) {
                 h.summary = "Each critical hit (an unmodified 6 to hit) scores " + std::to_string(a.x) +
                             (a.x == 1 ? " extra hit" : " extra hits") + " on the target. The extra hits are not "
@@ -275,11 +296,13 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
         int extra = 0;
         int hit = 0;
         std::size_t active = 0;
+        bool unmet = false;  // 24.01 (M100): the ability's keyword condition, against these selections' target
         for (const auto& effects : per) {
             if (i >= effects.size()) continue;
             extra += effects[i].extra_attack_dice;
             hit = std::max(hit, effects[i].hit_modifier);
             active += effects[i].active ? 1 : 0;
+            unmet = unmet || effects[i].condition_unmet;
         }
         const std::size_t n = per.size();
         const core::WeaponAbility& a = weapon.abilities[i];
@@ -325,6 +348,31 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
             line.text = "Sustained Hits " + std::to_string(sh->x) + ": each critical hit scores " +
                         std::to_string(sh->x) + (sh->x == 1 ? " extra hit" : " extra hits");
             line.kind = EffectKind::Active;
+            if (unmet) {  // 24.01 (M100)
+                line.text = "Sustained Hits " + std::to_string(sh->x) + ": no effect (the target doesn't have the keyword)";
+                line.kind = EffectKind::Inactive;
+            }
+        } else if (std::holds_alternative<ab::LethalHits>(a)) {
+            // 24.23 (M100, D-102)
+            line.text = unmet ? "Lethal Hits: no effect (the target doesn't have the keyword)"
+                              : "Lethal Hits: each critical hit wounds automatically";
+            line.kind = unmet ? EffectKind::Inactive : EffectKind::Active;
+        } else if (std::holds_alternative<ab::Psychic>(a)) {
+            line.text = "Psychic: penalties to hit and to BS/WS are ignored";  // 24.29
+            line.kind = EffectKind::Active;
+        } else if (const auto* cleave = std::get_if<ab::Cleave>(&a)) {
+            const int target_models = selections.empty() ? 0 : selections.front().target_models_at_selection;
+            line.text = "Cleave " + std::to_string(cleave->x) + ": ";  // 24.06
+            if (active == 0) {
+                line.text += "no extra attacks (fewer than 5 models in the target, or the attacks are split)";
+                line.kind = EffectKind::Inactive;
+            } else {
+                line.text += attacks(extra) + " (" + std::to_string(target_models) + " models in the target)";
+                line.kind = EffectKind::Active;
+            }
+        } else if (std::holds_alternative<ab::OneShot>(a)) {
+            line.text = "One Shot: this is the weapon's one use this battle";  // 24.26
+            line.kind = EffectKind::Active;
         } else if (std::holds_alternative<ab::Hazardous>(a)) {
             line.text = "Hazardous: a hazard roll for the unit after its attacks (1-2: a mortal wound)";
             line.kind = EffectKind::Active;
@@ -351,6 +399,10 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
             // 24.10 (M99, D-101)
             line.text = "Devastating Wounds: each critical wound inflicts the weapon's Damage as mortal wounds (no save)";
             line.kind = EffectKind::Active;
+            if (unmet) {  // 24.01 (M100)
+                line.text = "Devastating Wounds: no effect (the target doesn't have the keyword)";
+                line.kind = EffectKind::Inactive;
+            }
         } else if (const auto* anti = std::get_if<ab::Anti>(&a)) {
             const std::string label = weapon_ability_label(a);
             const std::string name = "Anti" + label.substr(5, label.size() - 6);  // "[ANTI-X Y+]" -> "Anti-X Y+"
