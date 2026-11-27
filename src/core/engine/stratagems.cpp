@@ -187,6 +187,11 @@ std::optional<std::string> roll_problem(const GameState& state, Side side, Strat
             if (roll_of(w) == RollKind::Hit && state.flow.attack && state.flow.attack->context.snap_shooting) {
                 return "15.09: you cannot re-roll hit rolls when snap shooting";
             }
+            // 10.07 (M101, D-103): "You cannot re-roll hit rolls" of an [INDIRECT FIRE] weapon in indirect shooting.
+            if (roll_of(w) == RollKind::Hit && state.flow.attack && w.batch < state.flow.attack->batches.size() &&
+                state.flow.attack->batches[w.batch].profile.unmodified_hit_fails_to > 1) {
+                return "10.07: you cannot re-roll the hit rolls of an [INDIRECT FIRE] weapon in indirect shooting";
+            }
             if (pickable_dice(state, w).empty()) {
                 return "D-011: every die of this roll has already been re-rolled (a die is re-rolled only once)";
             }

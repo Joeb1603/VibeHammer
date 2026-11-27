@@ -28,11 +28,12 @@ struct ShootingTypeInfo {
     std::string_view rule;
 };
 
-constexpr std::array<ShootingTypeInfo, 4> kShootingTypes{{
+constexpr std::array<ShootingTypeInfo, 5> kShootingTypes{{
     {ShootingType::Normal, "Normal", "10.04"},
     {ShootingType::Assault, "Assault", "10.05"},
     {ShootingType::CloseQuarters, "CloseQuarters", "10.06"},
     {ShootingType::Snap, "Snap", "15.09"},
+    {ShootingType::Indirect, "Indirect", "10.07"},  // M101 (D-103): after the others, so their order is as before
 }};
 
 const ShootingTypeInfo& info(ShootingType t) {
@@ -168,6 +169,11 @@ private:
     std::optional<TerrainView> terrain_;  // M88: only with terrain
 };
 
+// 10.07 (M101, D-103): an [INDIRECT FIRE] weapon fired in indirect shooting.
+bool indirect_at(ShootingType type, const WeaponProfile& profile) {
+    return type == ShootingType::Indirect && profile.has<ability::IndirectFire>();
+}
+
 // 04.02 / 10.06: the target rules for one declaration (the target unit exists and is an enemy).
 // D-097 (M96): 15.09 snap shooting: only an enemy unit within 24" of the unit (D-009: unit to unit).
 bool within_snap_range(const Unit& unit, const Unit& target) {
@@ -213,7 +219,9 @@ std::optional<std::string> target_problem(const Unit& unit, const Model& model, 
         return "17.03: '" + profile.name + "' is a [BLAST] weapon and cannot target " + unit_label(target.id) +
                ", an engaged MONSTER/VEHICLE unit (Rules Appendix FAQ)";
     }
-    if (!facts.visible(model, target)) {
+    // 10.07 (M101, D-103): "[INDIRECT FIRE] weapons in your unit can target units that are not visible to the attacking
+    // model" in indirect shooting; every other weapon needs visibility as usual.
+    if (!indirect_at(type, profile) && !facts.visible(model, target)) {
         return facts.not_visible_reason(model, target);
     }
     if (!target_within_range(model, profile, target)) {
@@ -243,7 +251,8 @@ bool target_ok(const Unit& unit, const Model& model, const WeaponProfile& profil
     if (profile.has<ability::Blast>() && facts.target_engaged(target) && unit_is_monster_or_vehicle(target)) {
         return false;  // 17.03, Rules Appendix FAQ (D-073)
     }
-    return target_within_range(model, profile, target) && facts.visible(model, target);  // 04.02, 06.01
+    // 04.02, 06.01 (10.07: not for an [INDIRECT FIRE] weapon in indirect shooting)
+    return target_within_range(model, profile, target) && (indirect_at(type, profile) || facts.visible(model, target));
 }
 
 // M54: the checks of declaration_problem that don't depend on the target, as a yes/no (04.01, D-026, D-071,
@@ -375,6 +384,12 @@ std::optional<std::string> shooting_type_problem(const GameState& state, const U
             // D-097: 15.08 Fire Overwatch's unit is unengaged (its ELIGIBLE IF is the rule that allows it).
             if (engaged) return rule + ": " + who + " is engaged; Fire Overwatch's snap shooting needs an unengaged unit";
             return std::nullopt;
+        case ShootingType::Indirect:
+            // 10.07 (M101, D-103): unengaged, no advance move this turn, one or more [INDIRECT FIRE] weapons.
+            if (engaged) return rule + ": " + who + " is engaged; indirect shooting needs an unengaged unit";
+            if (advanced) return rule + ": " + who + " made an advance move this turn";
+            if (!has_indirect_fire_weapon(unit)) return rule + ": " + who + " has no [INDIRECT FIRE] weapons";  // 24.19
+            return std::nullopt;
     }
     throw std::logic_error("invalid ShootingType");
 }
@@ -391,6 +406,29 @@ std::vector<ShootingType> eligible_shooting_types(const GameState& state, const 
         }
     }
     return out;
+}
+
+bool model_visible_to_model(const GameState& state, const Model& observer, const Unit& observed_unit,
+                            const Model& observed) {
+    const std::vector<PosedModel> blockers =
+        visibility_blockers(state, find_unit_of_model(state, observer.id), observed_unit);
+    if (state.terrain.empty()) return has_line_of_sight(posed_of(observer), posed_of(observed), blockers);
+    TerrainView view(state);  // M88 (D-088)
+    return model_visible(view, observer, observed_unit, observed, blockers);
+}
+
+bool has_indirect_fire_weapon(const Unit& unit) {
+    return unit_has_ranged_profile(unit, [](const WeaponProfile& p) { return p.has<ability::IndirectFire>(); });
+}
+
+bool unit_visible_to_side(const GameState& state, Side side, const Unit& target) {
+    for (const Unit& u : state.units) {
+        if (u.side != side) continue;
+        for (const Model& m : u.models) {
+            if (unit_visible_to_model(state, m, target)) return true;
+        }
+    }
+    return false;
 }
 
 bool unit_visible_to_model(const GameState& state, const Model& observer, const Unit& target) {
@@ -505,6 +543,7 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
     // M88 (D-089): 13.08 per attacking model and target unit, worked out once each (only with terrain).
     std::optional<TerrainView> view;
     std::map<std::pair<std::uint32_t, std::uint32_t>, bool> cover;
+    std::map<std::uint32_t, bool> seen_by_side;  // D-103 (10.07): by target unit
     for (const ShotDeclaration& s : shots) {
         WeaponSelection sel = select_weapon_target(state, s.model, s.weapon_index, s.profile_index, s.target);
         const Model& model = *find_model(unit, s.model);
@@ -535,8 +574,22 @@ std::vector<WeaponSelection> make_weapon_selections(const GameState& state, cons
             sel.hit_modifier -= 1;
             sel.hit_modifier_rules.push_back(HitModifierRule::EngagedMonsterTarget);
         }
+        // 10.07 (M101, D-103): each attack of an [INDIRECT FIRE] weapon in indirect shooting: "the target has the
+        // benefit of cover against that attack" (terrain or not; not against [IGNORES COVER], 24.18, and a [PSYCHIC]
+        // weapon ignores the worsened BS, 24.29), and "an unmodified hit roll of 1-5 fails, unless your unit remained
+        // stationary this turn and the target is visible to one or more friendly units, in which case an unmodified
+        // hit roll of 1-3 fails instead".
+        if (indirect_at(type, profile) && target != nullptr) {
+            if (penalties && !profile.has<ability::IgnoresCover>()) sel.benefit_of_cover = true;
+            auto seen = seen_by_side.find(s.target.v);
+            if (seen == seen_by_side.end()) {
+                seen = seen_by_side.emplace(s.target.v, unit_visible_to_side(state, unit.side, *target)).first;
+            }
+            sel.hit_fails_to = unit.turn_flags.remained_stationary && seen->second ? 3 : 5;
+        }
         // 24.18 (M90, D-091): the target can't have the benefit of cover against an [IGNORES COVER] weapon's attacks.
-        if (penalties && !state.terrain.empty() && target != nullptr && !profile.has<ability::IgnoresCover>()) {
+        if (penalties && !sel.benefit_of_cover && !state.terrain.empty() && target != nullptr &&
+            !profile.has<ability::IgnoresCover>()) {
             // 13.08 (D-089): decided when the targets are selected; models lost later don't change it.
             if (!view) view.emplace(state);
             const auto key = std::make_pair(s.model.v, s.target.v);

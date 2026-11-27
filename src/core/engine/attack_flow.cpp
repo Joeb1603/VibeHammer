@@ -142,6 +142,12 @@ std::vector<std::size_t> batch_options(const GameState& state, const AttackFlow&
     return same_target.empty() ? all : same_target;
 }
 
+// 05.04.01 with 24.28 (M101, D-103): the batch's groups in the declared allocation order, the group selected for a
+// [PRECISION] attack first.
+std::vector<AllocationGroup> allocation_groups(const BatchInProgress& b) {
+    return with_precision_group_first(order_groups(b.groups, *b.order), b.precision);
+}
+
 const BatchInProgress& current_batch(const AttackFlow& f) {
     if (!f.current) {
         throw std::logic_error("attack flow: no batch in progress");
@@ -158,8 +164,8 @@ bool casualty_decision_needed(const GameState& state, const AttackFlow& f) {
     const AttackBatch& batch = f.batches[b.batch];
     Unit copy = unit_ref(state, batch.target);
     const ModelChooser first = [](const Unit&, std::span<const ModelId> options) { return options.front(); };
-    const InflictDamageResult r = inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile,
-                                                 first, false, damage_stand_in);
+    const InflictDamageResult r =
+        inflict_damage(copy, allocation_groups(b), *b.save_rolls, batch.profile, first, false, damage_stand_in);
     return std::any_of(r.steps.begin(), r.steps.end(), [](const SaveStep& s) { return s.damage.has_value(); });
 }
 
@@ -277,8 +283,8 @@ void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, 
     const BatchInProgress b = current_batch(f);
     const AttackBatch& batch = f.batches[b.batch];
     Unit& target = unit_ref(state, batch.target);
-    const InflictDamageResult result = inflict_damage(target, order_groups(b.groups, *b.order), *b.save_rolls,
-                                                      batch.profile, priority_chooser(priority), false, roll);
+    const InflictDamageResult result = inflict_damage(target, allocation_groups(b), *b.save_rolls, batch.profile,
+                                                      priority_chooser(priority), false, roll);
     events.push_back(event::SavesResolved{target.id, result});
     for (const SaveStep& step : result.steps) {
         if (step.damage && step.damage->destroyed) {
@@ -313,8 +319,9 @@ void resolve_devastating(GameState& state, const std::vector<ModelId>& priority,
     const BatchInProgress b = current_batch(f);
     const AttackBatch& batch = f.batches[b.batch];
     Unit& target = unit_ref(state, batch.target);
-    const DevastatingWoundsResult result = inflict_devastating_wounds(target, b.devastating, batch.profile.damage,
-                                                                      priority_chooser(priority), false, roll);
+    // App 24.28.01 (D-103): first to the CHARACTER group selected for the [PRECISION] attack.
+    const DevastatingWoundsResult result = inflict_devastating_wounds(
+        target, b.devastating, batch.profile.damage, priority_chooser(priority), false, roll, b.precision);
     events.push_back(event::DevastatingWoundsInflicted{f.attacker, target.id, result});
     for (const DevastatingStep& step : result.steps) {
         if (step.damage.destroyed) events.push_back(event::ModelDestroyed{target.id, step.damage.model});
@@ -359,9 +366,9 @@ DamagePlan plan_damage(const GameState& state, const AttackFlow& f) {
     // the same).
     if (b.mortal) {
         // D-101: 24.10's mortal wounds, one damage roll per critical wound that reaches a model.
-        (void)inflict_devastating_wounds(copy, b.devastating, batch.profile.damage, recording, true, roll);
+        (void)inflict_devastating_wounds(copy, b.devastating, batch.profile.damage, recording, true, roll, b.precision);
     } else {
-        (void)inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, recording, true, roll);
+        (void)inflict_damage(copy, allocation_groups(b), *b.save_rolls, batch.profile, recording, true, roll);
     }
     if (needed) return DamagePlan{false, *needed};
     return DamagePlan{true, ModelId{}};
@@ -402,6 +409,35 @@ void resolve_attack_mortal_wounds(GameState& state, const std::vector<ModelId>& 
     const int count = f.pending_mortal_wounds;
     f.pending_mortal_wounds = 0;
     inflict_mortal_wounds_by_priority(state, unit_ref(state, f.attacker), count, priority, events);
+}
+
+// 24.28 [PRECISION] (M101, D-103): the CHARACTER models of the batch's target whose allocation group the attacking
+// unit's player can select: each is in the unit, is the model of a CHARACTER group, and is visible (06.01, 13.07-13.11)
+// to one or more of the attacking models (those whose weapons are in the batch). Empty without the ability, or when the
+// target has one allocation group (nothing to select).
+std::vector<ModelId> precision_options(const GameState& state, const AttackFlow& f, const BatchInProgress& b) {
+    std::vector<ModelId> out;
+    const AttackBatch& batch = f.batches[b.batch];
+    if (!precision(batch.profile) || b.groups.size() < 2) return out;
+    const Unit& target = unit_ref(state, batch.target);
+    const Unit& attacker = unit_ref(state, f.attacker);
+    std::vector<const Model*> attackers;
+    for (const std::size_t s : batch.selections) {
+        const Model* m = find_model(attacker, f.selections[s].attacker);
+        if (m != nullptr && std::find(attackers.begin(), attackers.end(), m) == attackers.end()) attackers.push_back(m);
+    }
+    for (const AllocationGroup& g : b.groups) {
+        if (!g.character) continue;
+        for (const ModelId id : g.models) {
+            const Model* character = find_model(target, id);
+            if (character == nullptr) continue;
+            const bool seen = std::any_of(attackers.begin(), attackers.end(), [&](const Model* m) {
+                return model_visible_to_model(state, *m, target, *character);
+            });
+            if (seen) out.push_back(id);
+        }
+    }
+    return out;
 }
 
 std::vector<ModelId> model_ids(const Unit& unit) {
@@ -454,6 +490,12 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
             if (!b.priority) return PendingDecision{target.side, decision::OrderCasualties{batch.target}};
             if (plan_damage(state, f).complete) return std::nullopt;
             return PendingDecision{unit_ref(state, f.attacker).side, decision::RollDice{RollKind::Damage, f.attacker}};
+        }
+        if (!b.precision_decided && !precision_options(state, f, b).empty()) {
+            // 24.28 (M101, D-103): "at the start of the Allocation Order step" the attacking unit's player can select
+            // the group of a visible CHARACTER model.
+            return PendingDecision{unit_ref(state, f.attacker).side,
+                                   decision::SelectPrecisionGroup{f.attacker, batch.target}};
         }
         if (!b.order) {
             if (legal_allocation_orders(target, b.groups).size() > 1) {
@@ -918,6 +960,40 @@ void apply_details(GameState& state, Side, const action::RerollWoundRolls& a, Di
     for (const WoundRoll& r : p.rolls.rolls) faces.push_back(r.unmodified);
     // D-096: then 15.02's window, with the dice Twin-linked re-rolled out of reach (01.05.02).
     after_roll(state, RollKind::Wound, f.attacker, p.batch, faces, std::move(rerolled), events);
+}
+
+// ---- 24.28 SelectPrecisionGroup (D-103) ----
+
+std::vector<GameAction> legal_for(const GameState& state, const decision::SelectPrecisionGroup&) {
+    // One answer per visible CHARACTER model, then none (any of them is valid).
+    const AttackFlow& f = flow_of(state);
+    std::vector<GameAction> out;
+    for (const ModelId id : precision_options(state, f, current_batch(f))) {
+        out.push_back(action::SelectPrecisionGroup{id});
+    }
+    out.push_back(action::SelectPrecisionGroup{std::nullopt});
+    return out;
+}
+
+ValidationResult validate_details(const GameState& state, Side, const action::SelectPrecisionGroup& a) {
+    if (!a.character) return ValidationResult::success();  // "the active player can select": none is allowed
+    const AttackFlow& f = flow_of(state);
+    const BatchInProgress& b = current_batch(f);
+    const std::vector<ModelId> options = precision_options(state, f, b);
+    if (std::find(options.begin(), options.end(), *a.character) == options.end()) {
+        const UnitId target = f.batches[b.batch].target;
+        return ValidationResult::failure("24.28: model " + std::to_string(a.character->v) + " is not a CHARACTER model of " +
+                                         unit_label(target) + " that one of the attacking models can see");
+    }
+    return ValidationResult::success();
+}
+
+void apply_details(GameState& state, Side, const action::SelectPrecisionGroup& a, DiceSource&, Events& events) {
+    AttackFlow& f = flow_of(state);
+    BatchInProgress& b = *f.current;
+    b.precision_decided = true;
+    b.precision = a.character;
+    events.push_back(event::PrecisionGroupSelected{f.attacker, f.batches[b.batch].target, a.character});
 }
 
 // ---- 04.03.03 RetargetAttacks (D-093) ----

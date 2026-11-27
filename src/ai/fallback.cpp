@@ -87,6 +87,10 @@ std::optional<core::GameAction> preferred(const core::GameState& state, const st
     }
     // 24.38 (D-072): re-roll every failed wound roll (listed first).
     if (std::holds_alternative<decision::RerollWoundRolls>(kind)) return first_of<action::RerollWoundRolls>(legal);
+    // 24.28 (M101, D-103): the first visible CHARACTER (listed first), or none when there is none.
+    if (std::holds_alternative<decision::SelectPrecisionGroup>(kind)) {
+        return first_of<action::SelectPrecisionGroup>(legal);
+    }
     // 04.03.03 (M92, D-093): the first offered new target (every lost weapon that can target it).
     if (std::holds_alternative<decision::RetargetAttacks>(kind)) return first_of<action::RetargetAttacks>(legal);
     // D-081 (M74): the lowest-id unit at the engine's proposal, or CannotSetUp when it has no legal spot.

@@ -132,6 +132,17 @@ HelpEntry weapon_ability_help(const core::WeaponAbility& ability) {
                 h.summary = "The weapon can be selected to make attacks with once per battle.";
                 h.rule = "24.26";
                 h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::IndirectFire>) {
+                h.summary = "The unit can shoot using Indirect shooting: this weapon can then target units its model "
+                            "can't see, at a cost (the target has cover, hit rolls of 1-5 fail, or 1-3 if the unit "
+                            "remained stationary and a friendly unit can see the target; no hit re-rolls).";
+                h.rule = "24.19";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::Precision>) {
+                h.summary = "When these attacks wound a unit with a CHARACTER model that an attacking model can see, "
+                            "the attacker can select that CHARACTER's group: the attacks are allocated to it first.";
+                h.rule = "24.28";
+                h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::SustainedHits>) {
                 h.summary = "Each critical hit (an unmodified 6 to hit) scores " + std::to_string(a.x) +
                             (a.x == 1 ? " extra hit" : " extra hits") + " on the target. The extra hits are not "
@@ -220,6 +231,14 @@ HelpEntry shooting_type_help(core::ShootingType type) {
                     "unit within 24\" of the unit, and only an unmodified hit roll of 6 hits, whatever the BS and the "
                     "modifiers (not a critical hit; [TORRENT] still hits automatically). Hit rolls can't be re-rolled.",
                     "15.09", true};
+        case core::ShootingType::Indirect:
+            return {"Indirect shooting",
+                    "The unit is not engaged, did not Advance and has an [INDIRECT FIRE] weapon. Those weapons can "
+                    "target units their model can't see. Each of their attacks is at a target with the benefit of "
+                    "cover, its hit roll can't be re-rolled, and an unmodified hit roll of 1-5 fails (1-3 if the unit "
+                    "remained stationary this turn and a friendly unit can see the target). The unit's other weapons "
+                    "shoot as in Normal shooting.",
+                    "10.07", true};
     }
     return {};
 }
@@ -372,6 +391,20 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
             }
         } else if (std::holds_alternative<ab::OneShot>(a)) {
             line.text = "One Shot: this is the weapon's one use this battle";  // 24.26
+            line.kind = EffectKind::Active;
+        } else if (std::holds_alternative<ab::IndirectFire>(a)) {
+            // 24.19 / 10.07 (M101, D-103)
+            if (type == core::ShootingType::Indirect) {
+                const int fails = selections.empty() ? 5 : selections.front().hit_fails_to;
+                line.text = "Indirect Fire: the target needn't be visible; it has cover, and hit rolls of 1-" +
+                            std::to_string(fails) + " fail";
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = "Indirect Fire: can target units out of sight in Indirect shooting";
+                line.kind = EffectKind::Info;
+            }
+        } else if (std::holds_alternative<ab::Precision>(a)) {
+            line.text = "Precision: a visible CHARACTER's group can be selected to take the attacks first";  // 24.28
             line.kind = EffectKind::Active;
         } else if (std::holds_alternative<ab::Hazardous>(a)) {
             line.text = "Hazardous: a hazard roll for the unit after its attacks (1-2: a mortal wound)";

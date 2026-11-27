@@ -123,6 +123,8 @@ std::string weapon_ability_label(const core::WeaponAbility& ability) {
             } else if constexpr (std::is_same_v<T, ab::Psychic>) return "[PSYCHIC]";
             else if constexpr (std::is_same_v<T, ab::Cleave>) return "[CLEAVE " + std::to_string(a.x) + "]";
             else if constexpr (std::is_same_v<T, ab::OneShot>) return "[ONE SHOT]";
+            else if constexpr (std::is_same_v<T, ab::IndirectFire>) return "[INDIRECT FIRE]";  // 24.19 (M101)
+            else if constexpr (std::is_same_v<T, ab::Precision>) return "[PRECISION]";         // 24.28 (M101)
             else if constexpr (std::is_same_v<T, ab::ExtraAttacks>) return "[EXTRA ATTACKS]";
             else if constexpr (std::is_same_v<T, ab::IgnoresCover>) return "[IGNORES COVER]";
             else if constexpr (std::is_same_v<T, ab::Anti>) {

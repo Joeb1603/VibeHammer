@@ -12,12 +12,13 @@
 
 namespace wh40k::core {
 
-// 10.02 Select Shooting Type. Indirect shooting (10.07) is out of scope for V1.
+// 10.02 Select Shooting Type.
 enum class ShootingType : std::uint8_t {
     Normal,         // 10.04
     Assault,        // 10.05
     CloseQuarters,  // 10.06
     Snap,           // 15.09 Snap Shooting (D-097, M96): only as a rule allows it (15.08 Fire Overwatch), never in 10.02
+    Indirect,       // 10.07 Indirect Shooting (M101, D-103): a unit with an [INDIRECT FIRE] weapon (24.19)
 };
 
 [[nodiscard]] std::string_view shooting_type_name(ShootingType t);  // also the JSON name

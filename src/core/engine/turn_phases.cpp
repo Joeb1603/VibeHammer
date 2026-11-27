@@ -8,6 +8,7 @@
 #include "core/engine/engine.hpp"
 #include "core/engine/internal.hpp"
 #include "core/model/keywords.hpp"
+#include "core/rules/shooting.hpp"
 #include "core/state/deployment.hpp"
 #include "core/state/queries.hpp"
 
@@ -194,6 +195,8 @@ void apply_details(GameState& state, Side, const action::StartMove& a, DiceSourc
     u->phase_flags.selected_to_move = true;  // 09.02: that unit is selected to move
     if (a.move_type == MoveType::RemainStationary) {
         // 09.04: no models are moved; no rules triggered by starting or ending a move.
+        // M101 (D-103): 10.07 reads "remained stationary this turn" for a unit with an [INDIRECT FIRE] weapon.
+        if (has_indirect_fire_weapon(*u)) u->turn_flags.remained_stationary = true;
         events.push_back(event::UnitRemainedStationary{a.unit});
         return;
     }

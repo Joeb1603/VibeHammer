@@ -96,6 +96,10 @@ struct BatchInProgress {
     // mortal wounds are being inflicted; `priority` and `damage_rolls` are theirs from here. Omitted from JSON when
     // false.
     bool mortal = false;
+    // M101 (D-103): 24.28 [PRECISION]: the attacking unit's player has answered (or had nothing to select), and the
+    // CHARACTER model whose allocation group they selected as the current one. Both omitted from JSON when unset.
+    bool precision_decided = false;
+    std::optional<ModelId> precision{};
     friend bool operator==(const BatchInProgress&, const BatchInProgress&) = default;
 };
 

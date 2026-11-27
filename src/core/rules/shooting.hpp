@@ -32,6 +32,17 @@ namespace wh40k::core {
 // and in `target` are ignored; every other model can block.
 [[nodiscard]] bool unit_visible_to_model(const GameState& state, const Model& observer, const Unit& target);
 
+// M101 (D-103): 06.01 Model Visible, for 24.28 [PRECISION]: `observer` can see the model `observed` of `observed_unit`
+// (past the models of other units, and with terrain 13.07, 13.09-13.11), as unit_visible_to_model judges each model.
+[[nodiscard]] bool model_visible_to_model(const GameState& state, const Model& observer, const Unit& observed_unit,
+                                          const Model& observed);
+
+// M101 (D-103): 24.19: does the unit have a ranged weapon profile with [INDIRECT FIRE] (10.07's ELIGIBLE IF)?
+[[nodiscard]] bool has_indirect_fire_weapon(const Unit& unit);
+// 10.07 "the target is visible to one or more friendly units": a model of any unit of `side` can see `target` (06.01
+// with terrain, as shooting judges it).
+[[nodiscard]] bool unit_visible_to_side(const GameState& state, Side side, const Unit& target);
+
 // 04.02: is `target` within the profile's range of `model` (some model of the target within range,
 // edge to edge, D-009)?
 [[nodiscard]] bool target_within_range(const Model& model, const WeaponProfile& profile, const Unit& target);

@@ -54,6 +54,8 @@ void add(Fnv1a& h, const core::Unit& u) {
     h.i32(u.starting_strength);
     const core::UnitTurnFlags& t = u.turn_flags;
     for (const bool b : {t.advanced, t.fell_back, t.moved_over_3in, t.made_charge_move, t.fights_first}) h.flag(b);
+    // M101 (D-103): 10.07's "remained stationary" only when set (a unit with an [INDIRECT FIRE] weapon), behind a tag.
+    if (t.remained_stationary) h.u64(0x73746179ull);  // "stay"
     const core::UnitPhaseFlags& p = u.phase_flags;
     for (const bool b : {p.selected_to_move, p.desperate_escape_hazards_made, p.selected_to_shoot, p.declared_charge,
                          p.piled_in, p.engaged_at_fight_step_start, p.selected_to_fight,

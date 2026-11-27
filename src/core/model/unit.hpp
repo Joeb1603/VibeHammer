@@ -41,6 +41,10 @@ struct UnitTurnFlags {
     bool moved_over_3in = false;  // 24.16 [HEAVY]
     bool made_charge_move = false;  // 11.04 (12.02 / 12.04 refer to it)
     bool fights_first = false;      // 11.04 After Moving: every model has Fights First (24.13) until end of turn
+    // M101 (D-103): 10.07 "your unit remained stationary this turn" (the Remain Stationary move type, 09.04). Recorded
+    // only for a unit a rule reads it for (one with an [INDIRECT FIRE] weapon), so every other state serializes as
+    // before. JSON omitted when false.
+    bool remained_stationary = false;
     friend bool operator==(const UnitTurnFlags&, const UnitTurnFlags&) = default;
 };
 

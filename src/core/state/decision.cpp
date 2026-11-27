@@ -119,6 +119,7 @@ std::string_view decision_rule(const PendingDecision& d) {
             else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "15.01";  // D-096
             else if constexpr (std::is_same_v<T, decision::SnapShoot>) return "15.09";      // D-097
             else if constexpr (std::is_same_v<T, decision::SelectModelAndEnemy>) return stratagem_rule(k.stratagem);
+            else if constexpr (std::is_same_v<T, decision::SelectPrecisionGroup>) return "24.28";  // D-103
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         d.kind);
@@ -150,6 +151,7 @@ std::string_view decision_name(const DecisionKind& kind) {
             else if constexpr (std::is_same_v<T, decision::UseStratagems>) return "UseStratagems";
             else if constexpr (std::is_same_v<T, decision::SnapShoot>) return "SnapShoot";
             else if constexpr (std::is_same_v<T, decision::SelectModelAndEnemy>) return "SelectModelAndEnemy";
+            else if constexpr (std::is_same_v<T, decision::SelectPrecisionGroup>) return "SelectPrecisionGroup";
             else static_assert(sizeof(T) == 0, "unhandled decision");
         },
         kind);
@@ -224,6 +226,10 @@ std::string what_to_do(const PendingDecision& d) {
                 // D-099: 15.05 / 15.06 EFFECT steps 1-2.
                 return "select a model of unit " + std::to_string(k.unit.v) + " and an enemy unit for " +
                        std::string(stratagem_name(k.stratagem));
+            } else if constexpr (std::is_same_v<T, decision::SelectPrecisionGroup>) {
+                // D-103: 24.28, at the start of the Allocation Order step.
+                return "select a CHARACTER of unit " + std::to_string(k.target.v) + " for unit " +
+                       std::to_string(k.attacker.v) + "'s [PRECISION] attacks, or none";
             } else {
                 static_assert(sizeof(T) == 0, "unhandled decision");
             }

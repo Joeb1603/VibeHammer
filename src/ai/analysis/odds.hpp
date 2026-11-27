@@ -81,8 +81,8 @@ public:
 private:
     // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X, [TWIN-LINKED], M96
     // (D-097): 15.09 snap shooting, M99 (D-101): the critical wound threshold (24.03) and [DEVASTATING WOUNDS] (24.10),
-    // M100 (D-102): [LETHAL HITS] (24.23))
-    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool, int, bool, bool>;
+    // M100 (D-102): [LETHAL HITS] (24.23), M101 (D-103): 10.07's unmodified hit rolls that fail)
+    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool, int, bool, bool, int>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
     // (dice, sides, modifier)

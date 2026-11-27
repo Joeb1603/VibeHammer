@@ -324,6 +324,10 @@ std::string body(const core::GameEvent& e) {
                 }
                 return text + wounds(x.enemy_mortal_wounds) + " on " + unit(x.enemy) + " (each 5+), " +
                        wounds(x.unit_mortal_wounds) + " on " + unit(x.unit) + " (each 1; at most 6 per unit)";
+            } else if constexpr (std::is_same_v<T, ev::PrecisionGroupSelected>) {
+                // M101 (D-103): "Precision: unit 1 selects model 12 of unit 4" / "... selects no CHARACTER of unit 4".
+                if (!x.character) return "Precision: " + unit(x.attacker) + " selects no CHARACTER of " + unit(x.target);
+                return "Precision: " + unit(x.attacker) + " selects " + model(*x.character) + " of " + unit(x.target);
             } else if constexpr (std::is_same_v<T, ev::DevastatingWoundsInflicted>) {
                 // M99 (D-101): "Devastating Wounds on unit 2: 3 mortal wounds on model 7 (destroyed); 1 critical wound
                 // lost".

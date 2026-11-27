@@ -81,6 +81,7 @@ TEST(Serialization, EveryDecisionKindRoundTrips) {
         {Side::B, decision::UseStratagems{WindowTiming::AfterRoll, UnitId{2}}},  // M95 (D-096)
         {Side::B, decision::SnapShoot{UnitId{2}}},                               // M96 (D-097)
         {Side::A, decision::SelectModelAndEnemy{Stratagem::Explosives, UnitId{1}}},  // M97 (D-099)
+        {Side::B, decision::SelectPrecisionGroup{UnitId{2}, UnitId{1}}},              // M101 (D-103)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<DecisionKind>);
     for (const auto& d : all) {
@@ -268,6 +269,7 @@ TEST(Serialization, EveryActionKindRoundTrips) {
         action::UseStratagem{Stratagem::CommandReroll, UnitId{2}, std::size_t{3}},                // M95 (D-096)
         action::DeclineStratagems{},                                                              // M95 (D-096)
         action::SelectModelAndEnemy{ModelId{4}, UnitId{7}},                                       // M97 (D-099)
+        action::SelectPrecisionGroup{ModelId{4}},                                                 // M101 (D-103)
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameAction>);
     for (const auto& a : all) {
@@ -395,6 +397,7 @@ TEST(Serialization, EveryEventKindRoundTrips) {
             DevastatingWoundsResult{{DevastatingStep{DamageResult{ModelId{7}, 3, 2, true}, CharacteristicRoll{{2}, 3}},
                                      DevastatingStep{DamageResult{ModelId{8}, 2, 2, false}, std::nullopt}},
                                     1, 1}},                                                                     // M99
+        event::PrecisionGroupSelected{UnitId{1}, UnitId{2}, ModelId{7}},                                       // M101
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

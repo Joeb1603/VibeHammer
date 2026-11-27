@@ -66,8 +66,10 @@ std::optional<CasualtyPreview> preview_attack(const GameState& state, std::span<
     PickReplay replay(picks);
     const ModelChooser chooser = [&replay](const Unit&, std::span<const ModelId> options) { return replay(options); };
     // D-069: a random D takes its maximum and rolls nothing (damage_stand_in).
-    const InflictDamageResult r = inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile,
-                                                 chooser, true, damage_stand_in);
+    // 24.28 (M101, D-103): the group selected for a [PRECISION] attack is the current one first.
+    const InflictDamageResult r =
+        inflict_damage(copy, with_precision_group_first(order_groups(b.groups, *b.order), b.precision), *b.save_rolls,
+                       batch.profile, chooser, true, damage_stand_in);
     if (!replay.valid()) return std::nullopt;
 
     CasualtyPreview out;
@@ -104,8 +106,8 @@ std::optional<CasualtyPreview> preview_devastating(const GameState& state, std::
     PickReplay replay(picks);
     const ModelChooser chooser = [&replay](const Unit&, std::span<const ModelId> options) { return replay(options); };
     // D-069: a random D takes its maximum and rolls nothing (damage_stand_in).
-    const DevastatingWoundsResult r =
-        inflict_devastating_wounds(copy, b.devastating, batch.profile.damage, chooser, true, damage_stand_in);
+    const DevastatingWoundsResult r = inflict_devastating_wounds(copy, b.devastating, batch.profile.damage, chooser, true,
+                                                                 damage_stand_in, b.precision);  // app 24.28.01
     if (!replay.valid()) return std::nullopt;
 
     CasualtyPreview out;

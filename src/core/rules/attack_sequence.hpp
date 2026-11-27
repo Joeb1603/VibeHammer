@@ -227,10 +227,24 @@ struct DevastatingWoundsResult {
 // non-CHARACTER model first, ...); that model takes every mortal wound of the critical wound (D-101). `choose` is
 // called when there is more than one candidate, or always with `ask_when_forced`; a random D is rolled by `roll_damage`
 // once the model is selected (as 05.04, D-069). Stops when the unit is destroyed.
+// M101 (D-103): `first_to` is the CHARACTER model of the group selected for a [PRECISION] attack (app 24.28.01: its
+// mortal wounds "are first applied to the CHARACTER group that was selected ... if that group is not already
+// destroyed"): while that model is in the unit it takes each critical wound's mortal wounds, before 06.02's order.
 [[nodiscard]] DevastatingWoundsResult inflict_devastating_wounds(Unit& target, int critical_wounds,
                                                                  const DiceExpr& damage, const ModelChooser& choose,
                                                                  bool ask_when_forced = false,
-                                                                 const DamageRoller& roll_damage = {});
+                                                                 const DamageRoller& roll_damage = {},
+                                                                 std::optional<ModelId> first_to = std::nullopt);
+
+// ---- 24.28 [PRECISION] (M101, D-103) ----
+
+// Does the profile have [PRECISION]?
+[[nodiscard]] bool precision(const AttackProfile& profile);
+// The groups in allocation order with the group of `character` (the CHARACTER model selected for a [PRECISION] attack)
+// moved to the front: it "is the current allocation group" until it is destroyed (24.28, 05.04.01), then the declared
+// order applies. Without a selection: `ordered` as it is.
+[[nodiscard]] std::vector<AllocationGroup> with_precision_group_first(std::vector<AllocationGroup> ordered,
+                                                                      std::optional<ModelId> character);
 
 struct BatchResult {
     HitRolls hits;
