@@ -261,18 +261,22 @@ TEST(R24_37_Torrent, AutomaticallyHitsWithoutRolling) {
     EXPECT_EQ(dice.consumed(), 0u);
 }
 
-TEST(R24_38_TwinLinked, IsResolvedWhileDevastatingWoundsIsStillRefused) {
+TEST(R24_38_TwinLinked, IsResolvedWhileAnUnknownAbilityIsStillRefused) {
     // M61 (D-072): [TWIN-LINKED] is implemented, so its hit and wound rolls are made as usual (the re-roll is the
-    // attacker's decision, in the engine). [DEVASTATING WOUNDS] (24.10, D-026) still throws as the second safety net.
+    // attacker's decision, in the engine). An ability the engine doesn't know (D-071) still throws as the second safety
+    // net. (M99, D-101: [DEVASTATING WOUNDS] is implemented; it was this test's refused example.)
     AttackProfile p = test_profile(4, 3, 0, 1);
     p.attack_time_abilities = {ability::TwinLinked{}};
     ScriptedDice dice{4, 2};
     EXPECT_EQ(make_hit_rolls(dice, p, 1).hits(), 1);
     EXPECT_EQ(make_wound_rolls(dice, p, 1, 4).wounds(), 0);  // 2 < 4+: failed, re-rollable
     AttackProfile dw = test_profile(4, 3, 0, 1);
-    dw.attack_time_abilities = {ability::DevastatingWounds{}};
+    dw.attack_time_abilities = {ability::Unknown{"Conversion"}};
     ScriptedDice more{4};
     EXPECT_THROW((void)make_hit_rolls(more, dw, 1), std::logic_error);
+    dw.attack_time_abilities = {ability::DevastatingWounds{}};
+    ScriptedDice again{4};
+    EXPECT_EQ(make_hit_rolls(again, dw, 1).hits(), 1);  // 24.10 (M99)
 }
 
 // ==== D-011 Modifying Dice Rolls ====

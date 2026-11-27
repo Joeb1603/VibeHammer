@@ -63,7 +63,7 @@ TEST(M62_Odds, ProfileSupportedLetsARandomAOrDThroughButNotARandomAMeleeWeapon) 
     EXPECT_TRUE(profile_supported(weapon_profile("havocs", "Havoc lascannon")));            // D D6+1
     EXPECT_TRUE(profile_supported(weapon_profile("screamer_killer", "Bio-plasmic scream")));  // A D6+3
     EXPECT_TRUE(profile_supported(weapon_profile("hive_tyrant", "Heavy venom cannon")));     // A D3
-    EXPECT_FALSE(profile_supported(weapon_profile("havocs", "Meltagun")));                    // [MELTA 2], D-071
+    EXPECT_TRUE(profile_supported(weapon_profile("havocs", "Meltagun")));  // D D6 with [MELTA 2]: resolved since M99 (D-101)
     WeaponProfile melee = weapon_profile("havocs", "Astartes chainsword");
     EXPECT_TRUE(profile_supported(melee));
     melee.damage = DiceExpr{1, 3, 0};

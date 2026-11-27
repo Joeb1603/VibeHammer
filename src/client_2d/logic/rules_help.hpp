@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/model/unit.hpp"
 #include "core/model/weapon.hpp"
 #include "core/rules/attack_types.hpp"
 #include "core/rules/shooting_types.hpp"
@@ -46,11 +47,13 @@ struct EffectLine {
 
 // One line per ability on `weapon`, summed over `selections` (every selection uses `weapon`). With the
 // shooting type, [ASSAULT] / [CLOSE-QUARTERS] are Active when they are what lets the unit shoot that way
-// (10.05 / 10.06), and Info otherwise.
+// (10.05 / 10.06), and Info otherwise. M99: `target` is the selections' target unit, which [ANTI] reads (24.03); without
+// it [ANTI] shows as having no effect.
 [[nodiscard]] std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
                                                    std::span<const core::WeaponSelection> selections,
                                                    const core::AttackContext& context,
-                                                   std::optional<core::ShootingType> type = std::nullopt);
+                                                   std::optional<core::ShootingType> type = std::nullopt,
+                                                   const core::Unit* target = nullptr);
 
 // D-073: what the shooting type and the target did to these selections' hit rolls: one line per rule that gave them
 // -1 when their targets were selected (10.06: a MONSTER/VEHICLE in close-quarters shooting; 17.03: an engaged

@@ -47,6 +47,10 @@ void to_json(Json& j, const SaveStep& v);
 void from_json(const Json& j, SaveStep& v);
 void to_json(Json& j, const InflictDamageResult& v);
 void from_json(const Json& j, InflictDamageResult& v);
+void to_json(Json& j, const DevastatingStep& v);  // D-101 (24.10)
+void from_json(const Json& j, DevastatingStep& v);
+void to_json(Json& j, const DevastatingWoundsResult& v);
+void from_json(const Json& j, DevastatingWoundsResult& v);
 void to_json(Json& j, const ModelPlacement& v);  // D-081
 void from_json(const Json& j, ModelPlacement& v);
 void to_json(Json& j, RollKind v);  // D-095

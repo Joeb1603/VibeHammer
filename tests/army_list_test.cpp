@@ -61,6 +61,20 @@ const Datasheet& sheet(const std::string& name) {
 
 std::string file(const std::string& name) { return "data/units/" + name + ".json"; }
 
+// M99 (D-101): the datasheet from the refusal tests' data (support/army_fixtures.hpp): D-079 part 1's refused weapons
+// carry an ability the engine doesn't know there, so they are refused whatever the engine has learned since.
+const Datasheet& rsheet(const std::string& name) {
+    static std::map<std::string, Datasheet> cache;
+    auto it = cache.find(name);
+    if (it == cache.end()) it = cache.emplace(name, wh40k::test::refused_resolver()(file(name))).first;
+    return it->second;
+}
+Names rproblems_of(const std::string& name, std::vector<ArmyModelGroup> groups) {
+    const Names p = unit_problems(rsheet(name), ArmyUnit{file(name), std::move(groups)});
+    for (const std::string& r : p) EXPECT_TRUE(cited(r)) << r;
+    return p;
+}
+
 ArmyUnit unit(const std::string& name, std::vector<ArmyModelGroup> groups) { return ArmyUnit{file(name), std::move(groups)}; }
 
 Names problems_of(const std::string& name, std::vector<ArmyModelGroup> groups) {
@@ -281,11 +295,14 @@ TEST(R02_07_WargearOptions, LimitsAreEnforced) {
     EXPECT_EQ(problems_of("chaos_terminator_squad", {t_champ, fists(6), accursed(3)}), Names{});
     EXPECT_EQ(problems_of("chaos_terminator_squad", {t_champ_fist, fists(6), accursed(3)}),
               Names{"D-079: a unit of 10 models may have at most 6 'Power fist' (it has 7)"});
-    // Chainfists: 1 below 10 models, 2 at 10 (the weapon is refused today too, D-071).
+    // Chainfists: 1 below 10 models, 2 at 10. M99 (D-101): [ANTI-VEHICLE 3+] is implemented, so the real weapon can be
+    // picked; in the refusal tests' data it is still refused (D-071).
     const auto chainfists = [](int n) { return group("Chainfist and combi-bolter", n, {"Chainfist", "Combi-bolter"}); };
     Names p = problems_of("chaos_terminator_squad", {t_champ, chainfists(2), accursed(2)});
     EXPECT_TRUE(has(p, "D-079: a unit of 5 models may have at most 1 'Chainfist' (it has 2)"));
     p = problems_of("chaos_terminator_squad", {t_champ, chainfists(2), accursed(7)});
+    EXPECT_EQ(p, Names{});
+    p = rproblems_of("chaos_terminator_squad", {t_champ, chainfists(2), accursed(7)});
     EXPECT_FALSE(has_prefix(p, "D-079: a unit of 10 models may have at most"));
     EXPECT_TRUE(has_prefix(p, "D-079: 'Chainfist and combi-bolter' carries 'Chainfist', which can't be picked: D-071: "));
     // Paired accursed weapons, the champion's option included: 1 below 10 models, 2 at 10.
@@ -475,20 +492,23 @@ TEST(D079_Character, AnArmyNeedsACharacter) {
 // ==== Refused weapons (agreed: greyed out with the reason) ====
 
 TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
-    // D-079 part 1's list: refused today from their abilities (D-026, D-071). M90 (D-091): the Flamers and the Heavy
-    // flamer ([IGNORES COVER]) are no longer refused, so the "every other weapon" loop below checks them.
+    // D-079 part 1's list: refused from their abilities (D-026, D-071). M90 (D-091): the Flamers and the Heavy
+    // flamer ([IGNORES COVER]) are no longer refused, so the "every other weapon" loop below checks them. M99 (D-101):
+    // the engine resolves [DEVASTATING WOUNDS], [ANTI] and [MELTA] too, so the list is read from the refusal tests'
+    // data, where these weapons carry an ability the engine doesn't know; on the real data only the Balefire tome
+    // ([PSYCHIC]) is still refused (the last check).
     const std::vector<std::pair<std::string, std::string>> refused = {
         {"chaos_lord", "Daemon hammer"},          {"chaos_terminator_squad", "Combi-weapon"},
         {"chaos_terminator_squad", "Chainfist"},  {"chaos_terminator_squad", "Reaper autocannon"},
         {"legionaries", "Meltagun"},              {"havocs", "Meltagun"},
         {"legionaries", "Balefire tome"},         {"termagants", "Strangleweb"}};
     for (const auto& [ds, weapon] : refused) {
-        const std::optional<std::string> r = weapon_refusal(sheet(ds), weapon);
+        const std::optional<std::string> r = weapon_refusal(rsheet(ds), weapon);
         ASSERT_TRUE(r.has_value()) << ds << " " << weapon;
         EXPECT_TRUE(cited(*r)) << *r;
         // The engine's own reason for the first refused profile.
         std::optional<std::string> engine;
-        for (const WeaponProfile& p : sheet(ds).find_weapon(weapon)->profiles) {
+        for (const WeaponProfile& p : rsheet(ds).find_weapon(weapon)->profiles) {
             if (!engine) engine = unimplemented_ability_problem(p);
         }
         EXPECT_EQ(r, engine);
@@ -496,9 +516,9 @@ TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
     // Every other weapon of the eight is pickable: each of its profiles is playable.
     std::set<std::string> refused_names;
     for (const auto& [ds, weapon] : refused) refused_names.insert(weapon);
-    for (const Faction& f : wh40k::test::factions()) {
+    for (const Faction& f : wh40k::test::refused_factions()) {
         for (const std::string& u : f.unit_files) {
-            const Datasheet ds = army_resolver()(u);
+            const Datasheet ds = wh40k::test::refused_resolver()(u);
             for (const Weapon& w : ds.weapons) {
                 if (refused_names.count(w.name) > 0) continue;
                 EXPECT_EQ(weapon_refusal(ds, w.name), std::nullopt) << u << " " << w.name;
@@ -506,28 +526,38 @@ TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
         }
     }
     // An option with a refused weapon is refused for it; a list with it can't be taken.
-    const ModelWargear* champ = sheet("chaos_terminator_squad").list_building->find_wargear("Terminator Champion");
+    const ModelWargear* champ = rsheet("chaos_terminator_squad").list_building->find_wargear("Terminator Champion");
     const WargearOption* fist_combi = champ->slots[0].find_option("Power fist and Combi-weapon");
     ASSERT_NE(fist_combi, nullptr);
-    EXPECT_EQ(option_refusal(sheet("chaos_terminator_squad"), *fist_combi),
-              weapon_refusal(sheet("chaos_terminator_squad"), "Combi-weapon"));
-    EXPECT_EQ(option_refusal(sheet("chaos_terminator_squad"), *champ->slots[0].find_option("Accursed weapon and Combi-bolter")),
+    EXPECT_EQ(option_refusal(rsheet("chaos_terminator_squad"), *fist_combi),
+              weapon_refusal(rsheet("chaos_terminator_squad"), "Combi-weapon"));
+    EXPECT_EQ(option_refusal(rsheet("chaos_terminator_squad"), *champ->slots[0].find_option("Accursed weapon and Combi-bolter")),
               std::nullopt);
-    const Names p = problems_of("chaos_lord", {group("Chaos Lord", 1, {"Daemon hammer", "Plasma pistol"})});
+    const Names p = rproblems_of("chaos_lord", {group("Chaos Lord", 1, {"Daemon hammer", "Plasma pistol"})});
     EXPECT_EQ(p, Names{"D-079: 'Chaos Lord' carries 'Daemon hammer', which can't be picked: " +
-                       *weapon_refusal(sheet("chaos_lord"), "Daemon hammer")});
+                       *weapon_refusal(rsheet("chaos_lord"), "Daemon hammer")});
+    // The real data (M99): every weapon but the Balefire tome is pickable.
+    for (const Faction& f : wh40k::test::factions()) {
+        for (const std::string& u : f.unit_files) {
+            const Datasheet ds = army_resolver()(u);
+            for (const Weapon& w : ds.weapons) {
+                EXPECT_EQ(weapon_refusal(ds, w.name).has_value(), w.name == "Balefire tome") << u << " " << w.name;
+            }
+        }
+    }
 }
 
 // ==== New units ====
 
 TEST(D079_Defaults, NewUnitsSkipRefusedWeapons) {
     const auto expect_unit = [](const std::string& name, const std::vector<ArmyModelGroup>& groups, int points) {
-        const std::optional<ArmyUnit> u = default_unit(sheet(name), file(name));
+        // M99 (D-101): on the refusal tests' data, where D-079 part 1's refused weapons still are.
+        const std::optional<ArmyUnit> u = default_unit(rsheet(name), file(name));
         ASSERT_TRUE(u.has_value()) << name;
         EXPECT_EQ(u->unit_file, file(name));
         EXPECT_EQ(u->models, groups) << name;
-        EXPECT_EQ(unit_problems(sheet(name), *u), Names{}) << name;
-        EXPECT_EQ(unit_points(sheet(name), *u, 0), points) << name;
+        EXPECT_EQ(unit_problems(rsheet(name), *u), Names{}) << name;
+        EXPECT_EQ(unit_points(rsheet(name), *u, 0), points) << name;
     };
     // The Lord's default Daemon hammer is refused: the first pickable option of that slot, the Accursed weapon.
     expect_unit("chaos_lord", {group("Chaos Lord", 1, {"Accursed weapon", "Plasma pistol"})}, 95);
@@ -551,19 +581,29 @@ TEST(D079_Defaults, NewUnitsSkipRefusedWeapons) {
     expect_unit("hive_tyrant", {group("Hive Tyrant", 1, {"Monstrous bonesword and lash whip", "Monstrous scything talons"})},
                 195);
     expect_unit("tyrannofex", {group("Tyrannofex", 1, {"Powerful limbs", "Stinger salvoes", "Fleshborer hive"})}, 170);
+    // M99 (D-101): on the real data the Lord keeps its BSData default, the Daemon hammer ([DEVASTATING WOUNDS]).
+    const std::optional<ArmyUnit> real_lord = default_unit(sheet("chaos_lord"), file("chaos_lord"));
+    ASSERT_TRUE(real_lord.has_value());
+    EXPECT_EQ(real_lord->models, (std::vector<ArmyModelGroup>{group("Chaos Lord", 1, {"Daemon hammer", "Plasma pistol"})}));
+    EXPECT_EQ(unit_points(sheet("chaos_lord"), *real_lord, 0), 95);
     // No list data: no new unit.
     EXPECT_EQ(default_unit(army_resolver()("data/units/intercessor_squad.json"), "data/units/intercessor_squad.json"),
               std::nullopt);
 }
 
 TEST(D079_Defaults, UnavailableModelTypes) {
-    EXPECT_EQ(unavailable_model_types(sheet("chaos_terminator_squad")),
+    EXPECT_EQ(unavailable_model_types(rsheet("chaos_terminator_squad")),
               (Names{"Accursed weapon and combi-weapon", "Power fist and combi-weapon", "Chainfist and combi-bolter",
                      "Chainfist and combi-weapon"}));  // M90 (D-091): the Heavy weapon type's Heavy flamer is playable
-    EXPECT_EQ(unavailable_model_types(sheet("legionaries")), Names{"Legionary w/ balefire tome"});
-    EXPECT_EQ(unavailable_model_types(sheet("termagants")), Names{"Termagant w/ Strangleweb"});
+    EXPECT_EQ(unavailable_model_types(rsheet("legionaries")), Names{"Legionary w/ balefire tome"});
+    EXPECT_EQ(unavailable_model_types(rsheet("termagants")), Names{"Termagant w/ Strangleweb"});
     for (const std::string& name : {"chaos_lord", "havocs", "genestealers", "tyrant_guard", "screamer_killer",
                                     "hive_tyrant", "tyrannofex"}) {
+        EXPECT_EQ(unavailable_model_types(rsheet(name)), Names{}) << name;
+    }
+    // M99 (D-101): on the real data only the Legionary with the Balefire tome ([PSYCHIC]) can't be taken.
+    EXPECT_EQ(unavailable_model_types(sheet("legionaries")), Names{"Legionary w/ balefire tome"});
+    for (const std::string& name : {"chaos_terminator_squad", "termagants", "chaos_lord", "havocs"}) {
         EXPECT_EQ(unavailable_model_types(sheet(name)), Names{}) << name;
     }
 }
@@ -755,11 +795,12 @@ TEST(D079_RandomArmy, LegalAndDeterministic) {
                           "Paired accursed weapons", "Reaper chaincannon", "Missile launcher", "Lascannon", "Shardlauncher",
                           "Spike rifle", "Termagant devourer", "Rupture cannon", "Acid spray", "Heavy venom cannon",
                           "Stranglethorn cannon", "Bone cleaver, lash whip and rending claws",
-                          "Flamer", "Heavy flamer"}) {  // M90 (D-091): [IGNORES COVER] is implemented
+                          "Flamer", "Heavy flamer",  // M90 (D-091): [IGNORES COVER] is implemented
+                          // M99 (D-101): [DEVASTATING WOUNDS], [ANTI-X Y+] and [MELTA X] are implemented
+                          "Daemon hammer", "Combi-weapon", "Chainfist", "Reaper autocannon", "Meltagun", "Strangleweb"}) {
         EXPECT_EQ(weapons.count(w), 1u) << w;
     }
-    for (const char* w : {"Daemon hammer", "Combi-weapon", "Chainfist", "Reaper autocannon", "Meltagun", "Balefire tome",
-                          "Strangleweb"}) {
+    for (const char* w : {"Balefire tome"}) {
         EXPECT_EQ(weapons.count(w), 0u) << w;  // refused weapons are never picked
     }
     EXPECT_NE(random_army(csm(), army_resolver(), 1), random_army(csm(), army_resolver(), 2));

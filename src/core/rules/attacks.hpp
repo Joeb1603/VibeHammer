@@ -30,9 +30,38 @@ namespace wh40k::core {
 
 [[nodiscard]] AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackContext& context);
 
-// D-026 / D-071: V1 rejects weapons with an ability it does not implement yet ([DEVASTATING WOUNDS] 24.10, and
-// every ability it doesn't recognise, ability::Unknown, e.g. [LETHAL HITS] or [ANTI-X Y+]), when they are selected.
-// [TWIN-LINKED] (24.38) is implemented since M61 (D-072). D-069: a random A or D is rolled (M62), except a random A on
+// M99 (D-101): the profile of one selection's attacks against `target` (D-006: what gather_attack_batches compares):
+// make_attack_profile, then the facts recorded at Select Targets and the target's keywords:
+// - the selection's hit modifier (10.06, 17.03) and its benefit of cover (13.08: BS worsened by 1, no worse than 6+);
+// - 24.25 [MELTA X]: +X to D when the target was within half range;
+// - 24.03 [ANTI-X Y+]: the critical wound threshold against a target unit with the keyword (anti_critical_wound_on).
+// The bots' hypothetical volleys call it with a selection they fill in themselves, so both read the rules here.
+[[nodiscard]] AttackProfile selection_attack_profile(const WeaponProfile& weapon, const WeaponSelection& selection,
+                                                     const AttackContext& context, const Unit& target);
+
+// The [MELTA] and [ANTI] part of selection_attack_profile, on a profile made otherwise (the bots' hypothetical volleys
+// keep their own hit modifier and cover arithmetic).
+void apply_target_abilities(AttackProfile& profile, const WeaponProfile& weapon, const WeaponSelection& selection,
+                            const Unit& target);
+
+// The context of a unit's melee attacks (04.01 While Fighting): 24.21 [LANCE] reads whether it made a charge move this
+// turn.
+[[nodiscard]] AttackContext fighting_context(const Unit& unit);
+
+// 24.03 [ANTI-X Y+]: the unmodified wound roll that is a critical wound for `weapon` against `target`: 6 (05.02), or
+// the lowest Y of its [ANTI] instances whose keyword the target unit has (24.02 Duplicated Abilities: the controlling
+// player selects one instance; the lowest Y that applies is always their best choice, D-101).
+[[nodiscard]] int anti_critical_wound_on(const WeaponProfile& weapon, const Unit& target);
+// Does this [ANTI] instance apply to the target unit (24.01: one or more of its keywords; "non-X": none of them)?
+[[nodiscard]] bool anti_applies(const ability::Anti& anti, const Unit& target);
+
+// 24.10 [DEVASTATING WOUNDS]: does the profile have it (each critical wound ends the attack sequence for that attack and
+// inflicts the weapon's D in mortal wounds)?
+[[nodiscard]] bool devastating_wounds(const AttackProfile& profile);
+
+// D-026 / D-071: the engine rejects weapons with an ability it does not recognise (ability::Unknown, e.g. [LETHAL HITS]
+// or [PRECISION]) when they are selected. [TWIN-LINKED] (24.38) is implemented since M61 (D-072); [DEVASTATING WOUNDS]
+// (24.10), [ANTI-X Y+] (24.03), [MELTA X] (24.25) and [LANCE] (24.21) since M99 (D-101). D-069: a random A or D is rolled (M62), except a random A on
 // a melee profile, which is refused here too (04.02 splits a known number of attacks; none in the data). Rule-cited
 // reason, or nullopt if the profile can be used.
 [[nodiscard]] std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& weapon);
@@ -87,16 +116,22 @@ struct AbilityEffect {
     bool active = false;
     int extra_attack_dice = 0;  // 24.30 [RAPID FIRE X] within half range; 24.05 [BLAST X] per five models
     int hit_modifier = 0;       // 24.16 [HEAVY]: +1 when its conditions apply
+    // M99 (D-101):
+    int wound_modifier = 0;     // 24.21 [LANCE]: +1 when the unit made a charge move this turn
+    int damage_modifier = 0;    // 24.25 [MELTA X]: +X within half range
+    int critical_wound_on = 0;  // 24.03 [ANTI-X Y+]: Y against a target with the keyword; 0 when it doesn't apply
     friend bool operator==(const AbilityEffect&, const AbilityEffect&) = default;
 };
 
-// One entry per ability on `weapon`, in profile order. The extra dice and hit modifier are those
-// gather_attack_dice and make_attack_profile give for the same inputs.
+// One entry per ability on `weapon`, in profile order. The extra dice and modifiers are those
+// gather_attack_dice, make_attack_profile and selection_attack_profile give for the same inputs. M99: `target` is the
+// selection's target unit, for [ANTI] (without it [ANTI] is never active).
 [[nodiscard]] std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const WeaponSelection& selection,
-                                                         const AttackContext& context);
+                                                         const AttackContext& context, const Unit* target = nullptr);
 
 // The context a gathered batch was made with: [HEAVY] applied iff the batch's hit modifier is more than
-// the selection's own (make_attack_profile adds the +1 to the profile, gather_attack_batches the rest).
+// the selection's own (make_attack_profile adds the +1 to the profile, gather_attack_batches the rest); M99: the unit
+// charged iff the batch has a wound modifier ([LANCE]'s +1 is the only one, 24.21).
 [[nodiscard]] AttackContext batch_context(const AttackBatch& batch, const WeaponSelection& selection,
                                           AttackType type);
 

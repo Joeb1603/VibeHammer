@@ -680,12 +680,12 @@ TEST(D004_LegalActions, RandomPlayExercisesTwinLinkedReRolls) {
 TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWithARuleCitedReason) {
     // Side A's first Shooting phase on the roster fixture: lascannons the engine refuses are in range of the east
     // Termagants (48") but never offered, and declaring them is a rule-cited refusal. (Until M62 the real Havoc
-    // lascannons, D6+1 damage, were refused under D-002; D-069 rolls them, so a stand-in with [DEVASTATING WOUNDS],
-    // 24.10, still refused, takes their place.)
+    // lascannons, D6+1 damage, were refused under D-002; D-069 rolls them, so a stand-in with an ability the engine
+    // doesn't know, D-071, takes their place. M99, D-101: that was [DEVASTATING WOUNDS] until 24.10 was implemented.)
     GameState gs = wh40k::test::load_rosters_fixture();
     for (Model& m : gs.find_unit(UnitId{5})->models) {
         for (Weapon& w : m.weapons) {
-            if (w.name == "Havoc lascannon") w.profiles[0].abilities.push_back(ability::DevastatingWounds{});
+            if (w.name == "Havoc lascannon") w.profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
         }
     }
     start_game(gs);
@@ -705,19 +705,19 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
     const ValidationResult r = validate_action(gs, Side::A, lascannon);
     ASSERT_FALSE(r.ok());
     EXPECT_TRUE(std::any_of(r.reasons.begin(), r.reasons.end(),
-                            [](const std::string& s) { return s.rfind("24.10: ", 0) == 0; }))
+                            [](const std::string& s) { return s.rfind("D-071: ", 0) == 0; }))
         << r.reasons.front();
     for (const auto& reason : r.reasons) EXPECT_TRUE(is_rule_cited(reason)) << reason;
 
     // Melee: the Hive Tyrant's bonesword was refused for [TWIN-LINKED] until M61 (D-026); it is resolved since D-072.
-    // A stand-in with [DEVASTATING WOUNDS] (24.10, still refused) takes its place here. (Its scything talons are an
+    // A stand-in with an ability the engine doesn't know (D-071; [DEVASTATING WOUNDS] until M99) takes its place here. (Its scything talons are an
     // [EXTRA ATTACKS] weapon since M60, D-071: with the bonesword refused, the talons alone are the legal selection.)
     GameState close = load_scenario(wh40k::test::repo_root() / wh40k::test::kHavocsVsTyrantFixture,
                                     wh40k::test::repo_root());
     Unit& tyrant = close.units[1];
     ASSERT_TRUE(tyrant.models[0].weapons[0].profiles[0].has<ability::TwinLinked>());
     EXPECT_FALSE(unimplemented_ability_problem(tyrant.models[0].weapons[0].profiles[0]).has_value());  // M61
-    tyrant.models[0].weapons[0].profiles[0].abilities.push_back(ability::DevastatingWounds{});
+    tyrant.models[0].weapons[0].profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
     const Model& target = close.units[0].models[2];
     tyrant.models[0].position = Position{target.position.x,
                                          target.position.y + base_radius(target.base) + base_radius(tyrant.models[0].base),
@@ -726,7 +726,7 @@ TEST(D026_UnimplementedAbilities, RosterWeaponsTheEngineCantResolveAreRefusedWit
         MeleeDeclaration{tyrant.models[0].id, 0, 0, {MeleeTarget{close.units[0].id, 6}}}};
     const auto problems = melee_problems(close, tyrant, bonesword);
     ASSERT_FALSE(problems.empty());
-    EXPECT_EQ(problems.front().rfind("24.10: ", 0), 0u) << problems.front();
+    EXPECT_EQ(problems.front().rfind("D-071: ", 0), 0u) << problems.front();
     for (const MeleeDeclaration& d : melee_options(close, tyrant)) EXPECT_NE(d.weapon_index, 0u);  // never offered
 }
 

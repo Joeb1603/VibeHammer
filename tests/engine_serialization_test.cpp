@@ -390,6 +390,11 @@ TEST(Serialization, EveryEventKindRoundTrips) {
         event::ModelAndEnemySelected{Stratagem::Explosives, UnitId{1}, ModelId{3}, UnitId{2}},                // M97
         event::StratagemDiceRolled{Stratagem::CrushingImpact, UnitId{4}, ModelId{40}, UnitId{1},
                                    {1, 5, 6, 3, 1, 2, 5, 4, 6, 1}, 4, 3},                                      // M97
+        event::DevastatingWoundsInflicted{
+            UnitId{1}, UnitId{2},
+            DevastatingWoundsResult{{DevastatingStep{DamageResult{ModelId{7}, 3, 2, true}, CharacteristicRoll{{2}, 3}},
+                                     DevastatingStep{DamageResult{ModelId{8}, 2, 2, false}, std::nullopt}},
+                                    1, 1}},                                                                     // M99
     };
     ASSERT_EQ(all.size(), std::variant_size_v<GameEvent>);
     for (const auto& e : all) {

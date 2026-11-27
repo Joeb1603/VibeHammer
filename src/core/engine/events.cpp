@@ -71,6 +71,7 @@ constexpr NameRule name_rule() {
     // D-099 (M97): their rule is their stratagem's (event_rule); 15.05 here.
     else if constexpr (std::is_same_v<T, event::ModelAndEnemySelected>) return {"ModelAndEnemySelected", "15.05"};
     else if constexpr (std::is_same_v<T, event::StratagemDiceRolled>) return {"StratagemDiceRolled", "15.05"};
+    else if constexpr (std::is_same_v<T, event::DevastatingWoundsInflicted>) return {"DevastatingWoundsInflicted", "24.10"};
     else static_assert(sizeof(T) == 0, "unhandled event");
 }
 

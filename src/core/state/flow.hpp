@@ -79,7 +79,7 @@ struct Activation {
 // The attack batch currently being resolved (05.01-05.04), after its hit and wound rolls.
 struct BatchInProgress {
     std::size_t batch = 0;                // index into AttackFlow::batches
-    int wounds = 0;                       // 05.02 result (> 0)
+    int wounds = 0;                       // 05.02: the attacks that make a save roll (0 with only 24.10's critical wounds)
     std::vector<AllocationGroup> groups;  // 05.03 Create Groups, in unit order
     std::optional<std::vector<std::size_t>> order;  // 05.03 Allocation Order (indices into groups), once declared
     std::optional<std::vector<int>> save_rolls;     // 05.03 Make Save Rolls (unmodified), once made
@@ -89,6 +89,13 @@ struct BatchInProgress {
     // D-096 (M95): a random D is rolled per attack that inflicts damage (D-069), each its own Damage roll: the rolls made
     // so far, in 05.04's order, while the batch's damage is resolved. Omitted from JSON when empty.
     std::vector<CharacteristicRoll> damage_rolls{};
+    // M99 (D-101): 24.10 [DEVASTATING WOUNDS]: the batch's critical wounds, which made no save roll: each inflicts the
+    // weapon's D in mortal wounds on one model, after the batch's normal damage (06.02). Omitted from JSON when 0.
+    int devastating = 0;
+    // M99 (D-101): the normal damage is resolved (or there was none: `wounds` is then 0 and `groups` unused) and the
+    // mortal wounds are being inflicted; `priority` and `damage_rolls` are theirs from here. Omitted from JSON when
+    // false.
+    bool mortal = false;
     friend bool operator==(const BatchInProgress&, const BatchInProgress&) = default;
 };
 

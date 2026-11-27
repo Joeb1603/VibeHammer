@@ -144,6 +144,13 @@ void add(Fnv1a& h, const core::FlowState& f) {
                 h.u64(0x646d6772ull);  // "dmgr"
                 for (const core::CharacteristicRoll& r : a.current->damage_rolls) h.i32(r.value);
             }
+            // M99 (D-101): only for a [DEVASTATING WOUNDS] batch with critical wounds (24.10), so other states hash as
+            // before.
+            if (a.current->devastating != 0 || a.current->mortal) {
+                h.u64(0x64657677ull);  // "devw"
+                h.i32(a.current->devastating);
+                h.flag(a.current->mortal);
+            }
         }
         // M60 (24.15): only when set, so a state without hazard rolls hashes as before.
         if (a.hazard_rolls != 0 || a.pending_mortal_wounds != 0) {

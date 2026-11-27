@@ -35,6 +35,16 @@ bool has_keyword(const Unit& unit, std::string_view keyword) {
     return false;
 }
 
+bool has_any_keyword(const Unit& unit, std::span<const std::string> keywords) {
+    for (const std::string& k : keywords) {
+        if (has_keyword(unit, k) || has_keyword(unit, k + "s")) return true;
+        if (k.size() > 1 && (k.back() == 's' || k.back() == 'S') && has_keyword(unit, std::string_view(k).substr(0, k.size() - 1))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool is_character(const Unit& unit, const Model& /*model*/) {
     return has_keyword(unit, "Character");
 }

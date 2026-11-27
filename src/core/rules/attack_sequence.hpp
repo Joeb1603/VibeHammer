@@ -47,7 +47,7 @@ namespace wh40k::core {
 // rolls while its attacker decides which to re-roll, 24.38).
 
 // One wound roll per hit (HitRolls::hits(), sustained hits included). Unmodified 1 fails, unmodified 6 is a critical wound, otherwise the
-// modified result (D-011) must be >= required_wound_roll(S, T).
+// modified result (D-011) must be >= required_wound_roll(S, T). M99 (D-101): the profile's critical_wound_on (24.03).
 [[nodiscard]] WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits,
                                           int toughness);
 // D-096 (M95): the results of wound-roll dice already rolled (one per hit), as make_wound_rolls judges them.
@@ -55,7 +55,9 @@ namespace wh40k::core {
 
 // 05.02 for one die: the first row of the table that applies to `unmodified`, with the (already capped, D-011)
 // wound modifier, against the required result. make_wound_rolls and reroll_wound_rolls both use it.
-[[nodiscard]] WoundRoll wound_roll_result(int unmodified, int modifier, int required);
+// M99 (D-101): `critical_on` is the unmodified result that is a critical wound (6; lower with 24.03 [ANTI-X Y+]). An
+// unmodified 1 still fails first.
+[[nodiscard]] WoundRoll wound_roll_result(int unmodified, int modifier, int required, int critical_on = 6);
 
 // ---- 24.38 [TWIN-LINKED]: re-rolling wound rolls (D-011, D-072) ----
 
@@ -189,6 +191,41 @@ struct InflictDamageResult {
 
 // ---- One batch, 05.01 to 05.04 ----
 
+// ---- 24.10 [DEVASTATING WOUNDS] (M99, D-101) ----
+
+// The wound rolls of a batch split by what follows them: `saves` attacks go on to the save rolls (05.03), `devastating`
+// critical wounds of a [DEVASTATING WOUNDS] profile end their attack sequence and inflict mortal wounds (24.10).
+struct WoundSplit {
+    int saves = 0;
+    int devastating = 0;
+    friend bool operator==(const WoundSplit&, const WoundSplit&) = default;
+};
+[[nodiscard]] WoundSplit split_wounds(const AttackProfile& profile, const WoundRolls& rolls);
+
+// One critical wound's mortal wounds: the weapon's D (rolled when random), on one model.
+struct DevastatingStep {
+    DamageResult damage;  // damage: the D mortal wounds; wounds_lost: those the model lost (the rest are lost, 24.10)
+    std::optional<CharacteristicRoll> damage_roll{};  // D-069: a random D, rolled for this critical wound
+    friend bool operator==(const DevastatingStep&, const DevastatingStep&) = default;
+};
+struct DevastatingWoundsResult {
+    std::vector<DevastatingStep> steps;  // one per critical wound that reached a model
+    int models_destroyed = 0;
+    int critical_wounds_lost = 0;  // critical wounds left when the unit was destroyed
+    friend bool operator==(const DevastatingWoundsResult&, const DevastatingWoundsResult&) = default;
+};
+
+// 24.10 with 06.02, after the batch's normal damage: each critical wound inflicts the weapon's D in mortal wounds on one
+// model, "a maximum of one model for each critical wound; any remaining mortal wounds inflicted by that attack are
+// lost". The model is selected as 06.02 selects it for the first mortal wound (mortal_wound_candidates: a wounded
+// non-CHARACTER model first, ...); that model takes every mortal wound of the critical wound (D-101). `choose` is
+// called when there is more than one candidate, or always with `ask_when_forced`; a random D is rolled by `roll_damage`
+// once the model is selected (as 05.04, D-069). Stops when the unit is destroyed.
+[[nodiscard]] DevastatingWoundsResult inflict_devastating_wounds(Unit& target, int critical_wounds,
+                                                                 const DiceExpr& damage, const ModelChooser& choose,
+                                                                 bool ask_when_forced = false,
+                                                                 const DamageRoller& roll_damage = {});
+
 struct BatchResult {
     HitRolls hits;
     WoundRolls wounds;                   // after any re-rolls (24.38)
@@ -198,13 +235,16 @@ struct BatchResult {
     InflictDamageResult damage;
     std::vector<AttackDiceRoll> attack_rolls{};  // D-069 (04.03): the batch's random A, rolled first
     int attack_dice = 0;                          // the dice resolved (the batch's, plus its random A)
+    // M99 (D-101): 24.10's mortal wounds, inflicted after the normal damage (06.02); empty without the ability.
+    DevastatingWoundsResult devastating{};
     friend bool operator==(const BatchResult&, const BatchResult&) = default;
 };
 
 // Resolves the attack sequence for one batch of attack dice against `target`, in the engine's dice order: the batch's
 // random A (D-069, 04.03), hit rolls, wound rolls, the attacker's re-rolls of a [TWIN-LINKED] batch (24.38;
 // `choose_rerolls` is called only when a wound roll failed, and is required then), save rolls, then a random D for
-// each attack that inflicts damage (D-069, 05.04).
+// each attack that inflicts damage (D-069, 05.04). M99 (D-101): the critical wounds of a [DEVASTATING WOUNDS] batch
+// make no save roll; their mortal wounds follow the normal damage (`choose_model` selects their models too, 06.02).
 // Precondition: the target still has models ("Target No Longer Eligible or Viable" is an app-only rule
 // not yet supplied; std::logic_error otherwise).
 [[nodiscard]] BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBatch& batch,

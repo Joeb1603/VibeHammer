@@ -461,7 +461,9 @@ void apply_details(GameState& state, Side, const action::Fight& a, DiceSource&, 
     std::vector<WeaponSelection> selections = make_melee_selections(state, a.declarations);
     events.push_back(event::MeleeAttacksDeclared{a.unit, selections});
     state.flow.fight->attacks_started = true;
-    start_attacks(state, a.unit, AttackContext{AttackType::Fighting, false}, std::move(selections), events);
+    // 24.21 [LANCE] (D-101): the context records whether the unit made a charge move this turn.
+    const AttackContext context = fighting_context(*state.find_unit(a.unit));
+    start_attacks(state, a.unit, context, std::move(selections), events);
 }
 
 // ---- 12.07 Consolidate ----

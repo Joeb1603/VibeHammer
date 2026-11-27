@@ -61,7 +61,8 @@ TEST(R24_11_ExtraAttacks, ParsesExtraAttacks) {
 
 TEST(R24_Abilities, UnknownAbilityKeepsOriginalTextAndDoesNotThrow) {
     // ("Sustained Hits 1" left this list in M60: 24.36 is implemented, R24_36_SustainedHits.ParsesSustainedHitsX.)
-    for (const char* s : {"Lethal Hits", "Anti-Infantry 4+", "", "Blast X",
+    // ("Anti-Infantry 4+" left it in M99: 24.03 is implemented, R24_03_Anti.ParsesAntiXY.)
+    for (const char* s : {"Lethal Hits", "Conversion", "", "Blast X", "Anti-Infantry", "Anti-Infantry 1+", "Melta",
                           "Rapid Fire 0"}) {
         WeaponAbility a;
         EXPECT_NO_THROW(a = parse_weapon_ability(s)) << s;

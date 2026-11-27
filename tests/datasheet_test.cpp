@@ -170,14 +170,14 @@ TEST(R02_04_Weapons, UnknownAbilityInDataLoadsAsUnknown) {
         "weapons": {
             "Odd gun": {"type": "ranged", "profiles": [
                 {"name": "Odd gun", "range_in": 12, "A": 1, "skill": 3, "S": 4, "AP": 0, "D": 1,
-                 "abilities": ["Lethal Hits", "Anti-Infantry 4+"]}]}
+                 "abilities": ["Lethal Hits", "Conversion"]}]}
         }
     })");
     Datasheet ds;
     ASSERT_NO_THROW(ds = parse_datasheet(j));
     const WeaponProfile& p = ds.weapons.at(0).profiles.at(0);
     EXPECT_EQ(p.abilities, (std::vector<WeaponAbility>{ability::Unknown{"Lethal Hits"},
-                                                       ability::Unknown{"Anti-Infantry 4+"}}));
+                                                       ability::Unknown{"Conversion"}}));
 }
 
 TEST(R02_04_Weapons, RangedWeaponWithoutRangeIsDataError) {

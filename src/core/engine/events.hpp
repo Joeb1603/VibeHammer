@@ -220,6 +220,15 @@ struct SavesResolved {  // 05.04: one step per save roll, lowest first; excess a
     InflictDamageResult result;
     friend bool operator==(const SavesResolved&, const SavesResolved&) = default;
 };
+// M99 (D-101): 24.10 [DEVASTATING WOUNDS]: a batch's critical wounds inflicted their mortal wounds on the target (06.02),
+// after its normal damage; each step is one critical wound's D on one model. With no step and every critical wound
+// lost, the normal damage had already destroyed the unit.
+struct DevastatingWoundsInflicted {
+    UnitId attacker;
+    UnitId target;
+    DevastatingWoundsResult result;
+    friend bool operator==(const DevastatingWoundsInflicted&, const DevastatingWoundsInflicted&) = default;
+};
 struct ModelDestroyed {  // Rules Appendix: Destroyed
     UnitId unit;
     ModelId model;
@@ -377,7 +386,7 @@ using GameEvent =
                  event::UnitSetUp, event::UnitNotSetUp, event::ObjectiveControlChanged,
                  event::VictoryPointsScored, event::AttacksRetargeted, event::DamageRolled,
                  event::StratagemUsed, event::DiceRerolled, event::BattleShockPassedAutomatically,
-                 event::ModelAndEnemySelected, event::StratagemDiceRolled>;
+                 event::ModelAndEnemySelected, event::StratagemDiceRolled, event::DevastatingWoundsInflicted>;
 
 [[nodiscard]] std::string_view event_name(const GameEvent& e);  // also the JSON "kind"
 [[nodiscard]] std::string_view event_rule(const GameEvent& e);  // e.g. "05.01"

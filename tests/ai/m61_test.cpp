@@ -141,7 +141,9 @@ TEST(M61_Odds, ProfileSupportedLetsTwinLinkedThrough) {
     WeaponProfile p = wh40k::test::load_v1_scenario().units[0].models[0].weapons[0].profiles[0];
     p.abilities.push_back(ability::TwinLinked{});
     EXPECT_TRUE(profile_supported(p));
-    p.abilities.push_back(ability::DevastatingWounds{});  // still refused (D-026)
+    p.abilities.push_back(ability::DevastatingWounds{});  // M99 (D-101): 24.10 is implemented too
+    EXPECT_TRUE(profile_supported(p));
+    p.abilities.push_back(ability::Unknown{"Conversion"});  // an ability the engine doesn't know is still refused (D-071)
     EXPECT_FALSE(profile_supported(p));
 }
 

@@ -167,13 +167,18 @@ bool casualty_decision_needed(const GameState& state, const AttackFlow& f) {
 // otherwise 05.03 starts.
 void after_wound_rolls(GameState& state, std::size_t index, const WoundRolls& wounds) {
     AttackFlow& f = flow_of(state);
-    if (wounds.wounds() == 0) {
+    // 24.10 (D-101): the critical wounds of a [DEVASTATING WOUNDS] batch end their attack sequence: no save roll.
+    const WoundSplit split = split_wounds(f.batches[index].profile, wounds);
+    if (split.saves == 0 && split.devastating == 0) {
         f.batch_done[index] = true;  // every attack failed: nothing to save
         return;
     }
     // 05.03 Create Groups now; the order and the save rolls follow.
     const Unit& target = unit_ref(state, f.batches[index].target);
-    f.current = BatchInProgress{index, wounds.wounds(), create_allocation_groups(target), std::nullopt, std::nullopt};
+    BatchInProgress b{index, split.saves, create_allocation_groups(target), std::nullopt, std::nullopt};
+    b.devastating = split.devastating;
+    b.mortal = split.saves == 0;  // no normal damage to resolve first: straight to the mortal wounds (06.02)
+    f.current = std::move(b);
 }
 
 // The batch whose dice are being rolled (D-095).
@@ -282,6 +287,38 @@ void resolve_casualties(GameState& state, const std::vector<ModelId>& priority, 
     if (is_destroyed(target)) {
         events.push_back(event::UnitDestroyed{target.id});
     }
+    if (b.devastating > 0 && !is_destroyed(target)) {
+        // 24.10 / 06.02 (D-101): "resolve all of the normal damage first, then resolve all of the mortal wounds": the
+        // batch's critical wounds follow, with a casualty order and damage rolls of their own.
+        BatchInProgress& current = *f.current;
+        current.mortal = true;
+        current.priority.reset();
+        current.damage_rolls.clear();
+        return;
+    }
+    if (b.devastating > 0) {
+        // The normal damage destroyed the unit: the critical wounds' mortal wounds are lost.
+        events.push_back(event::DevastatingWoundsInflicted{f.attacker, target.id, DevastatingWoundsResult{{}, 0, b.devastating}});
+    }
+    f.batch_done[b.batch] = true;
+    f.current.reset();
+}
+
+// 24.10 with 06.02 (D-101): the batch's critical wounds inflict their mortal wounds, each on one model, selected by the
+// casualty priority (D-013); then the batch is done. A random D is rolled by `roll` for each, once its model is selected.
+void resolve_devastating(GameState& state, const std::vector<ModelId>& priority, const DamageRoller& roll,
+                         Events& events) {
+    AttackFlow& f = flow_of(state);
+    const BatchInProgress b = current_batch(f);
+    const AttackBatch& batch = f.batches[b.batch];
+    Unit& target = unit_ref(state, batch.target);
+    const DevastatingWoundsResult result = inflict_devastating_wounds(target, b.devastating, batch.profile.damage,
+                                                                      priority_chooser(priority), false, roll);
+    events.push_back(event::DevastatingWoundsInflicted{f.attacker, target.id, result});
+    for (const DevastatingStep& step : result.steps) {
+        if (step.damage.destroyed) events.push_back(event::ModelDestroyed{target.id, step.damage.model});
+    }
+    if (is_destroyed(target)) events.push_back(event::UnitDestroyed{target.id});
     f.batch_done[b.batch] = true;
     f.current.reset();
 }
@@ -319,7 +356,12 @@ DamagePlan plan_damage(const GameState& state, const AttackFlow& f) {
     Unit copy = unit_ref(state, batch.target);
     // ask_when_forced: the chooser hears every damaging step, so `chosen` is that step's model (D-051's preview does
     // the same).
-    (void)inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, recording, true, roll);
+    if (b.mortal) {
+        // D-101: 24.10's mortal wounds, one damage roll per critical wound that reaches a model.
+        (void)inflict_devastating_wounds(copy, b.devastating, batch.profile.damage, recording, true, roll);
+    } else {
+        (void)inflict_damage(copy, order_groups(b.groups, *b.order), *b.save_rolls, batch.profile, recording, true, roll);
+    }
     if (needed) return DamagePlan{false, *needed};
     return DamagePlan{true, ModelId{}};
 }
@@ -403,6 +445,14 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
         const BatchInProgress& b = *f.current;
         const AttackBatch& batch = f.batches[b.batch];
         const Unit& target = unit_ref(state, batch.target);
+        if (b.mortal) {
+            // 24.10 / 06.02 (D-101): the target's controlling player selects the models for the critical wounds' mortal
+            // wounds (one casualty order, D-013; always asked, D-051); then a random D waits for the attacking unit's
+            // player, one Damage roll per critical wound (as D-096).
+            if (!b.priority) return PendingDecision{target.side, decision::OrderCasualties{batch.target}};
+            if (plan_damage(state, f).complete) return std::nullopt;
+            return PendingDecision{unit_ref(state, f.attacker).side, decision::RollDice{RollKind::Damage, f.attacker}};
+        }
         if (!b.order) {
             if (legal_allocation_orders(target, b.groups).size() > 1) {
                 return PendingDecision{target.side, decision::DeclareAllocationOrder{batch.target}};  // 05.03
@@ -461,6 +511,18 @@ void attack_progress(GameState& state, DiceSource& dice, Events& events) {
     if (f.current) {
         BatchInProgress& b = *f.current;
         const AttackBatch& batch = f.batches[b.batch];
+        if (b.mortal) {
+            // D-101: the casualty order is given and every damage roll the critical wounds need is made.
+            const std::vector<ModelId> priority = b.priority.value();
+            const std::vector<CharacteristicRoll> rolls = b.damage_rolls;
+            std::size_t next = 0;
+            const DamageRoller stored = [&rolls, &next](const DiceExpr&) {
+                if (next >= rolls.size()) throw std::logic_error("D-101: a damage roll is missing");
+                return rolls[next++];
+            };
+            resolve_devastating(state, priority, stored, events);
+            return;
+        }
         if (!b.order) {
             // Only one legal allocation order: declared without asking.
             declare_order(state, legal_allocation_orders(unit_ref(state, batch.target), b.groups).front(), events);
@@ -956,7 +1018,11 @@ void apply_details(GameState& state, Side, const action::OrderCasualties& a, Dic
         AttackFlow& f = *state.flow.attack;
         BatchInProgress& b = *f.current;
         if (f.batches[b.batch].profile.damage.is_fixed()) {
-            resolve_casualties(state, a.priority, dice_roller(dice), events);  // 05.04
+            if (b.mortal) {
+                resolve_devastating(state, a.priority, dice_roller(dice), events);  // 24.10 / 06.02 (D-101)
+            } else {
+                resolve_casualties(state, a.priority, dice_roller(dice), events);  // 05.04
+            }
         } else {
             b.priority = a.priority;  // D-096: each attack's random D waits for the attacker's Damage roll (D-069)
         }

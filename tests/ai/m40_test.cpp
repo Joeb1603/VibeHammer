@@ -325,7 +325,9 @@ TEST(M40_ExpectedDamage, DISABLED_FullGridEveryV1ProfileContextAndTarget) {
     wounded.models[2].wounds_remaining = 1;
     OddsCache cache;
     const auto cases = grid({&intercessors(gs), &termagants(gs), &wounded}, cache);
-    EXPECT_EQ(cases.size(), 3u * 25u);  // M61: + the [TWIN-LINKED] spinefist; M62: + the random-A Shardlauncher
+    // M61: + the [TWIN-LINKED] spinefist; M62: + the random-A Shardlauncher; M99: + the [DEVASTATING WOUNDS] Thunder
+    // Hammer and Strangleweb
+    EXPECT_EQ(cases.size(), 3u * 27u);
     check_against_samples(cases, cache, 20000);
 }
 
@@ -337,7 +339,9 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
     wounded.models[2].wounds_remaining = 1;
     OddsCache cache;
     const auto all = grid({&intercessors(gs), &termagants(gs), &wounded}, cache);
-    ASSERT_EQ(all.size(), 3u * 25u);  // M61: + the [TWIN-LINKED] spinefist (D-072); M62: + the Shardlauncher (D-069)
+    // M61: + the [TWIN-LINKED] spinefist (D-072); M62: + the Shardlauncher (D-069); M99: + the Thunder Hammer and the
+    // Strangleweb (D-101)
+    ASSERT_EQ(all.size(), 3u * 27u);
     const std::vector<std::string> picks{
         "Bolt Rifle - Focused Fire +heavy half-range vs Termagants",
         "Bolt Rifle - Focused Fire vs Intercessor Squad (wounded)",
@@ -349,6 +353,10 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
         "Spike rifle +heavy vs Intercessor Squad x",
         "Termagant spinefist vs Intercessor Squad x",  // M61: [TWIN-LINKED] (24.38), every failed wound roll re-rolled
         "Shardlauncher +heavy vs Termagants",          // M62: a random A (D3, D-069) with [BLAST] added after
+        // M99 (D-101): [DEVASTATING WOUNDS] (24.10): a critical wound makes no save roll and inflicts the D on one model
+        "Thunder Hammer vs Intercessor Squad x",
+        "Thunder Hammer vs Intercessor Squad (wounded)",
+        "Strangleweb vs Termagants",                   // with a random A and [TORRENT]
     };
     std::vector<GridCase> subset;
     for (const GridCase& c : all) {
@@ -361,10 +369,13 @@ TEST(M40_ExpectedDamage, AnalyticIsWithinTwoPercentOfTwentyThousandEngineBatches
 }
 
 TEST(M40_ExpectedDamage, RejectedProfilesAreExcluded) {
-    EXPECT_FALSE(profile_supported(profile_named("Thunder Hammer")));        // [DEVASTATING WOUNDS], D-026
+    EXPECT_TRUE(profile_supported(profile_named("Thunder Hammer")));         // [DEVASTATING WOUNDS]: resolved since M99 (D-101)
     EXPECT_TRUE(profile_supported(profile_named("Termagant spinefist")));    // [TWIN-LINKED]: resolved since M61 (D-072)
     EXPECT_TRUE(profile_supported(profile_named("Shardlauncher")));          // A D3: rolled since M62 (D-069)
-    EXPECT_FALSE(profile_supported(profile_named("Strangleweb")));           // [DEVASTATING WOUNDS], D-026 (A D6 is rolled)
+    EXPECT_TRUE(profile_supported(profile_named("Strangleweb")));            // [DEVASTATING WOUNDS] too, with a D6 A
+    WeaponProfile unknown = profile_named("Fleshborer");
+    unknown.abilities.push_back(ability::Unknown{"Conversion"});
+    EXPECT_FALSE(profile_supported(unknown));  // an ability the engine doesn't know (D-071)
     EXPECT_TRUE(profile_supported(profile_named("Plasma pistol - supercharge")));  // [HAZARDOUS] is implemented
 }
 

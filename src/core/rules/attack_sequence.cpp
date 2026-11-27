@@ -8,6 +8,7 @@
 
 #include "core/dice/modifiers.hpp"
 #include "core/model/keywords.hpp"
+#include "core/rules/mortal_wounds.hpp"
 #include "core/rules/random_characteristics.hpp"
 #include "core/state/queries.hpp"
 
@@ -15,14 +16,11 @@ namespace wh40k::core {
 
 namespace {
 
-// Abilities whose effects (critical-wound handling, anything unrecognised) are not implemented yet. Validation
-// refuses them when they are selected (D-026, D-071); this second safety net refuses to resolve them wrongly.
-// [TWIN-LINKED] is implemented since M61 (D-072).
+// Abilities whose effects (anything unrecognised) are not implemented yet. Validation refuses them when they are
+// selected (D-026, D-071); this second safety net refuses to resolve them wrongly.
+// [TWIN-LINKED] is implemented since M61 (D-072), [DEVASTATING WOUNDS] since M99 (D-101).
 void reject_unimplemented(const AttackProfile& profile) {
     for (const WeaponAbility& a : profile.attack_time_abilities) {
-        if (std::holds_alternative<ability::DevastatingWounds>(a)) {
-            throw std::logic_error("24.10 [DEVASTATING WOUNDS] is not implemented");
-        }
         if (const auto* u = std::get_if<ability::Unknown>(&a)) {
             throw std::logic_error("D-071: the ability '" + u->text + "' is not implemented");
         }
@@ -133,14 +131,14 @@ int WoundRolls::critical_wounds() const {
     }));
 }
 
-WoundRoll wound_roll_result(int unmodified, int modifier, int required) {
+WoundRoll wound_roll_result(int unmodified, int modifier, int required, int critical_on) {
     WoundRoll r;
     r.unmodified = unmodified;
     r.modified = modified_result(unmodified, modifier);
     if (r.unmodified == 1) {
         r.outcome = WoundOutcome::Fail;
-    } else if (r.unmodified == 6) {
-        r.outcome = WoundOutcome::CriticalWound;
+    } else if (r.unmodified >= critical_on) {
+        r.outcome = WoundOutcome::CriticalWound;  // an unmodified 6, or 24.03's Y+ (D-101)
     } else if (r.modified >= required) {
         r.outcome = WoundOutcome::Wound;
     } else {
@@ -153,7 +151,9 @@ WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::s
     WoundRolls out;
     out.required = required_wound_roll(profile.strength, toughness);
     const int modifier = cap_hit_wound_modifier(profile.wound_modifier);  // D-011
-    for (const int face : faces) out.rolls.push_back(wound_roll_result(face, modifier, out.required));
+    for (const int face : faces) {
+        out.rolls.push_back(wound_roll_result(face, modifier, out.required, profile.critical_wound_on));
+    }
     return out;
 }
 
@@ -194,7 +194,8 @@ std::vector<WoundReroll> reroll_wound_rolls(DiceSource& dice, const AttackProfil
         WoundReroll r;
         r.index = i;
         r.before = rolls.rolls[i];
-        r.after = wound_roll_result(dice.roll_d6(), modifier, rolls.required);  // the new roll replaces the old one
+        // the new roll replaces the old one
+        r.after = wound_roll_result(dice.roll_d6(), modifier, rolls.required, profile.critical_wound_on);
         rolls.rolls[i] = r.after;
         out.push_back(r);
     }
@@ -429,6 +430,50 @@ InflictDamageResult inflict_damage(Unit& target, std::span<const AllocationGroup
     return out;
 }
 
+// ---- 24.10 [DEVASTATING WOUNDS] ----
+
+WoundSplit split_wounds(const AttackProfile& profile, const WoundRolls& rolls) {
+    WoundSplit out;
+    out.devastating = devastating_wounds(profile) ? rolls.critical_wounds() : 0;
+    out.saves = rolls.wounds() - out.devastating;
+    return out;
+}
+
+DevastatingWoundsResult inflict_devastating_wounds(Unit& target, int critical_wounds, const DiceExpr& damage,
+                                                   const ModelChooser& choose, bool ask_when_forced,
+                                                   const DamageRoller& roll_damage) {
+    DevastatingWoundsResult out;
+    const bool random_damage = !damage.is_fixed();
+    if (random_damage && !roll_damage) {
+        throw std::logic_error("D-069: a random D (" + to_string(damage) + ") needs a damage roller");
+    }
+    for (int i = 0; i < critical_wounds; ++i) {
+        const std::vector<ModelId> options = mortal_wound_candidates(target);  // 06.02 Select Model
+        if (options.empty()) {
+            out.critical_wounds_lost = critical_wounds - i;  // the unit is destroyed
+            break;
+        }
+        ModelId chosen = options.front();
+        if (options.size() > 1 || ask_when_forced) {
+            chosen = choose(target, options);
+            if (!contains(options, chosen)) {
+                throw std::logic_error("06.02: selected model " + std::to_string(chosen.v) + " is not a legal choice");
+            }
+        }
+        DevastatingStep step;
+        int d = random_damage ? 0 : damage.fixed_value();
+        if (random_damage) {
+            step.damage_roll = roll_damage(damage);
+            d = step.damage_roll->value;
+        }
+        // 24.10: the D mortal wounds damage this one model; those it has no wounds left for are lost.
+        step.damage = resolve_damage(target, chosen, d);
+        out.models_destroyed += step.damage.destroyed ? 1 : 0;
+        out.steps.push_back(step);
+    }
+    return out;
+}
+
 BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBatch& batch,
                                  const AllocationOrderChooser& choose_order, const ModelChooser& choose_model,
                                  const WoundRerollChooser& choose_rerolls) {
@@ -450,8 +495,14 @@ BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBat
         const std::vector<std::size_t> chosen = choose_rerolls(r.wounds);
         r.rerolls = reroll_wound_rolls(dice, batch.profile, r.wounds, chosen);
     }
-    const int wounds = r.wounds.wounds();
+    const WoundSplit split = split_wounds(batch.profile, r.wounds);  // 24.10 (D-101)
+    const int wounds = split.saves;
+    const DamageRoller roll = [&dice](const DiceExpr& d) { return roll_characteristic(dice, d); };  // D-069
     if (wounds == 0) {
+        if (split.devastating > 0) {
+            r.devastating = inflict_devastating_wounds(target, split.devastating, batch.profile.damage, choose_model,
+                                                       false, roll);
+        }
         return r;
     }
 
@@ -472,8 +523,12 @@ BatchResult resolve_attack_batch(DiceSource& dice, Unit& target, const AttackBat
     r.save_rolls = make_save_rolls(dice, wounds);
 
     // 05.04
-    const DamageRoller roll = [&dice](const DiceExpr& d) { return roll_characteristic(dice, d); };  // D-069
     r.damage = inflict_damage(target, r.allocation_order, r.save_rolls, batch.profile, choose_model, false, roll);
+    // 24.10 / 06.02: the mortal wounds after the normal damage.
+    if (split.devastating > 0) {
+        r.devastating = inflict_devastating_wounds(target, split.devastating, batch.profile.damage, choose_model,
+                                                   false, roll);
+    }
     return r;
 }
 
