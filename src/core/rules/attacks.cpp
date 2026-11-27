@@ -34,7 +34,9 @@ bool is_attack_time_ability(const WeaponAbility& a) {
                      std::is_same_v<T, ability::Heavy> || std::is_same_v<T, ability::Torrent> ||
                      std::is_same_v<T, ability::ExtraAttacks> || std::is_same_v<T, ability::IgnoresCover> ||
                      std::is_same_v<T, ability::Anti> || std::is_same_v<T, ability::Melta> ||
-                     std::is_same_v<T, ability::Lance>);
+                     std::is_same_v<T, ability::Lance> ||
+                     // M100 (D-102): [CLEAVE] is gathered dice, [ONE SHOT] is used up when the weapon is selected.
+                     std::is_same_v<T, ability::Cleave> || std::is_same_v<T, ability::OneShot>);
         },
         a);
 }
@@ -121,8 +123,15 @@ std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& we
     }
     // [TWIN-LINKED] (24.38) is implemented since M61 (D-072); [DEVASTATING WOUNDS] (24.10), [ANTI-X Y+] (24.03),
     // [MELTA X] (24.25) and [LANCE] (24.21) since M99 (D-101).
-    // D-071: an ability the engine does not recognise ([LETHAL HITS], [PRECISION], [PSYCHIC], ...) is refused, rather
-    // than ignored.
+    // 24.23 (M100, D-102): "you can choose for that attack to automatically wound": the choice only matters when a
+    // critical wound does more than wound, i.e. with [DEVASTATING WOUNDS]. The engine takes the automatic wound without
+    // asking, so a profile with both is refused rather than resolved without the choice.
+    if (weapon.has<ability::LethalHits>() && weapon.has<ability::DevastatingWounds>()) {
+        return "24.23: '" + weapon.name + "' has both [LETHAL HITS] and [DEVASTATING WOUNDS]; the choice between an "
+               "automatic wound and a wound roll is not implemented yet (D-102), so it can't be selected";
+    }
+    // D-071: an ability the engine does not recognise ([PRECISION], [INDIRECT FIRE], ...) is refused, rather than
+    // ignored.
     if (const auto* unknown = weapon.get<ability::Unknown>()) {
         return "D-071: '" + weapon.name + "' has [" + upper_ascii(unknown->text) +
                "], which the engine does not implement yet; weapons with it can't be selected";
@@ -136,6 +145,35 @@ int sustained_hits(const AttackProfile& profile) {
         if (const auto* s = std::get_if<ability::SustainedHits>(&a)) x = std::max(x, s->x);  // D-071 (24.02)
     }
     return x;
+}
+
+bool lethal_hits(const AttackProfile& profile) {
+    return std::any_of(profile.attack_time_abilities.begin(), profile.attack_time_abilities.end(),
+                       [](const WeaponAbility& a) { return std::holds_alternative<ability::LethalHits>(a); });
+}
+
+bool condition_met(const ability::TargetCondition& condition, const Unit& target) {
+    if (condition.always()) return true;
+    return has_any_keyword(target, condition.keywords) != condition.non;  // app 02.05.01: "non-X"
+}
+
+bool ignores_hit_penalties(const WeaponProfile& weapon) { return weapon.has<ability::Psychic>(); }
+
+std::optional<std::string> one_shot_problem(const Weapon& weapon, const WeaponProfile& profile) {
+    if (weapon.one_shot_spent && profile.has<ability::OneShot>()) {
+        return "24.26: '" + profile.name + "' is a [ONE SHOT] weapon that has already been selected to make attacks "
+               "with this battle";
+    }
+    return std::nullopt;
+}
+
+void spend_one_shot_weapons(GameState& state, std::span<const WeaponSelection> selections) {
+    for (const WeaponSelection& sel : selections) {
+        if (!selected_profile(state, sel).has<ability::OneShot>()) continue;
+        for (Unit& u : state.units) {
+            if (Model* m = find_model(u, sel.attacker)) m->weapons[sel.weapon_index].one_shot_spent = true;
+        }
+    }
 }
 
 bool devastating_wounds(const AttackProfile& profile) {
@@ -159,6 +197,7 @@ int anti_critical_wound_on(const WeaponProfile& weapon, const Unit& target) {
 AttackProfile selection_attack_profile(const WeaponProfile& weapon, const WeaponSelection& selection,
                                        const AttackContext& context, const Unit& target) {
     AttackProfile profile = make_attack_profile(weapon, context);
+    // (24.29, D-102: a [PSYCHIC] weapon's selection records no -1 and no cover, make_weapon_selections.)
     profile.hit_modifier += selection.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
     // 13.08 (D-089): worsen the BS characteristic of the attack by 1 (3+ becomes 4+). The characteristic, not the
     // hit roll, so D-011's cap doesn't apply; [TORRENT] has no BS. Part of the profile, so D-006 keeps attacks with
@@ -181,6 +220,24 @@ void apply_target_abilities(AttackProfile& profile, const WeaponProfile& weapon,
         profile.damage.modifier = static_cast<std::int16_t>(profile.damage.modifier + x);
     }
     profile.critical_wound_on = anti_critical_wound_on(weapon, target);  // 24.03
+    // 24.01 (M100, D-102): an ability followed by keywords "only applies if the target unit has one or more of those
+    // keywords". One the target doesn't meet is left out; one it meets is kept without its condition, so attacks that
+    // are identical from here on compare as identical (D-006).
+    auto& abilities = profile.attack_time_abilities;
+    for (auto it = abilities.begin(); it != abilities.end();) {
+        const bool keep = std::visit(
+            [&target](auto& a) {
+                using T = std::decay_t<decltype(a)>;
+                if constexpr (std::is_same_v<T, ability::LethalHits> || std::is_same_v<T, ability::DevastatingWounds> ||
+                              std::is_same_v<T, ability::SustainedHits>) {
+                    if (!condition_met(a.only_against, target)) return false;
+                    a.only_against = {};
+                }
+                return true;
+            },
+            *it);
+        it = keep ? std::next(it) : abilities.erase(it);
+    }
 }
 
 AttackContext fighting_context(const Unit& unit) {
@@ -269,6 +326,11 @@ SelectionDice selection_dice(const WeaponProfile& weapon, const WeaponSelection&
     if (const auto* blast = weapon.get<ability::Blast>(); blast != nullptr) {
         bonus += blast->x * (selection.target_models_at_selection / 5);  // 24.05, rounding down
     }
+    // 24.06 [CLEAVE X] (M100, D-102): "if you only selected one target for all of that weapon's attacks" (a split
+    // weapon returned above), X dice per five models in the target at Select Targets.
+    if (const auto* cleave = weapon.get<ability::Cleave>(); cleave != nullptr) {
+        bonus += cleave->x * (selection.target_models_at_selection / 5);
+    }
     if (random) {
         out.random = weapon.attacks;  // D-069: rolled for this model and weapon when its batch is resolved
         out.bonus = bonus;            // added after the roll
@@ -307,12 +369,25 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
             // 24.36 on each critical hit; 24.15 a hazard roll after the unit's attacks (D-071); 24.38 the wound rolls
             // can be re-rolled (D-072)
             e.active = true;
+            if (const auto* sustained = std::get_if<ability::SustainedHits>(&a)) {
+                e.condition_unmet = target != nullptr && !condition_met(sustained->only_against, *target);  // 24.01
+            }
         } else if (std::holds_alternative<ability::ExtraAttacks>(a)) {
             e.active = context.type == AttackType::Fighting;  // 24.11: made in addition to another melee weapon
         } else if (std::holds_alternative<ability::IgnoresCover>(a)) {
             e.active = context.type == AttackType::Shooting;  // 24.18: the target can't have the benefit of cover
-        } else if (std::holds_alternative<ability::DevastatingWounds>(a)) {
+        } else if (const auto* dw = std::get_if<ability::DevastatingWounds>(&a)) {
             e.active = true;  // 24.10: on each critical wound (M99, D-101)
+            e.condition_unmet = target != nullptr && !condition_met(dw->only_against, *target);  // 24.01 (M100)
+        } else if (const auto* lethal = std::get_if<ability::LethalHits>(&a)) {
+            e.active = true;  // 24.23: each critical hit wounds automatically (M100, D-102)
+            e.condition_unmet = target != nullptr && !condition_met(lethal->only_against, *target);
+        } else if (std::holds_alternative<ability::Psychic>(a)) {
+            e.active = true;  // 24.29: hit penalties ignored
+        } else if (const auto* cleave = std::get_if<ability::Cleave>(&a)) {
+            if (!split) e.extra_attack_dice = cleave->x * (selection.target_models_at_selection / 5);  // 24.06
+        } else if (std::holds_alternative<ability::OneShot>(a)) {
+            e.active = true;  // 24.26: this is its one use
         } else if (std::holds_alternative<ability::Lance>(a)) {
             if (context.charged) e.wound_modifier = 1;  // 24.21
         } else if (const auto* melta = std::get_if<ability::Melta>(&a)) {
@@ -320,8 +395,9 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
         } else if (const auto* anti = std::get_if<ability::Anti>(&a)) {
             if (target != nullptr && anti_applies(*anti, *target)) e.critical_wound_on = anti->threshold;  // 24.03
         }
-        e.active = e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0 || e.wound_modifier != 0 ||
-                   e.damage_modifier != 0 || e.critical_wound_on != 0;
+        e.active = (e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0 || e.wound_modifier != 0 ||
+                    e.damage_modifier != 0 || e.critical_wound_on != 0) &&
+                   !e.condition_unmet;
         out.push_back(e);
     }
     return out;

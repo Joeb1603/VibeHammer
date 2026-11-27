@@ -41,6 +41,7 @@ HitWoundOdds derive_hit_wound(const core::AttackProfile& profile, int toughness)
     o.critical_wound /= kFaces;
     o.sustained = core::sustained_hits(profile);
     o.devastating = core::devastating_wounds(profile);  // 24.10 (M99)
+    o.lethal = core::lethal_hits(profile);              // 24.23 (M100)
     if (core::twin_linked(profile)) {
         // 24.38 (M61, D-072): the bot re-rolls every failed wound roll and no other. Each first face, then each face of
         // a failed one's re-roll, through core's own functions: P(wound) = p + (1 - p)p and P(critical wound) =
@@ -219,7 +220,7 @@ const HitWoundOdds& OddsCache::hit_wound(const core::AttackProfile& profile, int
     const HitWoundKey key{opt_or(profile.skill), profile.torrent,         profile.strength, profile.hit_modifier,
                           profile.wound_modifier,  toughness, core::sustained_hits(profile),
                           core::twin_linked(profile), profile.snap_shooting, profile.critical_wound_on,
-                          core::devastating_wounds(profile)};
+                          core::devastating_wounds(profile), core::lethal_hits(profile)};
     auto it = hit_wound_.find(key);
     if (it == hit_wound_.end()) {
         ++computed_;
@@ -425,8 +426,9 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
             std::vector<double> pk(static_cast<std::size_t>(x) + 2, 0.0);
             pk[0] = 1.0 - hw.hit;
             for (int k = 0; k <= x + 1; ++k) {
-                pk[static_cast<std::size_t>(k)] +=
-                    normal * binomial(1, k, hw.wound) + hw.critical_hit * binomial(x + 1, k, hw.wound);
+                // 24.23 (M100): a lethal critical hit is one automatic wound and X hits that roll to wound.
+                const double critical = hw.lethal ? binomial(x, k - 1, hw.wound) : binomial(x + 1, k, hw.wound);
+                pk[static_cast<std::size_t>(k)] += normal * binomial(1, k, hw.wound) + hw.critical_hit * critical;
             }
             std::vector<double> u(target.groups.size(), 0.0);  // P(one wound gets past the save | group)
             for (std::size_t g = 0; g < u.size(); ++g) {
@@ -438,15 +440,18 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
                 }
             }
             const double hits_per_die = hw.hit + x * hw.critical_hit;
+            // 24.23 (M100): the wounds of one die; a lethal critical hit's own hit wounds without a roll.
+            const double wounds_per_die =
+                hw.lethal ? (hits_per_die - hw.critical_hit) * hw.wound + hw.critical_hit : hits_per_die * hw.wound;
             out.attack_dice += batch.attack_dice;
             out.hits += batch.attack_dice * hits_per_die;
-            out.wounds += batch.attack_dice * hits_per_die * hw.wound;
-            out.unsaved += batch.attack_dice * hits_per_die * hw.wound * u[target.slots[0].group];
+            out.wounds += batch.attack_dice * wounds_per_die;
+            out.unsaved += batch.attack_dice * wounds_per_die * u[target.slots[0].group];
             if (random_a) {
                 out.attack_dice += extra_dice;
                 out.hits += extra_dice * hits_per_die;
-                out.wounds += extra_dice * hits_per_die * hw.wound;
-                out.unsaved += extra_dice * hits_per_die * hw.wound * u[target.slots[0].group];
+                out.wounds += extra_dice * wounds_per_die;
+                out.unsaved += extra_dice * wounds_per_die * u[target.slots[0].group];
             }
             std::vector<double> step(dist.size(), 0.0);
             std::vector<double> acc(dist.size(), 0.0);
@@ -473,15 +478,23 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
                                          cache.unsaved(target.groups[g], batch.profile.armour_penetration) +
                                      hw.critical_wound);
                 }
+                // 24.23 (M100): a critical hit wounds without a roll; the other hits roll as before. (A profile with
+                // both abilities is refused, D-102.)
+                if (hw.lethal) {
+                    q[g] = ((hw.hit - hw.critical_hit) * hw.wound + hw.critical_hit) *
+                           cache.unsaved(target.groups[g], batch.profile.armour_penetration);
+                }
             }
+            const double wounds_per_die =
+                hw.lethal ? (hw.hit - hw.critical_hit) * hw.wound + hw.critical_hit : hw.hit * hw.wound;
             out.attack_dice += batch.attack_dice;
             out.hits += batch.attack_dice * hw.hit;
-            out.wounds += batch.attack_dice * hw.hit * hw.wound;
+            out.wounds += batch.attack_dice * wounds_per_die;
             out.unsaved += batch.attack_dice * q[target.slots[0].group];
             if (random_a) {
                 out.attack_dice += extra_dice;
                 out.hits += extra_dice * hw.hit;
-                out.wounds += extra_dice * hw.hit * hw.wound;
+                out.wounds += extra_dice * wounds_per_die;
                 out.unsaved += extra_dice * q[target.slots[0].group];
             }
             run_dice([&]() {
@@ -597,6 +610,10 @@ bool profile_supported(const core::WeaponProfile& profile) {
     // D-026 / D-071 ([TWIN-LINKED] is resolved, D-072). D-069: a random A or D is rolled; a random-A melee profile is
     // refused by the same check.
     return !core::unimplemented_ability_problem(profile);
+}
+
+bool profile_supported(const core::Weapon& weapon, const core::WeaponProfile& profile) {
+    return profile_supported(profile) && !core::one_shot_problem(weapon, profile);  // 24.26 (M100, D-102)
 }
 
 double hazard_model_equivalents(const core::Unit& firer, int rolls) {
@@ -910,7 +927,7 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
         std::vector<Candidate<Pick>> cands;
         for (std::size_t w = 0; w < model.weapons.size(); ++w) {
             for (const core::WeaponProfile& p : model.weapons[w].profiles) {
-                if (p.kind != core::WeaponKind::Ranged || !profile_supported(p)) continue;
+                if (p.kind != core::WeaponKind::Ranged || !profile_supported(model.weapons[w], p)) continue;
                 if (!allowed_for_type(attacker, model, p, context.type) || !within_range(p, context.gap_mm)) continue;
                 if (!target_allowed(facts, mv_model, p)) continue;  // D-077: 04.02, 10.06, 17.03
                 core::WeaponSelection sel;
@@ -919,10 +936,14 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
                 sel.target_models_at_selection = static_cast<int>(target.models.size());  // 24.05
                 core::AttackProfile ap = core::make_attack_profile(p, attack);
                 core::apply_target_abilities(ap, p, sel, target);  // M99 (D-101): [MELTA] within half range, [ANTI]
-                ap.hit_modifier += hit_modifier_of(facts, mv_model, p);  // D-077: 10.06 and 17.03, as the engine adds them
+                // M100 (D-102): a [PSYCHIC] weapon ignores the -1s and the cover below (24.29), as the engine's
+                // make_weapon_selections records none for it.
+                const bool penalties = !core::ignores_hit_penalties(p);
+                // D-077: 10.06 and 17.03, as the engine adds them
+                if (penalties) ap.hit_modifier += hit_modifier_of(facts, mv_model, p);
                 // M89 (D-090): 13.08 Benefit of Cover worsens the BS by 1 (D-089, as gather_attack_batches); not
                 // against an [IGNORES COVER] weapon (24.18, M90, D-091: the engine records no cover for it).
-                if (context.target_cover && ap.skill && !p.has<core::ability::IgnoresCover>()) *ap.skill += 1;
+                if (penalties && context.target_cover && ap.skill && !p.has<core::ability::IgnoresCover>()) *ap.skill += 1;
                 const core::SelectionDice sd = core::selection_dice(p, sel, attack);
                 std::vector<core::DiceExpr> random;
                 if (sd.random) random.push_back(*sd.random);  // D-069
@@ -949,15 +970,18 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
     const TargetSnapshot snap = snapshot_of(target);
     core::AttackContext attack;
     attack.type = core::AttackType::Fighting;
-    const auto usable = [](const core::WeaponProfile& p) {
-        return p.kind == core::WeaponKind::Melee && profile_supported(p);
+    // M100 (D-102): a [ONE SHOT] profile of a spent weapon is not usable (24.26).
+    const auto usable_of = [](const core::Weapon& w) {
+        return [&w](const core::WeaponProfile& p) {
+            return p.kind == core::WeaponKind::Melee && profile_supported(w, p);
+        };
     };
     std::optional<double> hazard;  // D-077: the attacker's expected loss to one hazard roll (24.15), when priced
     for (const core::Model& model : attacker.models) {
         // 24.11 (D-071): the best of the model's other melee weapons, plus every [EXTRA ATTACKS] weapon; a model
         // with no other weapon it can use picks among its [EXTRA ATTACKS] weapons too.
         const bool has_other = std::any_of(model.weapons.begin(), model.weapons.end(), [&](const core::Weapon& w) {
-            return !core::is_extra_attacks_weapon(w) && std::any_of(w.profiles.begin(), w.profiles.end(), usable);
+            return !core::is_extra_attacks_weapon(w) && std::any_of(w.profiles.begin(), w.profiles.end(), usable_of(w));
         });
         std::optional<VolleyBatch> best;
         std::size_t best_weapon = 0;
@@ -966,7 +990,7 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
             const core::Weapon& weapon = model.weapons[wi];
             if (has_other && core::is_extra_attacks_weapon(weapon)) continue;
             for (const core::WeaponProfile& p : weapon.profiles) {
-                if (!usable(p)) continue;
+                if (!usable_of(weapon)(p)) continue;
                 core::WeaponSelection sel;
                 sel.target = target.id;
                 core::AttackProfile ap = core::make_attack_profile(p, attack);
@@ -990,7 +1014,7 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
             const core::Weapon& weapon = model.weapons[wi];
             if (wi == best_weapon || !core::is_extra_attacks_weapon(weapon)) continue;
             for (const core::WeaponProfile& p : weapon.profiles) {  // its first usable profile (D-001)
-                if (!usable(p)) continue;
+                if (!usable_of(weapon)(p)) continue;
                 core::WeaponSelection sel;
                 sel.target = target.id;
                 core::AttackProfile ap = core::make_attack_profile(p, attack);

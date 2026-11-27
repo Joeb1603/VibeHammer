@@ -37,7 +37,7 @@ std::vector<float> usable_ranges(const core::Unit& u) {
     for (const core::Model& m : u.models) {
         for (const core::Weapon& w : m.weapons) {
             for (const core::WeaponProfile& p : w.profiles) {
-                if (p.kind != core::WeaponKind::Ranged || !p.range_mm || !analysis::profile_supported(p)) continue;
+                if (p.kind != core::WeaponKind::Ranged || !p.range_mm || !analysis::profile_supported(w, p)) continue;
                 out.push_back(*p.range_mm);
             }
         }

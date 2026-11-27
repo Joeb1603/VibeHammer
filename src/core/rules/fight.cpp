@@ -39,12 +39,14 @@ std::vector<UnitId> enemy_units_within(const GameState& state, const Unit& unit,
 // A melee profile V1 can resolve: no unimplemented ability (D-026, D-071) and a fixed A (D-069: a random A is refused
 // for melee weapons; a random D is rolled). A model whose only melee weapons fail this cannot make melee attacks in
 // V1, so it is not required to (D-021).
-bool usable_melee_profile(const WeaponProfile& p) {
-    return p.kind == WeaponKind::Melee && !unimplemented_ability_problem(p);
+// M100 (D-102): nor a [ONE SHOT] profile of a weapon already selected this battle (24.26).
+bool usable_melee_profile(const Weapon& w, const WeaponProfile& p) {
+    return p.kind == WeaponKind::Melee && !unimplemented_ability_problem(p) && !one_shot_problem(w, p);
 }
 
 bool usable_melee_weapon(const Weapon& w) {
-    return std::any_of(w.profiles.begin(), w.profiles.end(), usable_melee_profile);
+    return std::any_of(w.profiles.begin(), w.profiles.end(),
+                       [&w](const WeaponProfile& p) { return usable_melee_profile(w, p); });
 }
 
 bool has_melee_weapon(const Model& m) { return std::any_of(m.weapons.begin(), m.weapons.end(), usable_melee_weapon); }
@@ -87,6 +89,7 @@ std::optional<std::string> declaration_problem(const GameState& state, const Uni
         return "04.01: '" + profile.name + "' is not a melee weapon; models fight with melee weapons";
     }
     if (auto p = unimplemented_ability_problem(profile)) return p;  // D-026, D-071, D-069 (a random A)
+    if (auto p = one_shot_problem(weapon, profile)) return p;       // 24.26 (M100, D-102)
     const int a = profile.attacks.fixed_value();  // fixed: a random A is refused above (D-069)
     if (d.targets.empty()) {
         return "04.02: select one or more targets for " + model_label(d.model) + "'s '" + profile.name + "'";
@@ -436,7 +439,7 @@ std::vector<MeleeDeclaration> melee_options(const GameState& state, const Unit& 
         for (std::size_t w = 0; w < m.weapons.size(); ++w) {
             for (std::size_t p = 0; p < m.weapons[w].profiles.size(); ++p) {
                 const WeaponProfile& profile = m.weapons[w].profiles[p];
-                if (!usable_melee_profile(profile)) {
+                if (!usable_melee_profile(m.weapons[w], profile)) {
                     continue;
                 }
                 for (const UnitId target : engaged) {

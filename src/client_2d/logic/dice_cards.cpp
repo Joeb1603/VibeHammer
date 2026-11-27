@@ -251,9 +251,18 @@ DiceCard wound_card(const core::GameState& state, const AttackContext& c, const 
         criticals += d.critical ? 1 : 0;
         card.dice.push_back(d);
     }
+    wounds += rolls.automatic;  // 24.23 (M100): wounds without a die of their own
     card.result = plural(wounds, "wound", "wounds");
     if (criticals > 0) card.result += " (" + std::to_string(criticals) + " critical)";
-    if (rolls.rolls.empty()) card.result = "No hits to roll for";
+    if (rolls.automatic > 0) {
+        card.result += ", " + std::to_string(rolls.automatic) + " of them automatic (Lethal Hits)";
+        card.need += "; Lethal Hits: each critical hit wounds without a roll";
+    }
+    if (rolls.rolls.empty()) {
+        card.result = rolls.automatic > 0 ? plural(rolls.automatic, "automatic wound", "automatic wounds") +
+                                                " (Lethal Hits): no wound roll is made"
+                                          : "No hits to roll for";
+    }
     return card;
 }
 

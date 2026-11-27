@@ -179,7 +179,10 @@ struct WoundRoll {
 struct WoundRolls {
     int required = 0;
     std::vector<WoundRoll> rolls;
-    [[nodiscard]] int wounds() const;  // includes critical wounds
+    // 24.23 [LETHAL HITS] (M100, D-102): the attacks that wound automatically (a critical hit each); no wound roll is
+    // made for them and they are not critical wounds (app 01.05.01). Omitted from JSON when 0.
+    int automatic = 0;
+    [[nodiscard]] int wounds() const;  // includes critical wounds and automatic wounds
     [[nodiscard]] int critical_wounds() const;
     friend bool operator==(const WoundRolls&, const WoundRolls&) = default;
 };

@@ -171,8 +171,8 @@ TEST(D006_IdenticalAttacks, AttackTimeAbilitiesSplitBatchesInAnyListedOrder) {
     const GameState gs = load_v1_scenario();
     WeaponProfile a = marine_profile(gs, kBoltPistol, 0);
     WeaponProfile b = a;
-    a.abilities = {ability::Hazardous{}, ability::Unknown{"Lethal Hits"}};
-    b.abilities = {ability::Unknown{"Lethal Hits"}, ability::CloseQuarters{}, ability::Hazardous{}};
+    a.abilities = {ability::Hazardous{}, ability::Unknown{"Conversion"}};
+    b.abilities = {ability::Unknown{"Conversion"}, ability::CloseQuarters{}, ability::Hazardous{}};
     EXPECT_EQ(make_attack_profile(a, kShootingNoHeavy), make_attack_profile(b, kShootingNoHeavy));
     WeaponProfile c = a;
     c.abilities = {ability::Hazardous{}};

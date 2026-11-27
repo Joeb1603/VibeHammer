@@ -48,10 +48,16 @@ namespace wh40k::core {
 
 // One wound roll per hit (HitRolls::hits(), sustained hits included). Unmodified 1 fails, unmodified 6 is a critical wound, otherwise the
 // modified result (D-011) must be >= required_wound_roll(S, T). M99 (D-101): the profile's critical_wound_on (24.03).
+// M100 (D-102): `automatic` of the hits wound automatically (24.23 [LETHAL HITS]): no roll is made for them.
 [[nodiscard]] WoundRolls make_wound_rolls(DiceSource& dice, const AttackProfile& profile, int hits,
-                                          int toughness);
+                                          int toughness, int automatic = 0);
 // D-096 (M95): the results of wound-roll dice already rolled (one per hit), as make_wound_rolls judges them.
-[[nodiscard]] WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::span<const int> faces);
+[[nodiscard]] WoundRolls judge_wound_rolls(const AttackProfile& profile, int toughness, std::span<const int> faces,
+                                           int automatic = 0);
+
+// 24.23 [LETHAL HITS] (M100, D-102): the hits that wound automatically: every critical hit of a profile with the
+// ability, none without it.
+[[nodiscard]] int automatic_wounds(const AttackProfile& profile, const HitRolls& hits);
 
 // 05.02 for one die: the first row of the table that applies to `unmodified`, with the (already capped, D-011)
 // wound modifier, against the required result. make_wound_rolls and reroll_wound_rolls both use it.

@@ -110,6 +110,21 @@ void from_json(const Json& j, WeaponKind& v) {
 
 namespace ability {
 
+namespace {
+// 24.01 (M100, D-102): an ability's keyword condition, "against" (and "non"), omitted when it always applies.
+void put_condition(Json& j, const TargetCondition& c) {
+    if (c.always()) return;
+    j["against"] = c.keywords;
+    if (c.non) j["non"] = true;
+}
+TargetCondition get_condition(const Json& j) {
+    TargetCondition c;
+    if (j.contains("against")) j.at("against").get_to(c.keywords);
+    c.non = j.contains("non") && j.at("non").get<bool>();
+    return c;
+}
+}  // namespace
+
 void to_json(Json& j, const WeaponAbility& v) {
     std::visit(
         [&j](const auto& a) {
@@ -122,8 +137,18 @@ void to_json(Json& j, const WeaponAbility& v) {
             else if constexpr (std::is_same_v<T, TwinLinked>) j = Json{{"kind", "TwinLinked"}};
             else if constexpr (std::is_same_v<T, Torrent>) j = Json{{"kind", "Torrent"}};
             else if constexpr (std::is_same_v<T, Hazardous>) j = Json{{"kind", "Hazardous"}};
-            else if constexpr (std::is_same_v<T, DevastatingWounds>) j = Json{{"kind", "DevastatingWounds"}};
-            else if constexpr (std::is_same_v<T, SustainedHits>) j = Json{{"kind", "SustainedHits"}, {"x", a.x}};
+            else if constexpr (std::is_same_v<T, DevastatingWounds>) {
+                j = Json{{"kind", "DevastatingWounds"}};
+                put_condition(j, a.only_against);
+            } else if constexpr (std::is_same_v<T, SustainedHits>) {
+                j = Json{{"kind", "SustainedHits"}, {"x", a.x}};
+                put_condition(j, a.only_against);
+            } else if constexpr (std::is_same_v<T, LethalHits>) {
+                j = Json{{"kind", "LethalHits"}};
+                put_condition(j, a.only_against);
+            } else if constexpr (std::is_same_v<T, Psychic>) j = Json{{"kind", "Psychic"}};
+            else if constexpr (std::is_same_v<T, Cleave>) j = Json{{"kind", "Cleave"}, {"x", a.x}};
+            else if constexpr (std::is_same_v<T, OneShot>) j = Json{{"kind", "OneShot"}};
             else if constexpr (std::is_same_v<T, ExtraAttacks>) j = Json{{"kind", "ExtraAttacks"}};
             else if constexpr (std::is_same_v<T, IgnoresCover>) j = Json{{"kind", "IgnoresCover"}};
             else if constexpr (std::is_same_v<T, Unknown>) j = Json{{"kind", "Unknown"}, {"text", a.text}};
@@ -147,8 +172,12 @@ void from_json(const Json& j, WeaponAbility& v) {
     else if (kind == "TwinLinked") v = TwinLinked{};
     else if (kind == "Torrent") v = Torrent{};
     else if (kind == "Hazardous") v = Hazardous{};
-    else if (kind == "DevastatingWounds") v = DevastatingWounds{};
-    else if (kind == "SustainedHits") v = SustainedHits{j.at("x").get<int>()};
+    else if (kind == "DevastatingWounds") v = DevastatingWounds{get_condition(j)};
+    else if (kind == "SustainedHits") v = SustainedHits{j.at("x").get<int>(), get_condition(j)};
+    else if (kind == "LethalHits") v = LethalHits{get_condition(j)};
+    else if (kind == "Psychic") v = Psychic{};
+    else if (kind == "Cleave") v = Cleave{j.at("x").get<int>()};
+    else if (kind == "OneShot") v = OneShot{};
     else if (kind == "ExtraAttacks") v = ExtraAttacks{};
     else if (kind == "IgnoresCover") v = IgnoresCover{};
     else if (kind == "Anti") {
@@ -204,11 +233,13 @@ void from_json(const Json& j, WeaponProfile& v) {
 
 void to_json(Json& j, const Weapon& v) {
     j = Json{{"name", v.name}, {"kind", v.kind}, {"profiles", v.profiles}};
+    if (v.one_shot_spent) j["spent"] = true;  // 24.26 (D-102): omitted when false
 }
 void from_json(const Json& j, Weapon& v) {
     j.at("name").get_to(v.name);
     j.at("kind").get_to(v.kind);
     j.at("profiles").get_to(v.profiles);
+    v.one_shot_spent = j.contains("spent") && j.at("spent").get<bool>();  // D-102
 }
 
 void to_json(Json& j, const Model& v) {

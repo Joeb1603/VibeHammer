@@ -122,10 +122,14 @@ void from_json(const Json& j, WoundRoll& v) {
     j.at("modified").get_to(v.modified);
     j.at("outcome").get_to(v.outcome);
 }
-void to_json(Json& j, const WoundRolls& v) { j = Json{{"required", v.required}, {"rolls", v.rolls}}; }
+void to_json(Json& j, const WoundRolls& v) {
+    j = Json{{"required", v.required}, {"rolls", v.rolls}};
+    if (v.automatic != 0) j["automatic"] = v.automatic;  // 24.23 (D-102): omitted when 0
+}
 void from_json(const Json& j, WoundRolls& v) {
     j.at("required").get_to(v.required);
     j.at("rolls").get_to(v.rolls);
+    v.automatic = j.contains("automatic") ? j.at("automatic").get<int>() : 0;  // D-102
 }
 void to_json(Json& j, const WoundReroll& v) {
     j = Json{{"index", v.index}, {"before", v.before}, {"after", v.after}};

@@ -1590,7 +1590,7 @@ TEST(M21_Datasheet, WeaponAbilityLabels) {
     EXPECT_EQ(weapon_ability_label(ability::Blast{1}), "[BLAST 1]");
     EXPECT_EQ(weapon_ability_label(ability::CloseQuarters{}), "[CLOSE-QUARTERS]");
     EXPECT_EQ(weapon_ability_label(ability::TwinLinked{}), "[TWIN-LINKED]");
-    EXPECT_EQ(weapon_ability_label(ability::Unknown{"Lethal Hits"}), "[LETHAL HITS]");
+    EXPECT_EQ(weapon_ability_label(ability::Unknown{"Conversion"}), "[CONVERSION]");
 }
 
 // ---- M22: the measuring ruler (D-035) ----

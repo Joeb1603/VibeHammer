@@ -127,7 +127,7 @@ GameState tyrant_declaring(bool usable_bonesword) {
     if (usable_bonesword) {
         bonesword.abilities.clear();  // stand-in: no [TWIN-LINKED]
     } else {
-        bonesword.abilities.push_back(ability::Unknown{"Lethal Hits"});  // stand-in: refused
+        bonesword.abilities.push_back(ability::Unknown{"Conversion"});  // stand-in: refused
     }
     const Model& havoc = gs.units[0].models[2];
     Model& tyrant = gs.units[1].models[0];

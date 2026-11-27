@@ -54,6 +54,10 @@ struct HitWoundOdds {
     // batch's normal damage, on the model 06.02 selects: the same model with one allocation group). `critical_wound`
     // follows the profile's critical wound threshold (24.03 [ANTI-X Y+]) through core's wound rolls.
     bool devastating = false;
+    // M100 (D-102): 24.23 [LETHAL HITS]: a critical hit wounds automatically (no wound roll, never a critical wound).
+    // `wound` and `critical_wound` stay the chances of a hit that rolls to wound; expected_outcome mixes the critical
+    // hits in.
+    bool lethal = false;
 };
 
 // Per-die chances, computed once per key. Lookups are deterministic and the values do not depend on what else is
@@ -76,8 +80,9 @@ public:
 
 private:
     // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X, [TWIN-LINKED], M96
-    // (D-097): 15.09 snap shooting, M99 (D-101): the critical wound threshold (24.03) and [DEVASTATING WOUNDS] (24.10))
-    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool, int, bool>;
+    // (D-097): 15.09 snap shooting, M99 (D-101): the critical wound threshold (24.03) and [DEVASTATING WOUNDS] (24.10),
+    // M100 (D-102): [LETHAL HITS] (24.23))
+    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool, int, bool, bool>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
     // (dice, sides, modifier)
@@ -178,6 +183,9 @@ struct SampledOutcome {
 // D-026 / D-071: can the engine resolve this profile (no unimplemented ability)? D-069: a random A or D is rolled, but
 // a random A on a melee profile is refused (unimplemented_ability_problem).
 [[nodiscard]] bool profile_supported(const core::WeaponProfile& profile);
+// M100 (D-102): the same for a model's own weapon: nor a [ONE SHOT] profile of a weapon already selected this battle
+// (24.26, core::one_shot_problem).
+[[nodiscard]] bool profile_supported(const core::Weapon& weapon, const core::WeaponProfile& profile);
 
 // ---- [HAZARDOUS] (24.15, 06.03, 06.02; D-077) ----
 

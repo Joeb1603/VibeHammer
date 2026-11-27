@@ -461,6 +461,7 @@ void to_json(Json& j, const AttackFlow& v) {
     if (v.wound_rerolls) j["wound_rerolls"] = *v.wound_rerolls;  // 24.38 (D-072); omitted when absent
     if (v.shooting_type != ShootingType::Normal) j["shooting_type"] = v.shooting_type;  // D-093; omitted when Normal
     if (v.rolling) j["rolling"] = *v.rolling;  // D-095; omitted when absent
+    if (v.automatic_wounds != 0) j["automatic_wounds"] = v.automatic_wounds;  // D-102 (24.23); omitted when 0
 }
 void from_json(const Json& j, AttackFlow& v) {
     j.at("attacker").get_to(v.attacker);
@@ -480,6 +481,7 @@ void from_json(const Json& j, AttackFlow& v) {
     if (const auto it = j.find("shooting_type"); it != j.end()) it->get_to(v.shooting_type);
     v.rolling.reset();
     if (const auto it = j.find("rolling"); it != j.end() && !it->is_null()) v.rolling = it->get<BatchRolls>();
+    v.automatic_wounds = j.contains("automatic_wounds") ? j.at("automatic_wounds").get<int>() : 0;  // D-102
 }
 
 // D-096 (M95): the open reaction window.

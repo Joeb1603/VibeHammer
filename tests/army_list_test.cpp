@@ -495,8 +495,8 @@ TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
     // D-079 part 1's list: refused from their abilities (D-026, D-071). M90 (D-091): the Flamers and the Heavy
     // flamer ([IGNORES COVER]) are no longer refused, so the "every other weapon" loop below checks them. M99 (D-101):
     // the engine resolves [DEVASTATING WOUNDS], [ANTI] and [MELTA] too, so the list is read from the refusal tests'
-    // data, where these weapons carry an ability the engine doesn't know; on the real data only the Balefire tome
-    // ([PSYCHIC]) is still refused (the last check).
+    // data, where these weapons carry an ability the engine doesn't know. M100 (D-102): [PSYCHIC] too, so on the real
+    // data no weapon is refused any more (the last check).
     const std::vector<std::pair<std::string, std::string>> refused = {
         {"chaos_lord", "Daemon hammer"},          {"chaos_terminator_squad", "Combi-weapon"},
         {"chaos_terminator_squad", "Chainfist"},  {"chaos_terminator_squad", "Reaper autocannon"},
@@ -536,12 +536,12 @@ TEST(D079_Refused, UnplayableWeaponsCantBePickedWithTheReason) {
     const Names p = rproblems_of("chaos_lord", {group("Chaos Lord", 1, {"Daemon hammer", "Plasma pistol"})});
     EXPECT_EQ(p, Names{"D-079: 'Chaos Lord' carries 'Daemon hammer', which can't be picked: " +
                        *weapon_refusal(rsheet("chaos_lord"), "Daemon hammer")});
-    // The real data (M99): every weapon but the Balefire tome is pickable.
+    // The real data (M99, M100): every weapon is pickable.
     for (const Faction& f : wh40k::test::factions()) {
         for (const std::string& u : f.unit_files) {
             const Datasheet ds = army_resolver()(u);
             for (const Weapon& w : ds.weapons) {
-                EXPECT_EQ(weapon_refusal(ds, w.name).has_value(), w.name == "Balefire tome") << u << " " << w.name;
+                EXPECT_EQ(weapon_refusal(ds, w.name), std::nullopt) << u << " " << w.name;
             }
         }
     }
@@ -601,9 +601,9 @@ TEST(D079_Defaults, UnavailableModelTypes) {
                                     "hive_tyrant", "tyrannofex"}) {
         EXPECT_EQ(unavailable_model_types(rsheet(name)), Names{}) << name;
     }
-    // M99 (D-101): on the real data only the Legionary with the Balefire tome ([PSYCHIC]) can't be taken.
-    EXPECT_EQ(unavailable_model_types(sheet("legionaries")), Names{"Legionary w/ balefire tome"});
-    for (const std::string& name : {"chaos_terminator_squad", "termagants", "chaos_lord", "havocs"}) {
+    // M99 (D-101), M100 (D-102): on the real data every model type can be taken (the Legionary with the Balefire tome,
+    // [PSYCHIC], was the last one that couldn't).
+    for (const std::string& name : {"chaos_terminator_squad", "termagants", "chaos_lord", "havocs", "legionaries"}) {
         EXPECT_EQ(unavailable_model_types(sheet(name)), Names{}) << name;
     }
 }
@@ -797,11 +797,22 @@ TEST(D079_RandomArmy, LegalAndDeterministic) {
                           "Stranglethorn cannon", "Bone cleaver, lash whip and rending claws",
                           "Flamer", "Heavy flamer",  // M90 (D-091): [IGNORES COVER] is implemented
                           // M99 (D-101): [DEVASTATING WOUNDS], [ANTI-X Y+] and [MELTA X] are implemented
-                          "Daemon hammer", "Combi-weapon", "Chainfist", "Reaper autocannon", "Meltagun", "Strangleweb"}) {
+                          "Daemon hammer", "Combi-weapon", "Chainfist", "Reaper autocannon", "Meltagun", "Strangleweb",
+                          "Balefire tome"}) {  // M100 (D-102): [PSYCHIC] is implemented
         EXPECT_EQ(weapons.count(w), 1u) << w;
     }
-    for (const char* w : {"Balefire tome"}) {
-        EXPECT_EQ(weapons.count(w), 0u) << w;  // refused weapons are never picked
+    // Refused weapons are never picked: on the refusal tests' data (D-101 part 8) none of D-079 part 1's list turns up.
+    std::set<std::string> stand_in_weapons;
+    for (const Faction& f : wh40k::test::refused_factions()) {
+        for (std::uint64_t seed = 1; seed <= 40; ++seed) {
+            for (const ArmyUnit& u : random_army(f, wh40k::test::refused_resolver(), seed).units) {
+                for (const ArmyModelGroup& g : u.models) stand_in_weapons.insert(g.weapons.begin(), g.weapons.end());
+            }
+        }
+    }
+    for (const char* w : {"Daemon hammer", "Combi-weapon", "Chainfist", "Reaper autocannon", "Meltagun", "Balefire tome",
+                          "Strangleweb"}) {
+        EXPECT_EQ(stand_in_weapons.count(w), 0u) << w;
     }
     EXPECT_NE(random_army(csm(), army_resolver(), 1), random_army(csm(), army_resolver(), 2));
     // A lower limit is kept too.

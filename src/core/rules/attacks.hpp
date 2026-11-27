@@ -55,6 +55,23 @@ void apply_target_abilities(AttackProfile& profile, const WeaponProfile& weapon,
 // Does this [ANTI] instance apply to the target unit (24.01: one or more of its keywords; "non-X": none of them)?
 [[nodiscard]] bool anti_applies(const ability::Anti& anti, const Unit& target);
 
+// 24.23 [LETHAL HITS] (M100, D-102): does the profile have it (each critical hit wounds automatically)?
+[[nodiscard]] bool lethal_hits(const AttackProfile& profile);
+
+// 24.01 (M100, D-102): does the target unit meet an ability's keyword condition (one or more of the keywords; "non-":
+// none of them; no keywords: always)?
+[[nodiscard]] bool condition_met(const ability::TargetCondition& condition, const Unit& target);
+
+// 24.29 [PSYCHIC] (M100, D-102): the modifiers that worsen the attack's BS/WS or its hit roll are ignored (10.06's and
+// 17.03's -1, 13.08's cover), and those that improve it are kept ([HEAVY]'s +1).
+[[nodiscard]] bool ignores_hit_penalties(const WeaponProfile& weapon);
+
+// 24.26 [ONE SHOT] (M100, D-102): why `profile` of `weapon` can't be selected again: the weapon has already been
+// selected to make attacks with this battle. nullopt if it can.
+[[nodiscard]] std::optional<std::string> one_shot_problem(const Weapon& weapon, const WeaponProfile& profile);
+// 24.26: the selections' [ONE SHOT] weapons are spent (called when the unit's attacks start).
+void spend_one_shot_weapons(GameState& state, std::span<const WeaponSelection> selections);
+
 // 24.10 [DEVASTATING WOUNDS]: does the profile have it (each critical wound ends the attack sequence for that attack and
 // inflicts the weapon's D in mortal wounds)?
 [[nodiscard]] bool devastating_wounds(const AttackProfile& profile);
@@ -120,6 +137,8 @@ struct AbilityEffect {
     int wound_modifier = 0;     // 24.21 [LANCE]: +1 when the unit made a charge move this turn
     int damage_modifier = 0;    // 24.25 [MELTA X]: +X within half range
     int critical_wound_on = 0;  // 24.03 [ANTI-X Y+]: Y against a target with the keyword; 0 when it doesn't apply
+    // M100 (D-102): the ability has a keyword condition the target doesn't meet (24.01): it does nothing here.
+    bool condition_unmet = false;
     friend bool operator==(const AbilityEffect&, const AbilityEffect&) = default;
 };
 

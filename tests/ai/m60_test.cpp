@@ -55,7 +55,7 @@ GameState tyrant_declaring(bool usable_bonesword) {
     if (usable_bonesword) {
         bonesword.abilities.clear();
     } else {
-        bonesword.abilities.push_back(ability::Unknown{"Lethal Hits"});
+        bonesword.abilities.push_back(ability::Unknown{"Conversion"});
     }
     const Model& havoc = gs.units[0].models[2];
     Model& tyrant = gs.units[1].models[0];
@@ -126,7 +126,7 @@ TEST(M60_Odds, AbilitiesTheEngineRefusesAreNotSupported) {
         q.abilities.push_back(ok);
         EXPECT_TRUE(profile_supported(q));
     }
-    p.abilities.push_back(ability::Unknown{"Lethal Hits"});  // D-071
+    p.abilities.push_back(ability::Unknown{"Conversion"});  // D-071
     EXPECT_FALSE(profile_supported(p));
 }
 
@@ -138,7 +138,7 @@ TEST(M60_Odds, TheMeleeVolleyAddsTheExtraAttacksWeapon) {
     for (const bool usable : {true, false}) {
         GameState gs = havocs_fixture();
         WeaponProfile& bonesword = gs.units[1].models[0].weapons[0].profiles[0];
-        if (!usable) bonesword.abilities.push_back(ability::Unknown{"Lethal Hits"});
+        if (!usable) bonesword.abilities.push_back(ability::Unknown{"Conversion"});
         const Volley v = unit_melee_volley(cache, gs.units[1], gs.units[0]);
         int dice = 0;
         for (const VolleyBatch& b : v) dice += b.attack_dice;
@@ -180,7 +180,7 @@ TEST(M60_Bots, NeitherTheBotNorItsDefaultsFireAWeaponWithAnAbilityTheEngineRefus
     // D-071: the Bolt Rifles get an ability the engine doesn't know; only the bolt pistols may fire.
     GameState gs = wh40k::test::shoot_step_state();
     for (Model& m : gs.units[0].models) {
-        for (WeaponProfile& p : m.weapons[0].profiles) p.abilities.push_back(ability::Unknown{"Lethal Hits"});
+        for (WeaponProfile& p : m.weapons[0].profiles) p.abilities.push_back(ability::Unknown{"Conversion"});
     }
     for (const bool defaults : {false, true}) {
         const BotChoice c = answer(gs, Side::A, defaults);

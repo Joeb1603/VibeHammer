@@ -91,6 +91,16 @@ std::string stat_line(const core::Characteristics& c) {
     return out;
 }
 
+namespace {
+// 24.01 (M100): ": VEHICLE", ": NON-MONSTER/VEHICLE" after an ability's name; nothing when it always applies.
+std::string condition_suffix(const core::ability::TargetCondition& c) {
+    if (c.always()) return "";
+    std::string keywords;
+    for (const std::string& k : c.keywords) keywords += (keywords.empty() ? "" : "/") + upper(k);
+    return ": " + std::string(c.non ? "NON-" : "") + keywords;
+}
+}  // namespace
+
 std::string weapon_ability_label(const core::WeaponAbility& ability) {
     return std::visit(
         [](const auto& a) -> std::string {
@@ -104,8 +114,15 @@ std::string weapon_ability_label(const core::WeaponAbility& ability) {
             else if constexpr (std::is_same_v<T, ab::TwinLinked>) return "[TWIN-LINKED]";
             else if constexpr (std::is_same_v<T, ab::Torrent>) return "[TORRENT]";
             else if constexpr (std::is_same_v<T, ab::Hazardous>) return "[HAZARDOUS]";
-            else if constexpr (std::is_same_v<T, ab::DevastatingWounds>) return "[DEVASTATING WOUNDS]";
-            else if constexpr (std::is_same_v<T, ab::SustainedHits>) return "[SUSTAINED HITS " + std::to_string(a.x) + "]";
+            else if constexpr (std::is_same_v<T, ab::DevastatingWounds>) {
+                return "[DEVASTATING WOUNDS" + condition_suffix(a.only_against) + "]";
+            } else if constexpr (std::is_same_v<T, ab::SustainedHits>) {
+                return "[SUSTAINED HITS " + std::to_string(a.x) + condition_suffix(a.only_against) + "]";
+            } else if constexpr (std::is_same_v<T, ab::LethalHits>) {
+                return "[LETHAL HITS" + condition_suffix(a.only_against) + "]";  // 24.23 (M100)
+            } else if constexpr (std::is_same_v<T, ab::Psychic>) return "[PSYCHIC]";
+            else if constexpr (std::is_same_v<T, ab::Cleave>) return "[CLEAVE " + std::to_string(a.x) + "]";
+            else if constexpr (std::is_same_v<T, ab::OneShot>) return "[ONE SHOT]";
             else if constexpr (std::is_same_v<T, ab::ExtraAttacks>) return "[EXTRA ATTACKS]";
             else if constexpr (std::is_same_v<T, ab::IgnoresCover>) return "[IGNORES COVER]";
             else if constexpr (std::is_same_v<T, ab::Anti>) {

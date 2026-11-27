@@ -238,8 +238,9 @@ void make_batch_wound_rolls(GameState& state, DiceSource& dice, Events& events) 
     const AttackBatch batch = f.batches[r.batch];
     const Unit& target = unit_ref(state, batch.target);
     const int toughness = target_toughness(target);
-    const std::vector<int> faces = roll_d6s(dice, r.hits->hits());
-    const WoundRolls wounds = judge_wound_rolls(batch.profile, toughness, faces);
+    // 24.23 (M100, D-102): no wound roll for the hits that wound automatically.
+    const std::vector<int> faces = roll_d6s(dice, r.hits->hits() - f.automatic_wounds);
+    const WoundRolls wounds = judge_wound_rolls(batch.profile, toughness, faces, f.automatic_wounds);
     events.push_back(event::WoundRollsMade{r.batch, wounds});
     if (twin_linked(batch.profile) && !failed_wound_rolls(wounds).empty()) {
         f.rolling.reset();
@@ -427,7 +428,8 @@ std::optional<PendingDecision> attack_decision(const GameState& state) {
             if (!hit_rolls_need_dice(batch)) return std::nullopt;
             return PendingDecision{side, decision::RollDice{RollKind::Hit, f.attacker}};  // 05.01
         }
-        if (f.rolling->hits->hits() == 0) return std::nullopt;
+        // 24.23 (D-102): with every hit an automatic wound there are no wound dice either.
+        if (f.rolling->hits->hits() - f.automatic_wounds == 0) return std::nullopt;
         return PendingDecision{side, decision::RollDice{RollKind::Wound, f.attacker}};  // 05.02
     }
     if (f.wound_rerolls) {
@@ -648,12 +650,16 @@ void apply_attack_roll(GameState& state, RollKind roll, std::size_t batch, const
         case RollKind::Hit: {
             const AttackBatch& b = f.batches[batch];
             rolling_of(f).hits = judge_hit_rolls(b.profile, b.attack_dice, faces);
+            // 24.23 [LETHAL HITS] (M100, D-102): the hit rolls stand, so its critical hits wound automatically.
+            f.automatic_wounds = automatic_wounds(b.profile, *f.rolling->hits);
             return;
         }
         case RollKind::Wound: {
             const AttackBatch b = f.batches[batch];
-            const WoundRolls wounds = judge_wound_rolls(b.profile, target_toughness(unit_ref(state, b.target)), faces);
+            const WoundRolls wounds = judge_wound_rolls(b.profile, target_toughness(unit_ref(state, b.target)), faces,
+                                                        f.automatic_wounds);
             f.rolling.reset();  // the batch is no longer being rolled (already so after a Twin-linked re-roll)
+            f.automatic_wounds = 0;
             after_wound_rolls(state, batch, wounds);
             return;
         }
@@ -697,7 +703,8 @@ event::RerolledRoll attack_roll_result(const GameState& state, RollKind roll, st
         case RollKind::Wound: {
             const AttackBatch& b = f.batches[batch];
             return event::WoundRollsMade{
-                batch, judge_wound_rolls(b.profile, target_toughness(unit_ref(state, b.target)), faces)};
+                batch, judge_wound_rolls(b.profile, target_toughness(unit_ref(state, b.target)), faces,
+                                         f.automatic_wounds)};
         }
         case RollKind::Save:
             return event::SaveRollsMade{f.batches[batch].target, faces};
@@ -734,7 +741,7 @@ void describe_attack_roll(const GameState& state, RollKind roll, RollDiceInfo& i
                 info.dice = batch.attack_dice;
                 info.need = batch.profile.skill;  // 05.01: BS or WS
             } else {
-                info.dice = f.rolling->hits.value().hits();
+                info.dice = f.rolling->hits.value().hits() - f.automatic_wounds;  // 24.23: none for an automatic wound
                 info.need = required_wound_roll(batch.profile.strength, target_toughness(unit_ref(state, batch.target)));
             }
             return;
@@ -1079,6 +1086,7 @@ void start_attacks(GameState& state, UnitId attacker, const AttackContext& conte
     f.batches = gather_attack_batches(state, selections, context);  // 04.03, D-006
     f.batch_done.assign(f.batches.size(), false);
     f.hazard_rolls = hazardous_weapons_selected(state, selections);  // 24.15: counted at Select Weapons
+    spend_one_shot_weapons(state, selections);                       // 24.26 (M100, D-102): its one use
     f.selections = std::move(selections);
     f.shooting_type = shooting_type;  // D-093: new targets (04.03.03) must fit it too
     events.push_back(event::AttackBatchesGathered{attacker, f.batches});
