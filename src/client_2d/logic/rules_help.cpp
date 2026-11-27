@@ -91,10 +91,26 @@ HelpEntry weapon_ability_help(const core::WeaponAbility& ability) {
                 h.rule = "24.15";
                 h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::DevastatingWounds>) {
-                h.summary = "A critical wound (unmodified 6) ends that attack and inflicts mortal wounds equal to "
-                            "the weapon's Damage instead. Not in this game yet: weapons with it can't be "
-                            "selected.";
+                h.summary = "A critical wound (an unmodified 6 to wound, or lower with [ANTI]) makes no save roll: it "
+                            "inflicts mortal wounds equal to the weapon's Damage on one model, after the attack's "
+                            "other damage. The target's player picks the model; mortal wounds it has no wounds left "
+                            "for are lost.";
                 h.rule = "24.10";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::Anti>) {
+                h.summary = "Against a target unit " + std::string(a.non ? "without" : "with") +
+                            " the keyword, an unmodified wound roll of " + std::to_string(a.threshold) +
+                            "+ is a critical wound: it wounds whatever the Strength and Toughness.";
+                h.rule = "24.03";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::Melta>) {
+                h.summary = "+" + std::to_string(a.x) + " Damage when the target is within half the weapon's range.";
+                h.rule = "24.25";
+                h.in_this_game = true;
+            } else if constexpr (std::is_same_v<T, ab::Lance>) {
+                h.summary = "+1 to wound if the unit made a charge move this turn.";
+                h.rule = "24.21";
+                h.in_this_game = true;
             } else if constexpr (std::is_same_v<T, ab::SustainedHits>) {
                 h.summary = "Each critical hit (an unmodified 6 to hit) scores " + std::to_string(a.x) +
                             (a.x == 1 ? " extra hit" : " extra hits") + " on the target. The extra hits are not "
@@ -250,10 +266,11 @@ HelpEntry engaged_monster_target_help() {
 
 std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
                                      std::span<const core::WeaponSelection> selections,
-                                     const core::AttackContext& context, std::optional<core::ShootingType> type) {
+                                     const core::AttackContext& context, std::optional<core::ShootingType> type,
+                                     const core::Unit* target) {
     std::vector<EffectLine> out;
     std::vector<std::vector<core::AbilityEffect>> per;
-    for (const core::WeaponSelection& s : selections) per.push_back(core::ability_effects(weapon, s, context));
+    for (const core::WeaponSelection& s : selections) per.push_back(core::ability_effects(weapon, s, context, target));
     for (std::size_t i = 0; i < weapon.abilities.size(); ++i) {
         int extra = 0;
         int hit = 0;
@@ -328,6 +345,41 @@ std::vector<EffectLine> effect_lines(const core::WeaponProfile& weapon,
                 line.kind = EffectKind::Active;
             } else {
                 line.text = "Ignores Cover: no effect in the Fight phase";
+                line.kind = EffectKind::Inactive;
+            }
+        } else if (std::holds_alternative<ab::DevastatingWounds>(a)) {
+            // 24.10 (M99, D-101)
+            line.text = "Devastating Wounds: each critical wound inflicts the weapon's Damage as mortal wounds (no save)";
+            line.kind = EffectKind::Active;
+        } else if (const auto* anti = std::get_if<ab::Anti>(&a)) {
+            const std::string label = weapon_ability_label(a);
+            const std::string name = "Anti" + label.substr(5, label.size() - 6);  // "[ANTI-X Y+]" -> "Anti-X Y+"
+            if (active > 0) {
+                line.text = name + ": a wound roll of " + std::to_string(anti->threshold) + "+ is a critical wound";
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = name + ": no effect (the target doesn't have the keyword)";
+                line.kind = EffectKind::Inactive;
+            }
+        } else if (const auto* melta = std::get_if<ab::Melta>(&a)) {
+            const std::string half = weapon.range_mm ? inches(*weapon.range_mm / 2.0f) : std::string("?");
+            line.text = "Melta " + std::to_string(melta->x) + ": ";
+            if (active == 0) {
+                line.text += "no extra Damage (target beyond half range, " + half + ")";
+                line.kind = EffectKind::Inactive;
+            } else {
+                line.text += "+" + std::to_string(melta->x) + " Damage (";
+                line.text += active == n ? "target within half range, " + half
+                                         : std::to_string(active) + " of " + models(n) + " within half range, " + half;
+                line.text += ")";
+                line.kind = EffectKind::Active;
+            }
+        } else if (std::holds_alternative<ab::Lance>(a)) {
+            if (active > 0) {
+                line.text = "Lance: +1 to wound (the unit made a charge move this turn)";
+                line.kind = EffectKind::Active;
+            } else {
+                line.text = "Lance: no bonus (the unit made no charge move this turn)";
                 line.kind = EffectKind::Inactive;
             }
         } else if (std::holds_alternative<ab::Assault>(a)) {

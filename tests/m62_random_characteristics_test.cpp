@@ -605,12 +605,13 @@ TEST(D069_RandomCharacteristics, TheRosterWeaponsWithARandomAOrDCanBeSelected) {
         EXPECT_TRUE(!p.attacks.is_fixed() || !p.damage.is_fixed()) << p.name;
         EXPECT_FALSE(unimplemented_ability_problem(p).has_value()) << p.name;
     }
-    // Still refused for another ability.
-    EXPECT_TRUE(starts_with(*unimplemented_ability_problem(profile("havocs", "Meltagun")), "D-071: "));
+    // M99 (D-101): the Meltagun ([MELTA 2], D6 damage) can be selected now.
+    EXPECT_FALSE(unimplemented_ability_problem(profile("havocs", "Meltagun")).has_value());
     // M90 (D-091): the Flamer and the Heavy flamer (D6 attacks, [IGNORES COVER], [TORRENT]) can be selected now.
     EXPECT_FALSE(unimplemented_ability_problem(profile("havocs", "Flamer")).has_value());
     EXPECT_FALSE(unimplemented_ability_problem(profile("chaos_terminator_squad", "Heavy flamer")).has_value());
-    EXPECT_TRUE(starts_with(*unimplemented_ability_problem(profile("termagants", "Strangleweb")), "24.10: "));
+    // M99 (D-101): and the Strangleweb (D6 attacks, [DEVASTATING WOUNDS], [TORRENT]).
+    EXPECT_FALSE(unimplemented_ability_problem(profile("termagants", "Strangleweb")).has_value());
 
     // On the roster fixture the Havocs are offered their lascannons in their first Shooting phase.
     GameState gs = wh40k::test::load_rosters_fixture();

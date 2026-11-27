@@ -29,6 +29,8 @@ struct AttackContext {
     // D-097 (M96): 15.09 snap shooting: only an unmodified 6 hits (and is not a critical hit), [TORRENT] still hits
     // automatically, no hit roll is re-rolled, no new target (04.03.03); [HEAVY] and 17.03 are off (07.02.01).
     bool snap_shooting = false;
+    // M99 (D-101): 24.21 [LANCE]: the attacking unit made a charge move this turn. Omitted from JSON when false.
+    bool charged = false;
     friend bool operator==(const AttackContext&, const AttackContext&) = default;
 };
 
@@ -78,7 +80,8 @@ struct AttackProfile {
     int armour_penetration = 0;
     DiceExpr damage;
     // Sum of applicable hit / wound roll modifiers, before the D-011 cap. Includes [HEAVY] +1 only when
-    // it applies (24.16).
+    // it applies (24.16), and [LANCE]'s +1 to wound after a charge move (24.21). `damage` includes [MELTA X]'s +X
+    // within half range (24.25).
     int hit_modifier = 0;
     int wound_modifier = 0;
     // Remaining abilities that act at hit roll or later (e.g. [TWIN-LINKED], [HAZARDOUS],
@@ -88,6 +91,9 @@ struct AttackProfile {
     std::vector<WeaponAbility> attack_time_abilities;
     // D-097 (M96): the attack is a snap shot (15.09): judge_hit_rolls hits only on an unmodified 6, never critical.
     bool snap_shooting = false;
+    // M99 (D-101): 24.03 [ANTI-X Y+]: an unmodified wound roll of this or more is a critical wound (05.02: 6; lower
+    // against a target unit with the weapon's keyword X). Omitted from JSON when 6.
+    int critical_wound_on = 6;
     friend bool operator==(const AttackProfile&, const AttackProfile&) = default;
 };
 

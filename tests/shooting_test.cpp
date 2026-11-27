@@ -567,16 +567,16 @@ TEST(R24_30_RapidFire, ExtraAttackOnlyForModelsWithTheTargetWithinHalfRange) {
 
 // ==== D-026: weapons with abilities V1 does not implement are rejected when selected ====
 
-TEST(D026_UnimplementedAbilities, ADevastatingWoundsRangedWeaponIsRejectedAndNotOffered) {
-    // M61: [TWIN-LINKED] is implemented now (D-072; this test used it until then), so [DEVASTATING WOUNDS] (24.10),
-    // still refused, stands in for an unimplemented ability on the Termagants' only ranged weapon.
+TEST(D026_UnimplementedAbilities, ARangedWeaponWithAnUnknownAbilityIsRejectedAndNotOffered) {
+    // M61: [TWIN-LINKED] is implemented now (D-072; this test used it until then), and M99 (D-101) [DEVASTATING WOUNDS]
+    // (its next stand-in), so an ability the engine doesn't know (D-071) is on the Termagants' only ranged weapon.
     GameState gs = shoot_step_state(Side::B);
     for (Model& m : gs.units[kGants].models) {
-        m.weapons[kFleshborer].profiles[0].abilities.push_back(ability::DevastatingWounds{});
+        m.weapons[kFleshborer].profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
     }
     EXPECT_TRUE(shot_options(gs, gs.units[kGants], ShootingType::Normal).empty());
     EXPECT_EQ(legal_actions(gs, Side::B), (std::vector<GameAction>{action::EndShootStep{}}));
     const action::Shoot a{gs.units[kGants].id, ShootingType::Normal, {shot(gs, kGants, 0, kFleshborer, 0, kMarines)}};
     const auto reasons = rejection(gs, Side::B, a);
-    EXPECT_TRUE(starts_with(reasons.at(0), "24.10: 'Fleshborer' has [DEVASTATING WOUNDS]")) << reasons[0];
+    EXPECT_TRUE(starts_with(reasons.at(0), "D-071: 'Fleshborer' has [CONVERSION]")) << reasons[0];
 }

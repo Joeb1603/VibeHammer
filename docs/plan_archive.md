@@ -6489,3 +6489,90 @@ games each, all clean): Explosives +6, Crushing Impact -10, both -4, so both key
 
 The alternative next step was the first line of the roadmap's Phase 1: the weapon abilities still refused when selected
 (Lethal Hits, Devastating Wounds, Anti-X, Melta, Lance, Precision), which unlock the most datasheet profiles.
+
+---
+
+## M98: M97's open items: the selection on the board, Crushing Impact in the charge planning (D-100) ✅ (done; the manual mouse checks open)
+
+**Effort:** high (client and bot work on M97's rules; one read-only core query). **Plan mode:** no. The user asked for
+M97's open items on 2026-11-26 ("Do the still open tasks").
+**Scope:** two of M97's open items.
+1. *The selection on the board:* 15.05's and 15.06's model-and-enemy step (`SelectModelAndEnemy`) is answered by
+   clicking. A click on an enemy unit submits its pair, with the model chosen or the first legal one (as the bar's
+   buttons). A click on a model of the stratagem's unit chooses it first. The bar's buttons stay.
+2. *The charge planning prices Crushing Impact:* with the `crushing_impact` key on, a planned charge move's value gains
+   what Crushing Impact is expected to gain at its end. That is its window's valuation less the CP's worth
+   (`kCrushMinGain`), counted only where the engine would offer it there. The key's default is measured again by D-092's
+   keep rule.
+
+Left out:
+- the manual mouse checks on Windows: they need the user's own computer, and none was attached to the cloud session;
+- weighing Explosives' CP against a later Command Re-roll, and tuning the thresholds;
+- Explosives in the Start and End of Shooting phase steps.
+
+**Rules:** 15.01, 15.05, 15.06 and 01.07; no new rule text. Decisions: D-024, D-029, D-042, D-051, D-092, D-097, D-099,
+D-100.
+
+**Design** (D-100 has the full text)
+- *Core:* `forecast_stratagem_problem` in `engine.hpp` gives the refusal a window would give, were it opened in the state
+  as it stands, or nullopt. It runs the window's own checks (15.01, 01.07, the WHEN and the TARGET), for the windows that
+  follow no roll. It is read-only, for the bots' forecasts (D-024).
+- *Client:* `BoardInteraction` gains `Mode::PickEffect` at the `SelectModelAndEnemy` decision:
+  - the enemy units in some legal pair are clickable, and so is the stratagem's unit (to choose its model); every other
+    unit is grey;
+  - a model in no legal pair is dimmed and can't be chosen;
+  - once a model is chosen (a gold ring), only the enemy units legal with it can be clicked;
+  - hovering a unit that can't be clicked gives the engine's reason;
+  - Esc, an empty click or a second click on the model drops the model.
+  The bar keeps one button per enemy unit, for the chosen model's pairs once one is chosen.
+- *Bot:* `crushing_impact_value(after, unit)` in `normal/stratagems`: the best pair's gain (as at the window) less
+  `kCrushMinGain`, when positive and the forecast allows it. It is added to:
+  - each roll's value in `charge_prospect` (the charge declaration and the move score's charge term);
+  - each target set's value in `decide_charge_targets`.
+  All of this happens only with the key on. At 0 nothing is computed, so the default bot plays exactly as at M97.
+
+**Steps**
+1. This section and D-100.
+2. The core query, with `D100_*` tests.
+3. The board mode, with `M98_*` client tests and xvfb screenshots.
+4. The bot's pricing, with `M98_*` bot tests:
+   - the identity set at the defaults against the M97 binary: every field of every game the same;
+   - the head-to-heads for `crushing_impact` and for both keys, with the defaults set by the keep rule.
+5. Docs: D-100's results and D-099's amendments, `docs/dev/bot_arena.md` and `client_flags.md`, this section marked
+   done, and M97 archived. Then the full `ctest`, commit, push, the PR and the rebase merge.
+
+**Acceptance**
+- [x] **The board:**
+  - a click on an enemy unit submits its pair (the chosen model's, else the first legal model's);
+  - a click on a model of the stratagem's unit chooses it, and a model in no pair is dimmed and ignored;
+  - the units that can't be picked are grey, with the engine's reason on hover;
+  - Esc drops the model, and the bar's buttons stay;
+  - `M98_*` client tests and xvfb screenshots.
+- [x] **The forecast:** the window's refusal, or nullopt where it would offer the stratagem. `D100_*`.
+- [x] **The charge planning:**
+  - with `crushing_impact` on, it adds Crushing Impact's expected net gain wherever the engine would offer it;
+  - with the key off, every value is as before: the identity set against the M97 binary is identical in every field.
+- [x] **The keys:** head-to-heads for `crushing_impact` and for both, with the defaults set by D-092's keep rule.
+- [x] **Full `ctest`** green.
+
+**Results** (D-100 part 6 has them in full):
+- *The board:* the selection is picked by clicking. The tests cover each kind of click (an enemy unit, a model, the chosen
+  model again, a model in no answer, Esc), and every answer submitted is legal, with the session going on to the roll.
+  The xvfb screenshots show Explosives' selection with two enemy units in reach of different ends of the Legionaries'
+  rank, the same with model 8 chosen, and Crushing Impact's selection.
+- *The forecast* agrees with the window after the Hive Tyrant's charge, and gives each of its refusals.
+- *The bots:*
+  - at the defaults, the identity set (2,600 games) is the M97 binary's in every field;
+  - the head-to-heads: `crushing_impact` -8 (196-204; M97 -10) and both keys -2 (199-201; M97 -4), every run clean.
+    Both keys stay off;
+  - the pricing changed 130 of the 200 games where the variant plays the Tyranids, the side with MONSTERs, but won only
+    one more of them. It changed none where it plays the Chaos Space Marines. p95 is unchanged (14.4-14.6 ms).
+- *Tests:* the full `ctest` passes, 1,693 of 1,693. M97's check that the board left the selection to the bar now checks
+  the board's mode.
+
+**Open items.**
+- The manual checks by mouse on Windows for M94-M98. They need the user's computer: the cloud session had none attached.
+  - M98: the selection by clicking (a model first or not, Esc, the grey units' reasons on hover).
+  - M97: Explosives and Crushing Impact in hotseat and against the bot (keys on), and Undo after each.
+- The bot: Explosives' CP against a later Command Re-roll; the thresholds (one setting measured each).
+- Explosives in the Start and End of Shooting phase steps.

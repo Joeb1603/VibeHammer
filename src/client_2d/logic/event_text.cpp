@@ -321,6 +321,20 @@ std::string body(const core::GameEvent& e) {
                 }
                 return text + wounds(x.enemy_mortal_wounds) + " on " + unit(x.enemy) + " (each 5+), " +
                        wounds(x.unit_mortal_wounds) + " on " + unit(x.unit) + " (each 1; at most 6 per unit)";
+            } else if constexpr (std::is_same_v<T, ev::DevastatingWoundsInflicted>) {
+                // M99 (D-101): "Devastating Wounds on unit 2: 3 mortal wounds on model 7 (destroyed); 1 critical wound
+                // lost".
+                std::string steps;
+                for (const auto& s : x.result.steps) {
+                    steps += (steps.empty() ? "" : ", ") + std::to_string(s.damage.damage) + " mortal wound" +
+                             (s.damage.damage == 1 ? "" : "s") +
+                             (s.damage_roll ? " (rolled " + ints(s.damage_roll->dice) + ")" : std::string()) + " on " +
+                             model(s.damage.model) + (s.damage.destroyed ? " (destroyed)" : "");
+                }
+                const int lost = x.result.critical_wounds_lost;
+                return "Devastating Wounds on " + unit(x.target) + ": " + (steps.empty() ? "none inflicted" : steps) +
+                       (lost > 0 ? "; " + std::to_string(lost) + " critical wound" + (lost == 1 ? "" : "s") + " lost"
+                                 : std::string());
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }

@@ -244,11 +244,13 @@ void from_json(const Json& j, HitModifierRule& v) {
 void to_json(Json& j, const AttackContext& v) {
     j = Json{{"type", v.type}, {"heavy_conditions_met", v.heavy_conditions_met}};
     if (v.snap_shooting) j["snap_shooting"] = true;  // D-097 (15.09): omitted when false
+    if (v.charged) j["charged"] = true;              // D-101 (24.21): omitted when false
 }
 void from_json(const Json& j, AttackContext& v) {
     j.at("type").get_to(v.type);
     j.at("heavy_conditions_met").get_to(v.heavy_conditions_met);
     v.snap_shooting = j.contains("snap_shooting") && j.at("snap_shooting").get<bool>();  // D-097
+    v.charged = j.contains("charged") && j.at("charged").get<bool>();                    // D-101
 }
 
 void to_json(Json& j, const WeaponSelection& v) {
@@ -287,6 +289,7 @@ void to_json(Json& j, const AttackProfile& v) {
              {"attack_time_abilities", abilities_to_json(v.attack_time_abilities)}};
     put_opt(j, "skill", v.skill);
     if (v.snap_shooting) j["snap_shooting"] = true;  // D-097 (15.09): omitted when false
+    if (v.critical_wound_on != 6) j["critical_wound_on"] = v.critical_wound_on;  // D-101 (24.03): omitted when 6
 }
 void from_json(const Json& j, AttackProfile& v) {
     get_opt(j, "skill", v.skill);
@@ -298,6 +301,7 @@ void from_json(const Json& j, AttackProfile& v) {
     j.at("wound_modifier").get_to(v.wound_modifier);
     v.attack_time_abilities = abilities_from_json(j.at("attack_time_abilities"));
     v.snap_shooting = j.contains("snap_shooting") && j.at("snap_shooting").get<bool>();  // D-097
+    v.critical_wound_on = j.contains("critical_wound_on") ? j.at("critical_wound_on").get<int>() : 6;  // D-101
 }
 
 // ---- D-069 Random Characteristics ----
@@ -409,6 +413,8 @@ void to_json(Json& j, const BatchInProgress& v) {
     put_opt(j, "save_rolls", v.save_rolls);
     if (v.priority) j["priority"] = *v.priority;  // D-095: omitted when absent
     if (!v.damage_rolls.empty()) j["damage_rolls"] = v.damage_rolls;  // D-096: omitted when empty
+    if (v.devastating != 0) j["devastating"] = v.devastating;  // D-101 (24.10): omitted when 0
+    if (v.mortal) j["mortal"] = true;                          // D-101: omitted when false
 }
 void from_json(const Json& j, BatchInProgress& v) {
     j.at("batch").get_to(v.batch);
@@ -422,6 +428,8 @@ void from_json(const Json& j, BatchInProgress& v) {
     }
     v.damage_rolls.clear();
     if (const auto it = j.find("damage_rolls"); it != j.end()) it->get_to(v.damage_rolls);
+    v.devastating = j.contains("devastating") ? j.at("devastating").get<int>() : 0;  // D-101
+    v.mortal = j.contains("mortal") && j.at("mortal").get<bool>();                   // D-101
 }
 
 void to_json(Json& j, const BatchRolls& v) {

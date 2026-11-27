@@ -5,8 +5,14 @@
 // chaincannon and missile launcher, Terminator power fists and paired accursed weapons, Legionary specials, a Hive
 // Tyrant with two scything talons, Termagant specials, six Tyrant Guard, both Tyrannofex cannons).
 
+#include <filesystem>
+#include <fstream>
+#include <random>
 #include <string>
+#include <system_error>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "core/data/army_list.hpp"
 #include "core/data/scenario_loader.hpp"
@@ -35,6 +41,62 @@ inline const core::DatasheetResolver& army_resolver() {
 }
 
 inline core::ArmyList stock_army(const core::Faction& f) { return core::load_army(repo_root() / f.default_army); }
+
+// M99 (D-101): the refusal tests' data. The engine refuses a weapon with an ability it does not implement (D-026,
+// D-071), and the list building greys it out (D-079). Each milestone that implements an ability takes weapons off the
+// real refused list, so the tests of the mechanism run on a copy of data/ where D-079 part 1's refused weapons (as at
+// M90) carry an ability the engine will never know, [CONVERSION] here: their cases stay whatever the engine learns.
+// Built once per test process, under the temp directory.
+inline constexpr const char* kStandInAbility = "Conversion";
+// The directory is removed when the test process ends.
+struct TempDataRoot {
+    std::filesystem::path dir;
+    ~TempDataRoot() {
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+    }
+};
+inline const std::filesystem::path& refused_data_root() {
+    static const TempDataRoot root = [] {
+        namespace fs = std::filesystem;
+        // A name of its own per test process (ctest runs them side by side): test support, not game logic.
+        std::random_device rd;
+        const fs::path dir = fs::temp_directory_path() /
+                             ("vibehammer_refused_data_" + std::to_string(rd()) + "_" + std::to_string(rd()));
+        fs::remove_all(dir);
+        fs::create_directories(dir / "data");
+        fs::copy(repo_root() / "data" / "factions.json", dir / "data" / "factions.json");
+        for (const char* sub : {"units", "armies", "scenarios"}) {
+            fs::copy(repo_root() / "data" / sub, dir / "data" / sub, fs::copy_options::recursive);
+        }
+        const std::vector<std::string> weapons = {"Daemon hammer", "Combi-weapon",  "Chainfist",  "Reaper autocannon",
+                                                  "Meltagun",      "Balefire tome", "Strangleweb"};
+        for (const auto& entry : fs::directory_iterator(dir / "data" / "units")) {
+            std::ifstream in(entry.path(), std::ios::binary);
+            nlohmann::json j = nlohmann::json::parse(in);
+            in.close();
+            bool changed = false;
+            for (const std::string& w : weapons) {
+                if (!j.contains("weapons") || !j["weapons"].contains(w)) continue;
+                for (auto& profile : j["weapons"][w]["profiles"]) profile["abilities"].push_back(kStandInAbility);
+                changed = true;
+            }
+            if (!changed) continue;
+            std::ofstream out(entry.path(), std::ios::binary | std::ios::trunc);
+            out << j.dump(2);
+        }
+        return TempDataRoot{dir};
+    }();
+    return root.dir;
+}
+inline const core::DatasheetResolver& refused_resolver() {
+    static const core::DatasheetResolver r = core::caching_datasheet_resolver(refused_data_root());
+    return r;
+}
+inline const std::vector<core::Faction>& refused_factions() {
+    static const std::vector<core::Faction> f = core::load_factions(refused_data_root());
+    return f;
+}
 
 inline core::ArmyModelGroup group(std::string type, int count, std::vector<std::string> weapons) {
     return core::ArmyModelGroup{std::move(type), count, std::move(weapons)};
@@ -114,6 +176,22 @@ inline core::GameState random_armies_battle(std::uint64_t seed,
     return custom_battle(core::random_army(csm(), army_resolver(), core::random_army_seed(core::Side::A, seed)),
                          core::random_army(tyranids(), army_resolver(), core::random_army_seed(core::Side::B, seed)),
                          first, mode);
+}
+
+// M99 (D-101): the random armies as they were drawn before M99, from the refusal tests' data (the weapons M99 made
+// pickable are still refused there, so they are never drawn): the same armies, weapon for weapon, as
+// random_armies_battle gave at M90-M98. For a statistic whose bound was chosen on those draws.
+inline core::GameState random_armies_battle_m90_pool(std::uint64_t seed,
+                                                     core::DeploymentMode mode = core::DeploymentMode::Auto,
+                                                     core::Side first = core::Side::A) {
+    const core::Faction* a = core::find_faction(refused_factions(), "chaos_space_marines");
+    const core::Faction* b = core::find_faction(refused_factions(), "tyranids");
+    if (a == nullptr || b == nullptr) throw std::logic_error("no faction in the refusal tests' data");
+    const core::ArmyList army_a = core::random_army(*a, refused_resolver(), core::random_army_seed(core::Side::A, seed));
+    const core::ArmyList army_b = core::random_army(*b, refused_resolver(), core::random_army_seed(core::Side::B, seed));
+    return core::build_game_state(
+        core::custom_battle_scenario(army_a, army_b, first, refused_factions(), refused_resolver(), mode),
+        refused_resolver());
 }
 
 }  // namespace wh40k::test

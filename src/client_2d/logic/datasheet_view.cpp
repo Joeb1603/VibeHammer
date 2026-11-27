@@ -108,6 +108,13 @@ std::string weapon_ability_label(const core::WeaponAbility& ability) {
             else if constexpr (std::is_same_v<T, ab::SustainedHits>) return "[SUSTAINED HITS " + std::to_string(a.x) + "]";
             else if constexpr (std::is_same_v<T, ab::ExtraAttacks>) return "[EXTRA ATTACKS]";
             else if constexpr (std::is_same_v<T, ab::IgnoresCover>) return "[IGNORES COVER]";
+            else if constexpr (std::is_same_v<T, ab::Anti>) {
+                // 24.03 (M99): "[ANTI-INFANTRY 4+]", "[ANTI-NON-MONSTER/VEHICLE 2+]"
+                std::string keywords;
+                for (const std::string& k : a.keywords) keywords += (keywords.empty() ? "" : "/") + upper(k);
+                return "[ANTI-" + std::string(a.non ? "NON-" : "") + keywords + " " + std::to_string(a.threshold) + "+]";
+            } else if constexpr (std::is_same_v<T, ab::Melta>) return "[MELTA " + std::to_string(a.x) + "]";
+            else if constexpr (std::is_same_v<T, ab::Lance>) return "[LANCE]";
             else return "[" + upper(a.text) + "]";
         },
         ability);

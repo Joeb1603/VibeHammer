@@ -49,6 +49,11 @@ struct HitWoundOdds {
     double critical_wound = 0.0;
     int sustained = 0;         // 24.36: the X of [SUSTAINED HITS X], 0 without it
     bool twin_linked = false;  // 24.38: `wound` includes the re-roll of a failed wound roll
+    // M99 (D-101): 24.10 [DEVASTATING WOUNDS]: a critical wound makes no save roll and inflicts the weapon's D on one
+    // model. expected_outcome counts it as an attack that always gets past the save (the engine inflicts it after the
+    // batch's normal damage, on the model 06.02 selects: the same model with one allocation group). `critical_wound`
+    // follows the profile's critical wound threshold (24.03 [ANTI-X Y+]) through core's wound rolls.
+    bool devastating = false;
 };
 
 // Per-die chances, computed once per key. Lookups are deterministic and the values do not depend on what else is
@@ -71,8 +76,8 @@ public:
 
 private:
     // (skill or -1, torrent, strength, hit modifier, wound modifier, toughness, [SUSTAINED HITS] X, [TWIN-LINKED], M96
-    // (D-097): 15.09 snap shooting)
-    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool>;
+    // (D-097): 15.09 snap shooting, M99 (D-101): the critical wound threshold (24.03) and [DEVASTATING WOUNDS] (24.10))
+    using HitWoundKey = std::tuple<int, bool, int, int, int, int, int, bool, bool, int, bool>;
     // (AP, Sv or -1, InSv or -1)
     using SaveKey = std::tuple<int, int, int>;
     // (dice, sides, modifier)

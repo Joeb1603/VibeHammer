@@ -10,7 +10,11 @@
 #include <array>
 #include <cstdio>
 #include <filesystem>
+#include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <optional>
+#include <set>
 #include <string>
 #include <tuple>
 #include <variant>
@@ -60,24 +64,34 @@ const ArmySource& source() {
 // ---- Normal's points weighting (D-080 amends D-077 item 7) ----
 
 TEST(M73_Weights, AOneDatasheetSideIsWeightedByPointsWhenTheOtherHasSeveral) {
-    // Random seed 6: two Chaos Lords (one datasheet) against two Hive Tyrants and Termagants. Before D-080 the Lords
-    // weighed 1 while the Tyranids were weighted by points; now every unit is points x N / sum of points.
-    const GameState gs = wh40k::test::random_armies_battle(6);
-    double total = 0.0;
-    int lords = 0;
-    for (const Unit& u : gs.units) {
-        total += u.points;
-        if (u.side == Side::A) {
-            EXPECT_EQ(u.name, "Chaos Lord");
-            ++lords;
+    // A random battle with one datasheet on a side against several on the other (at M73 seed 6: two Chaos Lords against
+    // two Hive Tyrants and Termagants). Before D-080 the one-datasheet side weighed 1 while the other was weighted by
+    // points; now every unit is points x N / sum of points. M99 (D-101): the draws change whenever a weapon becomes
+    // pickable, so the battle is the first of seeds 1-200 with that shape instead of a fixed seed.
+    std::optional<GameState> found;
+    for (std::uint64_t seed = 1; seed <= 200 && !found; ++seed) {
+        GameState candidate = wh40k::test::random_armies_battle(seed);
+        std::array<std::set<std::string>, 2> names;
+        std::array<int, 2> units{};
+        for (const Unit& u : candidate.units) {
+            names[side_index(u.side)].insert(u.name);
+            ++units[side_index(u.side)];
         }
+        const bool one_a = names[0].size() == 1 && units[0] > 1 && names[1].size() > 1;
+        const bool one_b = names[1].size() == 1 && units[1] > 1 && names[0].size() > 1;
+        if (one_a || one_b) found = std::move(candidate);
     }
-    EXPECT_EQ(lords, 2);
+    ASSERT_TRUE(found.has_value());
+    const GameState& gs = *found;
+    double total = 0.0;
+    for (const Unit& u : gs.units) total += u.points;
     const double n = static_cast<double>(gs.units.size());
+    bool differs = false;
     for (const Unit& u : gs.units) {
         EXPECT_DOUBLE_EQ(normal::share_weight(gs, u), u.points * n / total) << u.name;
+        differs = differs || std::abs(normal::share_weight(gs, u) - 1.0) > 0.01;
     }
-    EXPECT_NEAR(normal::share_weight(gs, gs.units[0]), 0.688, 0.001);
+    EXPECT_TRUE(differs);  // weighted by points, not 1 each
     // The replay's armies: two Hive Tyrants (one datasheet) against four Chaos Space Marine units, 985 points in all.
     const GameState replay_battle = fixture_battle("m73_chaos_space_marines.json", "m73_tyranids.json");
     for (const Unit& u : replay_battle.units) {

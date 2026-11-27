@@ -61,7 +61,8 @@ TEST(Serialization, EveryWeaponAbilityRoundTrips) {
         ability::Torrent{},   ability::Hazardous{}, ability::DevastatingWounds{},
         ability::SustainedHits{2}, ability::ExtraAttacks{},  // M60 (24.36, 24.11)
         ability::IgnoresCover{},                             // M90 (24.18)
-        ability::Unknown{"Anti-Infantry 4+"}};
+        ability::Unknown{"Conversion"},
+        ability::Anti{{"infantry", "beasts"}, 4, true}, ability::Melta{2}, ability::Lance{}};  // M99 (24.03, 24.25, 24.21)
     // Guard: the list above covers every alternative of the variant.
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const auto& a : all) {

@@ -40,6 +40,7 @@ HitWoundOdds derive_hit_wound(const core::AttackProfile& profile, int toughness)
     o.wound /= kFaces;
     o.critical_wound /= kFaces;
     o.sustained = core::sustained_hits(profile);
+    o.devastating = core::devastating_wounds(profile);  // 24.10 (M99)
     if (core::twin_linked(profile)) {
         // 24.38 (M61, D-072): the bot re-rolls every failed wound roll and no other. Each first face, then each face of
         // a failed one's re-roll, through core's own functions: P(wound) = p + (1 - p)p and P(critical wound) =
@@ -217,7 +218,8 @@ const HitWoundOdds& OddsCache::hit_wound(const core::AttackProfile& profile, int
     ++lookups_;
     const HitWoundKey key{opt_or(profile.skill), profile.torrent,         profile.strength, profile.hit_modifier,
                           profile.wound_modifier,  toughness, core::sustained_hits(profile),
-                          core::twin_linked(profile), profile.snap_shooting};
+                          core::twin_linked(profile), profile.snap_shooting, profile.critical_wound_on,
+                          core::devastating_wounds(profile)};
     auto it = hit_wound_.find(key);
     if (it == hit_wound_.end()) {
         ++computed_;
@@ -429,6 +431,11 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
             std::vector<double> u(target.groups.size(), 0.0);  // P(one wound gets past the save | group)
             for (std::size_t g = 0; g < u.size(); ++g) {
                 u[g] = cache.unsaved(target.groups[g], batch.profile.armour_penetration);
+                // 24.10 (M99): a critical wound makes no save roll. Of the wounds, the share that is critical always
+                // inflicts damage.
+                if (hw.devastating && hw.wound > 0.0) {
+                    u[g] = ((hw.wound - hw.critical_wound) * u[g] + hw.critical_wound) / hw.wound;
+                }
             }
             const double hits_per_die = hw.hit + x * hw.critical_hit;
             out.attack_dice += batch.attack_dice;
@@ -459,6 +466,13 @@ AttackOutcome expected_outcome(OddsCache& cache, std::span<const VolleyBatch> vo
             std::vector<double> q(target.groups.size(), 0.0);  // P(one die inflicts damage | group)
             for (std::size_t g = 0; g < q.size(); ++g) {
                 q[g] = hw.hit * hw.wound * cache.unsaved(target.groups[g], batch.profile.armour_penetration);
+                // 24.10 (M99): a critical wound makes no save roll and always inflicts damage; the other wounds are
+                // saved as before. A profile without the ability keeps the arithmetic above.
+                if (hw.devastating) {
+                    q[g] = hw.hit * ((hw.wound - hw.critical_wound) *
+                                         cache.unsaved(target.groups[g], batch.profile.armour_penetration) +
+                                     hw.critical_wound);
+                }
             }
             out.attack_dice += batch.attack_dice;
             out.hits += batch.attack_dice * hw.hit;
@@ -557,6 +571,7 @@ SampledOutcome sample_outcome(std::span<const VolleyBatch> volley, const core::U
             for (const core::SaveStep& step : r.damage.steps) {
                 if (step.damage) damage += step.damage->wounds_lost;
             }
+            for (const core::DevastatingStep& step : r.devastating.steps) damage += step.damage.wounds_lost;  // 24.10
         }
         const int destroyed = models_before - static_cast<int>(unit.models.size());
         out.models_destroyed_pmf[static_cast<std::size_t>(destroyed)] += 1.0;
@@ -695,9 +710,7 @@ std::vector<core::AttackBatch> melee_batches(const core::GameState& state, core:
     const core::Unit* unit = state.find_unit(attacker);
     if (unit == nullptr || !core::melee_problems(state, *unit, declarations).empty()) return {};
     const auto selections = core::make_melee_selections(state, declarations);
-    core::AttackContext context;
-    context.type = core::AttackType::Fighting;
-    return core::gather_attack_batches(state, selections, context);
+    return core::gather_attack_batches(state, selections, core::fighting_context(*unit));  // 24.21 (M99)
 }
 
 std::vector<TargetOutcome> evaluate_batches(OddsCache& cache, const core::GameState& state,
@@ -905,6 +918,7 @@ Volley unit_ranged_volley(OddsCache& cache, const core::Unit& attacker, const co
                 sel.target_within_half_range = within_half_range(p, context.gap_mm);       // 24.30
                 sel.target_models_at_selection = static_cast<int>(target.models.size());  // 24.05
                 core::AttackProfile ap = core::make_attack_profile(p, attack);
+                core::apply_target_abilities(ap, p, sel, target);  // M99 (D-101): [MELTA] within half range, [ANTI]
                 ap.hit_modifier += hit_modifier_of(facts, mv_model, p);  // D-077: 10.06 and 17.03, as the engine adds them
                 // M89 (D-090): 13.08 Benefit of Cover worsens the BS by 1 (D-089, as gather_attack_batches); not
                 // against an [IGNORES COVER] weapon (24.18, M90, D-091: the engine records no cover for it).
@@ -955,7 +969,9 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
                 if (!usable(p)) continue;
                 core::WeaponSelection sel;
                 sel.target = target.id;
-                const VolleyBatch one{core::make_attack_profile(p, attack), core::gather_attack_dice(p, sel, attack)};
+                core::AttackProfile ap = core::make_attack_profile(p, attack);
+                core::apply_target_abilities(ap, p, sel, target);  // M99 (D-101): [ANTI] against the target's keywords
+                const VolleyBatch one{ap, core::gather_attack_dice(p, sel, attack)};
                 double value = expected_outcome(cache, std::span<const VolleyBatch>(&one, 1), snap).model_equivalents;
                 if (hazard_rate > 0.0 && p.has<core::ability::Hazardous>()) {
                     if (!hazard) hazard = hazard_model_equivalents(attacker, 1);
@@ -977,7 +993,9 @@ Volley unit_melee_volley(OddsCache& cache, const core::Unit& attacker, const cor
                 if (!usable(p)) continue;
                 core::WeaponSelection sel;
                 sel.target = target.id;
-                add_to_volley(volley, core::make_attack_profile(p, attack), core::gather_attack_dice(p, sel, attack));
+                core::AttackProfile ap = core::make_attack_profile(p, attack);
+                core::apply_target_abilities(ap, p, sel, target);  // M99 (D-101)
+                add_to_volley(volley, ap, core::gather_attack_dice(p, sel, attack));
                 break;
             }
         }

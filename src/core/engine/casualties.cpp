@@ -93,6 +93,37 @@ std::optional<CasualtyPreview> preview_attack(const GameState& state, std::span<
     return out;
 }
 
+// M99 (D-101): 24.10's mortal wounds on the batch's target, one step per critical wound (its D on one model).
+std::optional<CasualtyPreview> preview_devastating(const GameState& state, std::span<const ModelId> picks) {
+    const AttackFlow& f = *state.flow.attack;
+    const BatchInProgress& b = *f.current;
+    const AttackBatch& batch = f.batches[b.batch];
+    const Unit* target = state.find_unit(batch.target);
+    if (target == nullptr) return std::nullopt;
+    Unit copy = *target;
+    PickReplay replay(picks);
+    const ModelChooser chooser = [&replay](const Unit&, std::span<const ModelId> options) { return replay(options); };
+    // D-069: a random D takes its maximum and rolls nothing (damage_stand_in).
+    const DevastatingWoundsResult r =
+        inflict_devastating_wounds(copy, b.devastating, batch.profile.damage, chooser, true, damage_stand_in);
+    if (!replay.valid()) return std::nullopt;
+
+    CasualtyPreview out;
+    if (!batch.profile.damage.is_fixed()) out.random_damage = batch.profile.damage;
+    for (std::size_t i = 0; i < r.steps.size(); ++i) {
+        if (replay.stop_step() && i == *replay.stop_step()) {
+            out.options = replay.options();
+            out.next_damage = r.steps[i].damage.damage;
+            for (std::size_t k = i; k < r.steps.size(); ++k) out.damage_left += r.steps[k].damage.damage;
+            return out;
+        }
+        out.results.push_back(r.steps[i].damage);
+    }
+    out.attacks_lost = r.critical_wounds_lost;
+    if (out.random_damage && !out.results.empty()) out.provisional_from = 1;  // after the first random roll
+    return out;
+}
+
 // 06.02 for `count` pending mortal wounds on `unit_id`: Desperate Escape's (09.07) or [HAZARDOUS]'s (24.15).
 std::optional<CasualtyPreview> preview_mortal_wounds(const GameState& state, UnitId unit_id, int count,
                                                      std::span<const ModelId> picks) {
@@ -137,6 +168,9 @@ std::optional<CasualtyPreview> preview_casualties(const GameState& state, std::s
     if (state.flow.attack && state.flow.attack->pending_mortal_wounds > 0) {
         return preview_mortal_wounds(state, state.flow.attack->attacker, state.flow.attack->pending_mortal_wounds,
                                      picks);
+    }
+    if (state.flow.attack && state.flow.attack->current && state.flow.attack->current->mortal) {
+        return preview_devastating(state, picks);  // D-101 (24.10)
     }
     if (state.flow.attack) return preview_attack(state, picks);
     if (state.flow.move) {

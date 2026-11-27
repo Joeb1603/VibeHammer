@@ -242,6 +242,8 @@ std::string_view decision_rule(const GameState& state, const PendingDecision& d)
         // 06.02 Select Model for mortal wounds: [HAZARDOUS] after a unit's attacks (24.15), or Desperate Escape (09.07)
         // or a stratagem's effect (D-099: 15.05, 15.06) outside an attack; otherwise 05.04 for an attack's save rolls.
         if (!state.flow.attack || state.flow.attack->pending_mortal_wounds > 0) return "06.02";
+        // M99 (D-101): the mortal wounds of a [DEVASTATING WOUNDS] batch's critical wounds (24.10).
+        if (state.flow.attack->current && state.flow.attack->current->mortal) return "06.02";
         return "05.04";
     }
     if (const auto* r = std::get_if<decision::RollDice>(&d.kind)) {

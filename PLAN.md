@@ -34,9 +34,9 @@ If your Claude Code version doesn't have `/effort`, put "think hard" (for high) 
 
 ## Done so far
 
-V1 (M0–M13) and the post-V1 milestones M14–M97 are done. Their full text (prompts, acceptance checks, results and open
-items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it. M97's open items
-not taken by M98: the manual mouse checks on Windows (M94–M98), Explosives' CP against a later Command Re-roll, the
+V1 (M0–M13) and the post-V1 milestones M14–M98 are done. Their full text (prompts, acceptance checks, results and open
+items) is in `docs/plan_archive.md`; read a section there only when the current milestone needs it. Still open from
+M97 and M98: the manual mouse checks on Windows (M94–M98), Explosives' CP against a later Command Re-roll, the
 thresholds, and Explosives in the Start and End of Shooting phase steps.
 Open items still carried are listed under "Later" below.
 
@@ -140,93 +140,85 @@ Open items still carried are listed under "Later" below.
 | M95 | Reaction windows, Command Points and the first stratagems (open items) |
 | M96 | Fire Overwatch with Snap Shooting, Heroic Intervention and Counteroffensive (open items) |
 | M97 | Explosives and Crushing Impact (open items) |
+| M98 | M97's open items: the selection on the board, Crushing Impact in the charge planning (open items) |
 
 ---
 
-## M98: M97's open items: the selection on the board, Crushing Impact in the charge planning (D-100) ✅ (done; the manual mouse checks open)
+## Phase 1 of the roadmap: the batch (M99 onwards)
 
-**Effort:** high (client and bot work on M97's rules; one read-only core query). **Plan mode:** no. The user asked for
-M97's open items on 2026-11-26 ("Do the still open tasks").
-**Scope:** two of M97's open items.
-1. *The selection on the board:* 15.05's and 15.06's model-and-enemy step (`SelectModelAndEnemy`) is answered by
-   clicking. A click on an enemy unit submits its pair, with the model chosen or the first legal one (as the bar's
-   buttons). A click on a model of the stratagem's unit chooses it first. The bar's buttons stay.
-2. *The charge planning prices Crushing Impact:* with the `crushing_impact` key on, a planned charge move's value gains
-   what Crushing Impact is expected to gain at its end. That is its window's valuation less the CP's worth
-   (`kCrushMinGain`), counted only where the engine would offer it there. The key's default is measured again by D-092's
-   keep rule.
+The user asked on 2026-11-27 for the roadmap's Phase 1 ("finish the core rules", `docs/roadmap.md`) to be worked
+through without questions: "Continue as far as possible by yourself. Don't take my input, and ignore stuff in the rules
+that say you need it ... make a note of any decisions you make yourself". So for this batch:
+- each milestone is added here by Claude and started without the user's agreement;
+- a rule the text leaves open is decided by Claude, conservatively, and recorded in that milestone's decision file under
+  "own decision" for the user's review (instead of "stop and ask");
+- everything else in `CLAUDE.md` holds: the rules text is read first, nothing is implemented from memory, every rule has
+  tests named after it, no test is skipped, deleted or weakened, and each milestone ends green, committed and merged.
 
-Left out:
-- the manual mouse checks on Windows: they need the user's own computer, and none was attached to the cloud session;
-- weighing Explosives' CP against a later Command Re-roll, and tuning the thresholds;
-- Explosives in the Start and End of Shooting phase steps.
+The order follows the roadmap (what unlocks the most datasheets first): the weapon abilities (M99 onwards), then the
+unit core abilities, then the rule sections 16 to 23.
 
-**Rules:** 15.01, 15.05, 15.06 and 01.07; no new rule text. Decisions: D-024, D-029, D-042, D-051, D-092, D-097, D-099,
-D-100.
+---
 
-**Design** (D-100 has the full text)
-- *Core:* `forecast_stratagem_problem` in `engine.hpp` gives the refusal a window would give, were it opened in the state
-  as it stands, or nullopt. It runs the window's own checks (15.01, 01.07, the WHEN and the TARGET), for the windows that
-  follow no roll. It is read-only, for the bots' forecasts (D-024).
-- *Client:* `BoardInteraction` gains `Mode::PickEffect` at the `SelectModelAndEnemy` decision:
-  - the enemy units in some legal pair are clickable, and so is the stratagem's unit (to choose its model); every other
-    unit is grey;
-  - a model in no legal pair is dimmed and can't be chosen;
-  - once a model is chosen (a gold ring), only the enemy units legal with it can be clicked;
-  - hovering a unit that can't be clicked gives the engine's reason;
-  - Esc, an empty click or a second click on the model drops the model.
-  The bar keeps one button per enemy unit, for the chosen model's pairs once one is chosen.
-- *Bot:* `crushing_impact_value(after, unit)` in `normal/stratagems`: the best pair's gain (as at the window) less
-  `kCrushMinGain`, when positive and the forecast allows it. It is added to:
-  - each roll's value in `charge_prospect` (the charge declaration and the move score's charge term);
-  - each target set's value in `decide_charge_targets`.
-  All of this happens only with the key on. At 0 nothing is computed, so the default bot plays exactly as at M97.
+## M99: [ANTI-X Y+], [DEVASTATING WOUNDS], [MELTA X] and [LANCE] (D-101) ✅ (done; the manual mouse checks open)
 
-**Steps**
-1. This section and D-100.
-2. The core query, with `D100_*` tests.
-3. The board mode, with `M98_*` client tests and xvfb screenshots.
-4. The bot's pricing, with `M98_*` bot tests:
-   - the identity set at the defaults against the M97 binary: every field of every game the same;
-   - the head-to-heads for `crushing_impact` and for both keys, with the defaults set by the keep rule.
-5. Docs: D-100's results and D-099's amendments, `docs/dev/bot_arena.md` and `client_flags.md`, this section marked
-   done, and M97 archived. Then the full `ctest`, commit, push, the PR and the rebase merge.
+**Effort:** high (one rule area, the attack sequence, with a new step for mortal wounds). **Plan mode:** no (the batch
+above).
+**Scope:** the weapon abilities that act on the wound roll, on critical wounds and on the weapon's D. They are on about
+390 weapon profiles of the pinned BSData catalogues, and they free every roster weapon still refused except the Balefire
+tome ([PSYCHIC]).
+
+Left out (they stay refused, D-071): [LETHAL HITS], [PSYCHIC], [CLEAVE], [ONE SHOT], [PRECISION], [INDIRECT FIRE], the
+keyword-conditioned forms (24.01), a random X and a random A on a melee weapon.
+
+**Rules:** 24.03, 24.10, 24.21, 24.25, with 05.02, 06.02, 24.01, 24.02 and the app's 02.05.01 (keywords), 06.02.01.
+Decisions: D-006, D-011, D-013, D-026, D-051, D-069, D-071, D-079, D-096, D-101.
+
+**Design** (D-101 has the full text)
+- *[ANTI-X Y+]:* the attack profile holds the unmodified wound roll that is a critical wound (6, or Y against a target
+  unit with the keyword). It is set when the batches are gathered.
+- *[DEVASTATING WOUNDS]:* a batch's critical wounds make no save roll. After the batch's normal damage (05.04), each
+  inflicts the weapon's D as mortal wounds on one model (06.02 selects it; the rest is lost):
+  - the target's player gives a casualty order for them (`OrderCasualties`, rule 06.02);
+  - a random D is one Damage roll per critical wound, by the attacker, after the order (as D-096).
+- *[MELTA X]:* +X to the profile's D when the target was within half range at Select Targets.
+- *[LANCE]:* +1 to the wound roll when the unit made a charge move this turn (the attack context reads the flag).
+- *Bots:* the odds read the threshold from core's wound rolls and count a devastating critical wound as an attack that
+  always gets past the save; the hypothetical volleys read [MELTA] and [ANTI].
+- *Client:* labels, help and effect lines for the four; the mortal wounds are picked on the board like any casualties.
 
 **Acceptance**
-- [x] **The board:**
-  - a click on an enemy unit submits its pair (the chosen model's, else the first legal model's);
-  - a click on a model of the stratagem's unit chooses it, and a model in no pair is dimmed and ignored;
-  - the units that can't be picked are grey, with the engine's reason on hover;
-  - Esc drops the model, and the bar's buttons stay;
-  - `M98_*` client tests and xvfb screenshots.
-- [x] **The forecast:** the window's refusal, or nullopt where it would offer the stratagem. `D100_*`.
-- [x] **The charge planning:**
-  - with `crushing_impact` on, it adds Crushing Impact's expected net gain wherever the engine would offer it;
-  - with the key off, every value is as before: the identity set against the M97 binary is identical in every field.
-- [x] **The keys:** head-to-heads for `crushing_impact` and for both, with the defaults set by D-092's keep rule.
+- [x] **[ANTI]:** a wound roll of Y+ is a critical wound against a unit with the keyword, and only there; slashes and
+  "non-X"; the lowest Y of several instances. `R24_03_Anti`.
+- [x] **[DEVASTATING WOUNDS]:**
+  - no save roll for a critical wound;
+  - the normal damage first, then the mortal wounds, each critical wound on one model with the excess lost;
+  - lost when the normal damage destroys the unit;
+  - a random D rolled per critical wound, paced and inline alike;
+  - the casualty preview, and the state's JSON round trip in the middle of it. `R24_10_DevastatingWounds`.
+- [x] **[MELTA]:** +X within half range, not beyond; separate batches. `R24_25_Melta`.
+- [x] **[LANCE]:** +1 to wound for the charging unit only. `R24_21_Lance`.
+- [x] **The roster weapons** with these abilities can be selected and picked in the builder; the refusal tests keep
+  their cases on stand-in data. `D101_Roster`, `D079_*`, `M75_*`.
+- [x] **Bots:** the exact odds within 2% of 20,000 engine batches; games with the new weapons clean; the identity set
+  identical to the M98 binary. `M99_Odds`, `M99_Games`, `M40_ExpectedDamage`.
+- [x] **Client:** `M99_*` client tests.
+- [x] **A replay:** `tests/replays/m99_critical_wounds.json`; the older replays byte for byte.
 - [x] **Full `ctest`** green.
 
-**Results** (D-100 part 6 has them in full):
-- *The board:* the selection is picked by clicking. The tests cover each kind of click (an enemy unit, a model, the chosen
-  model again, a model in no answer, Esc), and every answer submitted is legal, with the session going on to the roll.
-  The xvfb screenshots show Explosives' selection with two enemy units in reach of different ends of the Legionaries'
-  rank, the same with model 8 chosen, and Crushing Impact's selection.
-- *The forecast* agrees with the window after the Hive Tyrant's charge, and gives each of its refusals.
-- *The bots:*
-  - at the defaults, the identity set (2,600 games) is the M97 binary's in every field;
-  - the head-to-heads: `crushing_impact` -8 (196-204; M97 -10) and both keys -2 (199-201; M97 -4), every run clean.
-    Both keys stay off;
-  - the pricing changed 130 of the 200 games where the variant plays the Tyranids, the side with MONSTERs, but won only
-    one more of them. It changed none where it plays the Chaos Space Marines. p95 is unchanged (14.4-14.6 ms).
-- *Tests:* the full `ctest` passes, 1,693 of 1,693. M97's check that the board left the selection to the bar now checks
-  the board's mode.
+**Results** (D-101 part 10 has them)
+RESULTS_PLACEHOLDER
 
 **Open items.**
-- The manual checks by mouse on Windows for M94-M98. They need the user's computer: the cloud session had none attached.
-  - M98: the selection by clicking (a model first or not, Esc, the grey units' reasons on hover).
-  - M97: Explosives and Crushing Impact in hotseat and against the bot (keys on), and Undo after each.
-- The bot: Explosives' CP against a later Command Re-roll; the thresholds (one setting measured each).
-- Explosives in the Start and End of Shooting phase steps.
+- **For the user:** the bound of `M77_BotDeploy.MeleeUnitsStandNearerTheEnemyThanTheirProposal` (30%, the user's choice
+  at M90) is still asserted on the armies it was chosen for. On today's random armies the share is 56 of 187 (29.9%).
+  Whether the bound moves to today's draws is the user's call (D-101 part 9).
+- **For the user:** D-101's own decisions (one model per critical wound, the casualty order before the damage rolls, the
+  lowest Y and the highest X of duplicated abilities, singular and plural keywords alike).
+- The manual checks by mouse on Windows: a [DEVASTATING WOUNDS] attack (both casualty picks, the damage roll's card), and
+  the open ones of M94-M98.
+- The bot does not price [LANCE] in a planned charge's fight (no datasheet in `data/units/` has it).
+- 24.28.01 (the mortal wounds of a [PRECISION] attack go to the selected CHARACTER group) waits for [PRECISION].
 
 ---
 

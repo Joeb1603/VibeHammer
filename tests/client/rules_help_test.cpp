@@ -56,7 +56,9 @@ TEST(M24_RulesHelp, EveryWeaponAbilityHasPlainHelp) {
                                          ability::Torrent{},    ability::Hazardous{}, ability::DevastatingWounds{},
                                          ability::SustainedHits{1}, ability::ExtraAttacks{},
                                          ability::IgnoresCover{},  // M90 (24.18)
-                                         ability::Unknown{"Lethal Hits"}};
+                                         ability::Unknown{"Lethal Hits"},
+                                         // M99 (24.03, 24.25, 24.21)
+                                         ability::Anti{{"infantry"}, 4, false}, ability::Melta{2}, ability::Lance{}};
     ASSERT_EQ(all.size(), std::variant_size_v<WeaponAbility>);
     for (const WeaponAbility& a : all) expect_readable(weapon_ability_help(a));
     EXPECT_TRUE(weapon_ability_help(ability::Heavy{}).in_this_game);

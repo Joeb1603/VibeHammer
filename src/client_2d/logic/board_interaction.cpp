@@ -79,7 +79,7 @@ void describe(const core::GameState& state, const a::Shoot& shoot, MenuEntry& en
     }
     const auto selections = core::make_weapon_selections(state, *u, shoot.type, same);
     const core::AttackContext context = core::shooting_context(state, *u);
-    entry.effects = effect_lines(*p, selections, context, shoot.type);
+    entry.effects = effect_lines(*p, selections, context, shoot.type, state.find_unit(first.target));
     // D-073: 10.06 / 17.03 and the D-011 cap, with the net modifier gather_attack_batches would give the attacks.
     if (!selections.empty()) {
         const int net = core::make_attack_profile(*p, context).hit_modifier + selections.front().hit_modifier;
@@ -113,7 +113,11 @@ void describe(const core::GameState& state, const a::Fight& fight, core::UnitId 
         if (d.weapon_index == first.weapon_index && d.profile_index == first.profile_index) same.push_back(d);
     }
     const auto selections = core::make_melee_selections(state, same);
-    entry.effects = effect_lines(*p, selections, core::AttackContext{core::AttackType::Fighting, false});
+    // M99 (D-101): the unit's own context ([LANCE] after a charge move, 24.21) and the target's keywords ([ANTI], 24.03).
+    const core::Unit* attacker = core::find_unit_of_model(state, first.model);
+    const core::AttackContext context =
+        attacker != nullptr ? core::fighting_context(*attacker) : core::AttackContext{core::AttackType::Fighting, false};
+    entry.effects = effect_lines(*p, selections, context, std::nullopt, state.find_unit(target));
     for (EffectLine& line : random_characteristic_lines(*p)) entry.effects.push_back(std::move(line));  // D-069
 }
 

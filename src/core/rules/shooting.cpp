@@ -492,6 +492,7 @@ AttackContext shooting_context(const GameState& state, const Unit& unit, Shootin
     // never when snap shooting (07.02.01 Out of Phase Rules).
     context.heavy_conditions_met =
         !context.snap_shooting && !is_engaged(state, unit) && !unit.turn_flags.moved_over_3in;
+    context.charged = unit.turn_flags.made_charge_move;  // 24.21 [LANCE] (M99, D-101): any weapon with the ability
     return context;
 }
 

@@ -33,6 +33,8 @@ cmake --build build/linux && (cd build/linux && ctest)
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replay.DISABLED_RegenerateM96Replay
 # and m97_stratagems.json (Explosives and Crushing Impact, seed 1) likewise (M97):
 ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D099_Replay.DISABLED_RegenerateM97Replay
+# and m99_critical_wounds.json ([ANTI], [DEVASTATING WOUNDS] and [MELTA] with the roster weapons, seed 7) likewise (M99):
+./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D101_Replay.DISABLED_RegenerateM99Replay
 # M96's check that a format change adds only declines: the old files (git show HEAD:) in a directory, each new file
 # must be its old file converted by with_roll_steps:
 WH40K_FORMAT3_DIR=<dir> ./build/linux/tests/wh40k_tests --gtest_also_run_disabled_tests --gtest_filter=D097_Replays.DISABLED_CompareWithFormat3Files

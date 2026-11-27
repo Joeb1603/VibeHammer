@@ -1,7 +1,9 @@
 #include "core/model/weapon.hpp"
 
 #include <cctype>
+#include <algorithm>
 #include <charconv>
+#include <utility>
 
 namespace wh40k::core {
 
@@ -64,6 +66,42 @@ std::optional<int> parse_suffix_int(const std::string& norm, std::string_view pr
     return value;
 }
 
+// 24.03 [ANTI-X Y+] from normalised text: "anti infantry 4+", "anti monster/vehicle 2+", "anti non vehicle 3+" (the
+// FAQ's non-X form). The keyword keeps its inner spaces ("anti adeptus astartes 4+"). A threshold without the "+"
+// ("anti fly 2", one BSData entry) reads the same. nullopt if the text is not of that form.
+std::optional<ability::Anti> parse_anti(const std::string& norm) {
+    constexpr std::string_view prefix = "anti ";
+    if (norm.compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    const std::size_t last_space = norm.rfind(' ');
+    if (last_space == std::string::npos || last_space < prefix.size()) return std::nullopt;
+    std::string_view number(norm.data() + last_space + 1, norm.size() - last_space - 1);
+    if (!number.empty() && number.back() == '+') number.remove_suffix(1);
+    int threshold = 0;
+    const auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), threshold);
+    if (number.empty() || ec != std::errc{} || ptr != number.data() + number.size() || threshold < 2 || threshold > 6) {
+        return std::nullopt;  // 05.02: an unmodified 1 always fails, so "1+" is not a threshold
+    }
+    std::string keyword = norm.substr(prefix.size(), last_space - prefix.size());
+    ability::Anti out;
+    out.threshold = threshold;
+    constexpr std::string_view non = "non ";
+    if (keyword.compare(0, non.size(), non) == 0) {
+        out.non = true;
+        keyword.erase(0, non.size());
+    }
+    std::size_t start = 0;
+    while (start <= keyword.size()) {
+        const std::size_t slash = std::min(keyword.find('/', start), keyword.size());
+        std::string part = keyword.substr(start, slash - start);
+        while (!part.empty() && part.front() == ' ') part.erase(part.begin());
+        while (!part.empty() && part.back() == ' ') part.pop_back();
+        if (part.empty()) return std::nullopt;
+        out.keywords.push_back(std::move(part));
+        start = slash + 1;
+    }
+    return out;
+}
+
 }  // namespace
 
 WeaponAbility parse_weapon_ability(std::string_view text) {
@@ -78,6 +116,11 @@ WeaponAbility parse_weapon_ability(std::string_view text) {
     if (n == "devastating wounds") return ability::DevastatingWounds{};
     if (n == "extra attacks") return ability::ExtraAttacks{};
     if (n == "ignores cover") return ability::IgnoresCover{};  // 24.18 (M90)
+    if (n == "lance") return ability::Lance{};                 // 24.21 (M99)
+    if (const auto x = parse_suffix_int(n, "melta", std::nullopt)) {
+        return ability::Melta{*x};  // 24.25: always [MELTA X]
+    }
+    if (auto anti = parse_anti(n)) return std::move(*anti);  // 24.03: always [ANTI-X Y+]
     if (const auto x = parse_suffix_int(n, "rapid fire", std::nullopt)) {
         return ability::RapidFire{*x};  // 24.30: always [RAPID FIRE X]
     }

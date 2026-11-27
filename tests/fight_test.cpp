@@ -631,10 +631,11 @@ TEST(R12_08_ConsolidationMove, WithAnObjectiveWithin3InchesTheSameUnitMakesAnObj
 
 // ==== D-026: weapons with abilities V1 does not implement ====
 
-TEST(D026_UnimplementedAbilities, ADevastatingWoundsMeleeWeaponIsRejectedAndTheModelNeedNotFightWithIt) {
+TEST(D026_UnimplementedAbilities, AMeleeWeaponWithAnUnknownAbilityIsRejectedAndTheModelNeedNotFightWithIt) {
     GameState gs = after_successful_charge();
-    // Every Intercessor's only melee weapon gets [DEVASTATING WOUNDS] (24.10, not implemented in V1).
-    for (Model& m : gs.units[kMarines].models) m.weapons[kKnives].profiles[0].abilities.push_back(ability::DevastatingWounds{});
+    // Every Intercessor's only melee weapon gets an ability the engine doesn't know (D-071). (M99, D-101: it was
+    // [DEVASTATING WOUNDS] until 24.10 was implemented.)
+    for (Model& m : gs.units[kMarines].models) m.weapons[kKnives].profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
     to_fight_step(gs);
     act(gs, action::SelectToFight{id_of(gs, kMarines), FightType::Normal});
     // No model can make a melee attack V1 can resolve, so the fight resolves with no attacks (D-021).
@@ -643,7 +644,7 @@ TEST(D026_UnimplementedAbilities, ADevastatingWoundsMeleeWeaponIsRejectedAndTheM
 
     // A declaration naming the weapon anyway is rejected with the rule.
     GameState probe = after_successful_charge();
-    for (Model& m : probe.units[kMarines].models) m.weapons[kKnives].profiles[0].abilities.push_back(ability::DevastatingWounds{});
+    for (Model& m : probe.units[kMarines].models) m.weapons[kKnives].profiles[0].abilities.push_back(ability::Unknown{"Conversion"});
     probe.units[kMarines].models[0].weapons[kKnives].profiles[0].abilities.clear();  // one model can fight
     to_fight_step(probe);
     act(probe, action::SelectToFight{id_of(probe, kMarines), FightType::Normal});
@@ -653,7 +654,8 @@ TEST(D026_UnimplementedAbilities, ADevastatingWoundsMeleeWeaponIsRejectedAndTheM
     a.declarations.push_back(MeleeDeclaration{probe.units[kMarines].models[1].id, kKnives, 0,
                                               {MeleeTarget{id_of(probe, kGants), 3}}});
     const auto reasons = rejection(probe, Side::A, a);
-    EXPECT_EQ(reasons.at(0), "24.10: 'Knives and Fists' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)");
+    EXPECT_EQ(reasons.at(0), "D-071: 'Knives and Fists' has [CONVERSION], which the engine does not implement yet; "
+                             "weapons with it can't be selected");
 }
 
 // ==== D-007 with forced fights ====

@@ -183,6 +183,27 @@ void from_json(const Json& j, InflictDamageResult& v) {
     j.at("attacks_lost").get_to(v.attacks_lost);
 }
 
+// ---- D-101 (M99): 24.10 [DEVASTATING WOUNDS] ----
+void to_json(Json& j, const DevastatingStep& v) {
+    j = Json{{"damage", v.damage}};
+    if (v.damage_roll) j["damage_roll"] = *v.damage_roll;  // D-069: omitted for a fixed D
+}
+void from_json(const Json& j, DevastatingStep& v) {
+    j.at("damage").get_to(v.damage);
+    v.damage_roll.reset();
+    if (j.contains("damage_roll")) v.damage_roll = j.at("damage_roll").get<CharacteristicRoll>();
+}
+void to_json(Json& j, const DevastatingWoundsResult& v) {
+    j = Json{{"steps", v.steps},
+             {"models_destroyed", v.models_destroyed},
+             {"critical_wounds_lost", v.critical_wounds_lost}};
+}
+void from_json(const Json& j, DevastatingWoundsResult& v) {
+    j.at("steps").get_to(v.steps);
+    j.at("models_destroyed").get_to(v.models_destroyed);
+    j.at("critical_wounds_lost").get_to(v.critical_wounds_lost);
+}
+
 // ---- D-081: a model's place when its unit is set up ----
 void to_json(Json& j, const ModelPlacement& v) {
     j = Json{{"model", v.model}, {"position", v.position}};
@@ -570,6 +591,10 @@ void to_json(Json& j, const GameEvent& v) {
                 j["dice"] = e.dice;
                 j["enemy_mortal_wounds"] = e.enemy_mortal_wounds;
                 j["unit_mortal_wounds"] = e.unit_mortal_wounds;
+            } else if constexpr (std::is_same_v<T, DevastatingWoundsInflicted>) {
+                j["attacker"] = e.attacker;  // 24.10 (D-101)
+                j["target"] = e.target;
+                j["result"] = e.result;
             } else {
                 static_assert(sizeof(T) == 0, "unhandled event");
             }
@@ -749,6 +774,9 @@ void from_json(const Json& j, GameEvent& v) {
                                 j.at("model").get<ModelId>(),       j.at("enemy").get<UnitId>(),
                                 j.at("dice").get<std::vector<int>>(), j.at("enemy_mortal_wounds").get<int>(),
                                 j.at("unit_mortal_wounds").get<int>()};  // D-099
+    } else if (kind == "DevastatingWoundsInflicted") {
+        v = DevastatingWoundsInflicted{j.at("attacker").get<UnitId>(), j.at("target").get<UnitId>(),
+                                       j.at("result").get<DevastatingWoundsResult>()};  // D-101
     } else {
         bad_enum("GameEvent", j);
     }

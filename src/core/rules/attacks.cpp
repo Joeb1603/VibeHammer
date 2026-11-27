@@ -10,6 +10,7 @@
 
 #include "core/geometry/closest.hpp"
 #include "core/geometry/distance.hpp"
+#include "core/model/keywords.hpp"
 #include "core/state/queries.hpp"
 
 namespace wh40k::core {
@@ -22,7 +23,8 @@ constexpr int kWorstSkill = 6;
 // D-006: abilities that still affect the attack from the hit roll onward, other than those already
 // captured by AttackProfile fields ([HEAVY] -> hit_modifier, [TORRENT] -> torrent). [EXTRA ATTACKS] is used
 // up in the Select Weapons step (24.11, D-071), like [ASSAULT]. [IGNORES COVER] is used up in the Select Targets step,
-// where the selection's benefit of cover is decided (24.18, 13.08; M90, D-091).
+// where the selection's benefit of cover is decided (24.18, 13.08; M90, D-091). M99 (D-101): [LANCE] is the profile's
+// wound modifier, [MELTA X] its D and [ANTI-X Y+] its critical wound threshold, so they are not kept either.
 bool is_attack_time_ability(const WeaponAbility& a) {
     return std::visit(
         [](const auto& x) {
@@ -30,7 +32,9 @@ bool is_attack_time_ability(const WeaponAbility& a) {
             return !(std::is_same_v<T, ability::Assault> || std::is_same_v<T, ability::CloseQuarters> ||
                      std::is_same_v<T, ability::RapidFire> || std::is_same_v<T, ability::Blast> ||
                      std::is_same_v<T, ability::Heavy> || std::is_same_v<T, ability::Torrent> ||
-                     std::is_same_v<T, ability::ExtraAttacks> || std::is_same_v<T, ability::IgnoresCover>);
+                     std::is_same_v<T, ability::ExtraAttacks> || std::is_same_v<T, ability::IgnoresCover> ||
+                     std::is_same_v<T, ability::Anti> || std::is_same_v<T, ability::Melta> ||
+                     std::is_same_v<T, ability::Lance>);
         },
         a);
 }
@@ -115,12 +119,10 @@ std::optional<std::string> unimplemented_ability_problem(const WeaponProfile& we
         return "D-069: '" + weapon.name + "' has a random A (" + to_string(weapon.attacks) +
                "), which the engine does not implement for melee weapons (none in the data); it can't be selected";
     }
-    // [TWIN-LINKED] (24.38) is implemented since M61 (D-072).
-    if (weapon.has<ability::DevastatingWounds>()) {
-        return "24.10: '" + weapon.name + "' has [DEVASTATING WOUNDS], which V1 does not implement yet (D-026)";
-    }
-    // D-071: an ability the engine does not recognise ([LETHAL HITS], [ANTI-X Y+], [MELTA X], [PRECISION], ...) is
-    // refused in the same way, rather than ignored.
+    // [TWIN-LINKED] (24.38) is implemented since M61 (D-072); [DEVASTATING WOUNDS] (24.10), [ANTI-X Y+] (24.03),
+    // [MELTA X] (24.25) and [LANCE] (24.21) since M99 (D-101).
+    // D-071: an ability the engine does not recognise ([LETHAL HITS], [PRECISION], [PSYCHIC], ...) is refused, rather
+    // than ignored.
     if (const auto* unknown = weapon.get<ability::Unknown>()) {
         return "D-071: '" + weapon.name + "' has [" + upper_ascii(unknown->text) +
                "], which the engine does not implement yet; weapons with it can't be selected";
@@ -134,6 +136,58 @@ int sustained_hits(const AttackProfile& profile) {
         if (const auto* s = std::get_if<ability::SustainedHits>(&a)) x = std::max(x, s->x);  // D-071 (24.02)
     }
     return x;
+}
+
+bool devastating_wounds(const AttackProfile& profile) {
+    return std::any_of(profile.attack_time_abilities.begin(), profile.attack_time_abilities.end(),
+                       [](const WeaponAbility& a) { return std::holds_alternative<ability::DevastatingWounds>(a); });
+}
+
+bool anti_applies(const ability::Anti& anti, const Unit& target) {
+    return has_any_keyword(target, anti.keywords) != anti.non;  // app 02.05.01: "non-X" is a unit without the keyword
+}
+
+int anti_critical_wound_on(const WeaponProfile& weapon, const Unit& target) {
+    int on = 6;  // 05.02: an unmodified 6
+    for (const WeaponAbility& a : weapon.abilities) {
+        const auto* anti = std::get_if<ability::Anti>(&a);
+        if (anti != nullptr && anti_applies(*anti, target)) on = std::min(on, anti->threshold);  // D-101 (24.02)
+    }
+    return on;
+}
+
+AttackProfile selection_attack_profile(const WeaponProfile& weapon, const WeaponSelection& selection,
+                                       const AttackContext& context, const Unit& target) {
+    AttackProfile profile = make_attack_profile(weapon, context);
+    profile.hit_modifier += selection.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
+    // 13.08 (D-089): worsen the BS characteristic of the attack by 1 (3+ becomes 4+). The characteristic, not the
+    // hit roll, so D-011's cap doesn't apply; [TORRENT] has no BS. Part of the profile, so D-006 keeps attacks with
+    // and without cover in separate batches.
+    // 02.02.01 (app-only, D-093, M92): after all modifiers a BS cannot be 7+ or worse, so 6+ stays 6+.
+    if (selection.benefit_of_cover && profile.skill) *profile.skill = std::min(*profile.skill + 1, kWorstSkill);
+    apply_target_abilities(profile, weapon, selection, target);
+    return profile;
+}
+
+void apply_target_abilities(AttackProfile& profile, const WeaponProfile& weapon, const WeaponSelection& selection,
+                            const Unit& target) {
+    // 24.25 [MELTA X] (D-101): "if the target unit was within half range of that weapon in the Select Targets step ...
+    // add X to that weapon's D characteristic". With two instances (24.02) the highest X is the player's best choice.
+    if (selection.target_within_half_range) {
+        int x = 0;
+        for (const WeaponAbility& a : weapon.abilities) {
+            if (const auto* melta = std::get_if<ability::Melta>(&a)) x = std::max(x, melta->x);
+        }
+        profile.damage.modifier = static_cast<std::int16_t>(profile.damage.modifier + x);
+    }
+    profile.critical_wound_on = anti_critical_wound_on(weapon, target);  // 24.03
+}
+
+AttackContext fighting_context(const Unit& unit) {
+    AttackContext context;
+    context.type = AttackType::Fighting;
+    context.charged = unit.turn_flags.made_charge_move;  // 24.21 [LANCE] (11.04)
+    return context;
 }
 
 bool is_extra_attacks_weapon(const Weapon& weapon) {
@@ -170,6 +224,8 @@ AttackProfile make_attack_profile(const WeaponProfile& weapon, const AttackConte
         weapon.has<ability::Heavy>()) {
         p.hit_modifier += 1;
     }
+    // 24.21 [LANCE] (M99, D-101): +1 to the wound roll if the attacking model's unit made a charge move this turn.
+    if (context.charged && weapon.has<ability::Lance>()) p.wound_modifier += 1;
     for (const WeaponAbility& a : weapon.abilities) {
         if (is_attack_time_ability(a)) {
             p.attack_time_abilities.push_back(a);
@@ -232,11 +288,12 @@ int gather_attack_dice(const WeaponProfile& weapon, const WeaponSelection& selec
 }
 
 std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const WeaponSelection& selection,
-                                           const AttackContext& context) {
+                                           const AttackContext& context, const Unit* target) {
     std::vector<AbilityEffect> out;
     const bool split = selection.declared_attacks.has_value();  // 04.02: exactly the declared attacks
     for (const WeaponAbility& a : weapon.abilities) {
-        AbilityEffect e{a, false, 0, 0};
+        AbilityEffect e;
+        e.ability = a;
         if (const auto* rf = std::get_if<ability::RapidFire>(&a)) {
             if (!split && selection.target_within_half_range) e.extra_attack_dice = rf->x;  // 24.30
         } else if (const auto* blast = std::get_if<ability::Blast>(&a)) {
@@ -254,8 +311,17 @@ std::vector<AbilityEffect> ability_effects(const WeaponProfile& weapon, const We
             e.active = context.type == AttackType::Fighting;  // 24.11: made in addition to another melee weapon
         } else if (std::holds_alternative<ability::IgnoresCover>(a)) {
             e.active = context.type == AttackType::Shooting;  // 24.18: the target can't have the benefit of cover
+        } else if (std::holds_alternative<ability::DevastatingWounds>(a)) {
+            e.active = true;  // 24.10: on each critical wound (M99, D-101)
+        } else if (std::holds_alternative<ability::Lance>(a)) {
+            if (context.charged) e.wound_modifier = 1;  // 24.21
+        } else if (const auto* melta = std::get_if<ability::Melta>(&a)) {
+            if (selection.target_within_half_range) e.damage_modifier = melta->x;  // 24.25
+        } else if (const auto* anti = std::get_if<ability::Anti>(&a)) {
+            if (target != nullptr && anti_applies(*anti, *target)) e.critical_wound_on = anti->threshold;  // 24.03
         }
-        e.active = e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0;
+        e.active = e.active || e.extra_attack_dice > 0 || e.hit_modifier != 0 || e.wound_modifier != 0 ||
+                   e.damage_modifier != 0 || e.critical_wound_on != 0;
         out.push_back(e);
     }
     return out;
@@ -265,6 +331,7 @@ AttackContext batch_context(const AttackBatch& batch, const WeaponSelection& sel
     AttackContext context;
     context.type = type;
     context.heavy_conditions_met = type == AttackType::Shooting && batch.profile.hit_modifier > selection.hit_modifier;
+    context.charged = batch.profile.wound_modifier > 0;  // 24.21 [LANCE] (M99)
     return context;
 }
 
@@ -276,13 +343,8 @@ std::vector<AttackBatch> gather_attack_batches(const GameState& state,
     for (std::size_t i = 0; i < selections.size(); ++i) {
         const WeaponSelection& sel = selections[i];
         const WeaponProfile& wp = selected_profile(state, sel);
-        AttackProfile profile = make_attack_profile(wp, context);
-        profile.hit_modifier += sel.hit_modifier;  // e.g. 10.06; part of the profile, so D-006 compares it
-        // 13.08 (D-089): worsen the BS characteristic of the attack by 1 (3+ becomes 4+). The characteristic, not the
-        // hit roll, so D-011's cap doesn't apply; [TORRENT] has no BS. Part of the profile, so D-006 keeps attacks with
-        // and without cover in separate batches.
-        // 02.02.01 (app-only, D-093, M92): after all modifiers a BS cannot be 7+ or worse, so 6+ stays 6+.
-        if (sel.benefit_of_cover && profile.skill) *profile.skill = std::min(*profile.skill + 1, kWorstSkill);
+        // The hit modifier, cover, [MELTA] and [ANTI] of this selection against its target (D-089, D-101).
+        const AttackProfile profile = selection_attack_profile(wp, sel, context, require_unit(state, sel.target));
         const SelectionDice dice = selection_dice(wp, sel, context);
 
         if (std::find(target_order.begin(), target_order.end(), sel.target) == target_order.end()) {

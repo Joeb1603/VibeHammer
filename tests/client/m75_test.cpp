@@ -19,6 +19,7 @@
 #include "core/serialization/json.hpp"
 #include "launch_options.hpp"
 #include "settings.hpp"
+#include "support/army_fixtures.hpp"
 #include "test_helpers.hpp"
 
 using namespace wh40k::client;
@@ -31,6 +32,10 @@ namespace core = wh40k::core;
 namespace {
 
 ArmyBuilder builder() { return ArmyBuilder(wh40k::test::repo_root()); }
+// M99 (D-101): a builder on the refusal tests' data (support/army_fixtures.hpp), where D-079 part 1's refused weapons
+// carry an ability the engine doesn't know: the greyed options and unavailable model types keep their cases whatever the
+// engine has learned since.
+ArmyBuilder refusal_builder() { return ArmyBuilder(wh40k::test::refused_data_root()); }
 
 class TempDir {
 public:
@@ -122,7 +127,14 @@ TEST(M75_ArmyBuilder, StartsWithStockRosters960And955) {
 }
 
 TEST(M75_ArmyBuilder, AddUnitUsesPlayableDefaults) {
-    ArmyBuilder b = builder();
+    {
+        // M99 (D-101): on the real data the Lord keeps its BSData default, the Daemon hammer ([DEVASTATING WOUNDS]).
+        ArmyBuilder real = builder();
+        const std::size_t n = real.list(Side::A).units.size();
+        ASSERT_FALSE(real.add_unit(Side::A, "data/units/chaos_lord.json"));
+        EXPECT_TRUE(carries(real.list(Side::A).units[n], "Daemon hammer"));
+    }
+    ArmyBuilder b = refusal_builder();
     const std::size_t before = b.list(Side::A).units.size();
     ASSERT_FALSE(b.add_unit(Side::A, "data/units/chaos_lord.json"));
     ASSERT_FALSE(b.add_unit(Side::A, "data/units/havocs.json"));
@@ -153,7 +165,16 @@ TEST(M75_ArmyBuilder, AddUnitUsesPlayableDefaults) {
 }
 
 TEST(M75_ArmyBuilder, RefusedOptionsAreGreyedWithTheReason) {
-    ArmyBuilder b = builder();
+    {
+        // M99 (D-101): on the real data the Lord's Daemon hammer and the Havoc Champion's Meltagun can be picked.
+        ArmyBuilder real = builder();
+        const std::size_t lord = unit_of(real, Side::A, "data/units/chaos_lord.json");
+        EXPECT_FALSE(real.groups(Side::A, lord)[0].slots[0].options[0].refusal);
+        EXPECT_FALSE(real.set_option(Side::A, lord, 0, 0, 0));
+        const std::size_t havocs = unit_of(real, Side::A, "data/units/havocs.json");
+        for (const OptionView& o : real.groups(Side::A, havocs)[0].slots[1].options) EXPECT_FALSE(o.refusal) << o.name;
+    }
+    ArmyBuilder b = refusal_builder();
     const std::size_t lord = unit_of(b, Side::A, "data/units/chaos_lord.json");
     const std::vector<GroupView> groups = b.groups(Side::A, lord);
     ASSERT_EQ(groups.size(), 1u);
@@ -201,7 +222,17 @@ TEST(M75_ArmyBuilder, RefusedOptionsAreGreyedWithTheReason) {
 }
 
 TEST(M75_ArmyBuilder, UnavailableModelTypesHaveReasons) {
-    ArmyBuilder b = builder();
+    {
+        // M99 (D-101): on the real data every Terminator type and the Strangleweb Termagant can be taken.
+        ArmyBuilder real = builder();
+        ASSERT_FALSE(real.add_unit(Side::A, "data/units/chaos_terminator_squad.json"));
+        for (const ModelTypeView& t : real.model_types(Side::A, real.list(Side::A).units.size() - 1)) {
+            EXPECT_FALSE(t.unavailable) << t.name;
+        }
+        const std::size_t gants = unit_of(real, Side::B, "data/units/termagants.json");
+        EXPECT_FALSE(type_view(real.model_types(Side::B, gants), "Termagant w/ Strangleweb").unavailable);
+    }
+    ArmyBuilder b = refusal_builder();
     ASSERT_FALSE(b.add_unit(Side::A, "data/units/chaos_terminator_squad.json"));
     const std::size_t terminators = b.list(Side::A).units.size() - 1;
     const std::vector<ModelTypeView> types = b.model_types(Side::A, terminators);

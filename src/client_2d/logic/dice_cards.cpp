@@ -93,7 +93,8 @@ std::vector<EffectLine> attack_notes(const core::GameState& state, const AttackC
     const core::AttackType type = c.melee ? core::AttackType::Fighting : core::AttackType::Shooting;
     const std::optional<core::ShootingType> shooting =
         c.melee ? std::nullopt : std::optional<core::ShootingType>(c.shooting_type);
-    for (EffectLine& line : effect_lines(*p, sels, core::batch_context(*batch, sels.front(), type), shooting)) {
+    for (EffectLine& line : effect_lines(*p, sels, core::batch_context(*batch, sels.front(), type), shooting,
+                                         state.find_unit(batch->target))) {
         if (line.kind != EffectKind::Info) notes.push_back(std::move(line));
     }
     // D-073: 10.06 / 17.03 and the D-011 cap.
