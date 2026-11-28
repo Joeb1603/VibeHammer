@@ -160,6 +160,45 @@ that say you need it ... make a note of any decisions you make yourself". So for
 The order follows the roadmap (what unlocks the most datasheets first): the weapon abilities (M99 onwards), then the
 unit core abilities, then the rule sections 16 to 23.
 
+**The batch, in order.** Done: M99 (D-101), M100 (D-102), M101 (D-103): every weapon ability of section 24. Still to
+do, one milestone per session (`/clear` between them). Each gets its full section here (scope, rules, design,
+acceptance) when it starts, its decision file, tests named after its rules, a replay, the full `ctest` and the arena's
+identity set (`docs/dev/bot_arena.md`), then a PR merged into `main`. Rule numbers are in `docs/rules/00_index.md`.
+1. **M102: the weapon leftovers.** A random X ("[SUSTAINED HITS D3]", "[RAPID FIRE D3]": 17 BSData profiles), a random A
+   on a melee weapon (rolled before 04.02's split; 3 profiles), and the choice of 24.23 for a profile with both
+   [LETHAL HITS] and [DEVASTATING WOUNDS] (D-102). After it no weapon profile is refused.
+2. **M103: unit core abilities as data.** `tools/fetch_bsdata.py` reads the X of core abilities from BSData's name
+   modifiers ("Deadly Demise" + "D6", "Feel No Pain 5+", "Scouts 6\"", "Firing Deck 2", "Lone Operative"), and the
+   Chameleonic Stealth condition (D-070). Core gains typed unit abilities beside the text (24.01, 24.02 Duplicated
+   Abilities, the app's 24.01.01). `data/units/` regenerated from the pinned commit; no play change (identity set).
+3. **M104: Feel No Pain (24.12) and Deadly Demise (24.08).** A roll per wound that would be lost (a RollDice step and
+   Command Re-roll's window); Deadly Demise's roll when a model is destroyed and its mortal wounds on every unit within
+   6" (06.02, app 05.04.04: after the attacking unit's attacks).
+4. **M105: Stealth (24.33), Lone Operative (24.24) and Fights First as a datasheet ability (24.13, 12.04).**
+5. **M106: Scouts and the Scout move (24.31, 24.32) and Infiltrators (24.20):** the Resolve Pre-battle Abilities step
+   after deployment (D-081), for the engine, the client's hand set-up and the bot.
+6. **M107: Leader, Support and Attached Units (19, 24.22, 24.34):** forming them in the army builder and at set-up,
+   19.02's allocation (bodyguards first, then CHARACTER groups) with [PRECISION] (D-103), 19.03 keywords per model
+   (app 02.05.01), 19.04 abilities; the app's 05.02.01 (the bodyguard's T).
+7. **M108: Actions (16).** Starting, completing and interrupting an action; "not eligible to start an action" after
+   shooting (10.04-10.07). No mission uses one yet: tested with a test-only action.
+8. **M109: Secured objectives (14.03)** beyond state: what secures and what loses it.
+9. **M110: Strategic Reserves (20) with Deep Strike (24.09) and Rapid Ingress (15.07):** placing units in reserve at
+    set-up, arriving from battle round 2, the ingress move; Scouts' reserve option (24.31).
+10. **M111: Transports (18) with Firing Deck (24.14):** capacity, embarking, disembarking and its moves, the emergency
+    disembark when the transport is destroyed (before Deadly Demise, 24.08's example); Scouts in a DEDICATED
+    TRANSPORT (24.31).
+11. **M112: Epic Challenge (15.03) and Smokescreen (15.10):** the last core stratagems (attached units, SMOKE units).
+12. **M113: Flying and Surging (21) in 2D, and Hover (24.17).** The height parts stay `TODO(z)` (D-087).
+13. **M114: Aircraft (23).**
+14. **M115: FRAME (17.02) and Super-Heavy Walker (24.35):** the fetch tool's "Hull" bases.
+15. **M116: Strike Force (25.03):** 2,000-point lists, unit limits, the bot's time budgets re-measured.
+16. **M117: the coverage check.** Every one of the 156 rule numbers has tests or a decision saying why not (the z-axis
+    rules, 22.01-22.04's effect layer of Phase 4). Phase 1 is then done; the roadmap's Phase 2 (missions) follows.
+
+The order may change when a milestone finds a dependency; say so in the milestone's section. Open for the user from
+M99 to M101: the M77 deployment bound (M99's open items) and each decision file's "own decision" marks.
+
 ---
 
 ## M101: [INDIRECT FIRE] with Indirect Shooting, and [PRECISION] (D-103) ✅ (done; the manual mouse checks open)
