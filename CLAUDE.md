@@ -228,6 +228,10 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
   full `ctest`, arena runs and `--per-game` checks once, when the milestone is otherwise done.
 - For milestones marked "plan mode" in `PLAN.md`, propose the design (types, files, decision flow) and wait for approval before writing code.
 - Commit at the end of each green milestone with a message naming the milestone and rule numbers covered, then push. In cloud sessions the environment's stop hook requires uncommitted work to be committed and pushed. Then open a pull request and merge it into `main` (rebase merge, to keep `main` linear) without asking: the user gave standing permission on 2026-11-23.
+- When work is fully finished and pushed (merged), end the reply with a ready-to-paste prompt for the next piece of
+  work (normally the next milestone in `PLAN.md`), headed with the model to use, the `/effort` level (per `PLAN.md`'s
+  "Effort levels") and whether plan mode is needed (`PLAN.md` marks those; batch milestones need none). The user asked
+  for this on 2026-11-28.
 - The client's mouse input can't be scripted, so in a cloud session check the UI through the logic-level tests
   (`wh40k_client_tests`) and screenshots under `xvfb-run`; the client's flags are in `docs/dev/client_flags.md`.
   A full game by mouse still needs a manual run on Windows.
