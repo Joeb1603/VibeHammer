@@ -54,6 +54,8 @@ docs/datasheets/          the two New Recruit army rosters behind rosters_44x60.
 docs/gdmissions/          gdmissions.app's 11th ed pages as Markdown: core rules incl. app-only entries, missions, layouts,
                           detachments, changelogs (third-party, unverified; GW copyright: private repo only)
   00_index.md             what is in each file
+docs/wahapedia/           Wahapedia's 11th ed data export (CSV): datasheets, faction and detachment rules, enhancements,
+                          stratagems (third-party, unverified; GW copyright: private repo only); 00_index.md describes it
 docs/decisions.md         index of rule interpretations and design decisions (D-001 ...), cited in code
 docs/decisions/D-NNN.md   one file per decision
 docs/dev/                 reference: replays, client flags, bot arena, packaging and data regeneration
@@ -63,6 +65,7 @@ data/factions.json        the custom battles' factions and their datasheets (D-0
 data/armies/*.json        the factions' stock army lists for custom battles (units and loadouts only; D-079)
 tools/extract_rules.py    PDF -> docs/rules/   (needs pdftotext on PATH)
 tools/fetch_bsdata.py     BSData wh40k-11e -> data/units/
+tools/fetch_wahapedia.py  Wahapedia's 11th ed data export -> docs/wahapedia/
 tools/package.ps1         Release build -> VibeHammer.zip for sending the game to someone
 src/core/                 wh40k_core: headless rules library
 src/client_2d/            wh40k_client_2d: raylib + Dear ImGui executable (hotseat play + replay viewer)
@@ -236,4 +239,6 @@ Charge, pile-in and consolidation rules contain "if possible" and "as close as p
 - `docs/rules/` is no longer gitignored and may be committed, because the repo is private and will stay that way. It is still Games Workshop's copyrighted text: never make the repo public or copy `docs/rules/` anywhere public. If the repo ever goes public, add `docs/rules/` back to `.gitignore` and remove it from the history first.
 - `docs/gdmissions/` (scraped from gdmissions.app) is Games Workshop's copyrighted text as well, under the same rules. It is a
   third-party transcription: `docs/rules/` stays the source of truth, and its app-only entries are unverified.
+- `docs/wahapedia/` (Wahapedia's data export) is Games Workshop's copyrighted text too, under the same rules: never copy it
+  into `data/`, the package or a release. It is a third-party transcription, unverified; `docs/rules/` stays the source of truth.
 - `docs/datasheets/` (the New Recruit roster exports) is Games Workshop's copyrighted text too. The same rules apply: never copy it into `data/`, the package or a release, and the scenario file keeps only unit points and loadouts.
