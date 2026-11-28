@@ -1,6 +1,6 @@
 # Builds the client in Release and packs it into VibeHammer.zip (repo root, gitignored) for sending to
 # someone to play. The zip holds the exe, the VC++ runtime DLLs, data/ and the example replays; the exe
-# finds data/ next to itself (main.cpp find_data_root). Never add docs/rules/, docs/datasheets/ or the PDF
+# finds data/ next to itself (main.cpp find_data_root). Never add docs/rules/, docs/datasheets/, docs/wahapedia/ or the PDF
 # (GW copyright; the datasheets are New Recruit exports of GW datasheets).
 #
 # Usage (from the repo root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1

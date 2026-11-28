@@ -39,7 +39,9 @@ Sources of rules text, and their limits:
   names with costs. Third-party and unverified.
 - BSData (`tools/fetch_bsdata.py`): datasheets and list-building data. Whether it carries detachment rules,
   stratagems and enhancements for 11th edition could not be checked from the cloud session (question 4 below).
-- Nothing in the repo holds the text of faction rules, detachment rules, stratagems or enhancements.
+- `docs/wahapedia/` (`tools/fetch_wahapedia.py`, 2026-11-28): Wahapedia's 11th edition data export. It holds the text of
+  faction rules, detachment rules, enhancements and stratagems, with datasheets, points, keywords and Leader pairings
+  (`docs/wahapedia/00_index.md`). Third-party and unverified; it has the stratagems BSData lacks (question 4).
 
 ## The order, and why
 
@@ -202,8 +204,9 @@ Rules that do not fit still get hand-written code: item 5.)
 5. **The long tail.** Some rules will not fit the building blocks. Each gets either a new block (if others will use
    it) or a small hand-written rule with its own tests. Expect this to be a real share of the work.
 
-The blocking question is the **text**: faction rules, detachment rules, enhancements and stratagems are not in the
-repo and may not be in BSData (question 4).
+The blocking question was the **text**: BSData has faction rules, detachment rules and enhancements, but not the
+stratagems (question 4). Since 2026-11-28 those are in `docs/wahapedia/`, a third-party transcription to check
+against the app.
 
 ## Phase 5: the bot
 
@@ -281,6 +284,8 @@ Answered by the user on 2026-11-20:
    So Phase 4 can read datasheet abilities, army rules, detachment rules and enhancements from BSData with the fetch
    tool. Each detachment's stratagems have to come from the app or the codexes, supplied by the user. The core
    stratagems are in `docs/rules/` (section 15).
+   Since 2026-11-28 the stratagems are in `docs/wahapedia/`: Wahapedia's data export has every faction's 1452
+   stratagems (WHEN, TARGET, EFFECT, CP, detachment), along with the other texts above, to cross-check BSData.
 
 Still open:
 
